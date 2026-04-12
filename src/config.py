@@ -64,6 +64,9 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 # --- Post-identification segment merging ---
 SEGMENT_MERGE_GAP = 2.0  # merge adjacent same-speaker segments with gap < this (seconds)
 
+# --- Roster surname gating (Layer 2 pattern matcher) ---
+ROSTER_SURNAME_THRESHOLD = 0.80  # Reject pattern match if surname similarity below this
+
 # --- Checkpoint ---
 CHECKPOINT_EVERY_N_SEGMENTS = 50
 

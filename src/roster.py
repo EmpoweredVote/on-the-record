@@ -24,6 +24,7 @@ class RosterMember:
     aliases: list[str] = field(default_factory=list)
     politician_slug: Optional[str] = None
     politician_id: Optional[str] = None
+    district_label: Optional[str] = None
 
 
 @dataclass
@@ -121,6 +122,7 @@ def load_roster(
                 aliases=list(pol.get("aliases", [])),
                 politician_slug=pol.get("politician_slug"),
                 politician_id=pol.get("politician_id"),
+                district_label=pol.get("district_label") or None,
             )
         )
     return Roster(
@@ -130,7 +132,7 @@ def load_roster(
     )
 
 
-def _extract_surname(name: str) -> str:
+def extract_surname(name: str) -> str:
     """Extract the likely surname from a display name, stripping titles."""
     titles = {
         "councilmember", "councilwoman", "councilman", "alderman",
@@ -196,13 +198,13 @@ def correct_speaker_name(name: str, roster: Roster, threshold: float = 0.80) -> 
                 return member.name
 
     # 4. Fuzzy match: extract surname from input, compare against aliases
-    surname = _extract_surname(name_stripped)
+    surname = extract_surname(name_stripped)
     best_score = 0.0
     best_member = None
 
     for member in roster.members:
         for alias in member.aliases:
-            alias_surname = _extract_surname(alias)
+            alias_surname = extract_surname(alias)
             score = _similarity(surname, alias_surname)
             if score > best_score:
                 best_score = score
@@ -220,6 +222,9 @@ def correct_mappings(
 ) -> dict:
     """Apply roster corrections to all speaker mappings.
 
+    After correcting names, populates politician_slug and politician_id
+    on mappings that match a roster member (CSIDENT-04).
+
     Modifies mappings in place and returns the dict.
     """
     for label, mapping in mappings.items():
@@ -227,6 +232,12 @@ def correct_mappings(
             corrected = correct_speaker_name(mapping.speaker_name, roster)
             if corrected != mapping.speaker_name:
                 mapping.speaker_name = corrected
+            # Populate politician identity for any roster-matched speaker
+            for member in roster.members:
+                if corrected.lower() == member.name.lower() and member.politician_slug:
+                    mapping.politician_slug = member.politician_slug
+                    mapping.politician_id = member.politician_id
+                    break
 
     return mappings
 
@@ -293,11 +304,15 @@ def add_alias(
 def roster_names_for_prompt(roster: Roster) -> str:
     """Format roster members for inclusion in an LLM prompt.
 
-    Returns a string like:
-      Known council members: President Asare, Councilmember Piedmont-Smith, ...
+    Returns a bulleted list with district labels for disambiguation:
+      Known council members for this body:
+      - Councilmember Piedmont-Smith (District 5)
+      - Council President Asare (At-Large)
     """
     if not roster or not roster.members:
         return ""
-
-    names = [m.name for m in roster.members]
-    return "Known council members for this body: " + ", ".join(names)
+    lines = []
+    for m in roster.members:
+        district = f" ({m.district_label})" if m.district_label else ""
+        lines.append(f"- {m.name}{district}")
+    return "Known council members for this body:\n" + "\n".join(lines)

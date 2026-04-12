@@ -71,15 +71,22 @@ class SpeakerMapping:
     confidence: float = 0.0
     id_method: Optional[str] = None
     needs_review: bool = False
+    politician_slug: Optional[str] = None   # essentials identifier
+    politician_id: Optional[str] = None     # essentials UUID
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "speaker_label": self.speaker_label,
             "speaker_name": self.speaker_name,
             "confidence": self.confidence,
             "id_method": self.id_method,
             "needs_review": self.needs_review,
         }
+        if self.politician_slug is not None:
+            d["politician_slug"] = self.politician_slug
+        if self.politician_id is not None:
+            d["politician_id"] = self.politician_id
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> SpeakerMapping:
@@ -89,6 +96,8 @@ class SpeakerMapping:
             confidence=d.get("confidence", 0.0),
             id_method=d.get("id_method"),
             needs_review=d.get("needs_review", False),
+            politician_slug=d.get("politician_slug"),
+            politician_id=d.get("politician_id"),
         )
 
 
