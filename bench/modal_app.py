@@ -100,7 +100,10 @@ nemo_image = (
     .apt_install("ffmpeg", "libsndfile1")
     .pip_install(
         "Cython",
-        "nemo_toolkit[asr]==2.0.0",
+        # Sortformer (SortformerEncLabelModel) was added in NeMo 2.4+.
+        # 2.0.0 lacks the class entirely, hence the import error in earlier
+        # sweep runs.
+        "nemo_toolkit[asr]==2.7.3",
         "matplotlib",
         "soundfile==0.12.1",
     )

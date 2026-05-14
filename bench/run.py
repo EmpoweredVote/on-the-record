@@ -58,13 +58,15 @@ def diarize_one(model: str, meeting_id: str, app) -> dict:
 def pull_results(run_dir: Path) -> None:
     """Download `/vol/results/*` from the Modal volume into the local run dir.
 
-    Uses the modal CLI rather than Python — simpler, gets sub-second progress.
+    Uses the same Python interpreter's `modal` CLI (sibling of `python` in the
+    venv's bin/) so we don't depend on `modal` being on the system PATH.
     """
     print(f"\n  Pulling results from Modal volume → {run_dir} ...")
     run_dir.mkdir(parents=True, exist_ok=True)
+    modal_cli = Path(sys.executable).parent / "modal"
     subprocess.run(
-        ["modal", "volume", "get", "councilscribe-bench", "/results", str(run_dir),
-         "--force"],
+        [str(modal_cli), "volume", "get", "councilscribe-bench",
+         "/results", str(run_dir), "--force"],
         check=True,
     )
 
@@ -107,36 +109,40 @@ def main() -> int:
 
     sweep_log: list[dict] = []
 
-    # --- Stage 1: fetch ---
-    if not args.skip_fetch:
-        print("=== Fetching meetings ===")
-        for m in meetings:
-            print(f"  → {m['id']}")
-            info = fetch_one(m, app)
-            sweep_log.append({"phase": "fetch", **info})
-        print()
+    # Modal 1.x requires the App to be explicitly running for out-of-band
+    # .remote() calls. `with app.run()` brings the app up once for the whole
+    # sweep — much faster than entering/exiting per call.
+    with app.app.run():
+        # --- Stage 1: fetch ---
+        if not args.skip_fetch:
+            print("=== Fetching meetings ===")
+            for m in meetings:
+                print(f"  → {m['id']}")
+                info = fetch_one(m, app)
+                sweep_log.append({"phase": "fetch", **info})
+            print()
 
-    # --- Stage 2: diarize (sweep all model × meeting pairs) ---
-    print("=== Diarizing ===")
-    for m in meetings:
-        for model in models:
-            label = f"{m['id']} / {model}"
-            print(f"  → {label}")
-            t0 = time.time()
-            try:
-                result = diarize_one(model, m["id"], app)
-                wall = time.time() - t0
-                print(f"    ok ({wall:.0f}s wall, {result.get('elapsed_seconds')}s gpu, "
-                      f"{result.get('num_distinct_speakers')} speakers, "
-                      f"${result.get('cost_usd'):.3f})")
-                sweep_log.append({"phase": "diarize", "ok": True, **result})
-            except Exception as e:
-                print(f"    FAILED: {e}")
-                sweep_log.append({"phase": "diarize", "ok": False,
-                                  "meeting_id": m["id"], "model": model,
-                                  "error": str(e)})
-                if not args.continue_on_error:
-                    return 1
+        # --- Stage 2: diarize (sweep all model × meeting pairs) ---
+        print("=== Diarizing ===")
+        for m in meetings:
+            for model in models:
+                label = f"{m['id']} / {model}"
+                print(f"  → {label}")
+                t0 = time.time()
+                try:
+                    result = diarize_one(model, m["id"], app)
+                    wall = time.time() - t0
+                    print(f"    ok ({wall:.0f}s wall, {result.get('elapsed_seconds')}s gpu, "
+                          f"{result.get('num_distinct_speakers')} speakers, "
+                          f"${result.get('cost_usd'):.3f})")
+                    sweep_log.append({"phase": "diarize", "ok": True, **result})
+                except Exception as e:
+                    print(f"    FAILED: {e}")
+                    sweep_log.append({"phase": "diarize", "ok": False,
+                                      "meeting_id": m["id"], "model": model,
+                                      "error": str(e)})
+                    if not args.continue_on_error:
+                        return 1
 
     # --- Stage 3: download artifacts locally ---
     pull_results(run_dir)
