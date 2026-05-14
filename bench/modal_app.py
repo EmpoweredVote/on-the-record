@@ -66,16 +66,19 @@ pyannote_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "libsndfile1", "git")
     .pip_install(
-        "torch==2.4.0",
-        "torchaudio==2.4.0",
-        "pyannote.audio==3.3.2",
+        # pyannote.audio 4.x pulls its own torch/torchcodec/huggingface_hub
+        # versions. Pinning too tightly causes resolver conflicts.
+        "pyannote.audio==4.0.4",
         "soundfile==0.12.1",
-        "numpy==1.26.4",
-        "scipy==1.13.1",
-        "huggingface_hub==0.24.6",
+        "numpy>=1.26,<3",
+        "scipy>=1.13,<2",
     )
     .env({"HF_HOME": "/vol/cache/huggingface"})
 )
+
+# Variant of pyannote image with src/ bundled in so merge.py + models.py are
+# importable inside the function. Lives at /root/cs_src in the container.
+pyannote_merged_image = pyannote_image.add_local_dir("./src", remote_path="/root/cs_src")
 
 # pyannote.ai Precision-2 (REST API; no GPU needed).
 api_image = (
@@ -100,6 +103,31 @@ nemo_image = (
 # ---------------------------------------------------------------------------
 # RTTM helper (shared by all models)
 # ---------------------------------------------------------------------------
+
+def _annotation_to_turns(diarization) -> list[tuple[float, float, str]]:
+    """Extract (start, end, speaker) from pyannote 3.x Annotation OR 4.x DiarizeOutput.
+
+    Mirrors the dual-API handling in src/diarize.py so the benchmark works
+    against either pinned version.
+    """
+    turns: list[tuple[float, float, str]] = []
+    if hasattr(diarization, "itertracks"):
+        for turn, _, speaker in diarization.itertracks(yield_label=True):
+            turns.append((turn.start, turn.end, str(speaker)))
+    elif hasattr(diarization, "speaker_diarization"):
+        for turn, speaker in diarization.speaker_diarization:
+            label = (
+                f"SPEAKER_{int(speaker):02d}"
+                if str(speaker).isdigit()
+                else str(speaker)
+            )
+            turns.append((turn.start, turn.end, label))
+    else:
+        raise RuntimeError(
+            f"Unexpected diarization output type: {type(diarization)}"
+        )
+    return turns
+
 
 def turns_to_rttm(meeting_id: str, turns: list[tuple[float, float, str]]) -> str:
     """Convert (start, end, speaker_label) turns to NIST RTTM string.
@@ -335,12 +363,10 @@ def diarize_pyannote_oss(meeting_id: str) -> dict:
     pipeline.to(torch.device("cuda"))
 
     t0 = time.time()
-    annotation = pipeline(str(wav_path))
+    diarization = pipeline(str(wav_path))
     elapsed = time.time() - t0
 
-    turns: list[tuple[float, float, str]] = []
-    for turn, _, speaker in annotation.itertracks(yield_label=True):
-        turns.append((turn.start, turn.end, str(speaker)))
+    turns = _annotation_to_turns(diarization)
 
     # Cost: L4 GPU at ~$0.80/hr (verify in Modal dashboard)
     cost = (elapsed / 3600) * 0.80
@@ -357,13 +383,11 @@ def diarize_pyannote_oss(meeting_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @app.function(
-    image=pyannote_image,
+    image=pyannote_merged_image,
     volumes={VOLUME_PATH: volume},
     secrets=[hf_secret],
     gpu="L4",
     timeout=60 * 60 * 2,
-    # mount the CouncilScribe src/ so we can reuse merge.py + embedding extractor
-    mounts=[modal.Mount.from_local_dir("./src", remote_path="/root/cs_src")],
 )
 def diarize_pyannote_merged(meeting_id: str) -> dict:
     """Run pyannote OSS, then collapse fragmented speakers via embedding similarity.
@@ -400,16 +424,18 @@ def diarize_pyannote_merged(meeting_id: str) -> dict:
     pipeline.to(device)
 
     t0 = time.time()
-    annotation = pipeline(str(wav_path))
+    diarization = pipeline(str(wav_path))
 
-    segments: list[Segment] = []
-    for i, (turn, _, speaker) in enumerate(annotation.itertracks(yield_label=True)):
-        segments.append(Segment(
+    raw_turns = _annotation_to_turns(diarization)
+    segments: list[Segment] = [
+        Segment(
             segment_id=i,
-            start_time=round(turn.start, 3),
-            end_time=round(turn.end, 3),
+            start_time=round(start, 3),
+            end_time=round(end, 3),
             speaker_label=str(speaker),
-        ))
+        )
+        for i, (start, end, speaker) in enumerate(raw_turns)
+    ]
 
     # --- Step 2: extract per-speaker embeddings ---
     emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
