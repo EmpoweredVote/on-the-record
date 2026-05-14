@@ -62,6 +62,8 @@ fetch_image = (
 )
 
 # Pyannote OSS pipeline. Used by both `pyannote_oss` and `pyannote_merged`.
+# omegaconf is a transitive dep used by pyannote.audio.Inference (the embedding
+# extractor); not auto-installed, so we add it explicitly.
 pyannote_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "libsndfile1", "git")
@@ -69,6 +71,7 @@ pyannote_image = (
         # pyannote.audio 4.x pulls its own torch/torchcodec/huggingface_hub
         # versions. Pinning too tightly causes resolver conflicts.
         "pyannote.audio==4.0.4",
+        "omegaconf>=2.3",
         "soundfile==0.12.1",
         "numpy>=1.26,<3",
         "scipy>=1.13,<2",
@@ -81,19 +84,24 @@ pyannote_image = (
 pyannote_merged_image = pyannote_image.add_local_dir("./src", remote_path="/root/cs_src")
 
 # pyannote.ai Precision-2 (REST API; no GPU needed).
+# ffmpeg/ffprobe needed because the function uses _ffprobe_duration().
 api_image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
     .pip_install("requests==2.32.3")
 )
 
 # NVIDIA NeMo Sortformer.
+# matplotlib is a transitive dep of nemo_toolkit[asr] for some plotting paths;
+# not always pulled, so install explicitly. huggingface_hub left unpinned so
+# nemo can pull its own compatible version.
 nemo_image = (
     modal.Image.from_registry("nvcr.io/nvidia/pytorch:24.07-py3", add_python="3.10")
     .apt_install("ffmpeg", "libsndfile1")
     .pip_install(
         "Cython",
         "nemo_toolkit[asr]==2.0.0",
-        "huggingface_hub==0.24.6",
+        "matplotlib",
         "soundfile==0.12.1",
     )
     .env({"HF_HOME": "/vol/cache/huggingface", "NEMO_CACHE_DIR": "/vol/cache/nemo"})
@@ -145,6 +153,25 @@ def turns_to_rttm(meeting_id: str, turns: list[tuple[float, float, str]]) -> str
             f"<NA> <NA> {speaker} <NA> <NA>"
         )
     return "\n".join(lines) + "\n"
+
+
+def _cached_result(meeting_id: str, model_name: str) -> dict | None:
+    """Return cached meta dict if both .rttm and .meta.json already exist.
+
+    Lets the orchestrator be safely restarted — any (model, meeting) pair
+    that completed in a previous run is skipped on re-entry.
+    """
+    import json
+
+    results_dir = Path(VOLUME_PATH) / "results" / meeting_id
+    rttm_path = results_dir / f"{model_name}.rttm"
+    meta_path = results_dir / f"{model_name}.meta.json"
+    if rttm_path.exists() and meta_path.exists():
+        meta = json.loads(meta_path.read_text())
+        meta["cached"] = True
+        print(f"  Cached — skipping. ({rttm_path})")
+        return meta
+    return None
 
 
 def _write_result(
@@ -345,6 +372,9 @@ def _ffprobe_duration(wav_path: Path) -> float:
 )
 def diarize_pyannote_oss(meeting_id: str) -> dict:
     """Run pyannote/speaker-diarization-3.1 and write RTTM to volume."""
+    if (cached := _cached_result(meeting_id, "pyannote_oss")) is not None:
+        return cached
+
     import os
     import torch
     from pyannote.audio import Pipeline
@@ -395,6 +425,9 @@ def diarize_pyannote_merged(meeting_id: str) -> dict:
     Mirrors the production pipeline (Stage 2 + speaker merge) so the score
     reflects what CouncilScribe actually produces today, post-merge.
     """
+    if (cached := _cached_result(meeting_id, "pyannote_merged")) is not None:
+        return cached
+
     import os
     import sys
     import numpy as np
@@ -503,6 +536,9 @@ def diarize_pyannote_ai(meeting_id: str) -> dict:
         3. POST /v1/diarize with media={uri} → returns job_id.
         4. Poll GET /v1/jobs/{job_id} until status is succeeded/failed.
     """
+    if (cached := _cached_result(meeting_id, "pyannote_ai")) is not None:
+        return cached
+
     import os
     import json
     import requests
@@ -605,6 +641,9 @@ def diarize_nemo_sortformer(meeting_id: str) -> dict:
     benchmark, not a code issue. If Sortformer otherwise looks promising,
     follow up with NeMo's MSDD/clustering pipeline which handles arbitrary N.
     """
+    if (cached := _cached_result(meeting_id, "nemo_sortformer")) is not None:
+        return cached
+
     import os
     import torch
     from nemo.collections.asr.models import SortformerEncLabelModel
