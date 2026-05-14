@@ -54,20 +54,39 @@ Every stage checkpoints to Google Drive, so Colab session timeouts don't lose pr
 ```
 CouncilScribe/
   council_scribe.ipynb    # Main Colab notebook (start here)
+  run_local.py            # Local CLI entry point (alternative to Colab)
   requirements.txt
   src/
     config.py             # Settings, paths, thresholds
     models.py             # Data classes (Meeting, Segment, etc.)
     checkpoint.py         # Pipeline state machine
     audio_utils.py        # Audio helpers
+    download.py           # CATS TV scraping + URL download
     ingest.py             # Stage 1: ffmpeg normalization
     diarize.py            # Stage 2: pyannote diarization
+    merge.py              # Post-diarization: collapse fragmented speakers
     transcribe.py         # Stage 3: faster-whisper transcription
+    vtt_align.py          # Alt Stage 3: align CATS TV VTT to diarization
     identify.py           # Stage 4: speaker identification (Layers 1-2)
     llm_utils.py          # Stage 4: LLM identification (Layer 3)
+    roster.py             # Council roster + fuzzy name correction
     enroll.py             # Stage 5: voice profile enrollment
-    export.py             # Stage 6: JSON/Markdown/SRT export
+    summarize.py          # Stage 6: meeting summary generation
+    export.py             # Stage 7: JSON/Markdown/SRT export
+  bench/                  # Diarization model benchmark harness (Modal)
+    README.md             # See for benchmarking setup + how to pick a winner
+    modal_app.py          # 4 diarization models, runs on Modal
+    meetings.yaml         # Test set definition
+    run.py                # Local orchestrator
+    score.py              # Scoring + spot-check sampler
 ```
+
+## Diarization benchmarking
+
+`bench/` contains a Modal-based harness for comparing diarization models
+(`pyannote_oss`, `pyannote_merged`, `pyannote_ai` Precision-2, `nemo_sortformer`)
+against a fixed test set. See [`bench/README.md`](bench/README.md) for
+setup and how to use the output to pick a model for production.
 
 ## Speaker identification strategy
 

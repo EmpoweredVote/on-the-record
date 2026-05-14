@@ -1,0 +1,41 @@
+# Diarization benchmark test set.
+#
+# Each entry is either:
+#   - a `permalink` to a specific CATS TV meeting page (locked-in fixture), or
+#   - `latest: bloomington_city_council` (auto-resolved to the most recent
+#     Bloomington City Council meeting at run time)
+#
+# `expected_speakers` is your best estimate of distinct human voices in the
+# meeting. Used by the scorer to flag over-fragmentation (too many labels) or
+# under-segmentation (too few). Doesn't need to be exact — order-of-magnitude
+# is fine. Update after the first run if reality differs.
+
+meetings:
+  - id: 2026-02-04-council
+    permalink: https://catstv.net/m.php?q=15482
+    description: "Bloomington City Council — Feb 4, 2026"
+    expected_speakers: 12  # 9 councilors + clerk + mayor + a few public commenters
+
+  - id: 2026-02-18-council
+    permalink: https://catstv.net/m.php?q=15529
+    description: "Bloomington City Council — Feb 18, 2026"
+    expected_speakers: 12
+
+  - id: 2026-02-25-council
+    permalink: https://catstv.net/m.php?q=15556
+    description: "Bloomington City Council — Feb 25, 2026"
+    expected_speakers: 12
+
+  - id: latest-council
+    latest: bloomington_city_council
+    description: "Most recent Bloomington City Council regular session (resolved at run time)"
+    expected_speakers: 12
+    # Note: filters to m4v matching ^B_CC_\d{6}\.m4v$ — i.e. excludes fiscal
+    # committee, committee-on-courts, deliberation sessions, etc.
+
+# Models to benchmark. Each name maps to a Modal function in modal_app.py.
+models:
+  - pyannote_oss
+  - pyannote_merged
+  - pyannote_ai
+  - nemo_sortformer
