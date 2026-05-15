@@ -1,0 +1,22 @@
+{
+  "meeting_id": "2026-02-25-council",
+  "model": "pyannote_oss",
+  "elapsed_seconds": 107.71,
+  "audio_duration_seconds": 1867.91,
+  "realtime_factor": 17.34,
+  "num_turns": 377,
+  "num_distinct_speakers": 9,
+  "speaker_labels": [
+    "SPEAKER_00",
+    "SPEAKER_01",
+    "SPEAKER_02",
+    "SPEAKER_03",
+    "SPEAKER_04",
+    "SPEAKER_05",
+    "SPEAKER_06",
+    "SPEAKER_07",
+    "SPEAKER_08"
+  ],
+  "cost_usd": 0.0239,
+  "rttm_path": "/vol/results/2026-02-25-council/pyannote_oss.rttm"
+}

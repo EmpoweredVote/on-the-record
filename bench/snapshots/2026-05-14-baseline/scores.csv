@@ -1,0 +1,13 @@
+meeting_id,model,audio_duration_s,elapsed_s,realtime_factor,cost_usd,num_turns,num_speakers,expected_speakers,speaker_delta,avg_turn_s,silence_fraction
+2026-02-04-council,pyannote_ai,10325.3,173.55,59.49,0.4302,1430,31,12,19,6.41,0.119
+2026-02-04-council,pyannote_merged,10325.3,1493.79,6.91,0.332,1716,32,12,20,5.29,0.127
+2026-02-04-council,pyannote_oss,10325.3,1563.41,6.6,0.3474,1716,32,12,20,5.29,0.127
+2026-02-18-council,pyannote_ai,10997.9,165.58,66.42,0.4582,1369,24,12,12,7.17,0.114
+2026-02-18-council,pyannote_merged,10997.9,3033.31,3.63,0.6741,1879,25,12,13,5.11,0.133
+2026-02-18-council,pyannote_oss,10997.9,2258.76,4.87,0.5019,1879,25,12,13,5.11,0.133
+2026-02-25-council,pyannote_ai,1867.9,30.49,61.27,0.0778,344,8,12,-4,4.9,0.123
+2026-02-25-council,pyannote_merged,1867.9,107.24,17.42,0.0238,377,9,12,-3,4.44,0.126
+2026-02-25-council,pyannote_oss,1867.9,107.71,17.34,0.0239,377,9,12,-3,4.44,0.126
+latest-council,pyannote_ai,14645.6,246.74,59.36,0.6102,2304,44,12,32,5.51,0.139
+latest-council,pyannote_merged,14645.6,5356.59,2.73,1.1904,2524,42,12,30,5.02,0.142
+latest-council,pyannote_oss,14645.6,3082.24,4.75,0.6849,2524,42,12,30,5.02,0.142

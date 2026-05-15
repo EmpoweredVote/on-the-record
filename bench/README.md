@@ -1,17 +1,21 @@
 # Diarization model benchmark
 
 A reproducible harness for picking the best diarization model for CouncilScribe.
-Runs four candidates on a fixed set of Bloomington City Council meetings on
+Runs candidates on a fixed set of Bloomington City Council meetings on
 Modal, writes RTTM outputs back, and scores them locally.
+
+> **Results of the first run (2026-05-14)** are in [`FINDINGS.md`](FINDINGS.md).
+> The headline: switch to **pyannote.ai Precision-2** in production.
+> Curated artifacts: [`snapshots/2026-05-14-baseline/`](snapshots/2026-05-14-baseline/).
 
 ## What it tests
 
-| Model | Image | GPU | Cost signal |
-|---|---|---|---|
-| `pyannote_oss` | `pyannote.audio==3.3.2` | L4 | GPU time only |
-| `pyannote_merged` | same as above + uses `src/merge.py` | L4 | GPU time only |
-| `pyannote_ai` | requests (REST API) | none | ~$0.15 / audio hour |
-| `nemo_sortformer` | NeMo 2.0 from `nvcr.io/nvidia/pytorch:24.07` | L4 | GPU time only |
+| Model | Image | GPU | Cost signal | Status |
+|---|---|---|---|---|
+| `pyannote_oss` | `pyannote.audio==4.0.4` | L4 | GPU time only | active |
+| `pyannote_merged` | same as above + bundles `src/merge.py` | L4 | GPU time only | active |
+| `pyannote_ai` | requests (Precision-2 REST API) | none | ~$0.15 / audio hour | active |
+| `nemo_sortformer` | NeMo 2.7 from `nvcr.io/nvidia/pytorch:24.07` | L4 | GPU time only | **disabled** (OOM on L4, see FINDINGS.md) |
 
 ## One-time setup
 

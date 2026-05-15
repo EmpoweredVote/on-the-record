@@ -1,0 +1,21 @@
+{
+  "meeting_id": "2026-02-25-council",
+  "model": "pyannote_ai",
+  "elapsed_seconds": 30.49,
+  "audio_duration_seconds": 1867.91,
+  "realtime_factor": 61.27,
+  "num_turns": 344,
+  "num_distinct_speakers": 8,
+  "speaker_labels": [
+    "SPEAKER_00",
+    "SPEAKER_01",
+    "SPEAKER_02",
+    "SPEAKER_03",
+    "SPEAKER_04",
+    "SPEAKER_05",
+    "SPEAKER_06",
+    "SPEAKER_07"
+  ],
+  "cost_usd": 0.0778,
+  "rttm_path": "/vol/results/2026-02-25-council/pyannote_ai.rttm"
+}
