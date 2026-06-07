@@ -39,3 +39,6 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Bench sweep outputs — large, ephemeral. Curated snapshots live in bench/snapshots/.
+bench/results/

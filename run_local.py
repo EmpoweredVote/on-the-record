@@ -450,9 +450,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
     print()
 
     # ======================================================================
-    # Stage 2.5: Auto-merge fragmented speakers
+    # Stage 2.5: Auto-merge fragmented speakers (opt-in via --merge)
     # ======================================================================
-    if not args.no_merge:
+    if args.merge:
         if embeddings_path.exists():
             with open(embeddings_path, "r") as f:
                 emb_data = json.load(f)
@@ -1071,7 +1071,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             skip_llm=args.skip_llm if hasattr(args, "skip_llm") else False,
             skip_summary=True,  # skip summary in batch mode
             confirm_enroll=False,
-            no_merge=args.no_merge if hasattr(args, "no_merge") else False,
+            merge=args.merge if hasattr(args, "merge") else False,
             pre_identify=False,  # skip interactive pre-identify
             use_vtt=args.use_vtt if hasattr(args, "use_vtt") else False,
             body=getattr(args, "body", None),
@@ -1802,8 +1802,11 @@ Environment Variables:
                         help="Skip meeting summary generation (requires ANTHROPIC_API_KEY)")
     parser.add_argument("--confirm-enroll", action="store_true",
                         help="Interactively confirm enrollment for borderline speakers (0.70-0.85 confidence)")
-    parser.add_argument("--no-merge", action="store_true",
-                        help="Skip auto-merging of fragmented speakers after diarization")
+    parser.add_argument("--merge", action="store_true",
+                        help="Opt-in: collapse speakers whose voice embeddings exceed "
+                             "SPEAKER_MERGE_THRESHOLD. Disabled by default — current "
+                             "pyannote 3.1 doesn't fragment Bloomington audio in practice, "
+                             "and embeddings have known NaN issues. See bench/diagnose_merge.py.")
     parser.add_argument("--use-vtt", action="store_true",
                         help="Use VTT subtitles instead of Whisper (auto-detected if captions.vtt exists)")
 
