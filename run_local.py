@@ -409,20 +409,45 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 segments = [Segment.from_dict(d) for d in json.load(f)]
             print(f"  Loaded {len(segments)} segments from previous run")
         else:
-            from src.diarize import load_diarization_pipeline, run_diarization
+            diarizer = getattr(args, "diarizer", "oss")
+            if diarizer == "api":
+                from src.diarize_api import run_diarization_via_api
 
-            print("  Running speaker diarization...")
-            t0 = time.time()
-            pipeline = load_diarization_pipeline(hf_token)
-            segments = run_diarization(pipeline, wav_path, num_speakers=num_speakers)
-            elapsed = time.time() - t0
+                api_key = os.environ.get("PYANNOTE_AI_KEY")
+                if not api_key:
+                    raise RuntimeError(
+                        "--diarizer api requires PYANNOTE_AI_KEY in env "
+                        "(add it to .env.local)."
+                    )
+                print("  Running speaker diarization (pyannote.ai Precision-2)...")
+                if num_speakers is not None:
+                    print(
+                        f"  ! --num-speakers={num_speakers} is ignored by the API "
+                        "backend (Precision-2 does not accept a speaker-count hint)."
+                    )
+                t0 = time.time()
+                segments = run_diarization_via_api(wav_path, api_key)
+                elapsed = time.time() - t0
 
-            with open(diarization_path, "w") as f:
-                json.dump([s.to_dict() for s in segments], f, indent=2)
+                with open(diarization_path, "w") as f:
+                    json.dump([s.to_dict() for s in segments], f, indent=2)
 
-            del pipeline
-            free_gpu_memory()
-            print(f"  Diarization done in {elapsed:.1f}s")
+                print(f"  Diarization done in {elapsed:.1f}s")
+            else:
+                from src.diarize import load_diarization_pipeline, run_diarization
+
+                print("  Running speaker diarization (pyannote OSS 3.1)...")
+                t0 = time.time()
+                pipeline = load_diarization_pipeline(hf_token)
+                segments = run_diarization(pipeline, wav_path, num_speakers=num_speakers)
+                elapsed = time.time() - t0
+
+                with open(diarization_path, "w") as f:
+                    json.dump([s.to_dict() for s in segments], f, indent=2)
+
+                del pipeline
+                free_gpu_memory()
+                print(f"  Diarization done in {elapsed:.1f}s")
 
         # Sub-step B: Speaker embeddings
         if embeddings_path.exists():
@@ -446,13 +471,22 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     unique_speakers = set(s.speaker_label for s in segments)
     print(f"  {len(segments)} segments, {len(unique_speakers)} speakers detected")
-    meeting.processing_metadata.diarization_model = config.DIARIZATION_MODEL
+    if getattr(args, "diarizer", "oss") == "api":
+        meeting.processing_metadata.diarization_model = "pyannote/ai-precision-2"
+    else:
+        meeting.processing_metadata.diarization_model = config.DIARIZATION_MODEL
     print()
 
     # ======================================================================
     # Stage 2.5: Auto-merge fragmented speakers (opt-in via --merge)
     # ======================================================================
-    if args.merge:
+    if args.merge and getattr(args, "diarizer", "oss") == "api":
+        print(
+            "  ! --merge requested with --diarizer api: skipping merge stage. "
+            "Precision-2 already produces continuous turns; merge was designed "
+            "for OSS pyannote 3.1 fragmentation."
+        )
+    elif args.merge:
         if embeddings_path.exists():
             with open(embeddings_path, "r") as f:
                 emb_data = json.load(f)
@@ -1074,6 +1108,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             merge=args.merge if hasattr(args, "merge") else False,
             pre_identify=False,  # skip interactive pre-identify
             use_vtt=args.use_vtt if hasattr(args, "use_vtt") else False,
+            diarizer=getattr(args, "diarizer", "oss"),
             body=getattr(args, "body", None),
             force_retag=getattr(args, "force_retag", False),
         )
@@ -1809,6 +1844,13 @@ Environment Variables:
                              "and embeddings have known NaN issues. See bench/diagnose_merge.py.")
     parser.add_argument("--use-vtt", action="store_true",
                         help="Use VTT subtitles instead of Whisper (auto-detected if captions.vtt exists)")
+    parser.add_argument("--diarizer", choices=["oss", "api"], default="oss",
+                        help="Diarization backend. 'oss' uses local pyannote 3.1 "
+                             "(default, free, ~50min/3hr meeting on L4). 'api' uses "
+                             "pyannote.ai Precision-2 (cleaner segmentation, ~3min "
+                             "for the same meeting, ~$0.45 per audio hour). "
+                             "Requires PYANNOTE_AI_KEY in env. "
+                             "Recommended per bench/FINDINGS.md.")
 
     # Utilities
     parser.add_argument("--list-profiles", action="store_true",
