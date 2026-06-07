@@ -28,16 +28,20 @@ def normalize_audio(
     input_path: str | Path,
     output_path: str | Path,
     noise_reduce: bool = False,
+    cookies_file: str | None = None,
 ) -> dict:
     """Normalize audio to 16kHz mono WAV via ffmpeg.
 
     Accepts a local file path or a URL. If a URL is provided, the video is
-    downloaded first, then normalized.
+    downloaded first, then normalized. Supports YouTube, Facebook (via yt-dlp),
+    CATS TV page URLs, and any direct video URL.
 
     Args:
-        input_path: Source audio/video file path or URL (direct video URL or CATS TV page URL).
+        input_path: Source audio/video file path or URL.
         output_path: Destination WAV file path.
         noise_reduce: If True, apply spectral-gating noise reduction after conversion.
+        cookies_file: Path to a Netscape-format cookies file for authenticated
+            yt-dlp downloads (e.g. private Facebook videos).
 
     Returns:
         Metadata dict with source, output path, duration, and whether noise reduction was applied.
@@ -53,13 +57,11 @@ def normalize_audio(
     if _is_url(source_str):
         from .download import download_from_url
 
-        # Save downloaded video next to the output WAV
-        parsed = urlparse(source_str)
-        ext = Path(parsed.path).suffix or ".m4v"
-        download_path = output_path.parent / f"source{ext}"
+        # Use a placeholder stem; yt-dlp may change the extension
+        download_path = output_path.parent / "source.mp4"
         print(f"  Downloading from URL...")
-        download_from_url(source_str, download_path)
-        ffmpeg_input = str(download_path)
+        actual_path = download_from_url(source_str, download_path, cookies_file=cookies_file)
+        ffmpeg_input = str(actual_path)
     else:
         ffmpeg_input = str(Path(input_path))
 

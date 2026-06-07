@@ -359,7 +359,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
         from src.ingest import normalize_audio
 
         t0 = time.time()
-        metadata = normalize_audio(audio_path, wav_path, noise_reduce=args.noise_reduce)
+        metadata = normalize_audio(
+            audio_path, wav_path,
+            noise_reduce=args.noise_reduce,
+            cookies_file=getattr(args, "cookies", None),
+        )
         elapsed = time.time() - t0
         meeting.duration_seconds = metadata["duration_seconds"]
         state.mark_complete(PipelineStage.INGESTED)
@@ -1788,6 +1792,10 @@ Environment Variables:
                         help="Expected number of speakers (0 = auto-detect)")
     parser.add_argument("--noise-reduce", action="store_true",
                         help="Apply spectral noise reduction to audio")
+    parser.add_argument("--cookies", metavar="FILE",
+                        help="Netscape-format cookies file for authenticated downloads "
+                             "(e.g. private Facebook videos). Export from browser with "
+                             "a 'Get cookies.txt' extension.")
     parser.add_argument("--skip-llm", action="store_true",
                         help="Skip LLM-based speaker identification (Layer 3)")
     parser.add_argument("--skip-summary", action="store_true",

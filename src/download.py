@@ -15,28 +15,104 @@ CATSTV_BLOB_BASE = "https://catstv.blob.core.windows.net/videoarchive"
 _CONNECT_TIMEOUT = 30
 _READ_TIMEOUT = 600  # 10 minutes for large video files
 
+# Domains handled by yt-dlp rather than direct requests
+_YTDLP_DOMAINS = {
+    "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be",
+    "facebook.com", "www.facebook.com", "m.facebook.com", "fb.com", "fb.watch",
+}
+
+
+def _is_ytdlp_url(url: str) -> bool:
+    """Return True if the URL should be downloaded via yt-dlp."""
+    try:
+        return urlparse(url).netloc.lower() in _YTDLP_DOMAINS
+    except Exception:
+        return False
+
+
+def download_via_ytdlp(
+    url: str,
+    output_path: str | Path,
+    cookies_file: str | None = None,
+    progress: bool = True,
+) -> Path:
+    """Download a video via yt-dlp (YouTube, Facebook, and 1000+ other sites).
+
+    Downloads the best available audio stream. The returned path may have a
+    different extension than ``output_path`` depending on what yt-dlp selects.
+
+    Args:
+        url: YouTube, Facebook, or any yt-dlp-supported URL.
+        output_path: Desired output path (stem is used as the filename template).
+        cookies_file: Path to a Netscape-format cookies file for authenticated downloads.
+        progress: If True, show yt-dlp progress output.
+
+    Returns:
+        Path to the downloaded file (extension may differ from output_path).
+    """
+    try:
+        import yt_dlp
+    except ImportError:
+        raise RuntimeError(
+            "yt-dlp is not installed. Run: pip install yt-dlp"
+        )
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Use the stem as the output template; yt-dlp appends the real extension
+    template = str(output_path.parent / output_path.stem) + ".%(ext)s"
+
+    ydl_opts: dict = {
+        "format": "bestaudio/best",
+        "outtmpl": template,
+        "quiet": not progress,
+        "no_warnings": not progress,
+    }
+    if cookies_file:
+        ydl_opts["cookiefile"] = str(cookies_file)
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        ext = info.get("ext", "mp4")
+
+    actual_path = output_path.parent / f"{output_path.stem}.{ext}"
+    if not actual_path.exists():
+        raise RuntimeError(
+            f"yt-dlp reported success but file not found: {actual_path}"
+        )
+
+    return actual_path
+
 
 def download_from_url(
     url: str,
     output_path: str | Path,
+    cookies_file: str | None = None,
     progress: bool = True,
 ) -> Path:
-    """Download a video file from a direct URL.
+    """Download a video file from a URL.
 
-    Supports any direct video URL (mp4, m4v, mkv, etc.) and also CATS TV
-    page URLs — if the URL points to a catstv.net page, it extracts the
-    video blob URL automatically.
+    Supports:
+    - YouTube and Facebook URLs (routed through yt-dlp)
+    - CATS TV page URLs (blob URL extracted automatically)
+    - Any other direct video URL (mp4, m4v, mkv, etc.)
 
     Args:
-        url: Direct video URL or CATS TV page URL.
+        url: Video URL (YouTube, Facebook, CATS TV page, or direct file URL).
         output_path: Local path to save the downloaded file.
+        cookies_file: Path to a Netscape-format cookies file (used by yt-dlp for
+            authenticated downloads, e.g. private Facebook videos).
         progress: If True, print download progress.
 
     Returns:
-        Path to the downloaded file.
+        Path to the downloaded file (may differ from output_path for yt-dlp downloads).
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if _is_ytdlp_url(url):
+        return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
 
     # If it's a CATS TV page URL, resolve to the blob URL
     resolved = _resolve_video_url(url)
