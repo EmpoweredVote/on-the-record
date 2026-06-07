@@ -137,6 +137,25 @@ def _is_plausible_name(name: str) -> bool:
         return False
     return True
 
+def _surname_matches_roster(name: str, roster, threshold: float) -> bool:
+    """Return True if the extracted surname fuzzy-matches any roster member alias."""
+    from difflib import SequenceMatcher
+    from .roster import extract_surname
+
+    surname = extract_surname(name)
+    if not surname:
+        return False
+    for member in roster.members:
+        for alias in member.aliases:
+            alias_surname = extract_surname(alias)
+            if not alias_surname:
+                continue
+            score = SequenceMatcher(None, surname.lower(), alias_surname.lower()).ratio()
+            if score >= threshold:
+                return True
+    return False
+
+
 _PATTERNS: list[tuple[str, re.Pattern, float, str]] = [
     # Roll call: "Councilmember X?" -> next speaker says "Present"/"Here"
     (
@@ -194,6 +213,7 @@ _PATTERNS: list[tuple[str, re.Pattern, float, str]] = [
 
 def apply_pattern_matching(
     segments: list[Segment],
+    roster=None,
 ) -> dict[str, list[SpeakerMapping]]:
     """Scan transcript for name-revealing patterns.
 
@@ -213,6 +233,10 @@ def apply_pattern_matching(
             # Extract the identified name from the match
             name = match.group(match.lastindex) if match.lastindex else None
             if not name or not _is_plausible_name(name):
+                continue
+
+            # CSIDENT-02: reject names whose surname doesn't match any roster member
+            if roster is not None and not _surname_matches_roster(name, roster, config.ROSTER_SURNAME_THRESHOLD):
                 continue
 
             # Determine which speaker the name applies to
@@ -310,7 +334,7 @@ def identify_speakers(
             mappings[label] = mapping
 
     # Layer 2: Pattern matching
-    pattern_candidates = apply_pattern_matching(segments)
+    pattern_candidates = apply_pattern_matching(segments, roster=roster)
     for label, candidates in pattern_candidates.items():
         best = max(candidates, key=lambda c: c.confidence)
         if label not in mappings or best.confidence > mappings[label].confidence:

@@ -80,8 +80,14 @@ def run_diarization(
     if num_speakers is not None:
         kwargs["num_speakers"] = num_speakers
 
+    # Pre-load audio as a tensor dict to avoid torchcodec/FFmpeg version issues.
+    # pyannote accepts {'waveform': (C, T) tensor, 'sample_rate': int} directly.
+    samples, sr = load_wav(wav_path)
+    waveform = torch.tensor(samples).unsqueeze(0)  # (1, T)
+    audio_input = {"waveform": waveform, "sample_rate": sr}
+
     with _LineProgressHook() as hook:
-        diarization = pipeline(str(wav_path), hook=hook, **kwargs)
+        diarization = pipeline(audio_input, hook=hook, **kwargs)
 
     # Handle both old Annotation API (itertracks) and new DiarizeOutput API
     raw_segments: list[tuple[float, float, str]] = []

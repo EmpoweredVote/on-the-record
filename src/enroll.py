@@ -5,12 +5,30 @@ from __future__ import annotations
 import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
 from . import config
 from .models import Segment, SpeakerMapping
+
+
+class RestrictedUnpickler(pickle.Unpickler):
+    """Only allow unpickling of known safe types used by profile data."""
+
+    _SAFE_MODULE_ROOTS = {"numpy", "builtins"}
+    _SAFE_MODULES = {"src.enroll"}
+
+    def find_class(self, module: str, name: str) -> type:
+        root = module.split(".")[0]
+        if root in self._SAFE_MODULE_ROOTS or module in self._SAFE_MODULES:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(
+            f"Blocked unpickling of {module}.{name}"
+        )
+
+if TYPE_CHECKING:
+    from .roster import Roster
 
 
 @dataclass
@@ -21,6 +39,8 @@ class StoredProfile:
     centroid: Optional[np.ndarray] = None
     meetings_seen: list[str] = field(default_factory=list)
     total_segments_confirmed: int = 0
+    politician_slug: Optional[str] = None   # essentials identifier
+    politician_id: Optional[str] = None     # essentials UUID
 
     def recompute_centroid(self) -> None:
         if self.embeddings:
@@ -42,8 +62,22 @@ def load_profiles() -> ProfileDB:
     path = _db_path()
     if path.exists():
         with open(path, "rb") as f:
-            db = pickle.load(f)
+            db = RestrictedUnpickler(f).load()
         if not isinstance(db, ProfileDB):
+            return ProfileDB()
+        stored_version = getattr(db, "schema_version", 1)
+        if stored_version != config.PROFILE_SCHEMA_VERSION:
+            print(
+                f"  [enroll] Profile DB schema v{stored_version} incompatible with "
+                f"current v{config.PROFILE_SCHEMA_VERSION} (embedding model changed). "
+                f"Discarding {len(db.profiles)} stale profile(s); re-enroll from fresh meetings."
+            )
+            backup = path.with_suffix(f".v{stored_version}.pkl.bak")
+            try:
+                path.rename(backup)
+                print(f"  [enroll] Previous DB backed up to {backup.name}")
+            except OSError:
+                pass
             return ProfileDB()
         return db
     return ProfileDB()
@@ -85,6 +119,32 @@ def _name_to_slug(name: str) -> str:
     return filtered[0].lower()
 
 
+def resolve_enrollment_key(
+    display_name: str,
+    roster: Optional["Roster"] = None,
+) -> tuple[str, Optional[str], Optional[str]]:
+    """Return (profile_key, politician_slug, politician_id).
+
+    If display_name matches a roster member (via correct_speaker_name),
+    key = 'essentials:<politician_slug>', identity fields from roster.
+    Otherwise: key = _name_to_slug(display_name), both identity fields None.
+    """
+    if roster is not None:
+        from .roster import correct_speaker_name
+
+        corrected = correct_speaker_name(display_name, roster)
+        for member in roster.members:
+            if corrected == member.name:
+                if member.politician_slug:
+                    return (
+                        f"essentials:{member.politician_slug}",
+                        member.politician_slug,
+                        member.politician_id,
+                    )
+                break
+    return (_name_to_slug(display_name), None, None)
+
+
 def _enroll_one(
     db: ProfileDB,
     slug: str,
@@ -92,6 +152,8 @@ def _enroll_one(
     embedding: np.ndarray,
     meeting_id: str,
     seg_count: int,
+    politician_slug: Optional[str] = None,
+    politician_id: Optional[str] = None,
 ) -> None:
     """Add or update a single speaker profile in the database."""
     if slug in db.profiles:
@@ -100,6 +162,9 @@ def _enroll_one(
         if meeting_id not in profile.meetings_seen:
             profile.meetings_seen.append(meeting_id)
         profile.total_segments_confirmed += seg_count
+        if politician_slug and not profile.politician_slug:
+            profile.politician_slug = politician_slug
+            profile.politician_id = politician_id
         profile.recompute_centroid()
     else:
         profile = StoredProfile(
@@ -108,6 +173,8 @@ def _enroll_one(
             embeddings=[embedding],
             meetings_seen=[meeting_id],
             total_segments_confirmed=seg_count,
+            politician_slug=politician_slug,
+            politician_id=politician_id,
         )
         profile.recompute_centroid()
         db.profiles[slug] = profile
@@ -119,10 +186,13 @@ def enroll_speakers(
     mappings: dict[str, SpeakerMapping],
     meeting_id: str,
     segments: list[Segment],
+    roster: Optional["Roster"] = None,
 ) -> ProfileDB:
     """Enroll confirmed speakers into the profile database.
 
     Only enrolls speakers with confidence >= VOICE_MATCH_THRESHOLD.
+    When a roster is provided, roster-matched speakers are keyed under
+    ``essentials:<politician_slug>`` with identity fields populated.
     """
     for label, mapping in mappings.items():
         if not mapping.speaker_name:
@@ -132,9 +202,13 @@ def enroll_speakers(
         if label not in speaker_embeddings:
             continue
 
-        slug = _name_to_slug(mapping.speaker_name)
+        slug, pol_slug, pol_id = resolve_enrollment_key(mapping.speaker_name, roster)
         seg_count = sum(1 for s in segments if s.speaker_label == label)
-        _enroll_one(db, slug, mapping.speaker_name, speaker_embeddings[label], meeting_id, seg_count)
+        _enroll_one(
+            db, slug, mapping.speaker_name, speaker_embeddings[label],
+            meeting_id, seg_count,
+            politician_slug=pol_slug, politician_id=pol_id,
+        )
 
     return db
 
@@ -212,6 +286,10 @@ def rename_profile(
             if mid not in target.meetings_seen:
                 target.meetings_seen.append(mid)
         target.total_segments_confirmed += profile.total_segments_confirmed
+        # Preserve identity fields from source if target lacks them
+        if profile.politician_slug and not target.politician_slug:
+            target.politician_slug = profile.politician_slug
+            target.politician_id = profile.politician_id
         target.recompute_centroid()
     else:
         profile.speaker_id = new_slug
@@ -267,9 +345,28 @@ def fix_profiles_with_roster(db: ProfileDB, roster) -> list[str]:
             renames.append((slug, corrected, profile.display_name))
 
     for old_slug, new_name, old_name in renames:
-        new_slug = _name_to_slug(new_name)
-        rename_profile(db, old_slug, new_name)
-        changes.append(f"{old_slug} ({old_name}) -> {new_slug} ({new_name})")
+        new_key, pol_slug, pol_id = resolve_enrollment_key(new_name, roster)
+        if old_slug == new_key:
+            continue
+        profile = db.profiles.pop(old_slug)
+        if new_key in db.profiles:
+            target = db.profiles[new_key]
+            target.embeddings.extend(profile.embeddings)
+            for mid in profile.meetings_seen:
+                if mid not in target.meetings_seen:
+                    target.meetings_seen.append(mid)
+            target.total_segments_confirmed += profile.total_segments_confirmed
+            if pol_slug and not target.politician_slug:
+                target.politician_slug = pol_slug
+                target.politician_id = pol_id
+            target.recompute_centroid()
+        else:
+            profile.speaker_id = new_key
+            profile.display_name = new_name
+            profile.politician_slug = pol_slug
+            profile.politician_id = pol_id
+            db.profiles[new_key] = profile
+        changes.append(f"{old_slug} ({old_name}) -> {new_key} ({new_name})")
 
     return changes
 
@@ -281,6 +378,7 @@ def enroll_confirmed(
     mappings: dict[str, SpeakerMapping],
     meeting_id: str,
     segments: list[Segment],
+    roster: Optional["Roster"] = None,
 ) -> ProfileDB:
     """Enroll specific speakers that were confirmed interactively."""
     for label in confirmed_labels:
@@ -290,8 +388,12 @@ def enroll_confirmed(
         if label not in speaker_embeddings:
             continue
 
-        slug = _name_to_slug(mapping.speaker_name)
+        slug, pol_slug, pol_id = resolve_enrollment_key(mapping.speaker_name, roster)
         seg_count = sum(1 for s in segments if s.speaker_label == label)
-        _enroll_one(db, slug, mapping.speaker_name, speaker_embeddings[label], meeting_id, seg_count)
+        _enroll_one(
+            db, slug, mapping.speaker_name, speaker_embeddings[label],
+            meeting_id, seg_count,
+            politician_slug=pol_slug, politician_id=pol_id,
+        )
 
     return db

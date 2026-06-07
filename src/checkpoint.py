@@ -32,6 +32,7 @@ class PipelineState:
         self.completed_stage: PipelineStage = PipelineStage.NOT_STARTED
         self.transcription_progress: int = 0  # last completed segment index
         self.total_segments: int = 0
+        self.body_slug: Optional[str] = None
         self._load()
 
     def _load(self) -> None:
@@ -41,6 +42,7 @@ class PipelineState:
             self.completed_stage = PipelineStage(data.get("completed_stage", 0))
             self.transcription_progress = data.get("transcription_progress", 0)
             self.total_segments = data.get("total_segments", 0)
+            self.body_slug = data.get("body_slug")  # None if legacy/untagged — D-05 compat
 
     def save(self) -> None:
         """Atomic write: write to temp file then rename."""
@@ -48,6 +50,7 @@ class PipelineState:
             "completed_stage": int(self.completed_stage),
             "transcription_progress": self.transcription_progress,
             "total_segments": self.total_segments,
+            "body_slug": self.body_slug,
         }
         fd, tmp_path = tempfile.mkstemp(
             dir=str(self.meeting_dir), suffix=".tmp"
@@ -63,6 +66,32 @@ class PipelineState:
 
     def mark_complete(self, stage: PipelineStage) -> None:
         self.completed_stage = stage
+        self.save()
+
+    def rewind_for_retag(self) -> None:
+        """D-04: Invalidate downstream stages when body_slug changes.
+
+        Rewinds completed_stage to TRANSCRIBED (stage 3) so Stages 4-7 re-run,
+        deletes stale Stage 4+ artifacts produced against the old roster
+        (pre_identifications.json per D-11, plus llm_partial_results.json and
+        transcript_named.json), and atomically persists the rewound state.
+        Caller must set self.body_slug to the new slug BEFORE calling this.
+
+        Files are deleted BEFORE save() so that if the process crashes between
+        the unlinks and the save, pipeline_state.json still reflects the old
+        stage and a resume will regenerate the missing artifacts rather than
+        trust a stale state file.
+        """
+        self.completed_stage = PipelineStage.TRANSCRIBED
+        stale = (
+            "pre_identifications.json",   # D-11: stale roster-specific guesses
+            "llm_partial_results.json",   # Stage 4 LLM resume cache
+            "transcript_named.json",      # Stage 4 output with old-roster names
+        )
+        for name in stale:
+            p = self.meeting_dir / name
+            if p.exists():
+                p.unlink()
         self.save()
 
     def is_complete(self, stage: PipelineStage) -> bool:

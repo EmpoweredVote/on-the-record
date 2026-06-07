@@ -17,9 +17,11 @@ import argparse
 import gc
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 # Ensure src/ is importable when running from the repo root
 _REPO_DIR = Path(__file__).resolve().parent
@@ -34,6 +36,53 @@ if _env_file.exists():
             if _line and not _line.startswith("#") and "=" in _line:
                 _key, _, _val = _line.partition("=")
                 os.environ.setdefault(_key.strip(), _val.strip())
+
+from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
+
+# ---------------------------------------------------------------------------
+# Phase 109: pre-Stage-1 fail-fast guard (CSMEETING-02, D-07/D-08/D-09/D-13)
+# ---------------------------------------------------------------------------
+
+_BODY_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def ensure_body_roster_cached(body_slug: Optional[str]) -> None:
+    """Phase 109 fail-fast guard: verify {body_slug}.json exists in the roster cache.
+
+    Implements CSMEETING-02:
+      - D-05: if body_slug is None/empty, return silently (legacy path).
+      - D-07: runs BEFORE Stage 1, after argparse + metadata resolve.
+      - D-08: on missing cache, print 2-line stderr error + sys.exit(2).
+      - D-09: stale cache (>30 days) is NOT a fail-fast — file must merely exist.
+      - D-10: behaves identically on resume after cache delete.
+      - T-109-03: validates slug shape before composing filesystem paths.
+    """
+    if not body_slug:
+        return  # D-05 legacy path
+
+    # T-109-03: reject path-traversal / shell metacharacters BEFORE filesystem join.
+    if not _BODY_SLUG_RE.match(body_slug):
+        print(
+            f'ERROR: Invalid body slug "{body_slug}" — must match '
+            f'[a-z0-9][a-z0-9_-]{{0,63}} (1-64 chars)',
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    cache_path = config.CONFIG_DIR / "rosters" / f"{body_slug}.json"
+    if not cache_path.exists():
+        # D-08: exact 2-line error. D-13: literal ~-path string, do NOT expand CONFIG_DIR.
+        print(
+            f'ERROR: Body "{body_slug}" has no cached roster at '
+            f'~/CouncilScribe/config/rosters/{body_slug}.json',
+            file=sys.stderr,
+        )
+        print(
+            f'Run: python refresh_roster.py --body {body_slug}',
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    # D-09: staleness is checked later inside load_roster() — not our concern here.
 
 
 def get_hf_token() -> str:
@@ -230,6 +279,51 @@ def run_pipeline(args: argparse.Namespace) -> None:
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
+    # ── Phase 109: resolve effective body_slug (D-01..D-06, D-11) ──
+    cli_body = getattr(args, "body", None)
+    persisted_body = state.body_slug
+    force_retag = getattr(args, "force_retag", False)
+
+    if cli_body and persisted_body and cli_body != persisted_body and not force_retag:
+        # D-02: hard error on mismatch
+        print(
+            f"ERROR: Meeting already tagged as \"{persisted_body}\". "
+            f"Pass --body {persisted_body} to continue, or add --force-retag "
+            f"to change the body (this will re-run Stages 4-7).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if cli_body and persisted_body and cli_body != persisted_body and force_retag:
+        # D-03 + D-04 + D-11: overwrite, rewind, clear stale pre_ids
+        print(f"  Force-retag: {persisted_body} → {cli_body}", file=sys.stderr)
+        state.body_slug = cli_body
+        state.rewind_for_retag()
+    elif cli_body and not persisted_body:
+        # D-01: first run persists
+        if force_retag:
+            print(
+                f"  --force-retag on untagged meeting: behaving as first-run "
+                f"persist of {cli_body}",
+                file=sys.stderr,
+            )
+        state.body_slug = cli_body
+        state.save()
+    elif not cli_body and persisted_body and force_retag:
+        # Should be unreachable: D-12 enforced at argparse (line 1835).
+        raise AssertionError("--force-retag without --body bypassed D-12 guard")
+    # else: D-05 (no flag, no persisted — legacy) or D-06 (no flag, persisted — silent read)
+
+    effective_body_slug = state.body_slug  # used by Plan 02 guard + Plan 03 Stage 4
+
+    if effective_body_slug:
+        # D-01 / D-06: single info line for operator visibility
+        print(f"Body: {effective_body_slug}", file=sys.stderr)
+
+    # Phase 109 D-07: fail fast if tagged meeting has no cached roster.
+    # Must run before Stage 1 ingestion so operators don't burn GPU on a bad run.
+    ensure_body_roster_cached(effective_body_slug)
+
     meeting = Meeting(
         meeting_id=meeting_id,
         city=args.city,
@@ -265,7 +359,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
         from src.ingest import normalize_audio
 
         t0 = time.time()
-        metadata = normalize_audio(audio_path, wav_path, noise_reduce=args.noise_reduce)
+        metadata = normalize_audio(
+            audio_path, wav_path,
+            noise_reduce=args.noise_reduce,
+            cookies_file=getattr(args, "cookies", None),
+        )
         elapsed = time.time() - t0
         meeting.duration_seconds = metadata["duration_seconds"]
         state.mark_complete(PipelineStage.INGESTED)
@@ -564,10 +662,24 @@ def run_pipeline(args: argparse.Namespace) -> None:
     named_transcript_path = meeting_dir / "transcript_named.json"
     llm_partial_path = meeting_dir / "llm_partial_results.json"
 
-    # Load roster for name correction
-    roster = load_roster()
+    # Phase 109 CSMEETING-03: load body-specific roster when meeting is tagged.
+    # effective_body_slug comes from the Plan 01 resolve block; Plan 02's guard has
+    # already verified the cache file exists if effective_body_slug is set.
+    # NOTE: this is the ONLY load_roster() site Phase 109 updates. The 3 offline
+    # utility sites (~line 1021 _fix_transcripts, ~line 1719 --show-roster,
+    # ~line 1749 --fix-profiles) remain on bare load_roster() because they have
+    # no meeting context. See 109-RESEARCH.md §1. Phase 110/111 will revisit them.
+    if effective_body_slug:
+        roster = load_roster(body_slug=effective_body_slug)
+    else:
+        roster = load_roster()  # D-05 legacy fallback
     if roster:
-        print(f"  Loaded council roster: {len(roster.members)} members ({roster.city} {roster.body})")
+        # Roster dataclass may not have .city/.body when loaded from a body-keyed cache;
+        # print whichever label is available without crashing the legacy path.
+        label = f"{getattr(roster, 'city', '') or ''} {getattr(roster, 'body', '') or ''}".strip()
+        if not label and effective_body_slug:
+            label = effective_body_slug
+        print(f"  Loaded council roster: {len(roster.members)} members ({label})")
     roster_hint = roster_names_for_prompt(roster) if roster else ""
 
     if state.is_complete(PipelineStage.IDENTIFIED):
@@ -740,7 +852,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         # Auto-enroll high-confidence speakers (>= 0.85)
         profile_db = enroll_speakers(
             profile_db, speaker_embeddings, meeting.speakers,
-            meeting_id=meeting_id, segments=segments,
+            meeting_id=meeting_id, segments=segments, roster=roster,
         )
 
         auto_count = len(profile_db.profiles) - before_count
@@ -800,6 +912,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     profile_db = enroll_confirmed(
                         profile_db, speaker_embeddings, confirmed,
                         meeting.speakers, meeting_id=meeting_id, segments=segments,
+                        roster=roster,
                     )
                     print(f"\n  Enrolled {len(confirmed)} additional speaker(s) via confirmation")
             else:
@@ -961,6 +1074,8 @@ def _run_batch(args: argparse.Namespace) -> None:
             no_merge=args.no_merge if hasattr(args, "no_merge") else False,
             pre_identify=False,  # skip interactive pre-identify
             use_vtt=args.use_vtt if hasattr(args, "use_vtt") else False,
+            body=getattr(args, "body", None),
+            force_retag=getattr(args, "force_retag", False),
         )
 
         # Auto-generate date if missing
@@ -1677,6 +1792,10 @@ Environment Variables:
                         help="Expected number of speakers (0 = auto-detect)")
     parser.add_argument("--noise-reduce", action="store_true",
                         help="Apply spectral noise reduction to audio")
+    parser.add_argument("--cookies", metavar="FILE",
+                        help="Netscape-format cookies file for authenticated downloads "
+                             "(e.g. private Facebook videos). Export from browser with "
+                             "a 'Get cookies.txt' extension.")
     parser.add_argument("--skip-llm", action="store_true",
                         help="Skip LLM-based speaker identification (Layer 3)")
     parser.add_argument("--skip-summary", action="store_true",
@@ -1709,8 +1828,26 @@ Environment Variables:
                         help="Batch mode: text file with one input per line (path or 'URL DATE'), or directory of videos")
     parser.add_argument("--batch-resume", action="store_true",
                         help="Resume an interrupted batch run (skip already-completed meetings)")
+    parser.add_argument(
+        "--body",
+        type=str,
+        default=None,
+        help="Governing body slug (e.g. bloomington-common-council). "
+             "Persisted to pipeline_state.json on first run; omit on re-invocation.",
+    )
+    parser.add_argument(
+        "--force-retag",
+        action="store_true",
+        default=False,
+        help="Overwrite a meeting's persisted body_slug. Rewinds stages 4-7. "
+             "Requires --body.",
+    )
 
     args = parser.parse_args()
+
+    # D-12: --force-retag requires --body
+    if args.force_retag and not args.body:
+        parser.error("--force-retag requires --body <slug>")
 
     # --- Utility commands ---
     if args.show_roster:
