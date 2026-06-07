@@ -836,28 +836,49 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
             t0 = time.time()
             print("  Generating meeting summary via Anthropic API...")
-            meeting.summary = generate_summary(meeting, progress_callback=summary_progress)
-            elapsed = time.time() - t0
+            try:
+                meeting.summary = generate_summary(meeting, progress_callback=summary_progress)
+            except Exception as e:
+                # The summary stage is the only stage that needs the Anthropic API.
+                # If it fails (e.g. out of credits, bad key, network), don't crash the
+                # whole pipeline — report it clearly and continue. The stage is left
+                # incomplete so it will be retried automatically on the next run.
+                meeting.summary = None
+                detail = str(e)
+                if "credit balance is too low" in detail:
+                    reason = "Anthropic API credit balance is too low."
+                    hint = "Add credits at https://console.anthropic.com (Plans & Billing), then re-run to generate the summary."
+                elif "authentication" in detail.lower() or "invalid x-api-key" in detail.lower():
+                    reason = "Anthropic API key was rejected."
+                    hint = "Check ANTHROPIC_API_KEY, then re-run to generate the summary."
+                else:
+                    reason = f"Summary generation failed: {detail}"
+                    hint = "Re-run once the issue is resolved to generate the summary."
+                print(f"\n  ⚠ Skipping summary — {reason}")
+                print(f"    {hint}")
+                print("    (All other stages are complete; only the summary needs the API.)")
+            else:
+                elapsed = time.time() - t0
 
-            # Save summary checkpoint
-            with open(summary_path, "w") as f:
-                json.dump(meeting.summary.to_dict(), f, indent=2)
+                # Save summary checkpoint
+                with open(summary_path, "w") as f:
+                    json.dump(meeting.summary.to_dict(), f, indent=2)
 
-            # Re-save named transcript with summary included
-            with open(named_transcript_path, "w") as f:
-                json.dump(meeting.to_dict(), f, indent=2)
+                # Re-save named transcript with summary included
+                with open(named_transcript_path, "w") as f:
+                    json.dump(meeting.to_dict(), f, indent=2)
 
-            state.mark_complete(PipelineStage.SUMMARIZED)
+                state.mark_complete(PipelineStage.SUMMARIZED)
 
-            print(f"\n  Summary generated in {elapsed:.1f}s")
-            print(f"    Sections: {len(meeting.summary.sections)}")
-            print(f"    Key decisions: {len(meeting.summary.key_decisions)}")
-            if meeting.summary.executive_summary:
-                # Show first 200 chars of executive summary
-                preview = meeting.summary.executive_summary[:200]
-                if len(meeting.summary.executive_summary) > 200:
-                    preview += "..."
-                print(f"    Preview: {preview}")
+                print(f"\n  Summary generated in {elapsed:.1f}s")
+                print(f"    Sections: {len(meeting.summary.sections)}")
+                print(f"    Key decisions: {len(meeting.summary.key_decisions)}")
+                if meeting.summary.executive_summary:
+                    # Show first 200 chars of executive summary
+                    preview = meeting.summary.executive_summary[:200]
+                    if len(meeting.summary.executive_summary) > 200:
+                        preview += "..."
+                    print(f"    Preview: {preview}")
 
     print()
 
@@ -1818,8 +1839,8 @@ Environment Variables:
     parser.add_argument("--city", default="Bloomington", help="City name (default: Bloomington)")
     parser.add_argument("--date", default="", help="Meeting date (YYYY-MM-DD)")
     parser.add_argument("--meeting-type", default="Regular Session",
-                        choices=["Regular Session", "Special Session", "Work Session", "Committee Meeting"],
-                        help="Meeting type (default: Regular Session)")
+                        help="Meeting type or name, free text "
+                             "(e.g. \"Regular Session\", \"Plan Commission\"; default: Regular Session)")
     parser.add_argument("--meeting-id", default="", help="Custom meeting ID (auto-generated if omitted)")
 
     # Processing options
