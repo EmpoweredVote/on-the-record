@@ -98,6 +98,22 @@ CouncilScribe uses three layers to identify speakers, applied in order of confid
 
 Speakers below 0.70 confidence are flagged for human review via a Colab form widget.
 
+### Choosing a roster (local CLI)
+
+Speaker identification can be guided by a council roster (it corrects
+transcription errors against known member names). When you run `run_local.py`
+**interactively without `--body`**, CouncilScribe now asks which roster to use:
+
+- any cached per-body roster under `~/CouncilScribe/config/rosters/` (added
+  with `python refresh_roster.py --body <slug>`),
+- the legacy `~/CouncilScribe/config/council_roster.json`, or
+- **No roster** (the default — just press Enter) to skip name correction.
+
+Picking a cached roster tags the meeting (like passing `--body <slug>`), so
+resuming it reuses that roster automatically. Pass `--body <slug>` explicitly
+to skip the prompt. In non-interactive runs (batch mode, piped, cron) with no
+`--body`, no roster is used.
+
 ## Google Drive structure
 
 After processing, your Drive will contain:
