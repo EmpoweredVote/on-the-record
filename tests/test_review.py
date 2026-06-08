@@ -101,3 +101,59 @@ def test_rename_speaker_no_alias_when_no_prior_name():
     mappings = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00")}
     res = review.rename_speaker(mappings, segments, "SPEAKER_00", "Mayor Jones")
     assert res.alias_suggestion is None
+
+
+def test_merge_speakers_full_merge():
+    segments = [
+        _seg("SPEAKER_00", 0, 10, "a"),   # target, 10s, 1 seg
+        _seg("SPEAKER_01", 10, 40, "b"),  # source, 30s, 1 seg
+    ]
+    target_vec = np.array([1.0, 0.0])
+    source_vec = np.array([0.0, 1.0])
+    embeddings = {"SPEAKER_00": target_vec.copy(), "SPEAKER_01": source_vec.copy()}
+    m0 = SpeakerMapping(speaker_label="SPEAKER_00"); m0.speaker_name = "Mayor"
+    m1 = SpeakerMapping(speaker_label="SPEAKER_01")
+    mappings = {"SPEAKER_00": m0, "SPEAKER_01": m1}
+
+    res = review.merge_speakers(segments, embeddings, mappings, "SPEAKER_01", "SPEAKER_00")
+
+    assert all(s.speaker_label == "SPEAKER_00" for s in segments)
+    assert res.moved_segments == 1
+    assert res.combined_name == "Mayor"
+    assert "SPEAKER_01" not in embeddings
+    assert "SPEAKER_01" not in mappings
+    expected = (10 * target_vec + 30 * source_vec) / 40
+    assert np.allclose(embeddings["SPEAKER_00"], expected)
+
+
+def test_merge_adopts_source_name_when_target_unnamed():
+    segments = [_seg("SPEAKER_00", 0, 10), _seg("SPEAKER_01", 10, 20)]
+    embeddings = {"SPEAKER_00": np.array([1.0]), "SPEAKER_01": np.array([1.0])}
+    m0 = SpeakerMapping(speaker_label="SPEAKER_00")  # unnamed target
+    m1 = SpeakerMapping(speaker_label="SPEAKER_01"); m1.speaker_name = "Clerk Smith"; m1.confidence = 1.0
+    mappings = {"SPEAKER_00": m0, "SPEAKER_01": m1}
+    res = review.merge_speakers(segments, embeddings, mappings, "SPEAKER_01", "SPEAKER_00")
+    assert res.combined_name == "Clerk Smith"
+    assert mappings["SPEAKER_00"].speaker_name == "Clerk Smith"
+
+
+def test_merge_rejects_same_label():
+    segments = [_seg("SPEAKER_00", 0, 10)]
+    with pytest.raises(ValueError):
+        review.merge_speakers(segments, {}, {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00")}, "SPEAKER_00", "SPEAKER_00")
+
+
+def test_merge_missing_embeddings_still_relabels():
+    segments = [_seg("SPEAKER_00", 0, 10), _seg("SPEAKER_01", 10, 20)]
+    mappings = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00"),
+                "SPEAKER_01": SpeakerMapping(speaker_label="SPEAKER_01")}
+    res = review.merge_speakers(segments, {}, mappings, "SPEAKER_01", "SPEAKER_00")
+    assert all(s.speaker_label == "SPEAKER_00" for s in segments)
+    assert res.moved_segments == 1
+    assert "SPEAKER_01" not in mappings
+
+
+def test_speakers_needing_review():
+    a = SpeakerMapping(speaker_label="A"); a.needs_review = True
+    b = SpeakerMapping(speaker_label="B"); b.needs_review = False
+    assert review.speakers_needing_review({"A": a, "B": b}) == ["A"]

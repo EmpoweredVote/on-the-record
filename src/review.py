@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+import numpy as np
+
 
 @dataclass
 class SpeakerView:
@@ -118,3 +120,68 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
 
     alias = old_name if (old_name and old_name != final_name) else None
     return RenameResult(label=label, old_name=old_name, new_name=final_name, alias_suggestion=alias)
+
+
+@dataclass
+class MergeResult:
+    source_label: str
+    target_label: str
+    moved_segments: int
+    combined_name: Optional[str]
+
+
+def merge_speakers(segments, embeddings, mappings, source_label: str, target_label: str) -> MergeResult:
+    """Full merge: fold source_label into target_label.
+
+    - Relabels every source segment to the target.
+    - Combines centroids weighted by each label's pre-merge speech time and
+      recomputes the target centroid (if both embeddings present).
+    - Drops the source from embeddings and mappings.
+    - If the target has no name but the source does, the target adopts it.
+
+    Raises ValueError if labels are equal or the source has no segments/mapping.
+    """
+    if source_label == target_label:
+        raise ValueError("Cannot merge a speaker into itself.")
+    if source_label not in mappings and not any(s.speaker_label == source_label for s in segments):
+        raise ValueError(f"Unknown source speaker: {source_label}")
+
+    speech: dict[str, float] = {}
+    for s in segments:
+        speech[s.speaker_label] = speech.get(s.speaker_label, 0.0) + (s.end_time - s.start_time)
+
+    moved = 0
+    for s in segments:
+        if s.speaker_label == source_label:
+            s.speaker_label = target_label
+            moved += 1
+
+    if source_label in embeddings and target_label in embeddings:
+        w_src = speech.get(source_label, 0.0)
+        w_tgt = speech.get(target_label, 0.0)
+        total = w_src + w_tgt
+        if total > 0:
+            embeddings[target_label] = (
+                w_tgt * np.asarray(embeddings[target_label]) + w_src * np.asarray(embeddings[source_label])
+            ) / total
+        else:
+            embeddings[target_label] = np.mean(
+                [np.asarray(embeddings[target_label]), np.asarray(embeddings[source_label])], axis=0
+            )
+    embeddings.pop(source_label, None)
+
+    src_map = mappings.pop(source_label, None)
+    tgt_map = mappings.get(target_label)
+    if tgt_map is not None and not getattr(tgt_map, "speaker_name", None) and src_map is not None and getattr(src_map, "speaker_name", None):
+        tgt_map.speaker_name = src_map.speaker_name
+        tgt_map.confidence = max(getattr(tgt_map, "confidence", 0.0), getattr(src_map, "confidence", 0.0))
+        tgt_map.id_method = src_map.id_method
+        tgt_map.needs_review = False
+
+    combined_name = getattr(tgt_map, "speaker_name", None) if tgt_map is not None else None
+    return MergeResult(source_label=source_label, target_label=target_label, moved_segments=moved, combined_name=combined_name)
+
+
+def speakers_needing_review(mappings) -> list[str]:
+    """Labels whose mapping is flagged needs_review."""
+    return [label for label, m in mappings.items() if getattr(m, "needs_review", False)]
