@@ -157,3 +157,16 @@ def test_speakers_needing_review():
     a = SpeakerMapping(speaker_label="A"); a.needs_review = True
     b = SpeakerMapping(speaker_label="B"); b.needs_review = False
     assert review.speakers_needing_review({"A": a, "B": b}) == ["A"]
+
+
+def test_merge_carries_source_embedding_when_target_missing():
+    # Target has no embedding, source does → merged target should keep source's.
+    segments = [_seg("SPEAKER_00", 0, 10), _seg("SPEAKER_01", 10, 20)]
+    source_vec = np.array([0.0, 1.0])
+    embeddings = {"SPEAKER_01": source_vec.copy()}  # only source present
+    mappings = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00"),
+                "SPEAKER_01": SpeakerMapping(speaker_label="SPEAKER_01")}
+    review.merge_speakers(segments, embeddings, mappings, "SPEAKER_01", "SPEAKER_00")
+    assert "SPEAKER_01" not in embeddings
+    assert "SPEAKER_00" in embeddings
+    assert np.allclose(embeddings["SPEAKER_00"], source_vec)

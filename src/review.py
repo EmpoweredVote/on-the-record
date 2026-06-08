@@ -135,7 +135,8 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
 
     - Relabels every source segment to the target.
     - Combines centroids weighted by each label's pre-merge speech time and
-      recomputes the target centroid (if both embeddings present).
+      recomputes the target centroid (if both embeddings present). If only one
+      side has an embedding, the surviving embedding is carried to the target.
     - Drops the source from embeddings and mappings.
     - If the target has no name but the source does, the target adopts it.
 
@@ -168,6 +169,10 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
             embeddings[target_label] = np.mean(
                 [np.asarray(embeddings[target_label]), np.asarray(embeddings[source_label])], axis=0
             )
+    elif source_label in embeddings and target_label not in embeddings:
+        # Only the source has an embedding — carry it over so the merged
+        # speaker keeps usable voice data instead of losing it.
+        embeddings[target_label] = np.asarray(embeddings[source_label])
     embeddings.pop(source_label, None)
 
     src_map = mappings.pop(source_label, None)
