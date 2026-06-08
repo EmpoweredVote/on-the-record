@@ -729,42 +729,37 @@ def run_pipeline(args: argparse.Namespace) -> None:
         print("=" * 60)
 
         video_path = find_video_file(meeting_dir, meeting.audio_source)
-        speaker_stats = _build_speaker_stats(segments)
-        soft_matches = _load_soft_matches(embeddings_path)
-
-        sorted_labels = sorted(
-            speaker_stats.keys(),
-            key=lambda l: speaker_stats[l]["total_speech"],
-            reverse=True,
-        )
-
-        if video_path:
-            print(f"  Video: {Path(video_path).name}")
-        else:
-            print("  Video: not found")
-        if soft_matches:
-            matched = sum(1 for l in sorted_labels if l in soft_matches)
-            print(f"  Voice hints: {matched} speaker(s) have possible profile matches")
-        print(f"  Speakers: {len(sorted_labels)}")
-        print()
-
-        # Build temporary mappings dict for the review
-        from src.models import SpeakerMapping as SM
-        temp_mappings = dict(pre_identifications)  # start with any existing
-        for label in sorted_labels:
-            if label not in temp_mappings:
-                temp_mappings[label] = SM(speaker_label=label)
 
         import numpy as np
         from src.enroll import load_profiles as _load_profiles
+        from src import review as _review
         if embeddings_path.exists():
             with open(embeddings_path, "r") as f:
                 _emb = json.load(f)
             _pre_embeddings = {k: np.array(v) for k, v in _emb.items()}
         else:
             _pre_embeddings = {}
+        _pre_profile_db = _load_profiles()
+
+        from src.models import SpeakerMapping as SM
+        temp_mappings = dict(pre_identifications)  # start with any existing
+        _views = _review.build_review_state(segments, temp_mappings, _pre_embeddings, _pre_profile_db, show_text=False)
+        for v in _views:
+            if v.label not in temp_mappings:
+                temp_mappings[v.label] = SM(speaker_label=v.label)
+
+        if video_path:
+            print(f"  Video: {Path(video_path).name}")
+        else:
+            print("  Video: not found")
+        _hint_count = sum(1 for v in _views if v.soft_hints)
+        if _hint_count:
+            print(f"  Voice hints: {_hint_count} speaker(s) have possible profile matches")
+        print(f"  Speakers: {len(_views)}")
+        print()
+
         changes = _interactive_speaker_review(
-            segments, temp_mappings, _pre_embeddings, _load_profiles(),
+            segments, temp_mappings, _pre_embeddings, _pre_profile_db,
             video_path, str(meeting_dir / "audio.wav"),
             body_slug=effective_body_slug, show_text=False,
         )
@@ -1484,70 +1479,6 @@ def _format_ts(seconds: float) -> str:
     return f"{m:02d}:{s:02d}"
 
 
-def _build_speaker_stats(segments) -> dict:
-    """Build per-speaker statistics from segments.
-
-    Returns dict of label -> {seg_count, total_speech, first_seg, sample_seg, segments}.
-    """
-    stats = {}
-    for seg in segments:
-        label = seg.speaker_label
-        if label not in stats:
-            stats[label] = {
-                "seg_count": 0,
-                "total_speech": 0.0,
-                "first_seg": seg,
-                "sample_seg": None,
-                "segments": [],
-            }
-        stats[label]["seg_count"] += 1
-        stats[label]["total_speech"] += seg.end_time - seg.start_time
-        stats[label]["segments"].append(seg)
-
-    # Pick representative sample for each speaker (near 1/3 point)
-    for label, s in stats.items():
-        text_segs = [seg for seg in s["segments"] if seg.text and seg.text.strip()]
-        if text_segs:
-            idx = max(0, len(text_segs) // 3 - 1)
-            s["sample_seg"] = text_segs[idx]
-        elif s["segments"]:
-            # No text segments — use a segment near 1/3 for video clip
-            idx = max(0, len(s["segments"]) // 3 - 1)
-            s["sample_seg"] = s["segments"][idx]
-
-    return stats
-
-
-def _load_soft_matches(embeddings_path: Path) -> dict[str, list[tuple[str, float]]]:
-    """Load embeddings and compute soft voice profile matches.
-
-    Returns dict of label -> [(display_name, similarity), ...] or empty dict
-    if embeddings or profiles aren't available.
-    """
-    import numpy as np
-
-    if not embeddings_path.exists():
-        return {}
-
-    try:
-        from src.enroll import get_stored_centroids, load_profiles
-        from src.identify import soft_match_voice_profiles
-    except ImportError:
-        return {}
-
-    with open(embeddings_path, "r") as f:
-        emb_data = json.load(f)
-    speaker_embeddings = {k: np.array(v) for k, v in emb_data.items()}
-
-    profile_db = load_profiles()
-    stored_centroids = get_stored_centroids(profile_db)
-    if not stored_centroids:
-        return {}
-
-    display_names = {pid: p.display_name for pid, p in profile_db.profiles.items()}
-    return soft_match_voice_profiles(speaker_embeddings, stored_centroids, display_names)
-
-
 def _persist_after_review(meeting_dir: Path, segments, embeddings, changes) -> None:
     """If the review performed any merges, rewrite diarization.json + embeddings.json."""
     if not any("merged_into" in c for c in changes):
@@ -1801,15 +1732,22 @@ def _review_meeting(meeting_id: str) -> None:
         meeting = Meeting.from_dict(json.load(f))
 
     video_path = find_video_file(meeting_dir, meeting.audio_source)
-    speaker_stats = _build_speaker_stats(meeting.segments)
     embeddings_path = meeting_dir / "embeddings.json"
-    soft_matches = _load_soft_matches(embeddings_path)
 
-    sorted_labels = sorted(
-        speaker_stats.keys(),
-        key=lambda l: speaker_stats[l]["total_speech"],
-        reverse=True,
-    )
+    import numpy as np
+    from src.enroll import load_profiles
+    from src import review as _review
+
+    if embeddings_path.exists():
+        with open(embeddings_path, "r") as f:
+            _emb = json.load(f)
+        embeddings = {k: np.array(v) for k, v in _emb.items()}
+    else:
+        embeddings = {}
+    profile_db = load_profiles()
+    body_slug = _meeting_body_slug(meeting_dir)
+
+    views = _review.build_review_state(meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True)
 
     print(f"\nReviewing: {meeting.city} {meeting.meeting_type} ({meeting.date})")
     print(f"Meeting ID: {meeting_id}")
@@ -1817,25 +1755,21 @@ def _review_meeting(meeting_id: str) -> None:
         print(f"Video: {Path(video_path).name}")
     else:
         print("Video: not found (no clip playback available)")
-    print(f"Speakers: {len(sorted_labels)}")
+    print(f"Speakers: {len(views)}")
     print()
 
     # Show overview table
     print("  #  Label         Current Name                  Segs  Speech  Conf   Method")
     print("  " + "-" * 90)
-    for i, label in enumerate(sorted_labels):
-        stats = speaker_stats[label]
-        mapping = meeting.speakers.get(label)
-        name = mapping.speaker_name if mapping and mapping.speaker_name else "(unidentified)"
-        conf = mapping.confidence if mapping else 0.0
-        method = mapping.id_method or ""
-        mins = stats["total_speech"] / 60
+    for i, v in enumerate(views):
+        name = v.current_name or "(unidentified)"
+        method = v.current_method or ""
+        mins = v.total_speech_seconds / 60
         hint = ""
-        if soft_matches and label in soft_matches:
-            top = soft_matches[label][0]
-            if not (mapping and mapping.speaker_name and mapping.confidence >= 0.85):
-                hint = f"  ~ {top[0]} ({top[1]:.2f})"
-        print(f"  {i+1:>2}  {label:<13} {name:<30} {stats['seg_count']:>4}  {mins:>5.1f}m  {conf:.2f}  {method}{hint}")
+        if v.soft_hints and not (v.current_name and v.current_confidence >= 0.85):
+            top = v.soft_hints[0]
+            hint = f"  ~ {top[0]} ({top[1]:.2f})"
+        print(f"  {i+1:>2}  {v.label:<13} {name:<30} {v.seg_count:>4}  {mins:>5.1f}m  {v.current_confidence:.2f}  {method}{hint}")
 
     print()
     print("Commands for each speaker:")
@@ -1846,18 +1780,6 @@ def _review_meeting(meeting_id: str) -> None:
     print("  [name]   Type a new name to assign")
     print("  [Q]      Quit review (save changes so far)")
     print()
-
-    import numpy as np
-    from src.enroll import load_profiles
-
-    if embeddings_path.exists():
-        with open(embeddings_path, "r") as f:
-            _emb = json.load(f)
-        embeddings = {k: np.array(v) for k, v in _emb.items()}
-    else:
-        embeddings = {}
-    profile_db = load_profiles()
-    body_slug = _meeting_body_slug(meeting_dir)
 
     changes = _interactive_speaker_review(
         meeting.segments, meeting.speakers, embeddings, profile_db,
@@ -1947,14 +1869,21 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         current_mappings = {}
 
     video_path = find_video_file(meeting_dir, "")
-    speaker_stats = _build_speaker_stats(segments)
-    soft_matches = _load_soft_matches(embeddings_path)
 
-    sorted_labels = sorted(
-        speaker_stats.keys(),
-        key=lambda l: speaker_stats[l]["total_speech"],
-        reverse=True,
-    )
+    import numpy as np
+    from src.enroll import load_profiles
+    from src import review as _review
+
+    if embeddings_path.exists():
+        with open(embeddings_path, "r") as f:
+            _emb = json.load(f)
+        embeddings = {k: np.array(v) for k, v in _emb.items()}
+    else:
+        embeddings = {}
+    profile_db = load_profiles()
+    body_slug = _meeting_body_slug(meeting_dir)
+
+    views = _review.build_review_state(segments, current_mappings, embeddings, profile_db, show_text=has_text)
 
     print(f"\nSpeaker Identification: {meeting_id}")
     if video_path:
@@ -1965,28 +1894,26 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         print("Transcript: available (text samples shown)")
     else:
         print("Transcript: not yet available (video clips only)")
-    print(f"Speakers: {len(sorted_labels)}")
-    if soft_matches:
-        matched = sum(1 for l in sorted_labels if l in soft_matches)
-        print(f"Voice hints: {matched} speaker(s) have possible profile matches")
+    print(f"Speakers: {len(views)}")
+    _hint_count = sum(1 for v in views if v.soft_hints)
+    if _hint_count:
+        print(f"Voice hints: {_hint_count} speaker(s) have possible profile matches")
     print()
 
     # Show overview table
     print("  #  Label         Current Name                  Segs  Speech  Voice Hint")
     print("  " + "-" * 85)
-    for i, label in enumerate(sorted_labels):
-        stats = speaker_stats[label]
-        mapping = current_mappings.get(label)
-        name = mapping.speaker_name if mapping and mapping.speaker_name else "(unidentified)"
-        mins = stats["total_speech"] / 60
+    for i, v in enumerate(views):
+        name = v.current_name or "(unidentified)"
+        mins = v.total_speech_seconds / 60
         hint = ""
-        if soft_matches and label in soft_matches:
-            top = soft_matches[label][0]
+        if v.soft_hints:
+            top = v.soft_hints[0]
             if top[1] >= 0.85:
                 hint = f"* {top[0]} ({top[1]:.2f})"
             else:
                 hint = f"? {top[0]} ({top[1]:.2f})"
-        print(f"  {i+1:>2}  {label:<13} {name:<30} {stats['seg_count']:>4}  {mins:>5.1f}m  {hint}")
+        print(f"  {i+1:>2}  {v.label:<13} {name:<30} {v.seg_count:>4}  {mins:>5.1f}m  {hint}")
 
     print()
     print("Commands for each speaker:")
@@ -1997,18 +1924,6 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     print("  [name]   Type a name to assign")
     print("  [Q]      Quit (save changes so far)")
     print()
-
-    import numpy as np
-    from src.enroll import load_profiles
-
-    if embeddings_path.exists():
-        with open(embeddings_path, "r") as f:
-            _emb = json.load(f)
-        embeddings = {k: np.array(v) for k, v in _emb.items()}
-    else:
-        embeddings = {}
-    profile_db = load_profiles()
-    body_slug = _meeting_body_slug(meeting_dir)
 
     changes = _interactive_speaker_review(
         segments, current_mappings, embeddings, profile_db,
