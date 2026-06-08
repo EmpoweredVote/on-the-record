@@ -63,8 +63,11 @@ def test_build_review_state_includes_soft_hints():
 
 
 def test_build_review_state_needs_review_flag():
-    segments = [_seg("SPEAKER_00", 0, 10)]
+    segments = [_seg("SPEAKER_00", 0, 10), _seg("SPEAKER_01", 10, 20)]
     m = SpeakerMapping(speaker_label="SPEAKER_00")
     m.needs_review = True
-    views = review.build_review_state(segments, {"SPEAKER_00": m}, {}, _FakeProfileDB({}), show_text=False)
-    assert views[0].needs_review is True
+    mappings = {"SPEAKER_00": m, "SPEAKER_01": SpeakerMapping(speaker_label="SPEAKER_01")}
+    views = review.build_review_state(segments, mappings, {}, _FakeProfileDB({}), show_text=False)
+    by_label = {v.label: v for v in views}
+    assert by_label["SPEAKER_00"].needs_review is True
+    assert by_label["SPEAKER_01"].needs_review is False

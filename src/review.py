@@ -9,8 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-import numpy as np
-
 
 @dataclass
 class SpeakerView:
@@ -32,6 +30,8 @@ def _representative_segment(segs):
     pool = text_segs or segs
     if not pool:
         return None
+    # Mirror the existing _build_speaker_stats heuristic (a segment slightly
+    # before the 1/3 point) so this is a behavior-preserving replacement.
     idx = max(0, len(pool) // 3 - 1)
     return pool[idx]
 
