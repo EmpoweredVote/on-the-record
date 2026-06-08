@@ -755,10 +755,20 @@ def run_pipeline(args: argparse.Namespace) -> None:
             if label not in temp_mappings:
                 temp_mappings[label] = SM(speaker_label=label)
 
+        import numpy as np
+        from src.enroll import load_profiles as _load_profiles
+        if embeddings_path.exists():
+            with open(embeddings_path, "r") as f:
+                _emb = json.load(f)
+            _pre_embeddings = {k: np.array(v) for k, v in _emb.items()}
+        else:
+            _pre_embeddings = {}
         changes = _interactive_speaker_review(
-            sorted_labels, speaker_stats, temp_mappings,
-            video_path, soft_matches=soft_matches, show_text=False,
+            segments, temp_mappings, _pre_embeddings, _load_profiles(),
+            video_path, str(meeting_dir / "audio.wav"),
+            body_slug=effective_body_slug, show_text=False,
         )
+        _persist_after_review(meeting_dir, segments, _pre_embeddings, changes)
 
         if changes:
             for label, mapping in temp_mappings.items():
@@ -1527,130 +1537,155 @@ def _load_soft_matches(embeddings_path: Path) -> dict[str, list[tuple[str, float
     return soft_match_voice_profiles(speaker_embeddings, stored_centroids, display_names)
 
 
+def _persist_after_review(meeting_dir: Path, segments, embeddings, changes) -> None:
+    """If the review performed any merges, rewrite diarization.json + embeddings.json."""
+    if not any("merged_into" in c for c in changes):
+        return
+    diar_path = meeting_dir / "diarization.json"
+    emb_path = meeting_dir / "embeddings.json"
+    with open(diar_path, "w") as f:
+        json.dump([s.to_dict() for s in segments], f, indent=2)
+    emb_out = {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in embeddings.items()}
+    with open(emb_path, "w") as f:
+        json.dump(emb_out, f)
+
+
+def _meeting_body_slug(meeting_dir: Path) -> str | None:
+    """Read the persisted body_slug from a meeting's pipeline_state.json, if any."""
+    state_file = meeting_dir / "pipeline_state.json"
+    if not state_file.exists():
+        return None
+    try:
+        with open(state_file, "r") as f:
+            return json.load(f).get("body_slug")
+    except Exception:
+        return None
+
+
 def _interactive_speaker_review(
-    sorted_labels: list[str],
-    speaker_stats: dict,
-    current_mappings: dict,
+    segments,
+    mappings: dict,
+    embeddings: dict,
+    profile_db,
     video_path: str | None,
-    soft_matches: dict[str, list[tuple[str, float]]] | None = None,
+    audio_path: str | None,
+    *,
+    roster=None,
+    body_slug: str | None = None,
     show_text: bool = True,
 ) -> list[dict]:
-    """Core interactive loop for reviewing/identifying speakers.
+    """Interactive review loop built on the pure src/review.py core.
 
-    Args:
-        sorted_labels: Speaker labels in display order.
-        speaker_stats: Per-speaker stats from _build_speaker_stats().
-        current_mappings: label -> SpeakerMapping dict (modified in place).
-        video_path: Path to video file for clip playback, or None.
-        soft_matches: label -> [(name, score), ...] from soft voice matching.
-        show_text: Whether to show transcript text samples (False if pre-transcription).
+    Per speaker: play a clip ([V]), accept the top voice hint ([Y]), merge this
+    speaker into another ([M]), skip ([Enter]), quit ([Q]), or type a name.
+    Mutates segments/mappings/embeddings in place via review.py; the CALLER
+    persists (diarization.json / embeddings.json / transcript).
 
-    Returns:
-        List of change dicts: [{label, old_name, new_name}, ...].
+    Returns change dicts: {"label","old_name","new_name"} for renames and
+    {"label","merged_into"} for merges.
     """
-    from src.models import SpeakerMapping
+    from src import review
 
     if not sys.stdin.isatty():
         print("(non-interactive mode — cannot review)")
         return []
 
-    changes = []
+    changes: list[dict] = []
+    views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
 
-    for i, label in enumerate(sorted_labels):
-        stats = speaker_stats[label]
-        mapping = current_mappings.get(label, SpeakerMapping(speaker_label=label))
-        name = mapping.speaker_name or "(unidentified)"
-        mins = stats["total_speech"] / 60
-        sample = stats["sample_seg"]
+    i = 0
+    quit_requested = False
+    while i < len(views):
+        view = views[i]
+        label = view.label
+        name = view.current_name or "(unidentified)"
+        mins = view.total_speech_seconds / 60
 
-        # Header
-        print(f"\n[{i+1}/{len(sorted_labels)}] {label}: {name}")
-        print(f"  Segments: {stats['seg_count']}, Speech: {mins:.1f}m", end="")
-        if mapping.confidence > 0:
-            print(f", Confidence: {mapping.confidence:.2f}, Method: {mapping.id_method or 'none'}", end="")
+        print(f"\n[{i+1}/{len(views)}] {label}: {name}")
+        print(f"  Segments: {view.seg_count}, Speech: {mins:.1f}m", end="")
+        if view.current_confidence > 0:
+            print(f", Confidence: {view.current_confidence:.2f}, Method: {view.current_method or 'none'}", end="")
         print()
 
-        # Soft match hints
-        if soft_matches and label in soft_matches:
-            hints = soft_matches[label]
-            # Don't show hint if already identified with high confidence as this name
-            if not (mapping.speaker_name and mapping.confidence >= 0.85):
-                for hint_name, hint_score in hints[:3]:  # show top 3
-                    marker = "*" if hint_score >= 0.85 else "?"
-                    print(f"  {marker} Voice match: {hint_name} ({hint_score:.2f})")
-
-        # Text sample
-        if show_text and sample and sample.text and sample.text.strip():
-            text_preview = sample.text[:120] + "..." if len(sample.text) > 120 else sample.text
-            print(f"  Sample [{_format_ts(sample.start_time)}]: \"{text_preview}\"")
-        elif sample:
-            print(f"  Clip at [{_format_ts(sample.start_time)}]")
-
-        # Accept shortcut: if there's exactly one high soft match, allow [Y] to confirm
         top_hint = None
-        if soft_matches and label in soft_matches:
-            hints = soft_matches[label]
-            if hints and not (mapping.speaker_name and mapping.confidence >= 0.85):
-                top_hint = hints[0]
+        if view.soft_hints and not (view.current_name and view.current_confidence >= 0.85):
+            for hint_name, hint_score in view.soft_hints[:3]:
+                marker = "*" if hint_score >= 0.85 else "?"
+                print(f"  {marker} Voice match: {hint_name} ({hint_score:.2f})")
+            top_hint = view.soft_hints[0]
 
+        if view.sample_text:
+            preview = view.sample_text[:120] + "..." if len(view.sample_text) > 120 else view.sample_text
+            print(f"  Sample [{_format_ts(view.clip_start or 0)}]: \"{preview}\"")
+        elif view.clip_start is not None:
+            print(f"  Clip at [{_format_ts(view.clip_start)}]")
+
+        advance = True
         while True:
-            prompt_parts = ["  "]
-            if video_path and sample:
-                prompt_parts.append("[V]iew")
+            parts = ["  "]
+            if (video_path or audio_path) and view.clip_start is not None:
+                parts.append("[V]iew")
             if top_hint:
-                prompt_parts.append(f"[Y=accept {top_hint[0]}]")
-            prompt_parts.append("[Enter=skip] [Q=quit] or type name: ")
-            choice = input(" ".join(prompt_parts)).strip()
+                parts.append(f"[Y=accept {top_hint[0]}]")
+            if len(views) > 1:
+                parts.append("[M]erge")
+            parts.append("[Enter=skip] [Q=quit] or type name: ")
+            choice = input(" ".join(parts)).strip()
 
-            if choice.lower() in ("v", "view") and video_path and sample:
-                play_video_clip(
-                    video_path,
-                    start_time=sample.start_time,
-                    duration=20.0,
-                    title=f"{label} → {name}",
-                )
-                continue  # re-prompt after viewing
+            if choice.lower() in ("v", "view") and (video_path or audio_path) and view.clip_start is not None:
+                play_speaker_clip(video_path, audio_path, view.clip_start, duration=20.0,
+                                  title=f"{label} → {name}")
+                continue
             elif choice.lower() == "q":
                 print("  Quitting review.")
+                quit_requested = True
                 break
             elif choice == "":
-                # Skip — keep current name
+                break  # skip
+            elif choice.lower() == "m" and len(views) > 1:
+                others = [v for v in views if v.label != label]
+                print("  Merge THIS speaker into which?")
+                for k, ov in enumerate(others):
+                    print(f"    {k+1}. {ov.label}: {ov.current_name or '(unidentified)'}")
+                sel = input("    Number (or Enter to cancel): ").strip()
+                if not sel:
+                    continue
+                try:
+                    target = others[int(sel) - 1]
+                except (ValueError, IndexError):
+                    print("    Invalid selection.")
+                    continue
+                try:
+                    res = review.merge_speakers(segments, embeddings, mappings, label, target.label)
+                except ValueError as e:
+                    print(f"    {e}")
+                    continue
+                changes.append({"label": label, "merged_into": target.label})
+                print(f"  Merged {label} → {target.label} ({res.combined_name or 'unidentified'})")
+                views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
+                advance = False
                 break
             elif choice.lower() in ("y", "yes") and top_hint:
-                # Accept top soft match
-                old_name = mapping.speaker_name
-                new_name = top_hint[0]
-                mapping.speaker_name = new_name
-                mapping.confidence = 1.0
-                mapping.id_method = "human_confirmed"
-                mapping.needs_review = False
-                current_mappings[label] = mapping
-                changes.append({"label": label, "old_name": old_name, "new_name": new_name})
-                print(f"  Confirmed: {label} -> {new_name}")
+                res = review.rename_speaker(mappings, segments, label, top_hint[0], roster=roster)
+                mappings[label].id_method = "human_confirmed"
+                changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
+                print(f"  Confirmed: {label} -> {res.new_name}")
                 break
             else:
-                # User typed a new name
-                old_name = mapping.speaker_name
-                mapping.speaker_name = choice
-                mapping.confidence = 1.0
-                mapping.id_method = "human_review"
-                mapping.needs_review = False
-                current_mappings[label] = mapping
-                changes.append({"label": label, "old_name": old_name, "new_name": choice})
-                print(f"  Updated: {label} -> {choice}")
-
-                # Roster auto-learning: offer to add old wrong name as alias
-                if old_name and old_name != choice:
+                res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
+                changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
+                print(f"  Updated: {label} -> {res.new_name}")
+                if res.alias_suggestion:
                     from src.roster import add_alias
-                    if add_alias(None, choice, old_name):
-                        print(f"  Auto-added alias: '{old_name}' -> '{choice}'")
-
+                    if add_alias(None, res.new_name, res.alias_suggestion, body_slug=body_slug):
+                        target_label = body_slug or "council_roster.json"
+                        print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
                 break
-        else:
-            continue
 
-        if choice.lower() == "q":
+        if quit_requested:
             break
+        if advance:
+            i += 1
 
     return changes
 
@@ -1798,10 +1833,24 @@ def _review_meeting(meeting_id: str) -> None:
     print("  [Q]      Quit review (save changes so far)")
     print()
 
+    import numpy as np
+    from src.enroll import load_profiles
+
+    if embeddings_path.exists():
+        with open(embeddings_path, "r") as f:
+            _emb = json.load(f)
+        embeddings = {k: np.array(v) for k, v in _emb.items()}
+    else:
+        embeddings = {}
+    profile_db = load_profiles()
+    body_slug = _meeting_body_slug(meeting_dir)
+
     changes = _interactive_speaker_review(
-        sorted_labels, speaker_stats, meeting.speakers,
-        video_path, soft_matches=soft_matches, show_text=True,
+        meeting.segments, meeting.speakers, embeddings, profile_db,
+        video_path, str(meeting_dir / "audio.wav"),
+        body_slug=body_slug, show_text=True,
     )
+    _persist_after_review(meeting_dir, meeting.segments, embeddings, changes)
 
     # Apply corrections to segments and save
     if changes:
@@ -1931,10 +1980,24 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     print("  [Q]      Quit (save changes so far)")
     print()
 
+    import numpy as np
+    from src.enroll import load_profiles
+
+    if embeddings_path.exists():
+        with open(embeddings_path, "r") as f:
+            _emb = json.load(f)
+        embeddings = {k: np.array(v) for k, v in _emb.items()}
+    else:
+        embeddings = {}
+    profile_db = load_profiles()
+    body_slug = _meeting_body_slug(meeting_dir)
+
     changes = _interactive_speaker_review(
-        sorted_labels, speaker_stats, current_mappings,
-        video_path, soft_matches=soft_matches, show_text=has_text,
+        segments, current_mappings, embeddings, profile_db,
+        video_path, str(meeting_dir / "audio.wav"),
+        body_slug=body_slug, show_text=has_text,
     )
+    _persist_after_review(meeting_dir, segments, embeddings, changes)
 
     if changes:
         # Save identifications as pre_identifications.json
