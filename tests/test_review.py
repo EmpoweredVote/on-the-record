@@ -124,6 +124,8 @@ def test_merge_speakers_full_merge():
     assert "SPEAKER_01" not in mappings
     expected = (10 * target_vec + 30 * source_vec) / 40
     assert np.allclose(embeddings["SPEAKER_00"], expected)
+    # relabeled + target segments all carry the merged name
+    assert all(s.speaker_name == "Mayor" for s in segments)
 
 
 def test_merge_adopts_source_name_when_target_unnamed():
@@ -135,6 +137,7 @@ def test_merge_adopts_source_name_when_target_unnamed():
     res = review.merge_speakers(segments, embeddings, mappings, "SPEAKER_01", "SPEAKER_00")
     assert res.combined_name == "Clerk Smith"
     assert mappings["SPEAKER_00"].speaker_name == "Clerk Smith"
+    assert all(s.speaker_name == "Clerk Smith" for s in segments)
 
 
 def test_merge_rejects_same_label():

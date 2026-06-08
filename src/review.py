@@ -139,6 +139,7 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
       side has an embedding, the surviving embedding is carried to the target.
     - Drops the source from embeddings and mappings.
     - If the target has no name but the source does, the target adopts it.
+    - All segments now labeled the target carry the merged speaker's name.
 
     Raises ValueError if labels are equal or the source has no segments/mapping.
     """
@@ -184,6 +185,12 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
         tgt_map.needs_review = False
 
     combined_name = getattr(tgt_map, "speaker_name", None) if tgt_map is not None else None
+
+    # Keep segment names consistent with the merged speaker.
+    for s in segments:
+        if s.speaker_label == target_label:
+            s.speaker_name = combined_name
+
     return MergeResult(source_label=source_label, target_label=target_label, moved_segments=moved, combined_name=combined_name)
 
 
