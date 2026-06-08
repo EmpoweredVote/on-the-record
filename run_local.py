@@ -451,6 +451,23 @@ def run_pipeline(args: argparse.Namespace) -> None:
         raise AssertionError("--force-retag without --body bypassed D-12 guard")
     # else: D-05 (no flag, no persisted — legacy) or D-06 (no flag, persisted — silent read)
 
+    # Roster chooser: on a fresh interactive run with no --body, ask which
+    # roster should guide Stage 4 instead of silently using the legacy file.
+    # Non-interactive runs (no TTY) fall through to no roster (handled in
+    # _resolve_roster) unless --body was passed.
+    if _should_prompt_roster(
+        cli_body=cli_body,
+        persisted_body=persisted_body,
+        roster_choice=state.roster_choice,
+        identified=state.is_complete(PipelineStage.IDENTIFIED),
+        isatty=sys.stdin.isatty(),
+    ):
+        chosen_slug, marker = _prompt_roster_choice()
+        state.roster_choice = marker
+        if chosen_slug:
+            state.body_slug = chosen_slug
+        state.save()
+
     effective_body_slug = state.body_slug  # used by Plan 02 guard + Plan 03 Stage 4
 
     if effective_body_slug:

@@ -303,34 +303,26 @@ def test_stage4_uses_body_roster(tmp_path, tmp_config_dir, tmp_meetings_dir, tag
     assert roster is sentinel_roster, "Stage 4 must use the body-specific Roster object"
 
 
-def test_legacy_fallback_intact(tmp_path, tmp_config_dir, tmp_meetings_dir):
-    """D-05: No --body, no persisted slug → bare load_roster() called (legacy fallback intact).
+def test_no_body_no_choice_uses_no_roster(tmp_path, tmp_config_dir, tmp_meetings_dir):
+    """Updated D-05: no --body, no persisted slug, no roster_choice → NO roster.
 
-    Decision D-05: "No flag, no persisted slug → legacy fallback. A brand-new
-    meeting run with no --body flag at all continues to work exactly as today —
-    Stage 4 calls bare load_roster(), which resolves to
-    ~/CouncilScribe/config/council_roster.json."
+    The pre-chooser contract returned the legacy council_roster.json here.
+    As of the roster-chooser change (spec 2026-06-07), a non-interactive run
+    with nothing specified loads no roster instead of silently defaulting to
+    Bloomington. Interactive runs are prompted via _prompt_roster_choice.
     """
-    called_with = []
+    import run_local
+    calls = []
 
     def mock_load_roster(path=None, *, body_slug=None):
-        called_with.append({"path": path, "body_slug": body_slug})
-        return None  # legacy path — no council_roster.json in tmp dir
+        calls.append({"path": path, "body_slug": body_slug})
+        return object()
 
-    # Replicate Stage 4 conditional with effective_body_slug=None (D-05 path):
-    effective_body_slug = None
     with patch("src.roster.load_roster", side_effect=mock_load_roster):
-        from src.roster import load_roster
-        if effective_body_slug:
-            roster = load_roster(body_slug=effective_body_slug)
-        else:
-            roster = load_roster()  # D-05 legacy fallback
+        roster = run_local._resolve_roster(None, None)
 
-    assert len(called_with) == 1, f"Expected exactly one load_roster call, got {called_with}"
-    assert called_with[0]["body_slug"] is None, (
-        f"D-05 legacy fallback must call bare load_roster(), got body_slug={called_with[0]['body_slug']!r}"
-    )
-    assert roster is None, "Legacy fallback returns None when no council_roster.json present"
+    assert roster is None, "No body + no choice must resolve to no roster"
+    assert calls == [], "load_roster must not be called in the no-roster default path"
 
 
 def test_batch_propagates_body(tmp_path, tmp_config_dir, fake_roster_cache):
