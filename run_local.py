@@ -460,7 +460,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         persisted_body=persisted_body,
         roster_choice=state.roster_choice,
         identified=state.is_complete(PipelineStage.IDENTIFIED),
-        isatty=sys.stdin.isatty(),
+        isatty=sys.stdin.isatty() and not getattr(args, "batch_mode", False),
     ):
         chosen_slug, marker = _prompt_roster_choice()
         state.roster_choice = marker
@@ -1285,6 +1285,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             diarizer=getattr(args, "diarizer", "oss"),
             body=getattr(args, "body", None),
             force_retag=getattr(args, "force_retag", False),
+            batch_mode=True,  # suppress the interactive roster chooser (D3: batch uses no roster unless --body)
         )
 
         # Auto-generate date if missing

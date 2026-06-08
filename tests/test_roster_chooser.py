@@ -245,3 +245,45 @@ def test_resolve_roster_unchosen_defaults_to_no_roster(tmp_config_dir):
 
     assert roster is None
     assert calls == []
+
+
+def test_batch_mode_suppresses_roster_prompt(tmp_path, monkeypatch):
+    """Batch mode must not trigger the interactive roster chooser (D3).
+
+    Even when launched from a TTY, _run_batch should pass batch_mode=True so
+    run_pipeline's chooser gate is False and the run falls through to no roster.
+    """
+    import argparse
+    import run_local
+
+    batch_file = tmp_path / "batch.txt"
+    batch_file.write_text("/some/video.mp4 2026-02-10 Bloomington Regular\n", encoding="utf-8")
+
+    captured = []
+    monkeypatch.setattr(run_local, "run_pipeline", lambda a: captured.append(a))
+
+    args = argparse.Namespace(
+        batch=str(batch_file),
+        batch_resume=False,
+        skip_llm=False,
+        merge=False,
+        use_vtt=False,
+        diarizer="oss",
+        body=None,
+        force_retag=False,
+    )
+    run_local._run_batch(args)
+
+    assert len(captured) == 1, "run_pipeline should be called once for the single batch entry"
+    assert getattr(captured[0], "batch_mode", False) is True, (
+        "batch_args must set batch_mode=True so the roster chooser is suppressed"
+    )
+
+    # And confirm the gate itself is False for this batch invocation.
+    assert run_local._should_prompt_roster(
+        cli_body=captured[0].body,
+        persisted_body=None,
+        roster_choice=None,
+        identified=False,
+        isatty=True and not getattr(captured[0], "batch_mode", False),
+    ) is False
