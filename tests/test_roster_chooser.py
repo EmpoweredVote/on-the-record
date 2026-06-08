@@ -104,3 +104,69 @@ def test_list_cached_rosters_bad_json_falls_back_to_slug(tmp_config_dir):
 def test_should_prompt_roster(kwargs, expected):
     import run_local
     assert run_local._should_prompt_roster(**kwargs) is expected
+
+
+def _setup_menu(tmp_config_dir, *, legacy=False):
+    rosters = tmp_config_dir / "rosters"
+    _write_cache(rosters, "bloomington-common-council", "Bloomington Common Council", 10)
+    if legacy:
+        (tmp_config_dir / "council_roster.json").write_text(json.dumps({
+            "city": "Bloomington", "body": "City Council",
+            "members": [{"name": f"Councilmember {i}"} for i in range(8)],
+        }), encoding="utf-8")
+
+
+def test_prompt_pick_cached_roster(tmp_config_dir, monkeypatch):
+    import run_local
+    _setup_menu(tmp_config_dir, legacy=True)
+    monkeypatch.setattr("builtins.input", lambda *a: "1")
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug == "bloomington-common-council"
+    assert marker == "bloomington-common-council"
+
+
+def test_prompt_pick_legacy(tmp_config_dir, monkeypatch):
+    import run_local
+    _setup_menu(tmp_config_dir, legacy=True)
+    # Menu: 1=cached, 2=legacy, 3=no roster
+    monkeypatch.setattr("builtins.input", lambda *a: "2")
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug is None
+    assert marker == "__legacy__"
+
+
+def test_prompt_pick_no_roster(tmp_config_dir, monkeypatch):
+    import run_local
+    _setup_menu(tmp_config_dir, legacy=True)
+    monkeypatch.setattr("builtins.input", lambda *a: "3")
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug is None
+    assert marker == "__none__"
+
+
+def test_prompt_bare_enter_defaults_to_no_roster(tmp_config_dir, monkeypatch):
+    import run_local
+    _setup_menu(tmp_config_dir, legacy=True)
+    monkeypatch.setattr("builtins.input", lambda *a: "")
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug is None
+    assert marker == "__none__"
+
+
+def test_prompt_reprompts_on_bad_input(tmp_config_dir, monkeypatch):
+    import run_local
+    _setup_menu(tmp_config_dir, legacy=False)  # menu: 1=cached, 2=no roster
+    answers = iter(["banana", "9", "1"])
+    monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug == "bloomington-common-council"
+    assert marker == "bloomington-common-council"
+
+
+def test_prompt_no_legacy_present(tmp_config_dir, monkeypatch):
+    import run_local
+    _setup_menu(tmp_config_dir, legacy=False)  # menu: 1=cached, 2=no roster
+    monkeypatch.setattr("builtins.input", lambda *a: "2")
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug is None
+    assert marker == "__none__"

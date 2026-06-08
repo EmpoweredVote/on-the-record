@@ -134,6 +134,77 @@ def _should_prompt_roster(
     )
 
 
+def _prompt_roster_choice() -> tuple[Optional[str], str]:
+    """Interactive roster chooser. Returns (body_slug_or_None, marker).
+
+    marker is the value to persist in state.roster_choice:
+      - the slug itself for a cached roster (body_slug is also returned)
+      - "__legacy__" for the legacy council_roster.json
+      - "__none__" for no roster (also the bare-Enter default)
+
+    Caller is responsible for only invoking this when interactive
+    (see _should_prompt_roster).
+    """
+    cached = _list_cached_rosters()
+    legacy_path = config.CONFIG_DIR / "council_roster.json"
+    has_legacy = legacy_path.exists()
+
+    print("=" * 60)
+    print("ROSTER SELECTION")
+    print("=" * 60)
+    print("  Which council roster should guide speaker identification?")
+    print()
+
+    # options[i] = ("cached"|"legacy"|"none", slug_or_None)
+    options: list[tuple[str, Optional[str]]] = []
+    n = 0
+    for slug, label in cached:
+        n += 1
+        print(f"  {n}. {label}")
+        options.append(("cached", slug))
+
+    if has_legacy:
+        legacy_label = "legacy council_roster.json"
+        try:
+            with open(legacy_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            name = f"{data.get('city', '')} {data.get('body', '')}".strip()
+            members = len(data.get("members", []))
+            legacy_label = f"{name or 'council_roster.json'} (legacy, {members} members)"
+        except Exception:
+            pass
+        n += 1
+        print(f"  {n}. {legacy_label}")
+        options.append(("legacy", None))
+
+    n += 1
+    none_index = n
+    print(f"  {n}. No roster (skip name correction)")
+    options.append(("none", None))
+    print()
+
+    while True:
+        choice = input(f"  Select [1-{n}] (default {none_index} = no roster): ").strip()
+        if choice == "":
+            kind, value = "none", None
+            break
+        try:
+            idx = int(choice)
+        except ValueError:
+            print("  Please enter a number.")
+            continue
+        if 1 <= idx <= len(options):
+            kind, value = options[idx - 1]
+            break
+        print(f"  Out of range. Enter 1-{n}.")
+
+    if kind == "cached":
+        return value, value
+    if kind == "legacy":
+        return None, "__legacy__"
+    return None, "__none__"
+
+
 def get_hf_token() -> str:
     """Resolve HuggingFace token from env, cached login, or prompt."""
     # 1. Environment variable
