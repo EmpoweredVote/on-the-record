@@ -179,3 +179,69 @@ def test_prompt_empty_cache_only_shows_no_roster(tmp_config_dir, monkeypatch):
     body_slug, marker = run_local._prompt_roster_choice()
     assert body_slug is None
     assert marker == "__none__"
+
+
+from unittest.mock import patch
+
+
+def test_resolve_roster_body_slug_loads_body_specific(tmp_config_dir):
+    import run_local
+    sentinel = object()
+    calls = []
+
+    def fake_load_roster(path=None, *, body_slug=None):
+        calls.append({"path": path, "body_slug": body_slug})
+        return sentinel
+
+    with patch("src.roster.load_roster", side_effect=fake_load_roster):
+        roster = run_local._resolve_roster("bloomington-common-council", None)
+
+    assert roster is sentinel
+    assert calls == [{"path": None, "body_slug": "bloomington-common-council"}]
+
+
+def test_resolve_roster_legacy_calls_bare_load(tmp_config_dir):
+    import run_local
+    sentinel = object()
+    calls = []
+
+    def fake_load_roster(path=None, *, body_slug=None):
+        calls.append({"path": path, "body_slug": body_slug})
+        return sentinel
+
+    with patch("src.roster.load_roster", side_effect=fake_load_roster):
+        roster = run_local._resolve_roster(None, "__legacy__")
+
+    assert roster is sentinel
+    assert calls == [{"path": None, "body_slug": None}]  # bare load_roster()
+
+
+def test_resolve_roster_none_does_not_load(tmp_config_dir):
+    import run_local
+    calls = []
+
+    def fake_load_roster(path=None, *, body_slug=None):
+        calls.append(1)
+        return object()
+
+    with patch("src.roster.load_roster", side_effect=fake_load_roster):
+        roster = run_local._resolve_roster(None, "__none__")
+
+    assert roster is None
+    assert calls == []  # never touches the roster loader
+
+
+def test_resolve_roster_unchosen_defaults_to_no_roster(tmp_config_dir):
+    """Non-interactive / no --body / no choice → no roster (the D3 behavior flip)."""
+    import run_local
+    calls = []
+
+    def fake_load_roster(path=None, *, body_slug=None):
+        calls.append(1)
+        return object()
+
+    with patch("src.roster.load_roster", side_effect=fake_load_roster):
+        roster = run_local._resolve_roster(None, None)
+
+    assert roster is None
+    assert calls == []

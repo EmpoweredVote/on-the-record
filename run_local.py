@@ -204,6 +204,23 @@ def _prompt_roster_choice() -> tuple[Optional[str], str]:
     return None, "__none__"
 
 
+def _resolve_roster(effective_body_slug: Optional[str], roster_choice: Optional[str]):
+    """Resolve the Roster (or None) for Stage 4 given the meeting's state.
+
+    - body_slug set      → load that body's cached roster.
+    - roster_choice legacy → bare load_roster() (legacy council_roster.json).
+    - "__none__" / unchosen → no roster (no name correction). This is the
+      non-interactive default since the chooser only runs interactively.
+    """
+    from src.roster import load_roster
+
+    if effective_body_slug:
+        return load_roster(body_slug=effective_body_slug)
+    if roster_choice == "__legacy__":
+        return load_roster()
+    return None
+
+
 def get_hf_token() -> str:
     """Resolve HuggingFace token from env, cached login, or prompt."""
     # 1. Environment variable
@@ -810,7 +827,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         flag_for_review,
         identify_speakers,
     )
-    from src.roster import load_roster, roster_names_for_prompt
+    from src.roster import roster_names_for_prompt
 
     named_transcript_path = meeting_dir / "transcript_named.json"
     llm_partial_path = meeting_dir / "llm_partial_results.json"
@@ -822,10 +839,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # utility sites (~line 1021 _fix_transcripts, ~line 1719 --show-roster,
     # ~line 1749 --fix-profiles) remain on bare load_roster() because they have
     # no meeting context. See 109-RESEARCH.md §1. Phase 110/111 will revisit them.
-    if effective_body_slug:
-        roster = load_roster(body_slug=effective_body_slug)
-    else:
-        roster = load_roster()  # D-05 legacy fallback
+    roster = _resolve_roster(effective_body_slug, state.roster_choice)
     if roster:
         # Roster dataclass may not have .city/.body when loaded from a body-keyed cache;
         # print whichever label is available without crashing the legacy path.
@@ -833,6 +847,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
         if not label and effective_body_slug:
             label = effective_body_slug
         print(f"  Loaded council roster: {len(roster.members)} members ({label})")
+    else:
+        print("  No roster loaded — speaker names won't be corrected against a council roster.")
     roster_hint = roster_names_for_prompt(roster) if roster else ""
 
     if state.is_complete(PipelineStage.IDENTIFIED):
