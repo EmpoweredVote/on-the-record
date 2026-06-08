@@ -18,6 +18,7 @@ import gc
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -346,8 +347,6 @@ def play_video_clip(video_path: str, start_time: float, duration: float = 15.0, 
         duration: Duration to play in seconds.
         title: Window title.
     """
-    import subprocess
-
     # Start a few seconds early to give visual context
     seek = max(0, start_time - 3.0)
 
@@ -367,6 +366,39 @@ def play_video_clip(video_path: str, start_time: float, duration: float = 15.0, 
         subprocess.run(cmd, check=False)
     except FileNotFoundError:
         print("    ffplay not found — install ffmpeg to enable video playback")
+
+
+def play_speaker_clip(
+    video_path: str | None,
+    audio_path: str | None,
+    start_time: float,
+    duration: float = 20.0,
+    title: str = "",
+) -> None:
+    """Play a clip of a speaker: video if available, else the audio segment.
+
+    Uses ffplay. Starts a few seconds early for context. When only audio is
+    available, plays audio.wav with no display window (-nodisp).
+    """
+    media = video_path or audio_path
+    if not media:
+        print("    No media to play (no video or audio found).")
+        return
+
+    seek = max(0, start_time - 3.0)
+    cmd = ["ffplay", "-ss", str(seek), "-t", str(duration), "-autoexit", "-loglevel", "quiet"]
+    if not video_path:
+        cmd.append("-nodisp")
+    if title:
+        cmd += ["-window_title", title]
+    cmd.append(media)
+
+    kind = "video" if video_path else "audio"
+    print(f"    Playing {kind} clip ({duration:.0f}s from {int(seek // 60):02d}:{int(seek % 60):02d})...")
+    try:
+        subprocess.run(cmd, check=False)
+    except FileNotFoundError:
+        print("    ffplay not found — install ffmpeg to enable clip playback")
 
 
 def free_gpu_memory():
