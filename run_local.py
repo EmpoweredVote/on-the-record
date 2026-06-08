@@ -178,13 +178,12 @@ def _prompt_roster_choice() -> tuple[Optional[str], str]:
         options.append(("legacy", None))
 
     n += 1
-    none_index = n
     print(f"  {n}. No roster (skip name correction)")
     options.append(("none", None))
     print()
 
     while True:
-        choice = input(f"  Select [1-{n}] (default {none_index} = no roster): ").strip()
+        choice = input(f"  Select [1-{n}] (default {n} = no roster): ").strip()
         if choice == "":
             kind, value = "none", None
             break

@@ -170,3 +170,12 @@ def test_prompt_no_legacy_present(tmp_config_dir, monkeypatch):
     body_slug, marker = run_local._prompt_roster_choice()
     assert body_slug is None
     assert marker == "__none__"
+
+
+def test_prompt_empty_cache_only_shows_no_roster(tmp_config_dir, monkeypatch):
+    # No cached rosters and no legacy file → menu has only "No roster" as item 1.
+    import run_local
+    monkeypatch.setattr("builtins.input", lambda *a: "1")
+    body_slug, marker = run_local._prompt_roster_choice()
+    assert body_slug is None
+    assert marker == "__none__"
