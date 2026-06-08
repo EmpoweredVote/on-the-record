@@ -79,3 +79,42 @@ def build_review_state(segments, mappings, embeddings, profile_db, *, show_text:
 
     views.sort(key=lambda v: v.total_speech_seconds, reverse=True)
     return views
+
+
+@dataclass
+class RenameResult:
+    label: str
+    old_name: Optional[str]
+    new_name: str
+    alias_suggestion: Optional[str]
+
+
+def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None) -> RenameResult:
+    """Assign new_name to a speaker label across its mapping and segments.
+
+    If roster is given, the name is normalized via correct_speaker_name. Returns
+    a RenameResult; alias_suggestion is the prior (wrong) name, to offer as an
+    alias, or None when there was no prior name or it equals the new name.
+    """
+    from src.models import SpeakerMapping
+
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    old_name = mapping.speaker_name
+
+    final_name = new_name
+    if roster is not None:
+        from src.roster import correct_speaker_name
+        final_name = correct_speaker_name(new_name, roster)
+
+    mapping.speaker_name = final_name
+    mapping.confidence = 1.0
+    mapping.id_method = "human_review"
+    mapping.needs_review = False
+    mappings[label] = mapping
+
+    for seg in segments:
+        if seg.speaker_label == label:
+            seg.speaker_name = final_name
+
+    alias = old_name if (old_name and old_name != final_name) else None
+    return RenameResult(label=label, old_name=old_name, new_name=final_name, alias_suggestion=alias)

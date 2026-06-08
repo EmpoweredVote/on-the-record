@@ -71,3 +71,33 @@ def test_build_review_state_needs_review_flag():
     by_label = {v.label: v for v in views}
     assert by_label["SPEAKER_00"].needs_review is True
     assert by_label["SPEAKER_01"].needs_review is False
+
+
+def test_rename_speaker_updates_mapping_and_segments():
+    segments = [_seg("SPEAKER_00", 0, 5, "hi"), _seg("SPEAKER_00", 6, 9, "again"), _seg("SPEAKER_01", 9, 12)]
+    mappings = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00")}
+    res = review.rename_speaker(mappings, segments, "SPEAKER_00", "Mayor Jones")
+    assert res.new_name == "Mayor Jones"
+    assert res.old_name is None
+    assert mappings["SPEAKER_00"].speaker_name == "Mayor Jones"
+    assert mappings["SPEAKER_00"].confidence == 1.0
+    assert mappings["SPEAKER_00"].id_method == "human_review"
+    assert mappings["SPEAKER_00"].needs_review is False
+    assert [s.speaker_name for s in segments if s.speaker_label == "SPEAKER_00"] == ["Mayor Jones", "Mayor Jones"]
+
+
+def test_rename_speaker_suggests_alias_when_correcting():
+    segments = [_seg("SPEAKER_00", 0, 5)]
+    m = SpeakerMapping(speaker_label="SPEAKER_00")
+    m.speaker_name = "Misheard Name"
+    mappings = {"SPEAKER_00": m}
+    res = review.rename_speaker(mappings, segments, "SPEAKER_00", "Mayor Jones")
+    assert res.old_name == "Misheard Name"
+    assert res.alias_suggestion == "Misheard Name"
+
+
+def test_rename_speaker_no_alias_when_no_prior_name():
+    segments = [_seg("SPEAKER_00", 0, 5)]
+    mappings = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00")}
+    res = review.rename_speaker(mappings, segments, "SPEAKER_00", "Mayor Jones")
+    assert res.alias_suggestion is None
