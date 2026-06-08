@@ -30,6 +30,16 @@ def _is_ytdlp_url(url: str) -> bool:
         return False
 
 
+def _ytdlp_format() -> str:
+    """yt-dlp format string: a capped (~480p) video+audio stream.
+
+    Capped resolution keeps downloads modest — clips only need to show a face —
+    while still producing a playable source video for the review step. Falls back
+    to best available if the capped combo is unavailable.
+    """
+    return "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
+
+
 def download_via_ytdlp(
     url: str,
     output_path: str | Path,
@@ -38,8 +48,9 @@ def download_via_ytdlp(
 ) -> Path:
     """Download a video via yt-dlp (YouTube, Facebook, and 1000+ other sites).
 
-    Downloads the best available audio stream. The returned path may have a
-    different extension than ``output_path`` depending on what yt-dlp selects.
+    Downloads a capped-resolution video+audio stream (so the source video is
+    available for review clips). The returned path may have a different extension
+    than ``output_path`` depending on what yt-dlp selects.
 
     Args:
         url: YouTube, Facebook, or any yt-dlp-supported URL.
@@ -64,7 +75,7 @@ def download_via_ytdlp(
     template = str(output_path.parent / output_path.stem) + ".%(ext)s"
 
     ydl_opts: dict = {
-        "format": "bestaudio/best",
+        "format": _ytdlp_format(),
         "outtmpl": template,
         "quiet": not progress,
         "no_warnings": not progress,
