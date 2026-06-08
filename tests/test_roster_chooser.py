@@ -73,3 +73,14 @@ def test_list_cached_rosters_returns_sorted_slug_and_label(tmp_config_dir):
     assert [slug for slug, _ in result] == ["aaa-city-council", "zzz-town-council"]
     assert result[0][1] == "AAA City Council (5 members) [aaa-city-council]"
     assert result[1][1] == "ZZZ Town Council (3 members) [zzz-town-council]"
+
+
+def test_list_cached_rosters_bad_json_falls_back_to_slug(tmp_config_dir):
+    import run_local
+    rosters = tmp_config_dir / "rosters"
+    rosters.mkdir(parents=True, exist_ok=True)
+    (rosters / "broken-council.json").write_text("not valid json", encoding="utf-8")
+
+    result = run_local._list_cached_rosters()
+
+    assert result == [("broken-council", "broken-council")]
