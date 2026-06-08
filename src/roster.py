@@ -246,59 +246,73 @@ def add_alias(
     roster_path: Optional[Path],
     canonical_name: str,
     new_alias: str,
+    *,
+    body_slug: Optional[str] = None,
 ) -> bool:
     """Add a new alias to a roster member's alias list.
 
-    Loads the roster JSON, adds the alias if not already present, and saves.
-    Guards against nonsense aliases (too short, generic labels, etc.).
+    Two targets:
+    - body_slug given → the per-body cache at CONFIG_DIR/rosters/{body_slug}.json,
+      whose members live under "politicians" with a derived canonical name
+      "{title} {last_name}" (matching load_roster's slug path).
+    - else → the legacy council_roster.json (or roster_path), "members" schema.
 
-    Args:
-        roster_path: Path to roster JSON file. Uses default if None.
-        canonical_name: The canonical member name to add the alias to.
-        new_alias: The alias to add.
-
-    Returns:
-        True if alias was added, False otherwise.
+    Returns True if an alias was added, False otherwise.
     """
+    # Guard: reject nonsense aliases (shared by both schemas)
+    if not new_alias or len(new_alias.strip()) < 3:
+        return False
+    alias_stripped = new_alias.strip()
+    _SKIP = {"speaker", "unknown", "unidentified", "none", "n/a"}
+    if alias_stripped.lower() in _SKIP:
+        return False
+    if alias_stripped.startswith("SPEAKER_"):
+        return False
+
+    if body_slug:
+        cache_path = config.CONFIG_DIR / "rosters" / f"{body_slug}.json"
+        if not cache_path.exists():
+            return False
+        with open(cache_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for pol in data.get("politicians", []):
+            full_name = pol.get("full_name", "")
+            title = pol.get("title", "")
+            last_name = full_name.split()[-1] if full_name else ""
+            derived = f"{title} {last_name}".strip() if (title and last_name) else full_name
+            if derived.lower() != canonical_name.lower():
+                continue
+            existing = [a.lower() for a in pol.get("aliases", [])]
+            if alias_stripped.lower() in existing or alias_stripped.lower() == derived.lower():
+                return False
+            pol.setdefault("aliases", []).append(alias_stripped)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return True
+        return False
+
+    # Legacy path (unchanged behavior)
     if roster_path is None:
         roster_path = config.CONFIG_DIR / "council_roster.json"
     if not roster_path.exists():
         return False
-
-    # Guard: reject nonsense aliases
-    if not new_alias or len(new_alias.strip()) < 3:
-        return False
-    alias_stripped = new_alias.strip()
-    # Skip generic/placeholder names
-    _SKIP = {"speaker", "unknown", "unidentified", "none", "n/a"}
-    if alias_stripped.lower() in _SKIP:
-        return False
-    # Skip SPEAKER_XX labels
-    if alias_stripped.startswith("SPEAKER_"):
-        return False
-
     with open(roster_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-
     for member in data.get("members", []):
         if member["name"].lower() != canonical_name.lower():
             continue
-
         existing = [a.lower() for a in member.get("aliases", [])]
         if alias_stripped.lower() in existing:
-            return False  # already present
+            return False
         if alias_stripped.lower() == member["name"].lower():
-            return False  # same as canonical
-
+            return False
         if "aliases" not in member:
             member["aliases"] = []
         member["aliases"].append(alias_stripped)
-
         with open(roster_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
-
-    return False  # member not found
+    return False
 
 
 def roster_names_for_prompt(roster: Roster) -> str:

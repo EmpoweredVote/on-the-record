@@ -287,3 +287,36 @@ def test_batch_mode_suppresses_roster_prompt(tmp_path, monkeypatch):
         identified=False,
         isatty=True and not getattr(captured[0], "batch_mode", False),
     ) is False
+
+
+def test_add_alias_legacy_targets_council_roster(tmp_config_dir):
+    from src import roster
+    (tmp_config_dir / "council_roster.json").write_text(json.dumps({
+        "city": "Bloomington", "body": "City Council",
+        "members": [{"name": "Council President Asare", "aliases": []}],
+    }), encoding="utf-8")
+    added = roster.add_alias(None, "Council President Asare", "Sasseberg")
+    assert added is True
+    data = json.loads((tmp_config_dir / "council_roster.json").read_text())
+    assert "Sasseberg" in data["members"][0]["aliases"]
+
+
+def test_add_alias_body_slug_targets_per_body_cache(tmp_config_dir):
+    from src import roster
+    rosters = tmp_config_dir / "rosters"
+    rosters.mkdir(parents=True, exist_ok=True)
+    (rosters / "bloomington-common-council.json").write_text(json.dumps({
+        "body_slug": "bloomington-common-council",
+        "body_key": "Bloomington Common Council",
+        "fetched_at": "2026-01-01T00:00:00+00:00",
+        "politicians": [
+            {"full_name": "Isak Asare", "title": "Council President", "aliases": []},
+        ],
+    }), encoding="utf-8")
+    # canonical for the slug path is "{title} {last_name}" => "Council President Asare"
+    added = roster.add_alias(None, "Council President Asare", "Sasseberg",
+                             body_slug="bloomington-common-council")
+    assert added is True
+    data = json.loads((rosters / "bloomington-common-council.json").read_text())
+    assert "Sasseberg" in data["politicians"][0]["aliases"]
+    assert not (tmp_config_dir / "council_roster.json").exists()
