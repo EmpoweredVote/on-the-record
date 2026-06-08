@@ -981,8 +981,19 @@ def run_pipeline(args: argparse.Namespace) -> None:
             name = m.speaker_name or "(unidentified)"
             print(f"    {label} -> {name} (conf={m.confidence:.2f}, method={m.id_method}, {status})")
 
-        # Human review
-        mappings = human_review(mappings)
+        # Human review — rich interactive review on a terminal (clips, hints,
+        # merge); fall back to the text-only quick review otherwise or when
+        # --no-review is set.
+        if sys.stdin.isatty() and not getattr(args, "no_review", False):
+            review_video = find_video_file(meeting_dir, meeting.audio_source)
+            review_changes = _interactive_speaker_review(
+                segments, mappings, speaker_embeddings, profile_db,
+                review_video, str(wav_path),
+                roster=roster, body_slug=effective_body_slug, show_text=True,
+            )
+            _persist_after_review(meeting_dir, segments, speaker_embeddings, review_changes)
+        else:
+            mappings = human_review(mappings)
 
         # Apply to segments
         segments = apply_mappings_to_segments(segments, mappings)
@@ -2141,10 +2152,15 @@ Environment Variables:
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
     parser.add_argument("--show-roster", action="store_true",
                         help="Display the current council roster and exit")
+    parser.add_argument("--no-review", action="store_true",
+                        help="Skip the interactive speaker review at the end of a run")
+    parser.add_argument("--review", metavar="MEETING_ID",
+                        help="Review/correct/merge speakers in an existing meeting "
+                             "(canonical; --review-meeting and --identify-speakers are aliases)")
     parser.add_argument("--review-meeting", metavar="MEETING_ID",
-                        help="Interactively review and correct all speakers in an existing meeting")
+                        help="Interactively review and correct all speakers in an existing meeting (alias of --review)")
     parser.add_argument("--identify-speakers", metavar="MEETING_ID",
-                        help="Standalone speaker identification with video clips and voice hints (works pre-transcription)")
+                        help="Standalone speaker identification with video clips and voice hints (works pre-transcription) (alias of --review)")
     parser.add_argument("--pre-identify", action="store_true",
                         help="Interactive speaker identification after diarization, before transcription (pipeline mode)")
     parser.add_argument("--batch", metavar="FILE_OR_DIR",
@@ -2253,6 +2269,16 @@ Environment Variables:
 
     if args.fix_transcripts:
         _fix_transcripts()
+        return
+
+    if args.review:
+        # Canonical review: full post-transcription review when a named
+        # transcript exists, else diarization-only identification.
+        from src import config as _config
+        if (_config.MEETINGS_DIR / args.review / "transcript_named.json").exists():
+            _review_meeting(args.review)
+        else:
+            _identify_speakers_standalone(args.review)
         return
 
     if args.review_meeting:
