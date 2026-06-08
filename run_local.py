@@ -204,7 +204,7 @@ def _prompt_roster_choice() -> tuple[Optional[str], str]:
     return None, "__none__"
 
 
-def _resolve_roster(effective_body_slug: Optional[str], roster_choice: Optional[str]):
+def _resolve_roster(effective_body_slug: Optional[str], roster_choice: Optional[str]) -> Optional["Roster"]:
     """Resolve the Roster (or None) for Stage 4 given the meeting's state.
 
     - body_slug set      → load that body's cached roster.
@@ -212,6 +212,7 @@ def _resolve_roster(effective_body_slug: Optional[str], roster_choice: Optional[
     - "__none__" / unchosen → no roster (no name correction). This is the
       non-interactive default since the chooser only runs interactively.
     """
+    # Local import so tests can patch src.roster.load_roster.
     from src.roster import load_roster
 
     if effective_body_slug:
@@ -832,13 +833,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
     named_transcript_path = meeting_dir / "transcript_named.json"
     llm_partial_path = meeting_dir / "llm_partial_results.json"
 
-    # Phase 109 CSMEETING-03: load body-specific roster when meeting is tagged.
-    # effective_body_slug comes from the Plan 01 resolve block; Plan 02's guard has
-    # already verified the cache file exists if effective_body_slug is set.
-    # NOTE: this is the ONLY load_roster() site Phase 109 updates. The 3 offline
-    # utility sites (~line 1021 _fix_transcripts, ~line 1719 --show-roster,
-    # ~line 1749 --fix-profiles) remain on bare load_roster() because they have
-    # no meeting context. See 109-RESEARCH.md §1. Phase 110/111 will revisit them.
+    # Phase 109 CSMEETING-03 + roster chooser: resolve the Stage 4 roster from the
+    # meeting's tagging/choice state. effective_body_slug comes from the resolve
+    # block above; if it's set, Plan 02's guard has already verified the cache file
+    # exists. The actual load_roster() calls live inside _resolve_roster(); this is
+    # the only meeting-context roster resolution. The 3 offline utility sites
+    # (_fix_transcripts, --show-roster, --fix-profiles) still call bare load_roster()
+    # because they have no meeting context. See 109-RESEARCH.md §1.
     roster = _resolve_roster(effective_body_slug, state.roster_choice)
     if roster:
         # Roster dataclass may not have .city/.body when loaded from a body-keyed cache;
