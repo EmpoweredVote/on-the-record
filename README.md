@@ -114,6 +114,26 @@ resuming it reuses that roster automatically. Pass `--body <slug>` explicitly
 to skip the prompt. In non-interactive runs (batch mode, piped, cron) with no
 `--body`, no roster is used.
 
+### Reviewing & naming speakers
+
+After an interactive run finishes, CouncilScribe drops into a guided speaker
+review (skip with `--no-review`). For each detected speaker it shows stats and
+any voice-profile match hints, and lets you:
+
+- **`[V]iew`** — play a ~20s clip of that speaker (video if available, otherwise
+  audio),
+- **`[Y]`** — accept the suggested voice-profile match,
+- **`[M]erge`** — merge this speaker into another (when diarization split one
+  person into two: their segments and voice data combine),
+- type a **name**, or **`[Enter]`** to skip / **`[Q]`** to quit.
+
+Naming a speaker enrolls their voice so future meetings auto-match them. To
+re-review a finished meeting later: `python run_local.py --review <MEETING_ID>`
+(the old `--review-meeting` / `--identify-speakers` still work as aliases).
+
+YouTube/Facebook meetings now download a capped-resolution video so clips are
+available during review (CATS TV, direct URLs, and local files always had them).
+
 ## Google Drive structure
 
 After processing, your Drive will contain:
