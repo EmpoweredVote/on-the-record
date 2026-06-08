@@ -1842,6 +1842,7 @@ def _review_meeting(meeting_id: str) -> None:
     print("  [Enter]  Skip (keep current name)")
     print("  [V]      View video clip of this speaker")
     print("  [Y]      Accept suggested voice match (if shown)")
+    print("  [M]      Merge this speaker into another")
     print("  [name]   Type a new name to assign")
     print("  [Q]      Quit review (save changes so far)")
     print()
@@ -1992,6 +1993,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     print("  [Enter]  Skip")
     print("  [V]      View video clip of this speaker")
     print("  [Y]      Accept suggested voice match (if shown)")
+    print("  [M]      Merge this speaker into another")
     print("  [name]   Type a name to assign")
     print("  [Q]      Quit (save changes so far)")
     print()
@@ -2037,13 +2039,10 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
             old = c["old_name"] or "(unidentified)"
             print(f"  {c['label']}: {old} -> {c['new_name']}")
 
-        # If named transcript exists, update it too
+        # If named transcript exists, update it too. Reuse the in-memory
+        # `meeting` (loaded at the top of this function and mutated in place by
+        # the review loop) — re-loading from disk here would discard merges.
         if named_path.exists():
-            with open(named_path, "r") as f:
-                meeting = Meeting.from_dict(json.load(f))
-            for label, mapping in current_mappings.items():
-                if isinstance(mapping, SpeakerMapping):
-                    meeting.speakers[label] = mapping
             for seg in meeting.segments:
                 m = meeting.speakers.get(seg.speaker_label)
                 if m and m.speaker_name:
