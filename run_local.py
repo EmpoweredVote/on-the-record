@@ -1724,6 +1724,8 @@ def _enroll_after_review(
     profile_db = load_profiles()
 
     for change in changes:
+        if "merged_into" in change:
+            continue  # merges aren't renames — nothing to enroll here
         label = change["label"]
         new_name = change["new_name"]
         if not new_name or label not in speaker_embeddings:
@@ -1869,6 +1871,9 @@ def _review_meeting(meeting_id: str) -> None:
 
         print(f"\n{len(changes)} correction(s) saved:")
         for c in changes:
+            if "merged_into" in c:
+                print(f"  {c['label']}: merged into {c['merged_into']}")
+                continue
             old = c["old_name"] or "(unidentified)"
             print(f"  {c['label']}: {old} -> {c['new_name']}")
         print(f"Exports updated: {export_dir}")
@@ -2015,6 +2020,9 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
 
         print(f"\n{len(changes)} identification(s) saved to {pre_id_path.name}")
         for c in changes:
+            if "merged_into" in c:
+                print(f"  {c['label']}: merged into {c['merged_into']}")
+                continue
             old = c["old_name"] or "(unidentified)"
             print(f"  {c['label']}: {old} -> {c['new_name']}")
 
