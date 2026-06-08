@@ -85,6 +85,32 @@ def ensure_body_roster_cached(body_slug: Optional[str]) -> None:
     # D-09: staleness is checked later inside load_roster() — not our concern here.
 
 
+def _list_cached_rosters() -> list[tuple[str, str]]:
+    """Return [(body_slug, label), ...] for each cached per-body roster.
+
+    Scans CONFIG_DIR/rosters/*.json, sorted by filename. label is
+    "{body_key} ({N} members) [{slug}]", falling back to the slug if the
+    file can't be parsed.
+    """
+    rosters_dir = config.CONFIG_DIR / "rosters"
+    out: list[tuple[str, str]] = []
+    if not rosters_dir.exists():
+        return out
+    for path in sorted(rosters_dir.glob("*.json")):
+        slug = path.stem
+        label = slug
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            body_key = data.get("body_key") or slug
+            count = len(data.get("politicians", []))
+            label = f"{body_key} ({count} members) [{slug}]"
+        except Exception:
+            pass
+        out.append((slug, label))
+    return out
+
+
 def get_hf_token() -> str:
     """Resolve HuggingFace token from env, cached login, or prompt."""
     # 1. Environment variable

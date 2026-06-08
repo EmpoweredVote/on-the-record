@@ -43,3 +43,33 @@ def test_legacy_state_file_without_roster_choice_loads_as_none(tmp_path):
     state = PipelineState(tmp_path)
     assert state.roster_choice is None
     assert state.completed_stage == PipelineStage.TRANSCRIBED
+
+
+def _write_cache(rosters_dir: Path, slug: str, body_key: str, n_members: int) -> None:
+    rosters_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "body_slug": slug,
+        "body_key": body_key,
+        "fetched_at": "2026-01-01T00:00:00+00:00",
+        "politicians": [{"full_name": f"Member {i}", "title": "Councilmember"} for i in range(n_members)],
+    }
+    (rosters_dir / f"{slug}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_list_cached_rosters_empty(tmp_config_dir):
+    import run_local
+    assert run_local._list_cached_rosters() == []
+
+
+def test_list_cached_rosters_returns_sorted_slug_and_label(tmp_config_dir):
+    import run_local
+    rosters = tmp_config_dir / "rosters"
+    _write_cache(rosters, "zzz-town-council", "ZZZ Town Council", 3)
+    _write_cache(rosters, "aaa-city-council", "AAA City Council", 5)
+
+    result = run_local._list_cached_rosters()
+
+    # sorted by slug (filename)
+    assert [slug for slug, _ in result] == ["aaa-city-council", "zzz-town-council"]
+    assert result[0][1] == "AAA City Council (5 members) [aaa-city-council]"
+    assert result[1][1] == "ZZZ Town Council (3 members) [zzz-town-council]"
