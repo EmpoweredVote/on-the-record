@@ -111,6 +111,29 @@ def _list_cached_rosters() -> list[tuple[str, str]]:
     return out
 
 
+def _should_prompt_roster(
+    *,
+    cli_body,
+    persisted_body,
+    roster_choice,
+    identified: bool,
+    isatty: bool,
+) -> bool:
+    """Decide whether to show the interactive roster chooser.
+
+    Prompt only on a fresh interactive run where the operator hasn't already
+    chosen a roster: TTY attached, no --body, no persisted body_slug, no prior
+    roster_choice, and Stage 4 (identification) not already complete.
+    """
+    return (
+        isatty
+        and not cli_body
+        and not persisted_body
+        and roster_choice is None
+        and not identified
+    )
+
+
 def get_hf_token() -> str:
     """Resolve HuggingFace token from env, cached login, or prompt."""
     # 1. Environment variable

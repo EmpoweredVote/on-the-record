@@ -84,3 +84,23 @@ def test_list_cached_rosters_bad_json_falls_back_to_slug(tmp_config_dir):
     result = run_local._list_cached_rosters()
 
     assert result == [("broken-council", "broken-council")]
+
+
+@pytest.mark.parametrize("kwargs,expected", [
+    # The only "prompt" case: interactive, no cli body, no persisted body,
+    # no prior choice, not yet identified.
+    (dict(cli_body=None, persisted_body=None, roster_choice=None, identified=False, isatty=True), True),
+    # --body given → never prompt
+    (dict(cli_body="x", persisted_body=None, roster_choice=None, identified=False, isatty=True), False),
+    # already tagged → never prompt
+    (dict(cli_body=None, persisted_body="x", roster_choice=None, identified=False, isatty=True), False),
+    # prior choice recorded → never prompt
+    (dict(cli_body=None, persisted_body=None, roster_choice="__none__", identified=False, isatty=True), False),
+    # identification already complete → never prompt
+    (dict(cli_body=None, persisted_body=None, roster_choice=None, identified=True, isatty=True), False),
+    # not a terminal → never prompt
+    (dict(cli_body=None, persisted_body=None, roster_choice=None, identified=False, isatty=False), False),
+])
+def test_should_prompt_roster(kwargs, expected):
+    import run_local
+    assert run_local._should_prompt_roster(**kwargs) is expected
