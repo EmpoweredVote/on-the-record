@@ -467,6 +467,21 @@ def run_pipeline(args: argparse.Namespace) -> None:
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
+    # Apply --redo rewind now that meeting_dir is known (works with both
+    # --resume and --input; the --resume branch may have already done this,
+    # but rewind_to is idempotent so the double-call is harmless).
+    if getattr(args, "redo", None):
+        _redo_map = {
+            "ingest":     PipelineStage.INGESTED,
+            "diarize":    PipelineStage.DIARIZED,
+            "transcribe": PipelineStage.TRANSCRIBED,
+            "identify":   PipelineStage.IDENTIFIED,
+            "summary":    PipelineStage.SUMMARIZED,
+            "all":        PipelineStage.INGESTED,
+        }
+        state.rewind_to(_redo_map[args.redo])
+        print(f"Re-running from stage: {args.redo}")
+
     # ── Phase 109: resolve effective body_slug (D-01..D-06, D-11) ──
     cli_body = getattr(args, "body", None)
     persisted_body = state.body_slug
@@ -2236,10 +2251,11 @@ Environment Variables:
     )
     parser.add_argument(
         "--redo",
-        choices=["diarize", "transcribe", "identify", "summary", "all"],
+        choices=["ingest", "diarize", "transcribe", "identify", "summary", "all"],
         default=None,
-        help="Re-run a past meeting from this stage onward (requires --resume MEETING_ID). "
-             "'all' re-runs the full analysis from diarization (ingested audio is kept).",
+        help="Re-run from this stage onward. Use with --resume or --input. "
+             "'ingest' re-downloads and re-checks for captions. "
+             "'all' re-runs everything from ingest.",
     )
 
     args = parser.parse_args()
@@ -2248,8 +2264,8 @@ Environment Variables:
     if args.force_retag and not args.body:
         parser.error("--force-retag requires --body <slug>")
 
-    if args.redo and not args.resume:
-        parser.error("--redo requires --resume <MEETING_ID>")
+    if args.redo and not args.resume and not args.input:
+        parser.error("--redo requires --resume <MEETING_ID> or --input <URL/FILE>")
 
     # --- Utility commands ---
     if args.show_roster:
@@ -2402,18 +2418,6 @@ Environment Variables:
         args.meeting_id = args.resume
         print(f"Resuming meeting: {args.resume}")
 
-        if args.redo:
-            from src.checkpoint import PipelineState, PipelineStage
-            _redo_map = {
-                "diarize": PipelineStage.DIARIZED,
-                "transcribe": PipelineStage.TRANSCRIBED,
-                "identify": PipelineStage.IDENTIFIED,
-                "summary": PipelineStage.SUMMARIZED,
-                "all": PipelineStage.DIARIZED,
-            }
-            _redo_state = PipelineState(meeting_dir)
-            _redo_state.rewind_to(_redo_map[args.redo])
-            print(f"Re-running from stage: {args.redo}")
 
     # --- Validate ---
     if not args.input:
