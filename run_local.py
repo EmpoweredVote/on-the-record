@@ -1523,6 +1523,49 @@ def _meeting_body_slug(meeting_dir: Path) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Metadata defaults / interactive prompt helpers
+# ---------------------------------------------------------------------------
+
+CITY_DEFAULT = "Bloomington"
+MEETING_TYPE_DEFAULT = "Regular Session"
+
+
+def _today_iso() -> str:
+    from datetime import date
+    return date.today().isoformat()
+
+
+def _resolve_metadata(args) -> None:
+    """Fill args.city/date/meeting_type for a new run.
+
+    Interactive + no --default → prompt for each UNSET field (Enter accepts the
+    shown default). --default or non-interactive → use defaults silently. Fields
+    already provided on the CLI are left as-is. meeting_id is not touched.
+    """
+    interactive = sys.stdin.isatty() and not getattr(args, "default", False)
+    today = _today_iso()
+
+    if not interactive:
+        if args.city is None:
+            args.city = CITY_DEFAULT
+        if args.meeting_type is None:
+            args.meeting_type = MEETING_TYPE_DEFAULT
+        if not args.date:
+            args.date = today
+        return
+
+    if args.city is None:
+        ans = input(f"  City [{CITY_DEFAULT}]: ").strip()
+        args.city = ans or CITY_DEFAULT
+    if not args.date:
+        ans = input(f"  Date YYYY-MM-DD [{today}]: ").strip()
+        args.date = ans or today
+    if args.meeting_type is None:
+        ans = input(f"  Meeting type [{MEETING_TYPE_DEFAULT}]: ").strip()
+        args.meeting_type = ans or MEETING_TYPE_DEFAULT
+
+
 def _interactive_speaker_review(
     segments,
     mappings: dict,
@@ -2047,11 +2090,12 @@ Environment Variables:
     )
 
     # Meeting metadata
-    parser.add_argument("--city", default="Bloomington", help="City name (default: Bloomington)")
-    parser.add_argument("--date", default="", help="Meeting date (YYYY-MM-DD)")
-    parser.add_argument("--meeting-type", default="Regular Session",
+    parser.add_argument("--city", default=None,
+                        help=f"City name (default: {CITY_DEFAULT}; prompted if omitted)")
+    parser.add_argument("--date", default="", help="Meeting date (YYYY-MM-DD; prompted if omitted)")
+    parser.add_argument("--meeting-type", default=None,
                         help="Meeting type or name, free text "
-                             "(e.g. \"Regular Session\", \"Plan Commission\"; default: Regular Session)")
+                             "(e.g. \"Regular Session\", \"Plan Commission\"; prompted if omitted)")
     parser.add_argument("--meeting-id", default="", help="Custom meeting ID (auto-generated if omitted)")
 
     # Processing options
@@ -2083,6 +2127,9 @@ Environment Variables:
                              "for the same meeting, ~$0.45 per audio hour). "
                              "Requires PYANNOTE_AI_KEY in env. "
                              "Recommended per bench/FINDINGS.md.")
+    parser.add_argument("--default", action="store_true",
+                        help="Skip metadata prompts and use defaults "
+                             f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / today)")
 
     # Utilities
     parser.add_argument("--list-profiles", action="store_true",
@@ -2311,10 +2358,17 @@ Environment Variables:
         print("\nError: --input, --browse-catstv, or --resume is required.")
         sys.exit(1)
 
-    if not args.date:
-        from datetime import date
-        args.date = date.today().isoformat()
-        print(f"No --date provided, using today: {args.date}")
+    # Resolve city/date/meeting-type (prompt unless --default / non-interactive).
+    # Skip prompting on resume (metadata comes from the existing meeting).
+    if args.resume:
+        if args.city is None:
+            args.city = CITY_DEFAULT
+        if args.meeting_type is None:
+            args.meeting_type = MEETING_TYPE_DEFAULT
+        if not args.date:
+            args.date = _today_iso()
+    else:
+        _resolve_metadata(args)
 
     # --- Run ---
     run_pipeline(args)
