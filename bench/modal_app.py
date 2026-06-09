@@ -85,7 +85,10 @@ pyannote_merged_image = pyannote_image.add_local_dir("./src", remote_path="/root
 
 # Image for Whisper transcription (production pipeline functions).
 whisper_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.from_registry(
+        "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04",
+        add_python="3.11",
+    )
     .apt_install("ffmpeg", "libsndfile1")
     .pip_install(
         "faster-whisper>=1.0.0",
