@@ -48,7 +48,7 @@ def upload_audio(wav_path: Path, meeting_id: str) -> None:
     remote = f"meetings/{meeting_id}/audio.wav"
     size_mb = wav_path.stat().st_size / (1024 * 1024)
     print(f"  Uploading audio to Modal volume ({size_mb:.1f} MB)...")
-    with vol.batch_upload() as batch:
+    with vol.batch_upload(force=True) as batch:
         batch.put_file(str(wav_path), remote)
     print("  Upload complete.")
 
