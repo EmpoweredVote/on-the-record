@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 
 _REPO_DIR = Path(__file__).resolve().parent.parent
@@ -92,10 +94,28 @@ def run_transcription(meeting_id: str, segments: list[dict]) -> list[dict]:
     """
     app = _modal_app()
 
-    print("  Dispatching Whisper transcription to Modal GPU (large-v3)...")
-    with app.app.run():
-        result_json = app.pipeline_transcribe.remote(
-            meeting_id, json.dumps(segments)
-        )
+    n_segs = len(segments)
+    print(f"  Dispatching Whisper transcription to Modal GPU (large-v3, {n_segs} segments)...")
+
+    stop_heartbeat = threading.Event()
+
+    def _heartbeat():
+        t0 = time.time()
+        interval = 30
+        while not stop_heartbeat.wait(interval):
+            elapsed = time.time() - t0
+            mins, secs = divmod(int(elapsed), 60)
+            print(f"  Still transcribing... ({mins}m{secs:02d}s elapsed — run 'modal logs' for segment progress)", flush=True)
+
+    hb = threading.Thread(target=_heartbeat, daemon=True)
+    hb.start()
+    try:
+        with app.app.run():
+            result_json = app.pipeline_transcribe.remote(
+                meeting_id, json.dumps(segments)
+            )
+    finally:
+        stop_heartbeat.set()
+        hb.join()
 
     return json.loads(result_json)
