@@ -97,6 +97,46 @@ class PipelineState:
                 p.unlink()
         self.save()
 
+    # Artifacts produced by each stage (INGESTED outputs and global voice
+    # profiles are intentionally never deleted by rewind_to).
+    _STAGE_ARTIFACTS = {
+        PipelineStage.DIARIZED: ("diarization.json", "embeddings.json"),
+        PipelineStage.TRANSCRIBED: ("transcript_raw.json",),
+        PipelineStage.IDENTIFIED: ("transcript_named.json", "pre_identifications.json", "llm_partial_results.json"),
+        PipelineStage.SUMMARIZED: ("summary.json",),
+    }
+
+    def rewind_to(self, stage: "PipelineStage") -> None:
+        """Rewind so `stage` and everything after it re-run.
+
+        Sets completed_stage to the stage immediately before `stage`, deletes the
+        on-disk artifacts of `stage`..EXPORTED (and the exports/ directory contents),
+        and resets transcription progress if TRANSCRIBED or earlier is being redone.
+        Never deletes audio.wav/captions.vtt (ingest) or the global voice profiles.
+        Files are deleted BEFORE save() (crash-safe, mirrors rewind_for_retag).
+        """
+        if stage < PipelineStage.DIARIZED:
+            stage = PipelineStage.DIARIZED  # never re-ingest via rewind_to
+
+        for s, names in self._STAGE_ARTIFACTS.items():
+            if s >= stage:
+                for name in names:
+                    p = self.meeting_dir / name
+                    if p.exists():
+                        p.unlink()
+        exports = self.meeting_dir / "exports"
+        if exports.exists():
+            for child in exports.iterdir():
+                if child.is_file():
+                    child.unlink()
+
+        if stage <= PipelineStage.TRANSCRIBED:
+            self.transcription_progress = 0
+            self.total_segments = 0
+
+        self.completed_stage = PipelineStage(int(stage) - 1)
+        self.save()
+
     def is_complete(self, stage: PipelineStage) -> bool:
         return self.completed_stage >= stage
 
