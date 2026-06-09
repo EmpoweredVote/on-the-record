@@ -372,21 +372,23 @@ def play_speaker_clip(
     video_path: str | None,
     audio_path: str | None,
     start_time: float,
-    duration: float = 20.0,
+    duration: float = 40.0,
     title: str = "",
-) -> None:
-    """Play a clip of a speaker: video if available, else the audio segment.
+):
+    """Play a looping clip of a speaker WITHOUT blocking, returning the player handle.
 
-    Uses ffplay. Starts a few seconds early for context. When only audio is
-    available, plays audio.wav with no display window (-nodisp).
+    Video if available, else the audio segment (ffplay -nodisp). Loops (`-loop 0`)
+    so the clip stays up while the operator types the name; the caller stops it via
+    _stop_player. Returns the subprocess.Popen handle, or None if there's no media
+    or ffplay isn't installed.
     """
     media = video_path or audio_path
     if not media:
         print("    No media to play (no video or audio found).")
-        return
+        return None
 
     seek = max(0, start_time - 3.0)
-    cmd = ["ffplay", "-ss", str(seek), "-t", str(duration), "-autoexit", "-loglevel", "quiet"]
+    cmd = ["ffplay", "-ss", str(seek), "-t", str(duration), "-loop", "0", "-loglevel", "quiet"]
     if not video_path:
         cmd.append("-nodisp")
     if title:
@@ -394,11 +396,28 @@ def play_speaker_clip(
     cmd.append(media)
 
     kind = "video" if video_path else "audio"
-    print(f"    Playing {kind} clip ({duration:.0f}s from {int(seek // 60):02d}:{int(seek % 60):02d})...")
+    print(f"    Playing {kind} clip ({duration:.0f}s from {int(seek // 60):02d}:{int(seek % 60):02d}) "
+          f"— looping; type a name or skip to stop it...")
     try:
-        subprocess.run(cmd, check=False)
+        return subprocess.Popen(cmd)
     except FileNotFoundError:
         print("    ffplay not found — install ffmpeg to enable clip playback")
+        return None
+
+
+def _stop_player(proc) -> None:
+    """Terminate a clip player started by play_speaker_clip (tolerant of None/exited)."""
+    if proc is None:
+        return
+    try:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                proc.kill()
+    except Exception:
+        pass
 
 
 def free_gpu_memory():
