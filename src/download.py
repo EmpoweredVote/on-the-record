@@ -83,6 +83,7 @@ def download_via_ytdlp(
         "outtmpl": template,
         "quiet": not progress,
         "no_warnings": not progress,
+        "extractor_args": {"youtube": {"js_runtimes": ["node"]}},
     }
     if cookies_file:
         ydl_opts["cookiefile"] = str(cookies_file)
@@ -312,6 +313,7 @@ def download_captions_via_ytdlp(
         "outtmpl": template,
         "quiet": True,
         "no_warnings": True,
+        "extractor_args": {"youtube": {"js_runtimes": ["node"]}},
     }
 
     try:
