@@ -1582,66 +1582,76 @@ def _interactive_speaker_review(
             print(f"  Clip at [{_format_ts(view.clip_start)}]")
 
         advance = True
-        while True:
-            parts = ["  "]
-            if (video_path or audio_path) and view.clip_start is not None:
-                parts.append("[V]iew")
-            if top_hint:
-                parts.append(f"[Y=accept {top_hint[0]}]")
-            if len(views) > 1:
-                parts.append("[M]erge")
-            parts.append("[Enter=skip] [Q=quit] or type name: ")
-            choice = input(" ".join(parts)).strip()
+        clip_idx = 0
+        current_player = None
+        has_clip = bool((video_path or audio_path) and view.clip_candidates)
+        try:
+            while True:
+                parts = ["  "]
+                if has_clip:
+                    parts.append("[V]iew" + (" next" if clip_idx > 0 else ""))
+                if top_hint:
+                    parts.append(f"[Y=accept {top_hint[0]}]")
+                if len(views) > 1:
+                    parts.append("[M]erge")
+                parts.append("[Enter=skip] [Q=quit] or type name: ")
+                choice = input(" ".join(parts)).strip()
 
-            if choice.lower() in ("v", "view") and (video_path or audio_path) and view.clip_start is not None:
-                play_speaker_clip(video_path, audio_path, view.clip_start, duration=20.0,
-                                  title=f"{label} → {name}")
-                continue
-            elif choice.lower() == "q":
-                print("  Quitting review.")
-                quit_requested = True
-                break
-            elif choice == "":
-                break  # skip
-            elif choice.lower() == "m" and len(views) > 1:
-                others = [v for v in views if v.label != label]
-                print("  Merge THIS speaker into which?")
-                for k, ov in enumerate(others):
-                    print(f"    {k+1}. {ov.label}: {ov.current_name or '(unidentified)'}")
-                sel = input("    Number (or Enter to cancel): ").strip()
-                if not sel:
+                if choice.lower() in ("v", "view") and has_clip:
+                    _stop_player(current_player)
+                    n = clip_idx % len(view.clip_candidates)
+                    start = view.clip_candidates[n]
+                    print(f"  Clip {n + 1}/{len(view.clip_candidates)} at [{_format_ts(start)}]")
+                    current_player = play_speaker_clip(video_path, audio_path, start, title=f"{label} → {name}")
+                    clip_idx += 1
                     continue
-                try:
-                    target = others[int(sel) - 1]
-                except (ValueError, IndexError):
-                    print("    Invalid selection.")
-                    continue
-                try:
-                    res = review.merge_speakers(segments, embeddings, mappings, label, target.label)
-                except ValueError as e:
-                    print(f"    {e}")
-                    continue
-                changes.append({"label": label, "merged_into": target.label})
-                print(f"  Merged {label} → {target.label} ({res.combined_name or 'unidentified'})")
-                views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
-                advance = False
-                break
-            elif choice.lower() in ("y", "yes") and top_hint:
-                res = review.rename_speaker(mappings, segments, label, top_hint[0], roster=roster)
-                mappings[label].id_method = "human_confirmed"
-                changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
-                print(f"  Confirmed: {label} -> {res.new_name}")
-                break
-            else:
-                res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
-                changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
-                print(f"  Updated: {label} -> {res.new_name}")
-                if res.alias_suggestion:
-                    from src.roster import add_alias
-                    if add_alias(None, res.new_name, res.alias_suggestion, body_slug=body_slug):
-                        target_label = body_slug or "council_roster.json"
-                        print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
-                break
+                elif choice.lower() == "q":
+                    print("  Quitting review.")
+                    quit_requested = True
+                    break
+                elif choice == "":
+                    break  # skip
+                elif choice.lower() == "m" and len(views) > 1:
+                    others = [v for v in views if v.label != label]
+                    print("  Merge THIS speaker into which?")
+                    for k, ov in enumerate(others):
+                        print(f"    {k+1}. {ov.label}: {ov.current_name or '(unidentified)'}")
+                    sel = input("    Number (or Enter to cancel): ").strip()
+                    if not sel:
+                        continue
+                    try:
+                        target = others[int(sel) - 1]
+                    except (ValueError, IndexError):
+                        print("    Invalid selection.")
+                        continue
+                    try:
+                        res = review.merge_speakers(segments, embeddings, mappings, label, target.label)
+                    except ValueError as e:
+                        print(f"    {e}")
+                        continue
+                    changes.append({"label": label, "merged_into": target.label})
+                    print(f"  Merged {label} → {target.label} ({res.combined_name or 'unidentified'})")
+                    views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
+                    advance = False
+                    break
+                elif choice.lower() in ("y", "yes") and top_hint:
+                    res = review.rename_speaker(mappings, segments, label, top_hint[0], roster=roster)
+                    mappings[label].id_method = "human_confirmed"
+                    changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
+                    print(f"  Confirmed: {label} -> {res.new_name}")
+                    break
+                else:
+                    res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
+                    changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
+                    print(f"  Updated: {label} -> {res.new_name}")
+                    if res.alias_suggestion:
+                        from src.roster import add_alias
+                        if add_alias(None, res.new_name, res.alias_suggestion, body_slug=body_slug):
+                            target_label = body_slug or "council_roster.json"
+                            print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
+                    break
+        finally:
+            _stop_player(current_player)
 
         if quit_requested:
             break
