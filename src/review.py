@@ -21,21 +21,10 @@ class SpeakerView:
     seg_count: int
     total_speech_seconds: float
     clip_start: Optional[float]
-    sample_text: Optional[str]
+    clip_candidates: list[float] = field(default_factory=list)
+    sample_text: Optional[str] = None
     soft_hints: list[tuple[str, float]] = field(default_factory=list)
     needs_review: bool = False
-
-
-def _representative_segment(segs):
-    """Pick a segment near the 1/3 point, preferring ones with text."""
-    text_segs = [s for s in segs if getattr(s, "text", None) and s.text.strip()]
-    pool = text_segs or segs
-    if not pool:
-        return None
-    # Mirror the existing _build_speaker_stats heuristic (a segment slightly
-    # before the 1/3 point) so this is a behavior-preserving replacement.
-    idx = max(0, len(pool) // 3 - 1)
-    return pool[idx]
 
 
 def build_review_state(segments, mappings, embeddings, profile_db, *, show_text: bool) -> list[SpeakerView]:
@@ -61,11 +50,16 @@ def build_review_state(segments, mappings, embeddings, profile_db, *, show_text:
     views: list[SpeakerView] = []
     for label, segs in by_label.items():
         total = sum(s.end_time - s.start_time for s in segs)
-        rep = _representative_segment(segs)
+        # Candidates: this speaker's segments by duration desc (longest turn is
+        # the most identifying), top 8 start times. The default clip + sample
+        # come from the longest turn.
+        ordered = sorted(segs, key=lambda s: s.end_time - s.start_time, reverse=True)
+        clip_candidates = [s.start_time for s in ordered[:8]]
+        longest = ordered[0] if ordered else None
         mapping = mappings.get(label)
         sample_text = None
-        if show_text and rep is not None and getattr(rep, "text", None) and rep.text.strip():
-            sample_text = rep.text
+        if show_text and longest is not None and getattr(longest, "text", None) and longest.text.strip():
+            sample_text = longest.text
         views.append(SpeakerView(
             label=label,
             current_name=getattr(mapping, "speaker_name", None) if mapping else None,
@@ -73,7 +67,8 @@ def build_review_state(segments, mappings, embeddings, profile_db, *, show_text:
             current_method=getattr(mapping, "id_method", None) if mapping else None,
             seg_count=len(segs),
             total_speech_seconds=total,
-            clip_start=rep.start_time if rep is not None else None,
+            clip_start=longest.start_time if longest is not None else None,
+            clip_candidates=clip_candidates,
             sample_text=sample_text,
             soft_hints=hints.get(label, []),
             needs_review=getattr(mapping, "needs_review", False) if mapping else False,

@@ -173,3 +173,35 @@ def test_merge_carries_source_embedding_when_target_missing():
     assert "SPEAKER_01" not in embeddings
     assert "SPEAKER_00" in embeddings
     assert np.allclose(embeddings["SPEAKER_00"], source_vec)
+
+
+def test_build_review_state_clip_candidates_longest_first():
+    segs = [
+        _seg("S0", 0, 5, "short a"),
+        _seg("S0", 5, 35, "the long identifying turn"),
+        _seg("S0", 40, 42, "short b"),
+    ]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=True)
+    v = views[0]
+    # candidates ordered by segment duration desc: 30s@5, 5s@0, 2s@40
+    assert v.clip_candidates == [5.0, 0.0, 40.0]
+    # default clip is the longest turn
+    assert v.clip_start == 5.0
+    # sample text comes from the longest turn
+    assert v.sample_text == "the long identifying turn"
+
+
+def test_build_review_state_clip_candidates_capped_at_8():
+    segs = [_seg("S0", i * 10, i * 10 + (i + 1), "x") for i in range(12)]  # 12 segments, increasing length
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=False)
+    assert len(views[0].clip_candidates) == 8  # top 8 only
+
+
+def test_build_review_state_single_segment_clip_start():
+    segs = [_seg("S0", 3.0, 9.0, "hello")]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=True)
+    assert views[0].clip_candidates == [3.0]
+    assert views[0].clip_start == 3.0
