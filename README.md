@@ -151,6 +151,10 @@ full analysis from diarization; the already-ingested audio is kept). It rewinds
 the checkpoint and re-runs from that stage onward — `--redo identify` re-runs
 speaker identification and drops you back into the all-speaker review.
 
+Note: if the meeting has CATS TV captions (`captions.vtt`), `--redo transcribe`
+re-aligns the transcript from those captions rather than re-running Whisper
+(same as a first run with captions present).
+
 ### Meeting metadata prompts
 
 For a new run, if you don't pass `--city`, `--date`, or `--meeting-type`,
