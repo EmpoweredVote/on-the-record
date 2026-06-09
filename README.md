@@ -120,8 +120,11 @@ After an interactive run finishes, CouncilScribe drops into a guided speaker
 review (skip with `--no-review`). For each detected speaker it shows stats and
 any voice-profile match hints, and lets you:
 
-- **`[V]iew`** — play a ~20s clip of that speaker (video if available, otherwise
-  audio),
+- **`[V]iew`** — play a clip of that speaker, starting with their **longest turn**
+  (most likely to show them clearly). It loops and plays in the background, so you
+  can **type the name while it plays** (handy when the name is shown on screen).
+  Press `[V]` again to jump to the next-longest turn. The clip stops when you enter
+  a name or skip.
 - **`[Y]`** — accept the suggested voice-profile match,
 - **`[M]erge`** — merge this speaker into another (when diarization split one
   person into two: their segments and voice data combine),
@@ -133,6 +136,27 @@ re-review a finished meeting later: `python run_local.py --review <MEETING_ID>`
 
 YouTube/Facebook meetings now download a capped-resolution video so clips are
 available during review (CATS TV, direct URLs, and local files always had them).
+
+### Re-running a past meeting
+
+To re-run a finished meeting from a particular stage (e.g. after improving a
+roster or fixing audio):
+
+```
+python run_local.py --resume <MEETING_ID> --redo identify
+```
+
+`--redo` accepts `diarize`, `transcribe`, `identify`, `summary`, or `all` (the
+full analysis from diarization; the already-ingested audio is kept). It rewinds
+the checkpoint and re-runs from that stage onward — `--redo identify` re-runs
+speaker identification and drops you back into the all-speaker review.
+
+### Meeting metadata prompts
+
+For a new run, if you don't pass `--city`, `--date`, or `--meeting-type`,
+CouncilScribe prompts for each (press Enter to accept the shown default). Pass
+`--default` to skip the prompts and use the defaults (Bloomington / Regular
+Session / today). Non-interactive runs use the defaults automatically.
 
 ## Google Drive structure
 
