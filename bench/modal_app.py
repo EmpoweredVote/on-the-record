@@ -83,6 +83,17 @@ pyannote_image = (
 # importable inside the function. Lives at /root/cs_src in the container.
 pyannote_merged_image = pyannote_image.add_local_dir("./src", remote_path="/root/cs_src")
 
+# Image for Whisper transcription (production pipeline functions).
+whisper_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "libsndfile1")
+    .pip_install(
+        "faster-whisper>=1.0.0",
+        "soundfile==0.12.1",
+        "numpy>=1.26,<3",
+    )
+)
+
 # pyannote.ai Precision-2 (REST API; no GPU needed).
 # ffmpeg/ffprobe needed because the function uses _ffprobe_duration().
 api_image = (
@@ -689,6 +700,204 @@ def diarize_nemo_sortformer(meeting_id: str) -> dict:
     )
     volume.commit()
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Production pipeline functions (called by src/modal_compute.py)
+# ---------------------------------------------------------------------------
+# These mirror the benchmark functions above but return JSON-serialisable
+# dicts directly instead of writing RTTM files to the volume. run_local.py
+# uses these when --compute modal is passed.
+
+@app.function(
+    image=pyannote_merged_image,  # has cs_src for merge.py
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="L4",
+    timeout=60 * 60 * 2,
+)
+def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
+    """Diarize + extract speaker embeddings; return JSON for run_local.py.
+
+    Return format (JSON string):
+        {"segments": [Segment.to_dict(), ...], "embeddings": {label: [float, ...]}}
+
+    The audio must already be in the volume at
+        /vol/meetings/{meeting_id}/audio.wav
+    Upload it first via src.modal_compute.upload_audio().
+    """
+    import json as _json
+    import os
+    import sys
+
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from pyannote.audio import Inference, Model, Pipeline
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(
+            f"Audio not found in Modal volume: {wav_path}. "
+            "Run src.modal_compute.upload_audio() first."
+        )
+
+    device = torch.device("cuda")
+
+    # --- Diarize ---
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1",
+        token=os.environ["HF_TOKEN"],
+    )
+    pipeline.to(device)
+
+    t0 = time.time()
+    diarization = pipeline(str(wav_path))
+    turns = _annotation_to_turns(diarization)
+
+    # Convert to plain dicts (no Segment dataclass dependency here).
+    segments_data = [
+        {
+            "segment_id": i,
+            "start_time": round(start, 3),
+            "end_time": round(end, 3),
+            "speaker_label": spk,
+            "text": "",
+            "words": [],
+        }
+        for i, (start, end, spk) in enumerate(turns)
+    ]
+
+    # --- Extract per-speaker centroid embeddings ---
+    emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
+    inference = Inference(emb_model, window="whole", device=device)
+
+    samples, sr = sf.read(str(wav_path))
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+
+    embs_per_speaker: dict[str, list] = {}
+    for seg in segments_data:
+        i0 = int(seg["start_time"] * sr)
+        i1 = int(seg["end_time"] * sr)
+        clip = samples[i0:i1]
+        if len(clip) < int(sr * 0.3):
+            continue
+        wf = torch.tensor(clip, dtype=torch.float32).unsqueeze(0).to(device)
+        emb = inference({"waveform": wf, "sample_rate": sr})
+        embs_per_speaker.setdefault(seg["speaker_label"], []).append(emb)
+
+    centroids = {
+        label: np.mean(vecs, axis=0).tolist()
+        for label, vecs in embs_per_speaker.items()
+    }
+
+    # --- Optional speaker merge (mirrors src/merge.py logic) ---
+    if use_merge:
+        sys.path.insert(0, "/root")
+        from cs_src.merge import merge_similar_speakers
+        from cs_src.models import Segment as _Seg
+
+        _segs = [
+            _Seg(
+                segment_id=d["segment_id"],
+                start_time=d["start_time"],
+                end_time=d["end_time"],
+                speaker_label=d["speaker_label"],
+            )
+            for d in segments_data
+        ]
+        _centroids_np = {k: np.array(v) for k, v in centroids.items()}
+        merged_segs, merged_centroids, merge_log = merge_similar_speakers(_segs, _centroids_np)
+        if merge_log:
+            print(f"  Merged {len(centroids) - len(merged_centroids)} speaker(s): {merge_log}")
+        segments_data = [
+            {
+                "segment_id": s.segment_id,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "speaker_label": s.speaker_label,
+                "text": "",
+                "words": [],
+            }
+            for s in merged_segs
+        ]
+        centroids = {k: v.tolist() for k, v in merged_centroids.items()}
+
+    elapsed = time.time() - t0
+    print(f"  Diarization + embeddings done in {elapsed:.1f}s "
+          f"({len(segments_data)} segments, {len(centroids)} speakers)")
+
+    return _json.dumps({"segments": segments_data, "embeddings": centroids})
+
+
+@app.function(
+    image=whisper_image,
+    volumes={VOLUME_PATH: volume},
+    gpu="L4",
+    timeout=60 * 60 * 4,
+)
+def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
+    """Transcribe diarized segments with Whisper large-v3; return updated JSON.
+
+    Accepts the segments list serialised as a JSON string (same format as
+    Segment.to_dict()) and returns the same structure with ``text`` and
+    ``words`` populated.
+    """
+    import json as _json
+
+    import numpy as np
+    import soundfile as sf
+    from faster_whisper import WhisperModel
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(f"Audio not found in Modal volume: {wav_path}")
+
+    segments_data: list[dict] = _json.loads(segments_json)
+
+    model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+
+    samples, sr = sf.read(str(wav_path))
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+
+    total = len(segments_data)
+    t0 = time.time()
+
+    for i, seg in enumerate(segments_data):
+        i0 = int(seg["start_time"] * sr)
+        i1 = int(seg["end_time"] * sr)
+        clip = samples[i0:i1].astype(np.float32)
+
+        if len(clip) < sr * 0.1:
+            seg["text"] = ""
+            seg["words"] = []
+            continue
+
+        result_segs, _ = model.transcribe(clip, word_timestamps=True, language="en")
+
+        words = []
+        text_parts = []
+        for rs in result_segs:
+            if rs.words:
+                for w in rs.words:
+                    words.append({
+                        "word": w.word.strip(),
+                        "start": round(seg["start_time"] + w.start, 3),
+                        "end": round(seg["start_time"] + w.end, 3),
+                    })
+            text_parts.append(rs.text.strip())
+
+        seg["text"] = " ".join(text_parts).strip()
+        seg["words"] = words
+
+        if (i + 1) % 50 == 0:
+            pct = (i + 1) / total * 100
+            elapsed = time.time() - t0
+            print(f"  [{i + 1}/{total}] ({pct:.0f}%) {elapsed:.0f}s elapsed", flush=True)
+
+    return _json.dumps(segments_data)
 
 
 # ---------------------------------------------------------------------------

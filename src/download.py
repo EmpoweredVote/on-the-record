@@ -30,6 +30,10 @@ def _is_ytdlp_url(url: str) -> bool:
         return False
 
 
+# Public alias used by run_local.py caption download logic.
+is_ytdlp_url = _is_ytdlp_url
+
+
 def _ytdlp_format() -> str:
     """yt-dlp format string: a capped (~480p) video+audio stream.
 
@@ -268,6 +272,116 @@ def fetch_catstv_meetings(search_url: str | None = None) -> list[dict]:
         })
 
     return meetings
+
+
+def download_captions_via_ytdlp(
+    url: str,
+    vtt_output_path: str | Path,
+    languages: list[str] | None = None,
+) -> "Path | None":
+    """Download closed captions for a YouTube / Facebook / etc. URL.
+
+    Tries manual subtitles first (higher quality), then auto-generated captions.
+    Saves the best matching English track as a WebVTT file at *vtt_output_path*.
+
+    Returns the saved path, or None if no captions are available or yt-dlp is
+    not installed.
+    """
+    try:
+        import yt_dlp
+    except ImportError:
+        return None
+
+    vtt_output_path = Path(vtt_output_path)
+    vtt_output_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir = vtt_output_path.parent
+
+    if languages is None:
+        languages = ["en", "en-US", "en-GB"]
+
+    # Output template: yt-dlp appends the language code before the extension,
+    # e.g. "captions.en.vtt" or "captions.en-US.vtt".
+    template = str(out_dir / "captions.%(ext)s")
+
+    ydl_opts: dict = {
+        "skip_download": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitlesformat": "vtt",
+        "subtitleslangs": languages,
+        "outtmpl": template,
+        "quiet": True,
+        "no_warnings": True,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception:
+        return None
+
+    # yt-dlp names the file "captions.<lang>.vtt"; rename to the desired path.
+    for lang in languages:
+        candidate = out_dir / f"captions.{lang}.vtt"
+        if candidate.exists():
+            candidate.rename(vtt_output_path)
+            return vtt_output_path
+
+    # Some extractors write directly without the language suffix.
+    direct = out_dir / "captions.vtt"
+    if direct.exists() and direct != vtt_output_path:
+        direct.rename(vtt_output_path)
+        return vtt_output_path
+
+    if vtt_output_path.exists():
+        return vtt_output_path
+
+    return None
+
+
+def extract_catstv_vtt_url(url: str) -> str | None:
+    """Find the VTT caption URL for a CATS TV video.
+
+    For page URLs (catstv.net/...), scrapes the transcript section for a .vtt
+    link. For blob URLs, probes the _subtitles.vtt convention then plain .vtt.
+    Returns the URL string, or None if not found.
+    """
+    from bs4 import BeautifulSoup
+
+    parsed = urlparse(url)
+
+    if "catstv.net" in parsed.netloc:
+        try:
+            resp = requests.get(url, timeout=(_CONNECT_TIMEOUT, 60))
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            # Prefer the dedicated transcript section
+            transcript_div = soup.find(class_="video-transcript")
+            if transcript_div:
+                link = transcript_div.find("a", href=re.compile(r"\.vtt$", re.I))
+                if link:
+                    return link["href"]
+            # Fallback: any link on the page ending in .vtt
+            for a in soup.find_all("a", href=re.compile(r"\.vtt$", re.I)):
+                return a["href"]
+        except Exception:
+            pass
+        return None
+
+    if "catstv.blob.core.windows.net" in parsed.netloc:
+        filename = parsed.path.rsplit("/", 1)[-1]
+        base_no_ext = filename.rsplit(".", 1)[0] if "." in filename else filename
+        dir_url = url.rsplit("/", 1)[0]
+        for candidate in (f"{base_no_ext}_subtitles.vtt", f"{base_no_ext}.vtt"):
+            candidate_url = f"{dir_url}/{candidate}"
+            try:
+                r = requests.head(candidate_url, timeout=(_CONNECT_TIMEOUT, 30))
+                if r.status_code == 200:
+                    return candidate_url
+            except Exception:
+                continue
+
+    return None
 
 
 def download_vtt(vtt_url: str, output_path: str | Path) -> Path | None:

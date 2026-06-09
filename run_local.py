@@ -576,15 +576,27 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
         # Try to download VTT if input is a CATS TV URL
         if not vtt_path.exists() and isinstance(audio_path, str) and "catstv" in audio_path:
-            from src.download import download_vtt
-            # Derive VTT URL from video URL
-            m4v_base = audio_path.rsplit(".", 1)[0] if "." in audio_path else audio_path
-            vtt_url = m4v_base + ".vtt"
-            result = download_vtt(vtt_url, vtt_path)
-            if result:
-                print(f"  Downloaded VTT captions: {vtt_path.name}")
+            from src.download import download_vtt, extract_catstv_vtt_url
+            vtt_url = extract_catstv_vtt_url(audio_path)
+            if vtt_url:
+                result = download_vtt(vtt_url, vtt_path)
+                if result:
+                    print(f"  Downloaded VTT captions: {vtt_path.name} (will use instead of Whisper)")
+                else:
+                    print("  No VTT captions available from CATS TV")
             else:
                 print("  No VTT captions available from CATS TV")
+
+        # Try to download captions for YouTube / Facebook / other yt-dlp URLs
+        elif not vtt_path.exists() and isinstance(audio_path, str):
+            from src.download import download_captions_via_ytdlp, is_ytdlp_url
+            if is_ytdlp_url(str(audio_path)):
+                print("  Checking for closed captions...")
+                result = download_captions_via_ytdlp(str(audio_path), vtt_path)
+                if result:
+                    print(f"  Downloaded captions: {vtt_path.name} (will use instead of Whisper)")
+                else:
+                    print("  No captions available — will transcribe with Whisper")
 
     duration_min = meeting.duration_seconds / 60
     print(f"  Audio duration: {duration_min:.1f} minutes\n")
@@ -607,69 +619,90 @@ def run_pipeline(args: argparse.Namespace) -> None:
             segments = [Segment.from_dict(d) for d in json.load(f)]
         print(f"  Loaded {len(segments)} segments")
     else:
-        # Sub-step A: Diarization
-        if diarization_path.exists():
-            print("  Diarization file found. Loading instead of re-running...")
-            with open(diarization_path, "r") as f:
-                segments = [Segment.from_dict(d) for d in json.load(f)]
-            print(f"  Loaded {len(segments)} segments from previous run")
-        else:
-            diarizer = getattr(args, "diarizer", "oss")
-            if diarizer == "api":
-                from src.diarize_api import run_diarization_via_api
-
-                api_key = os.environ.get("PYANNOTE_AI_KEY")
-                if not api_key:
-                    raise RuntimeError(
-                        "--diarizer api requires PYANNOTE_AI_KEY in env "
-                        "(add it to .env.local)."
-                    )
-                print("  Running speaker diarization (pyannote.ai Precision-2)...")
-                if num_speakers is not None:
-                    print(
-                        f"  ! --num-speakers={num_speakers} is ignored by the API "
-                        "backend (Precision-2 does not accept a speaker-count hint)."
-                    )
+        _compute = getattr(args, "compute", "local")
+        if _compute == "modal" and getattr(args, "diarizer", "oss") != "api":
+            if not diarization_path.exists() or not embeddings_path.exists():
+                from src.modal_compute import run_diarization as _modal_diarize
                 t0 = time.time()
-                segments = run_diarization_via_api(wav_path, api_key)
+                _segs_data, _emb_data = _modal_diarize(
+                    wav_path, meeting_id, use_merge=args.merge
+                )
                 elapsed = time.time() - t0
-
+                segments = [Segment.from_dict(d) for d in _segs_data]
                 with open(diarization_path, "w") as f:
                     json.dump([s.to_dict() for s in segments], f, indent=2)
-
-                print(f"  Diarization done in {elapsed:.1f}s")
+                with open(embeddings_path, "w") as f:
+                    json.dump(_emb_data, f)
+                print(f"  Done in {elapsed:.1f}s (Modal)")
             else:
-                from src.diarize import load_diarization_pipeline, run_diarization
-
-                print("  Running speaker diarization (pyannote OSS 3.1)...")
-                t0 = time.time()
-                pipeline = load_diarization_pipeline(hf_token)
-                segments = run_diarization(pipeline, wav_path, num_speakers=num_speakers)
-                elapsed = time.time() - t0
-
-                with open(diarization_path, "w") as f:
-                    json.dump([s.to_dict() for s in segments], f, indent=2)
-
-                del pipeline
-                free_gpu_memory()
-                print(f"  Diarization done in {elapsed:.1f}s")
-
-        # Sub-step B: Speaker embeddings
-        if embeddings_path.exists():
-            print("  Embeddings file found. Skipping extraction.")
+                print("  Diarization + embeddings found. Loading from checkpoint...")
+                with open(diarization_path, "r") as f:
+                    segments = [Segment.from_dict(d) for d in json.load(f)]
+                print(f"  Loaded {len(segments)} segments")
         else:
-            from src.diarize import extract_speaker_embeddings
+            # Sub-step A: Diarization
+            if diarization_path.exists():
+                print("  Diarization file found. Loading instead of re-running...")
+                with open(diarization_path, "r") as f:
+                    segments = [Segment.from_dict(d) for d in json.load(f)]
+                print(f"  Loaded {len(segments)} segments from previous run")
+            else:
+                diarizer = getattr(args, "diarizer", "oss")
+                if diarizer == "api":
+                    from src.diarize_api import run_diarization_via_api
 
-            print("  Extracting speaker embeddings...")
-            t0 = time.time()
-            speaker_embeddings = extract_speaker_embeddings(wav_path, segments, hf_token)
+                    api_key = os.environ.get("PYANNOTE_AI_KEY")
+                    if not api_key:
+                        raise RuntimeError(
+                            "--diarizer api requires PYANNOTE_AI_KEY in env "
+                            "(add it to .env.local)."
+                        )
+                    print("  Running speaker diarization (pyannote.ai Precision-2)...")
+                    if num_speakers is not None:
+                        print(
+                            f"  ! --num-speakers={num_speakers} is ignored by the API "
+                            "backend (Precision-2 does not accept a speaker-count hint)."
+                        )
+                    t0 = time.time()
+                    segments = run_diarization_via_api(wav_path, api_key)
+                    elapsed = time.time() - t0
 
-            emb_data = {k: v.tolist() for k, v in speaker_embeddings.items()}
-            with open(embeddings_path, "w") as f:
-                json.dump(emb_data, f)
+                    with open(diarization_path, "w") as f:
+                        json.dump([s.to_dict() for s in segments], f, indent=2)
 
-            elapsed = time.time() - t0
-            print(f"  Embeddings done in {elapsed:.1f}s")
+                    print(f"  Diarization done in {elapsed:.1f}s")
+                else:
+                    from src.diarize import load_diarization_pipeline, run_diarization
+
+                    print("  Running speaker diarization (pyannote OSS 3.1)...")
+                    t0 = time.time()
+                    pipeline = load_diarization_pipeline(hf_token)
+                    segments = run_diarization(pipeline, wav_path, num_speakers=num_speakers)
+                    elapsed = time.time() - t0
+
+                    with open(diarization_path, "w") as f:
+                        json.dump([s.to_dict() for s in segments], f, indent=2)
+
+                    del pipeline
+                    free_gpu_memory()
+                    print(f"  Diarization done in {elapsed:.1f}s")
+
+            # Sub-step B: Speaker embeddings
+            if embeddings_path.exists():
+                print("  Embeddings file found. Skipping extraction.")
+            else:
+                from src.diarize import extract_speaker_embeddings
+
+                print("  Extracting speaker embeddings...")
+                t0 = time.time()
+                speaker_embeddings = extract_speaker_embeddings(wav_path, segments, hf_token)
+
+                emb_data = {k: v.tolist() for k, v in speaker_embeddings.items()}
+                with open(embeddings_path, "w") as f:
+                    json.dump(emb_data, f)
+
+                elapsed = time.time() - t0
+                print(f"  Embeddings done in {elapsed:.1f}s")
 
         free_gpu_memory()
         state.mark_complete(PipelineStage.DIARIZED)
@@ -691,6 +724,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
             "Precision-2 already produces continuous turns; merge was designed "
             "for OSS pyannote 3.1 fragmentation."
         )
+    elif args.merge and getattr(args, "compute", "local") == "modal":
+        print("  (--merge was applied inside Modal — skipping local merge step)")
     elif args.merge:
         if embeddings_path.exists():
             with open(embeddings_path, "r") as f:
@@ -846,6 +881,25 @@ def run_pipeline(args: argparse.Namespace) -> None:
         save_raw_transcript(segments, transcript_path)
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s")
+    elif getattr(args, "compute", "local") == "modal":
+        from src.modal_compute import run_transcription as _modal_transcribe, upload_audio as _modal_upload
+
+        # When --diarizer api is used, run_diarization() on Modal was never called,
+        # so the audio was never uploaded to the volume. Always ensure it's present.
+        _modal_upload(wav_path, meeting_id)
+
+        print("  Dispatching Whisper transcription to Modal GPU (large-v3)...")
+        t0 = time.time()
+        _segs_data = [s.to_dict() for s in segments]
+        _updated_data = _modal_transcribe(meeting_id, _segs_data)
+        elapsed = time.time() - t0
+        segments = [Segment.from_dict(d) for d in _updated_data]
+
+        meeting.processing_metadata.transcription_model = config.WHISPER_MODEL_GPU
+        meeting.processing_metadata.gpu_used = True
+        save_raw_transcript(segments, transcript_path)
+        state.mark_complete(PipelineStage.TRANSCRIBED)
+        print(f"  Done in {elapsed:.1f}s (Modal)")
     else:
         resume_from = state.transcription_progress
         if resume_from > 0:
@@ -1350,6 +1404,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             pre_identify=False,  # skip interactive pre-identify
             use_vtt=args.use_vtt if hasattr(args, "use_vtt") else False,
             diarizer=getattr(args, "diarizer", "oss"),
+            compute=getattr(args, "compute", "local"),
             body=getattr(args, "body", None),
             force_retag=getattr(args, "force_retag", False),
             batch_mode=True,  # suppress the interactive roster chooser (D3: batch uses no roster unless --body)
@@ -2127,6 +2182,14 @@ Environment Variables:
                              "for the same meeting, ~$0.45 per audio hour). "
                              "Requires PYANNOTE_AI_KEY in env. "
                              "Recommended per bench/FINDINGS.md.")
+    parser.add_argument("--compute", choices=["local", "modal"], default="local",
+                        help="Compute backend for GPU-intensive stages (diarization "
+                             "with --diarizer oss, and Whisper transcription). "
+                             "'local' runs on this machine (default). "
+                             "'modal' offloads to Modal cloud GPUs — requires modal "
+                             "installed and authenticated (modal token new). "
+                             "Has no effect when --diarizer api is used (pyannote.ai "
+                             "is always remote).")
     parser.add_argument("--default", action="store_true",
                         help="Skip metadata prompts and use defaults "
                              f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / today)")
