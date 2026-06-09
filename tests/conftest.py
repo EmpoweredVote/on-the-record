@@ -18,6 +18,21 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_voice_profiles(tmp_path_factory, monkeypatch):
+    """Never read the developer's real ~/CouncilScribe/profiles during tests.
+
+    Tests that build fake (low-dimensional) embeddings would otherwise have
+    load_profiles() read the real speaker_profiles.pkl (256-dim centroids) and
+    crash in cosine() with a shape mismatch. Point _db_path at an empty per-test
+    location so load_profiles() returns an empty ProfileDB by default. Tests that
+    need specific profiles monkeypatch src.enroll._db_path themselves (this runs
+    first, so their override wins).
+    """
+    isolated = tmp_path_factory.mktemp("profiles_isolated") / "speaker_profiles.pkl"
+    monkeypatch.setattr("src.enroll._db_path", lambda: isolated)
+
+
 @pytest.fixture
 def tmp_config_dir(tmp_path, monkeypatch):
     """Redirect src.config.CONFIG_DIR to a tmp directory.
