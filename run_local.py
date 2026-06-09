@@ -2124,12 +2124,22 @@ Environment Variables:
         help="Overwrite a meeting's persisted body_slug. Rewinds stages 4-7. "
              "Requires --body.",
     )
+    parser.add_argument(
+        "--redo",
+        choices=["diarize", "transcribe", "identify", "summary", "all"],
+        default=None,
+        help="Re-run a past meeting from this stage onward (requires --resume MEETING_ID). "
+             "'all' re-runs the full analysis from diarization (ingested audio is kept).",
+    )
 
     args = parser.parse_args()
 
     # D-12: --force-retag requires --body
     if args.force_retag and not args.body:
         parser.error("--force-retag requires --body <slug>")
+
+    if args.redo and not args.resume:
+        parser.error("--redo requires --resume <MEETING_ID>")
 
     # --- Utility commands ---
     if args.show_roster:
@@ -2281,6 +2291,19 @@ Environment Variables:
 
         args.meeting_id = args.resume
         print(f"Resuming meeting: {args.resume}")
+
+        if args.redo:
+            from src.checkpoint import PipelineState, PipelineStage
+            _redo_map = {
+                "diarize": PipelineStage.DIARIZED,
+                "transcribe": PipelineStage.TRANSCRIBED,
+                "identify": PipelineStage.IDENTIFIED,
+                "summary": PipelineStage.SUMMARIZED,
+                "all": PipelineStage.DIARIZED,
+            }
+            _redo_state = PipelineState(meeting_dir)
+            _redo_state.rewind_to(_redo_map[args.redo])
+            print(f"Re-running from stage: {args.redo}")
 
     # --- Validate ---
     if not args.input:
