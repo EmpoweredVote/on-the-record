@@ -21,6 +21,9 @@ export default async function PeoplePage() {
         Everyone identified speaking in published meetings, linked to every
         moment they spoke.
       </p>
+      <nav className="siteNav">
+        <Link href="/search">Search →</Link>
+      </nav>
       {loadError ? (
         <p>People are temporarily unavailable. Please try again shortly.</p>
       ) : people.length === 0 ? (

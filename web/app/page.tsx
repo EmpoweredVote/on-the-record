@@ -27,6 +27,7 @@ export default async function HomePage() {
       </p>
       <nav className="siteNav">
         <Link href="/people">People →</Link>
+        <Link href="/search">Search →</Link>
       </nav>
       {loadError ? (
         <p>Meetings are temporarily unavailable. Please try again shortly.</p>

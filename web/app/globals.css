@@ -432,3 +432,116 @@ a {
 .speakerLink:hover {
   text-decoration: underline;
 }
+
+/* ---------- Search ---------- */
+
+.siteNav {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.searchForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.searchForm input[type="search"] {
+  flex: 1 1 240px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.searchForm select,
+.searchForm button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.9rem;
+}
+
+.searchForm button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.searchHint,
+.searchCount {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.searchGroup {
+  margin-bottom: 1.75rem;
+}
+
+.searchGroup h2 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.searchGroup h2 a {
+  color: var(--accent);
+}
+
+.searchHits {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.searchHit {
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+}
+
+.searchSpeaker {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+}
+
+.searchSnippet {
+  font-size: 0.95rem;
+  margin-top: 0.2rem;
+}
+
+.searchSnippet mark {
+  background: var(--active);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.searchPager {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.searchPager button {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.searchPager button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
