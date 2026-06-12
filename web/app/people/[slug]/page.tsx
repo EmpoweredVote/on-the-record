@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchAppearances, fetchPeople, fetchPerson } from "@/lib/queries";
+import { formatTime } from "@/lib/format";
 
 export const dynamicParams = false;
 
@@ -15,15 +16,6 @@ export async function generateStaticParams() {
 
 // essentials.city politician profiles are /politician/<uuid>
 const ESSENTIALS_BASE = "https://essentials.city";
-
-function formatTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const mm = String(m).padStart(2, "0");
-  const ss = String(s).padStart(2, "0");
-  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
-}
 
 export default async function PersonPage({
   params,
