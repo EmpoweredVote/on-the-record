@@ -31,6 +31,44 @@ def _speaker_display(seg: Segment) -> str:
     return seg.speaker_name or seg.speaker_label
 
 
+def _metadata_lines(meeting: Meeting) -> list[str]:
+    """Build the metadata block rendered under the H1 of markdown exports.
+
+    Links back to the original video/audio so transcripts can be verified
+    against their source. Local file paths render as basename only to avoid
+    leaking the operator's filesystem layout.
+    """
+    lines = []
+
+    source = (meeting.audio_source or "").strip()
+    if source.startswith(("http://", "https://")):
+        lines.append(f"- **Source:** [{source}]({source})")
+    elif source:
+        lines.append(f"- **Source file:** {Path(source).name}")
+
+    if meeting.duration_seconds:
+        lines.append(f"- **Duration:** {_format_timestamp(meeting.duration_seconds)}")
+
+    if meeting.meeting_id:
+        lines.append(f"- **Meeting ID:** {meeting.meeting_id}")
+
+    meta = meeting.processing_metadata
+    if meta:
+        parts = []
+        if meta.transcription_model:
+            parts.append(f"whisper {meta.transcription_model}")
+        if meta.diarization_model:
+            parts.append(meta.diarization_model)
+        if meta.pipeline_version:
+            parts.append(f"CouncilScribe v{meta.pipeline_version}")
+        if parts:
+            lines.append(f"- **Pipeline:** {' · '.join(parts)}")
+
+    if lines:
+        lines.extend(["", "---"])
+    return lines
+
+
 def export_markdown(meeting: Meeting, output_path: str | Path) -> Path:
     """Export transcript as readable Markdown.
 
@@ -43,6 +81,10 @@ def export_markdown(meeting: Meeting, output_path: str | Path) -> Path:
     title = f"{meeting.city} {meeting.meeting_type}"
     lines.append(f"# {title} — {meeting.date}")
     lines.append("")
+    meta_lines = _metadata_lines(meeting)
+    if meta_lines:
+        lines.extend(meta_lines)
+        lines.append("")
 
     for seg in meeting.segments:
         if not seg.text:
@@ -134,6 +176,10 @@ def export_summary_markdown(summary: MeetingSummary, meeting: Meeting, output_pa
     title = f"{meeting.city} {meeting.meeting_type}"
     lines.append(f"# {title} — {meeting.date}")
     lines.append("")
+    meta_lines = _metadata_lines(meeting)
+    if meta_lines:
+        lines.extend(meta_lines)
+        lines.append("")
 
     # Executive summary
     if summary.executive_summary:
