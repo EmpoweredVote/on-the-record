@@ -21,3 +21,37 @@ export interface Segment {
   politician_slug: string | null;
   text: string;
 }
+
+export interface Person {
+  slug: string;
+  politician_id: string | null;   // essentials.politicians UUID
+  name: string;
+  headshot_url: string | null;
+  party: string | null;
+  office_title: string | null;
+  district: string | null;
+  jurisdiction: string | null;
+  meeting_count: number;
+  cities: string[];
+  last_spoke_date: string | null; // YYYY-MM-DD
+}
+
+export interface PersonDetail extends Person {
+  bio_text: string | null;
+}
+
+export interface AppearanceSegment {
+  segment_id: number;             // segmentIndex from ev-accounts
+  start_time: number;
+  end_time: number;
+  text: string;
+}
+
+export interface Appearance {
+  meeting_id: string;
+  city: string;
+  meeting_type: string;
+  meeting_date: string;           // YYYY-MM-DD
+  playback_kind: string | null;
+  segments: AppearanceSegment[];
+}

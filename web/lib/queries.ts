@@ -1,4 +1,4 @@
-import type { Meeting, Segment } from "./types";
+import type { Appearance, Meeting, Person, PersonDetail, Segment } from "./types";
 
 const BASE = (process.env.EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
 
@@ -30,6 +30,63 @@ function mapSegment(s: any): Segment {
     politician_slug: s.politicianSlug ?? null,
     text: s.text,
   };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapPerson(p: any): Person {
+  return {
+    slug: p.slug,
+    politician_id: p.politicianId ?? null,
+    name: p.name,
+    headshot_url: p.headshotUrl ?? null,
+    party: p.party ?? null,
+    office_title: p.officeTitle ?? null,
+    district: p.district ?? null,
+    jurisdiction: p.jurisdiction ?? null,
+    meeting_count: p.meetingCount ?? 0,
+    cities: p.cities ?? [],
+    last_spoke_date: p.lastSpokeDate ?? null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapAppearance(a: any): Appearance {
+  return {
+    meeting_id: a.meetingId,
+    city: a.city,
+    meeting_type: a.meetingType,
+    meeting_date: a.date,
+    playback_kind: a.playbackKind ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    segments: (a.segments as any[]).map((s) => ({
+      segment_id: s.segmentIndex,
+      start_time: s.startTime,
+      end_time: s.endTime,
+      text: s.text,
+    })),
+  };
+}
+
+export async function fetchPeople(): Promise<Person[]> {
+  const res = await fetch(`${BASE}/api/people`);
+  if (!res.ok) throw new Error(`people fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (data as unknown[]).map(mapPerson);
+}
+
+export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
+  const res = await fetch(`${BASE}/api/people/${slug}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`person fetch failed: ${res.status}`);
+  const p = await res.json();
+  return { ...mapPerson(p), bio_text: p.bioText ?? null };
+}
+
+export async function fetchAppearances(slug: string): Promise<Appearance[]> {
+  const res = await fetch(`${BASE}/api/people/${slug}/appearances`);
+  if (!res.ok) throw new Error(`appearances fetch failed: ${res.status}`);
+  const { appearances } = (await res.json()) as { appearances: unknown[] };
+  return appearances.map(mapAppearance);
 }
 
 export async function fetchMeetings(): Promise<Meeting[]> {
