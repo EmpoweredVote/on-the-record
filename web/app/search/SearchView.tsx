@@ -34,7 +34,9 @@ function mapResult(r: any): SearchResult {
 }
 
 // ts_headline emits [[[match]]] sentinels (never HTML) — split into <mark>
-// React nodes so nothing goes through dangerouslySetInnerHTML.
+// React nodes so nothing goes through dangerouslySetInnerHTML. Transcript
+// text containing a literal [[[ would only desync the even/odd highlighting
+// (cosmetic); everything stays a text node either way.
 function renderSnippet(snippet: string) {
   const parts = snippet.split(/\[\[\[|\]\]\]/);
   return parts.map((part, i) =>
@@ -65,7 +67,10 @@ export default function SearchView({
   const urlQ = searchParams.get("q") ?? "";
   const urlCity = searchParams.get("city") ?? "";
   const urlSpeaker = searchParams.get("speaker") ?? "";
-  const urlPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const urlPage = Math.min(
+    MAX_PAGE,
+    Math.max(1, Math.floor(Number(searchParams.get("page") ?? "1") || 1))
+  );
 
   const [input, setInput] = useState(urlQ);
   const [city, setCity] = useState(urlCity);
@@ -73,6 +78,9 @@ export default function SearchView({
   const [status, setStatus] = useState<Status>("idle");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  // Bumped on every submit so re-searching an unchanged query after an
+  // error re-runs the fetch effect (the URL alone wouldn't change).
+  const [retryNonce, setRetryNonce] = useState(0);
 
   // Keep the form in sync with the URL (back/forward navigation).
   useEffect(() => {
@@ -110,7 +118,7 @@ export default function SearchView({
         if ((err as Error).name !== "AbortError") setStatus("error");
       });
     return () => controller.abort();
-  }, [urlQ, urlCity, urlSpeaker, urlPage]);
+  }, [urlQ, urlCity, urlSpeaker, urlPage, retryNonce]);
 
   const navigate = useCallback(
     (q: string, c: string, s: string, page: number) => {
@@ -126,6 +134,7 @@ export default function SearchView({
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setRetryNonce((n) => n + 1);
     navigate(input.trim(), city, speaker, 1);
   }
 
@@ -191,14 +200,20 @@ export default function SearchView({
           Try a phrase in quotes, or exclude words with a leading dash.
         </p>
       )}
-      {status === "loading" && <p className="searchHint">Searching…</p>}
+      {status === "loading" && (
+        <p className="searchHint" role="status">
+          Searching…
+        </p>
+      )}
       {status === "error" && (
-        <p className="searchHint">
+        <p className="searchHint" role="status">
           Search is temporarily unavailable. Please try again shortly.
         </p>
       )}
       {status === "done" && totalCount === 0 && (
-        <p className="searchHint">No results for &ldquo;{urlQ}&rdquo;.</p>
+        <p className="searchHint" role="status">
+          No results for &ldquo;{urlQ}&rdquo;.
+        </p>
       )}
 
       {status === "done" && totalCount > 0 && (
