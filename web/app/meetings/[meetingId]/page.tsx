@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchMeeting, fetchSegments } from "@/lib/queries";
+import { fetchMeeting, fetchMeetings, fetchSegments } from "@/lib/queries";
 import MeetingView from "./MeetingView";
 
-export const revalidate = 300;
+export const dynamicParams = false;
+
+export async function generateStaticParams() {
+  const meetings = await fetchMeetings();
+  return meetings.map((m) => ({ meetingId: m.meeting_id }));
+}
 
 export default async function MeetingPage({
   params,

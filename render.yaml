@@ -1,14 +1,11 @@
 services:
-  - type: web
+  - type: static
     name: on-the-record-web
-    runtime: node
     rootDir: web
-    buildCommand: npm install && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
-    startCommand: node .next/standalone/server.js
+    buildCommand: npm install && npm run build
+    staticPublishPath: out
     envVars:
       - key: NODE_VERSION
         value: "20"
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+      - key: EV_ACCOUNTS_URL
         sync: false
