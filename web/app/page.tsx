@@ -25,6 +25,9 @@ export default async function HomePage() {
         Searchable, speaker-attributed transcripts of public meetings, synced
         to the original video.
       </p>
+      <nav className="siteNav">
+        <Link href="/people">People →</Link>
+      </nav>
       {loadError ? (
         <p>Meetings are temporarily unavailable. Please try again shortly.</p>
       ) : meetings.length === 0 ? (
