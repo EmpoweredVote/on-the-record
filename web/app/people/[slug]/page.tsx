@@ -6,6 +6,10 @@ export const dynamicParams = false;
 
 export async function generateStaticParams() {
   const people = await fetchPeople();
+  // output:"export" fails the build when a dynamic route has zero params
+  // (e.g., before the first meeting is published). Emit one sentinel slug
+  // that renders 404 so empty-data builds still succeed.
+  if (people.length === 0) return [{ slug: "none" }];
   return people.map((p) => ({ slug: p.slug }));
 }
 
