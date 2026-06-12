@@ -1305,6 +1305,17 @@ def run_pipeline(args: argparse.Namespace) -> None:
         for fmt, path in results.items():
             print(f"    {fmt}: {path}")
 
+    if getattr(args, "publish", False):
+        try:
+            from src.publish import publish_meeting
+
+            result = publish_meeting(meeting, state.body_slug)
+            print(f"  Published to Supabase: {result.segments} segments, "
+                  f"{result.speakers} speakers")
+        except Exception as e:
+            print(f"  WARNING: Supabase publish failed: {e}")
+            print(f"  Retry later with: python run_local.py --publish-meeting {meeting.meeting_id}")
+
     print()
     print("=" * 60)
     print("PIPELINE COMPLETE")
@@ -1466,6 +1477,33 @@ def _run_batch(args: argparse.Namespace) -> None:
 
     if completed or skipped:
         print(f"\nUse --review-meeting MEETING_ID to review speaker identifications.")
+
+
+def _publish_meeting_standalone(meeting_id: str) -> None:
+    """Publish an already-processed meeting to Supabase (backfill workhorse)."""
+    from src import config
+    from src.checkpoint import PipelineState
+    from src.models import Meeting
+    from src.publish import publish_meeting
+
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    named_path = meeting_dir / "transcript_named.json"
+    if not named_path.exists():
+        print(f"No transcript_named.json found for meeting ID: {meeting_id}")
+        print(f"  Expected at: {named_path}")
+        sys.exit(1)
+
+    with open(named_path, "r", encoding="utf-8") as f:
+        meeting = Meeting.from_dict(json.load(f))
+
+    body_slug = PipelineState(meeting_dir).body_slug
+
+    print(f"Publishing {meeting_id} to Supabase...")
+    result = publish_meeting(meeting, body_slug)
+    print(f"  Meeting:  {result.meeting_id}")
+    print(f"  Segments: {result.segments}")
+    print(f"  Speakers: {result.speakers}")
+    print(f"  People:   {result.people}")
 
 
 def _fix_transcripts() -> None:
@@ -2216,6 +2254,10 @@ Environment Variables:
                         help="Rename stored voice profiles using the council roster and exit")
     parser.add_argument("--fix-transcripts", action="store_true",
                         help="Re-correct speaker names in all existing transcripts using the roster and re-export")
+    parser.add_argument("--publish", action="store_true",
+                        help="After the pipeline completes, publish the meeting to Supabase for the web site")
+    parser.add_argument("--publish-meeting", metavar="MEETING_ID",
+                        help="Publish an already-processed meeting to Supabase and exit")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
     parser.add_argument("--show-roster", action="store_true",
@@ -2348,6 +2390,10 @@ Environment Variables:
 
     if args.fix_transcripts:
         _fix_transcripts()
+        return
+
+    if args.publish_meeting:
+        _publish_meeting_standalone(args.publish_meeting)
         return
 
     if args.review:
