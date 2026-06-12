@@ -9,3 +9,5 @@ services:
         value: "20"
       - key: EV_ACCOUNTS_URL
         sync: false
+      - key: NEXT_PUBLIC_EV_ACCOUNTS_URL
+        sync: false

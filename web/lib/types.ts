@@ -55,3 +55,16 @@ export interface Appearance {
   playback_kind: string | null;
   segments: AppearanceSegment[];
 }
+
+export interface SearchResult {
+  meeting_id: string;
+  city: string;
+  meeting_type: string;
+  meeting_date: string;          // YYYY-MM-DD
+  segment_id: number;            // segmentIndex from ev-accounts
+  start_time: number;
+  end_time: number;
+  speaker_name: string | null;
+  politician_slug: string | null;
+  snippet: string;               // [[[match]]] sentinels, rendered as <mark>
+}
