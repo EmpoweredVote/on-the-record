@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "web",
       "port": 3000
+    },
+    {
+      "name": "static-export",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "web/out", "-l", "4173"],
+      "port": 4173
     }
   ]
 }

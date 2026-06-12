@@ -24,12 +24,12 @@ Each phase below tags work by where it lives: **[pipeline]**, **[ev-accounts]**,
 - **[ev-accounts]** Enrich people with photos/bios already in the essentials data (shared `politician_slug`/`politician_id`).
 - Free byproduct: because ev-accounts *is* the essentials backend, essentials.city can render an "appearances" card on politician profiles straight from the same endpoint — the old "essentials integration" phase collapses into this one. Remaining leftover: meeting pages here link speaker names to essentials profiles.
 
-## Phase 3 — Cross-meeting search  ← next up
+## Phase 3 — Cross-meeting search ✅ (built 2026-06-12; live once data is re-published and both repos deploy)
 
 - **[ev-accounts]** `/api/search?q=&speaker=&city=`: `websearch_to_tsquery('english', $q)` against the segments FTS index + `ts_headline` snippets, joined to meeting metadata. CORS-allowlisted for the site origin (static export ⇒ browser calls it directly).
 - **[web]** `/search` page (client component): results grouped by meeting, each deep-linking to `/meetings/[id]?t=...#seg-...`.
 
-## Phase 4 — AI summaries & key moments
+## Phase 4 — AI summaries & key moments  ← next up
 
 - **[pipeline]** During publish, generate per-meeting artifacts with an LLM pass over the named transcript: short summary, topic list, and notable moments (segment ranges + one-line description). Deterministic re-publish: store alongside the transcript so re-runs don't re-bill.
 - **[ev-accounts]** Columns + API: summary/topics/moments on the meeting payload.
