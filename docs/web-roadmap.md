@@ -17,14 +17,14 @@ Two consequences of static export worth remembering:
 
 Each phase below tags work by where it lives: **[pipeline]**, **[ev-accounts]**, or **[web]**.
 
-## Phase 2 — People  ← next up
+## Phase 2 — People ✅ (built 2026-06-12; live once data is re-published and both repos deploy)
 
 - **[ev-accounts]** `/api/people` (roster, filterable by city/body), `/api/people/[slug]` (profile), `/api/people/[slug]/appearances` (every meeting where the person spoke, with segments and timestamps — `segments where politician_slug = ? order by meeting_id, start_time`).
 - **[web]** `/people` roster page (card grid, like digitaldemocracy.org/people) and `/people/[slug]` profile: name, district, essentials.city link, appearances with deep links into meetings.
 - **[ev-accounts]** Enrich people with photos/bios already in the essentials data (shared `politician_slug`/`politician_id`).
 - Free byproduct: because ev-accounts *is* the essentials backend, essentials.city can render an "appearances" card on politician profiles straight from the same endpoint — the old "essentials integration" phase collapses into this one. Remaining leftover: meeting pages here link speaker names to essentials profiles.
 
-## Phase 3 — Cross-meeting search
+## Phase 3 — Cross-meeting search  ← next up
 
 - **[ev-accounts]** `/api/search?q=&speaker=&city=`: `websearch_to_tsquery('english', $q)` against the segments FTS index + `ts_headline` snippets, joined to meeting metadata. CORS-allowlisted for the site origin (static export ⇒ browser calls it directly).
 - **[web]** `/search` page (client component): results grouped by meeting, each deep-linking to `/meetings/[id]?t=...#seg-...`.
