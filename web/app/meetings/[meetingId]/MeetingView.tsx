@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import type { Meeting, Segment } from "@/lib/types";
 import type { PlayerAdapter } from "./players/adapter";
 import YouTubePlayer from "./players/YouTubePlayer";
@@ -237,7 +238,17 @@ export default function MeetingView({
                 {formatTime(seg.start_time)}
               </button>
               <span className="speaker">
-                {seg.speaker_name || seg.speaker_label}
+                {seg.politician_slug ? (
+                  <Link
+                    href={`/people/${seg.politician_slug}`}
+                    className="speakerLink"
+                    title="View this person's appearances"
+                  >
+                    {seg.speaker_name || seg.speaker_label}
+                  </Link>
+                ) : (
+                  seg.speaker_name || seg.speaker_label
+                )}
               </span>
               <button
                 className="copyLink"
