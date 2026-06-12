@@ -58,7 +58,7 @@ function mapAppearance(a: any): Appearance {
     meeting_date: a.date,
     playback_kind: a.playbackKind ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    segments: (a.segments as any[]).map((s) => ({
+    segments: ((a.segments ?? []) as any[]).map((s) => ({
       segment_id: s.segmentIndex,
       start_time: s.startTime,
       end_time: s.endTime,
@@ -75,7 +75,7 @@ export async function fetchPeople(): Promise<Person[]> {
 }
 
 export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
-  const res = await fetch(`${BASE}/api/people/${slug}`);
+  const res = await fetch(`${BASE}/api/people/${encodeURIComponent(slug)}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`person fetch failed: ${res.status}`);
   const p = await res.json();
@@ -83,7 +83,9 @@ export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
 }
 
 export async function fetchAppearances(slug: string): Promise<Appearance[]> {
-  const res = await fetch(`${BASE}/api/people/${slug}/appearances`);
+  const res = await fetch(
+    `${BASE}/api/people/${encodeURIComponent(slug)}/appearances`
+  );
   if (!res.ok) throw new Error(`appearances fetch failed: ${res.status}`);
   const { appearances } = (await res.json()) as { appearances: unknown[] };
   return appearances.map(mapAppearance);
