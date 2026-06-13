@@ -134,7 +134,6 @@ def _normalize_politician(rec: dict) -> dict:
         "politician_slug": rec.get("slug"),
         "full_name": rec.get("full_name", ""),
         "office_title": rec.get("office_title", ""),
-        "party": rec.get("party", ""),
         "district_label": rec.get("district_label", ""),
         "is_incumbent": bool(rec.get("is_incumbent", False)),
         "government_name": rec.get("government_name", ""),
@@ -148,8 +147,11 @@ def search_politicians(
 
     Calls GET /api/essentials/candidates/search-by-name (incumbents +
     challengers). Returns up to `limit` normalized dicts, each with
-    politician_id, politician_slug, full_name, office_title, party,
+    politician_id, politician_slug, full_name, office_title,
     district_label, is_incumbent, government_name.
+
+    Note: affiliation fields are intentionally excluded — the pipeline never
+    reads or persists them (enforced by tests/test_antipartisan.py).
 
     Raises EssentialsClientError on a <2-char query (INVALID_QUERY) or any
     transport/HTTP/parse failure. Callers in review treat this as best-effort.

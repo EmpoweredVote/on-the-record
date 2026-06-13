@@ -190,7 +190,6 @@ def test_search_politicians_success(mock_get):
         "politician_slug": "john-hamilton",
         "full_name": "John Hamilton",
         "office_title": "Mayor",
-        "party": "Democratic",
         "district_label": "",
         "is_incumbent": True,
         "government_name": "Bloomington",
