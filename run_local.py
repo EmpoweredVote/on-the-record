@@ -1916,7 +1916,8 @@ def _enroll_after_review(
     """
     import numpy as np
 
-    from src.enroll import _enroll_one, _name_to_slug, load_profiles, save_profiles
+    from src.enroll import _enroll_mapping, _name_to_slug, load_profiles, save_profiles
+    from src.models import SpeakerMapping
 
     embeddings_path = meeting_dir / "embeddings.json"
     if not embeddings_path.exists():
@@ -1943,7 +1944,12 @@ def _enroll_after_review(
         new_name = change["new_name"]
         if not new_name or label not in speaker_embeddings:
             continue
-        slug = _name_to_slug(new_name)
+        mapping = current_mappings.get(label)
+        # Mapping identity (from an inline link) wins over the name-derived slug.
+        if mapping is not None and mapping.politician_slug:
+            slug = f"essentials:{mapping.politician_slug}"
+        else:
+            slug = _name_to_slug(new_name)
         is_new = slug not in profile_db.profiles
         enrollable.append({
             "label": label,
@@ -1963,12 +1969,13 @@ def _enroll_after_review(
     choice = input("\nEnroll these speakers? [Y/n] ").strip().lower()
     if choice in ("", "y", "yes"):
         for e in enrollable:
-            mapping = current_mappings.get(e["label"])
+            mapping = current_mappings.get(e["label"]) or SpeakerMapping(
+                speaker_label=e["label"], speaker_name=e["name"])
             seg_count = sum(1 for s in segments if s.speaker_label == e["label"])
-            _enroll_one(
-                profile_db, e["slug"], e["name"],
+            _enroll_mapping(
+                profile_db, mapping,
                 speaker_embeddings[e["label"]],
-                meeting_id, seg_count,
+                meeting_id, seg_count, None,
             )
             tag = "NEW" if e["is_new"] else "UPDATE"
             print(f"  Enrolled: {e['name']} ({e['slug']}) [{tag}]")
