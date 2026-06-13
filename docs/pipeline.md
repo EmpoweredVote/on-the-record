@@ -157,6 +157,23 @@ Note: if the meeting has CATS TV captions (`captions.vtt`), `--redo transcribe`
 re-aligns the transcript from those captions rather than re-running Whisper
 (same as a first run with captions present).
 
+### Repairing one caption-backed transcript
+
+For a processed meeting with an existing `captions.vtt`, rebuild only its
+transcript text and exports:
+
+```bash
+.venv/bin/python run_local.py --repair-transcript <MEETING_ID>
+```
+
+The repair preserves reviewed speaker identities, politician links, metadata,
+summary, and checkpoint state. It creates a timestamped backup at
+`<meeting>/backups/transcript-repair-YYYYMMDD-HHMMSS/`.
+
+Meetings without saved captions must use
+`--resume <MEETING_ID> --redo transcribe`, which reruns transcription and
+downstream stages.
+
 ### Meeting metadata prompts
 
 For a new run, if you don't pass `--city`, `--date`, or `--meeting-type`,
