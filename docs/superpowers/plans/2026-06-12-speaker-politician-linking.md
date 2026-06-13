@@ -76,7 +76,6 @@ def test_search_politicians_success(mock_get):
         "politician_slug": "john-hamilton",
         "full_name": "John Hamilton",
         "office_title": "Mayor",
-        "party": "Democratic",
         "district_label": "",
         "is_incumbent": True,
         "government_name": "Bloomington",
@@ -212,12 +211,13 @@ def fetch_body_roster(body_slug: str, base_url: str | None = None) -> dict:
 ```python
 def _normalize_politician(rec: dict) -> dict:
     """Whitelist the fields the pipeline needs from a PoliticianFlatRecord."""
+    # No affiliation/party field — the pipeline never persists it
+    # (tests/test_antipartisan.py enforces this on src/essentials_client.py).
     return {
         "politician_id": rec.get("id"),
         "politician_slug": rec.get("slug"),
         "full_name": rec.get("full_name", ""),
         "office_title": rec.get("office_title", ""),
-        "party": rec.get("party", ""),
         "district_label": rec.get("district_label", ""),
         "is_incumbent": bool(rec.get("is_incumbent", False)),
         "government_name": rec.get("government_name", ""),
@@ -231,8 +231,11 @@ def search_politicians(
 
     Calls GET /api/essentials/candidates/search-by-name (incumbents +
     challengers). Returns up to `limit` normalized dicts, each with
-    politician_id, politician_slug, full_name, office_title, party,
+    politician_id, politician_slug, full_name, office_title,
     district_label, is_incumbent, government_name.
+
+    Note: affiliation fields are intentionally excluded — the pipeline never
+    reads or persists them (enforced by tests/test_antipartisan.py).
 
     Raises EssentialsClientError on a <2-char query (INVALID_QUERY) or any
     transport/HTTP/parse failure. Callers in review treat this as best-effort.
@@ -538,7 +541,7 @@ def test_parse_link_selection():
 def test_format_match_line_contains_key_facts():
     match = {
         "full_name": "John Hamilton", "office_title": "Mayor",
-        "government_name": "Bloomington", "party": "Democratic",
+        "government_name": "Bloomington",
         "district_label": "", "is_incumbent": True,
     }
     line = review.format_match_line(match, 0)
@@ -550,7 +553,7 @@ def test_format_match_line_contains_key_facts():
 
 def test_format_match_line_candidate_tag():
     match = {"full_name": "Jane Doe", "office_title": "", "district_label": "IN-09",
-             "party": "", "government_name": "", "is_incumbent": False}
+             "government_name": "", "is_incumbent": False}
     assert "[candidate]" in review.format_match_line(match, 1)
 ```
 
@@ -599,7 +602,11 @@ def parse_link_selection(token, n_matches):
 
 
 def format_match_line(match, index):
-    """One-line rendering of a search_politicians() result for the link menu."""
+    """One-line rendering of a search_politicians() result for the link menu.
+
+    No affiliation/party detail — the pipeline never surfaces it (antipartisan
+    rule, tests/test_antipartisan.py).
+    """
     tag = "incumbent" if match.get("is_incumbent") else "candidate"
     detail = []
     if match.get("office_title"):
@@ -607,8 +614,6 @@ def format_match_line(match, index):
         detail.append(f"{match['office_title']}{', ' + loc if loc else ''}")
     elif match.get("district_label"):
         detail.append(match["district_label"])
-    if match.get("party"):
-        detail.append(match["party"])
     suffix = f" · {' · '.join(detail)}" if detail else ""
     name = match.get("full_name") or "(unknown)"
     return f"  {index + 1}. {name}{suffix} [{tag}]"

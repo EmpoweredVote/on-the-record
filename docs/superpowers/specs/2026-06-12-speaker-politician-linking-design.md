@@ -41,7 +41,7 @@ The identity plumbing already exists end-to-end:
   (incumbents **and** candidates — a candidate is just a row with
   `is_incumbent = false`; one ID space) already exists in ev-accounts:
   `GET /api/essentials/candidates/search-by-name?q=` → returns `id`, `slug`,
-  `office_title`, `party`, `district_label`, `is_incumbent`, ... (cap 20,
+  `office_title`, `district_label`, `is_incumbent`, ... (cap 20,
   `q ≥ 2`).
 
 **Two wires are disconnected**, which is the whole reason linking neither
@@ -90,9 +90,10 @@ New function in `src/essentials_client.py` mirroring the existing
 - Guards `q` to ≥ 2 non-whitespace chars; raises `EssentialsClientError`
   (`code="INVALID_QUERY"`) below that, mirroring the endpoint's 422.
 - Returns a normalized `list[dict]`, each:
-  `{politician_id, politician_slug, full_name, office_title, party,
+  `{politician_id, politician_slug, full_name, office_title,
   district_label, is_incumbent, government_name}` (fields pulled from the
-  endpoint's flat record; missing values default to `None`/`""`).
+  endpoint's flat record; missing values default to `None`/`""`). No
+  affiliation/party field — the pipeline never persists it (antipartisan rule).
 - **Best-effort contract:** the only caller (review) catches
   `EssentialsClientError` and degrades; this function never prints or blocks.
 
