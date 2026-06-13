@@ -6,7 +6,14 @@ import MeetingView from "./MeetingView";
 export const dynamicParams = false;
 
 export async function generateStaticParams() {
-  const meetings = await fetchMeetings();
+  // Wrap in try/catch so builds succeed when EV_ACCOUNTS_URL is unset or the
+  // API is unreachable (fetch throws TypeError: Invalid URL for relative paths).
+  let meetings: Awaited<ReturnType<typeof fetchMeetings>> = [];
+  try {
+    meetings = await fetchMeetings();
+  } catch {
+    // API unavailable at build time — fall through to sentinel below.
+  }
   // output:"export" fails the build when a dynamic route has zero params
   // (e.g., before the first meeting is published). Emit one sentinel id
   // that renders 404 so empty-data builds still succeed. Must be a valid
