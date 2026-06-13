@@ -1,16 +1,15 @@
-"""Tests for the Supabase publisher: playback resolution and payload builders."""
+"""Tests for the meetings.* publisher: playback resolution helpers.
+
+The row-building logic was refactored in commit dd9b26e into cursor-bound
+upserts (``_upsert_meeting`` / ``_upsert_speakers`` / ``_replace_segments``)
+that need a live Postgres connection, so the old pure ``build_*_row`` helpers
+no longer exist. Their unit tests were removed with them. The pure URL
+helpers below survived the refactor unchanged and remain worth covering.
+"""
 
 import pytest
 
-from src.models import Meeting, ProcessingMetadata, Segment, SpeakerMapping, Word
-from src.publish import (
-    build_meeting_row,
-    build_people_rows,
-    build_segment_rows,
-    build_speaker_rows,
-    extract_youtube_id,
-    resolve_playback,
-)
+from src.publish import extract_youtube_id, resolve_playback
 
 
 # ---------------------------------------------------------------------------
@@ -77,98 +76,3 @@ def test_resolve_playback_catstv_page_falls_back_on_error(monkeypatch):
 
     monkeypatch.setattr(download, "_extract_blob_url_from_page", boom)
     assert resolve_playback("https://catstv.net/government.php?id=99") == (None, None)
-
-
-# ---------------------------------------------------------------------------
-# Payload builders
-# ---------------------------------------------------------------------------
-
-def _meeting() -> Meeting:
-    return Meeting(
-        meeting_id="2026-02-18-council",
-        city="Bloomington",
-        date="2026-02-18",
-        meeting_type="Regular Session",
-        audio_source="https://catstv.blob.core.windows.net/videoarchive/B_CC_260218.m4v",
-        duration_seconds=11000.0,
-        segments=[
-            Segment(
-                segment_id=0,
-                start_time=0.0,
-                end_time=5.0,
-                speaker_label="SPEAKER_00",
-                speaker_name="Council President Asare",
-                text="Good evening.",
-                words=[Word(word="Good", start=0.0, end=0.4)],
-                confidence=0.95,
-            ),
-            Segment(
-                segment_id=1,
-                start_time=5.0,
-                end_time=6.0,
-                speaker_label="SPEAKER_01",
-                text="",  # empty segments are skipped
-            ),
-        ],
-        speakers={
-            "SPEAKER_00": SpeakerMapping(
-                speaker_label="SPEAKER_00",
-                speaker_name="Council President Asare",
-                confidence=0.95,
-                id_method="voice_profile",
-                politician_slug="asare-isabel",
-            ),
-            "SPEAKER_01": SpeakerMapping(
-                speaker_label="SPEAKER_01",
-                speaker_name="Public Commenter",
-            ),
-        },
-        processing_metadata=ProcessingMetadata(),
-    )
-
-
-def test_meeting_row_url_source():
-    row = build_meeting_row(_meeting(), body_slug="bloomington")
-    assert row["source_url"].startswith("https://catstv.blob")
-    assert row["playback_kind"] == "file"
-    assert row["playback_url"] == row["source_url"]
-    assert row["meeting_date"] == "2026-02-18"
-    assert row["body_slug"] == "bloomington"
-
-
-def test_meeting_row_local_path_source():
-    meeting = _meeting()
-    meeting.audio_source = "/Users/operator/meeting.mp4"
-    row = build_meeting_row(meeting, body_slug=None)
-    assert row["source_url"] is None
-    assert row["playback_kind"] is None
-    assert row["playback_url"] is None
-
-
-def test_meeting_row_rejects_bad_date():
-    meeting = _meeting()
-    meeting.date = "Feb 18, 2026"
-    with pytest.raises(RuntimeError, match="not YYYY-MM-DD"):
-        build_meeting_row(meeting, body_slug=None)
-
-
-def test_segment_rows_exclude_words_and_empty_text():
-    rows = build_segment_rows(_meeting())
-    assert len(rows) == 1  # empty-text segment dropped
-    assert "words" not in rows[0]
-    assert rows[0]["politician_slug"] == "asare-isabel"  # denormalized from mapping
-    assert rows[0]["text"] == "Good evening."
-
-
-def test_speaker_rows_include_unidentified():
-    rows = build_speaker_rows(_meeting())
-    assert len(rows) == 2
-    by_label = {r["speaker_label"]: r for r in rows}
-    assert by_label["SPEAKER_01"]["politician_slug"] is None
-
-
-def test_people_rows_only_for_slugged_speakers():
-    rows = build_people_rows(_meeting(), body_slug=None)
-    assert len(rows) == 1
-    assert rows[0]["politician_slug"] == "asare-isabel"
-    assert rows[0]["display_name"] == "Council President Asare"

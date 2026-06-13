@@ -397,9 +397,11 @@ def play_speaker_clip(
 
     kind = "video" if video_path else "audio"
     print(f"    Playing {kind} clip ({duration:.0f}s from {int(seek // 60):02d}:{int(seek % 60):02d}) "
-          f"— looping; type a name or skip to stop it...")
+          f"— looping; press V for the next clip, R to replay, or type a name / Enter to move on...")
     try:
-        return subprocess.Popen(cmd)
+        # Detach from the terminal's stdin so the looping player can never
+        # contend with the review prompt's input().
+        return subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
     except FileNotFoundError:
         print("    ffplay not found — install ffmpeg to enable clip playback")
         return None
@@ -1503,7 +1505,6 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
     print(f"  Meeting:  {result.meeting_id}")
     print(f"  Segments: {result.segments}")
     print(f"  Speakers: {result.speakers}")
-    print(f"  People:   {result.people}")
 
 
 def _fix_transcripts() -> None:
@@ -1688,8 +1689,10 @@ def _interactive_speaker_review(
 ) -> list[dict]:
     """Interactive review loop built on the pure src/review.py core.
 
-    Per speaker: play a clip ([V]), accept the top voice hint ([Y]), merge this
-    speaker into another ([M]), skip ([Enter]), quit ([Q]), or type a name.
+    Per speaker: play clips ([V] cycles through up to 8 candidates, [V3] jumps
+    to clip 3, [R] replays the current one), accept the top voice hint ([Y]),
+    merge this speaker into another ([M]), skip ([Enter]), quit ([Q]), or type
+    a name.
     Mutates segments/mappings/embeddings in place via review.py; the CALLER
     persists (diarization.json / embeddings.json / transcript).
 
@@ -1733,28 +1736,52 @@ def _interactive_speaker_review(
             print(f"  Clip at [{_format_ts(view.clip_start)}]")
 
         advance = True
-        clip_idx = 0
+        clip_idx = 0        # index of the clip [V] plays next
+        last_clip = None    # index of the most recently played clip
         current_player = None
         has_clip = bool((video_path or audio_path) and view.clip_candidates)
+        n_clips = len(view.clip_candidates)
+
+        def _play_clip(n: int) -> None:
+            nonlocal current_player, last_clip, clip_idx
+            _stop_player(current_player)
+            start = view.clip_candidates[n]
+            print(f"  Clip {n + 1}/{n_clips} at [{_format_ts(start)}]")
+            current_player = play_speaker_clip(
+                video_path, audio_path, start,
+                title=f"{label} → {name} (clip {n + 1}/{n_clips})",
+            )
+            last_clip = n
+            clip_idx = n + 1
+
         try:
             while True:
                 parts = ["  "]
                 if has_clip:
-                    parts.append("[V]iew" + (" next" if clip_idx > 0 else ""))
+                    if last_clip is None:
+                        parts.append(f"[V]iew clip (1/{n_clips})")
+                    else:
+                        parts.append(f"[V]=next clip ({clip_idx % n_clips + 1}/{n_clips}) [R]eplay")
                 if top_hint:
                     parts.append(f"[Y=accept {top_hint[0]}]")
                 if len(views) > 1:
                     parts.append("[M]erge")
                 parts.append("[Enter=skip] [Q=quit] or type name: ")
                 choice = input(" ".join(parts)).strip()
+                lower = choice.lower()
 
-                if choice.lower() in ("v", "view") and has_clip:
-                    _stop_player(current_player)
-                    n = clip_idx % len(view.clip_candidates)
-                    start = view.clip_candidates[n]
-                    print(f"  Clip {n + 1}/{len(view.clip_candidates)} at [{_format_ts(start)}]")
-                    current_player = play_speaker_clip(video_path, audio_path, start, title=f"{label} → {name}")
-                    clip_idx += 1
+                if lower in ("v", "view") and has_clip:
+                    _play_clip(clip_idx % n_clips)
+                    continue
+                elif lower.startswith("v") and lower[1:].isdigit() and has_clip:
+                    n = int(lower[1:]) - 1
+                    if not 0 <= n < n_clips:
+                        print(f"  No clip {lower[1:]} — this speaker has {n_clips} clip(s).")
+                        continue
+                    _play_clip(n)
+                    continue
+                elif lower in ("r", "replay") and has_clip:
+                    _play_clip(last_clip if last_clip is not None else 0)
                     continue
                 elif choice.lower() == "q":
                     print("  Quitting review.")
