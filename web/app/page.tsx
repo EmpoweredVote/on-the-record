@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { fetchMeetings } from "@/lib/queries";
 
-export const revalidate = 300;
-
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "";
   const h = Math.floor(seconds / 3600);
@@ -27,6 +25,10 @@ export default async function HomePage() {
         Searchable, speaker-attributed transcripts of public meetings, synced
         to the original video.
       </p>
+      <nav className="siteNav">
+        <Link href="/people">People →</Link>
+        <Link href="/search">Search →</Link>
+      </nav>
       {loadError ? (
         <p>Meetings are temporarily unavailable. Please try again shortly.</p>
       ) : meetings.length === 0 ? (

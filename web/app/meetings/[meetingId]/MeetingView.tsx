@@ -7,19 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import type { Meeting, Segment } from "@/lib/types";
 import type { PlayerAdapter } from "./players/adapter";
 import YouTubePlayer from "./players/YouTubePlayer";
 import FilePlayer from "./players/FilePlayer";
-
-function formatTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const mm = String(m).padStart(2, "0");
-  const ss = String(s).padStart(2, "0");
-  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
-}
+import { formatTime } from "@/lib/format";
 
 // Index of the segment playing at time t (last segment with start_time <= t).
 function segmentIndexAt(starts: number[], t: number): number {
@@ -237,7 +230,17 @@ export default function MeetingView({
                 {formatTime(seg.start_time)}
               </button>
               <span className="speaker">
-                {seg.speaker_name || seg.speaker_label}
+                {seg.politician_slug ? (
+                  <Link
+                    href={`/people/${seg.politician_slug}`}
+                    className="speakerLink"
+                    title="View this person's appearances"
+                  >
+                    {seg.speaker_name || seg.speaker_label}
+                  </Link>
+                ) : (
+                  seg.speaker_name || seg.speaker_label
+                )}
               </span>
               <button
                 className="copyLink"

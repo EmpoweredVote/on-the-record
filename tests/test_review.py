@@ -205,3 +205,29 @@ def test_build_review_state_single_segment_clip_start():
     views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=True)
     assert views[0].clip_candidates == [3.0]
     assert views[0].clip_start == 3.0
+
+
+def test_build_review_state_long_turn_gets_in_turn_candidates():
+    # A single 200s monologue used to yield ONE candidate (the same 40s clip
+    # forever). It now also offers starts every 60s while >=30s remains.
+    segs = [_seg("S0", 100.0, 300.0, "long monologue")]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=True)
+    assert views[0].clip_candidates == [100.0, 160.0, 220.0]
+    assert views[0].clip_start == 100.0
+
+
+def test_build_review_state_in_turn_candidates_respect_cap():
+    # One very long turn cannot crowd past the cap of 8 candidates.
+    segs = [_seg("S0", 0.0, 3600.0, "hour-long item")]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=False)
+    assert views[0].clip_candidates == [0.0, 60.0, 120.0, 180.0, 240.0, 300.0, 360.0, 420.0]
+
+
+def test_build_review_state_mixed_turns_keep_longest_first_order():
+    # In-turn extras of the longest turn come before the next segment's start.
+    segs = [_seg("S0", 0.0, 90.0, "long"), _seg("S0", 100.0, 110.0, "short")]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=False)
+    assert views[0].clip_candidates == [0.0, 60.0, 100.0]

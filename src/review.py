@@ -51,10 +51,21 @@ def build_review_state(segments, mappings, embeddings, profile_db, *, show_text:
     for label, segs in by_label.items():
         total = sum(s.end_time - s.start_time for s in segs)
         # Candidates: this speaker's segments by duration desc (longest turn is
-        # the most identifying), top 8 start times. The default clip + sample
-        # come from the longest turn.
+        # the most identifying), capped at 8. Turns much longer than the ~40s
+        # playback window also contribute in-turn start points (every 60s while
+        # at least 30s of the turn remains) so cycling clips can sample beyond
+        # the opening of a long monologue. The default clip + sample come from
+        # the longest turn.
         ordered = sorted(segs, key=lambda s: s.end_time - s.start_time, reverse=True)
-        clip_candidates = [s.start_time for s in ordered[:8]]
+        clip_candidates: list[float] = []
+        for s in ordered:
+            if len(clip_candidates) >= 8:
+                break
+            clip_candidates.append(s.start_time)
+            offset = 60.0
+            while len(clip_candidates) < 8 and (s.end_time - s.start_time) - offset >= 30.0:
+                clip_candidates.append(s.start_time + offset)
+                offset += 60.0
         longest = ordered[0] if ordered else None
         mapping = mappings.get(label)
         sample_text = None
