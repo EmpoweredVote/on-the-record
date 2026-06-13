@@ -150,7 +150,7 @@ def _install_transaction(
             live_path.parent.mkdir(parents=True, exist_ok=True)
             os.replace(staged_path, live_path)
             changed.append(relative_path)
-    except Exception as install_error:
+    except BaseException as install_error:
         rollback_errors = []
         for relative_path in reversed(changed):
             live_path = meeting_dir / relative_path
@@ -162,7 +162,7 @@ def _install_transaction(
                     )
                 elif live_path.exists():
                     live_path.unlink()
-            except Exception as rollback_error:
+            except BaseException as rollback_error:
                 rollback_errors.append(f"{relative_path}: {rollback_error}")
 
         if rollback_errors:
@@ -171,9 +171,11 @@ def _install_transaction(
                 f"Could not install repaired transcript: {install_error}; "
                 f"rollback also failed: {details}"
             ) from install_error
-        raise RepairError(
-            f"Could not install repaired transcript: {install_error}"
-        ) from install_error
+        if isinstance(install_error, Exception):
+            raise RepairError(
+                f"Could not install repaired transcript: {install_error}"
+            ) from install_error
+        raise
 
 
 def repair_transcript(

@@ -280,6 +280,56 @@ def test_install_failure_rolls_back_every_changed_live_artifact(
     assert not (exports_dir / "transcript.md").exists()
 
 
+def test_keyboard_interrupt_rolls_back_and_is_reraised(tmp_path, monkeypatch):
+    meeting_dir = tmp_path / "interrupted-meeting"
+    exports_dir = _write_minimal_meeting(
+        meeting_dir,
+        summary=MeetingSummary(executive_summary="Preserved summary."),
+    )
+    tracked_paths = [
+        meeting_dir / "transcript_raw.json",
+        meeting_dir / "transcript_named.json",
+        exports_dir / "transcript.md",
+        exports_dir / "transcript.json",
+        exports_dir / "subtitles.srt",
+        exports_dir / "summary.md",
+    ]
+    original_bytes = {}
+    for path in tracked_paths:
+        if path.name == "transcript.md":
+            continue
+        if path.name == "transcript_named.json":
+            original_bytes[path] = path.read_bytes()
+        else:
+            original_bytes[path] = f"ORIGINAL {path.name}".encode()
+    for path, content in original_bytes.items():
+        path.write_bytes(content)
+
+    real_replace = os.replace
+    interrupt = KeyboardInterrupt("simulated interrupt")
+
+    def interrupt_during_install(source, destination):
+        if (
+            destination == exports_dir / "transcript.json"
+            and ".transcript-repair-" in str(source)
+        ):
+            raise interrupt
+        real_replace(source, destination)
+
+    monkeypatch.setattr("src.repair.os.replace", interrupt_during_install)
+
+    with pytest.raises(KeyboardInterrupt) as exc_info:
+        repair_transcript(
+            meeting_dir,
+            now=datetime(2026, 6, 13, 14, 10, 0),
+        )
+
+    assert exc_info.value is interrupt
+    for path, content in original_bytes.items():
+        assert path.read_bytes() == content
+    assert not (exports_dir / "transcript.md").exists()
+
+
 def test_repair_without_summary_removes_stale_summary_after_backing_it_up(tmp_path):
     meeting_dir = tmp_path / "no-summary-meeting"
     exports_dir = _write_minimal_meeting(meeting_dir, summary=None)
