@@ -14,6 +14,16 @@ from src.models import (
 from src.repair import RepairError, repair_transcript
 
 
+_LIVE_ARTIFACTS = (
+    "transcript_raw.json",
+    "transcript_named.json",
+    "exports/transcript.md",
+    "exports/transcript.json",
+    "exports/subtitles.srt",
+    "exports/summary.md",
+)
+
+
 def _write_minimal_meeting(meeting_dir, *, summary):
     exports_dir = meeting_dir / "exports"
     exports_dir.mkdir(parents=True)
@@ -62,6 +72,165 @@ Repaired caption text
         encoding="utf-8",
     )
     return exports_dir
+
+
+def _write_and_capture_live_artifacts(meeting_dir):
+    original_bytes = {}
+    for relative_path in _LIVE_ARTIFACTS:
+        path = meeting_dir / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if relative_path == "transcript_named.json":
+            content = path.read_bytes()
+        else:
+            content = f"ORIGINAL {relative_path}".encode()
+            path.write_bytes(content)
+        original_bytes[path] = content
+    return original_bytes
+
+
+def _assert_live_artifacts_unchanged(original_bytes):
+    for path, content in original_bytes.items():
+        assert path.read_bytes() == content
+
+
+@pytest.mark.parametrize(
+    "missing_filename",
+    [
+        "pipeline_state.json",
+        "diarization.json",
+        "captions.vtt",
+        "transcript_named.json",
+    ],
+)
+def test_repair_requires_every_input_file(tmp_path, missing_filename):
+    meeting_dir = tmp_path / "missing-input-meeting"
+    _write_minimal_meeting(meeting_dir, summary=None)
+    (meeting_dir / missing_filename).unlink()
+
+    with pytest.raises(RepairError, match=missing_filename):
+        repair_transcript(meeting_dir)
+
+
+def test_invalid_named_json_fails_before_backup_or_live_changes(tmp_path):
+    meeting_dir = tmp_path / "invalid-named-meeting"
+    _write_minimal_meeting(meeting_dir, summary=None)
+    original_raw = b"ORIGINAL RAW TRANSCRIPT"
+    (meeting_dir / "transcript_raw.json").write_bytes(original_raw)
+    (meeting_dir / "transcript_named.json").write_text(
+        "{not valid JSON",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RepairError, match="valid JSON"):
+        repair_transcript(meeting_dir)
+
+    assert (meeting_dir / "transcript_raw.json").read_bytes() == original_raw
+    assert not (meeting_dir / "backups").exists()
+
+
+def test_invalid_pipeline_state_json_fails_before_backup_or_live_changes(tmp_path):
+    meeting_dir = tmp_path / "invalid-pipeline-state-meeting"
+    _write_minimal_meeting(meeting_dir, summary=None)
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
+    (meeting_dir / "pipeline_state.json").write_text(
+        "{not valid JSON",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RepairError, match="valid JSON"):
+        repair_transcript(meeting_dir)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    assert not (meeting_dir / "backups").exists()
+
+
+def test_caption_file_without_usable_cues_fails_before_backup_or_live_changes(
+    tmp_path,
+):
+    meeting_dir = tmp_path / "empty-captions-meeting"
+    _write_minimal_meeting(meeting_dir, summary=None)
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
+    (meeting_dir / "captions.vtt").write_text("WEBVTT\n", encoding="utf-8")
+
+    with pytest.raises(RepairError, match="no usable cues"):
+        repair_transcript(meeting_dir)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    assert not (meeting_dir / "backups").exists()
+
+
+def test_export_failure_fails_before_backup_or_live_changes(tmp_path, monkeypatch):
+    meeting_dir = tmp_path / "export-failure-meeting"
+    _write_minimal_meeting(
+        meeting_dir,
+        summary=MeetingSummary(executive_summary="Preserved summary."),
+    )
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
+
+    def fail_export(*args, **kwargs):
+        raise TypeError("simulated serialization failure")
+
+    monkeypatch.setattr("src.repair.export_all", fail_export)
+
+    with pytest.raises(RepairError, match="simulated serialization failure"):
+        repair_transcript(meeting_dir)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    assert not (meeting_dir / "backups").exists()
+
+
+def test_backup_copy_failure_cleans_new_backup_without_touching_live_files(
+    tmp_path, monkeypatch
+):
+    meeting_dir = tmp_path / "backup-failure-meeting"
+    _write_minimal_meeting(
+        meeting_dir,
+        summary=MeetingSummary(executive_summary="Preserved summary."),
+    )
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
+    older_backup = meeting_dir / "backups" / "transcript-repair-20260612-120000"
+    older_backup.mkdir(parents=True)
+    sentinel = older_backup / "sentinel.txt"
+    sentinel.write_bytes(b"KEEP THIS BACKUP")
+    now = datetime(2026, 6, 13, 15, 0, 0)
+    failed_backup = meeting_dir / "backups" / "transcript-repair-20260613-150000"
+
+    def fail_copy(*args, **kwargs):
+        raise OSError("simulated backup failure")
+
+    monkeypatch.setattr("src.repair.shutil.copy2", fail_copy)
+
+    with pytest.raises(RepairError, match="Could not create repair backup"):
+        repair_transcript(meeting_dir, now=now)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    assert not failed_backup.exists()
+    assert sentinel.read_bytes() == b"KEEP THIS BACKUP"
+
+
+def test_existing_backup_timestamp_collision_is_not_modified(tmp_path):
+    meeting_dir = tmp_path / "backup-collision-meeting"
+    _write_minimal_meeting(
+        meeting_dir,
+        summary=MeetingSummary(executive_summary="Preserved summary."),
+    )
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
+    now = datetime(2026, 6, 13, 15, 30, 0)
+    existing_backup = (
+        meeting_dir / "backups" / "transcript-repair-20260613-153000"
+    )
+    existing_backup.mkdir(parents=True)
+    sentinel = existing_backup / "sentinel.txt"
+    sentinel.write_bytes(b"DO NOT REPLACE")
+
+    with pytest.raises(RepairError):
+        repair_transcript(meeting_dir, now=now)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    assert sentinel.read_bytes() == b"DO NOT REPLACE"
+    assert sorted(path.name for path in existing_backup.iterdir()) == [
+        "sentinel.txt"
+    ]
 
 
 def test_repair_transcript_rebuilds_from_captions_and_backs_up_live_files(tmp_path):

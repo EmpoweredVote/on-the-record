@@ -45,28 +45,31 @@ _BACKUP_FILES = (
 )
 
 
+def _load_json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RepairError(
+            f"Invalid repair input: {path.name} must contain valid JSON: {exc}"
+        ) from exc
+
+
 def _load_inputs(meeting_dir: Path) -> tuple[list[Segment], Meeting]:
     missing = [name for name in _REQUIRED_FILES if not (meeting_dir / name).is_file()]
     if missing:
         raise RepairError(f"Missing required meeting files: {', '.join(missing)}")
 
     try:
-        pipeline_state = json.loads(
-            (meeting_dir / "pipeline_state.json").read_text(encoding="utf-8")
-        )
+        pipeline_state = _load_json(meeting_dir / "pipeline_state.json")
         if not isinstance(pipeline_state, dict):
             raise ValueError("pipeline_state.json must contain a JSON object")
 
-        diarization_data = json.loads(
-            (meeting_dir / "diarization.json").read_text(encoding="utf-8")
-        )
+        diarization_data = _load_json(meeting_dir / "diarization.json")
         if not isinstance(diarization_data, list):
             raise ValueError("diarization.json must contain a JSON array")
         segments = [Segment.from_dict(item) for item in diarization_data]
 
-        named_data = json.loads(
-            (meeting_dir / "transcript_named.json").read_text(encoding="utf-8")
-        )
+        named_data = _load_json(meeting_dir / "transcript_named.json")
         if not isinstance(named_data, dict):
             raise ValueError("transcript_named.json must contain a JSON object")
         meeting = Meeting.from_dict(named_data)
@@ -76,7 +79,6 @@ def _load_inputs(meeting_dir: Path) -> tuple[list[Segment], Meeting]:
     except (
         OSError,
         UnicodeError,
-        json.JSONDecodeError,
         AttributeError,
         KeyError,
         TypeError,
@@ -109,7 +111,7 @@ def _create_backup(meeting_dir: Path, backup_dir: Path) -> None:
     except Exception as exc:
         if created:
             shutil.rmtree(backup_dir, ignore_errors=True)
-        raise RepairError(f"Could not create transcript repair backup: {exc}") from exc
+        raise RepairError(f"Could not create repair backup: {exc}") from exc
 
 
 def _restore_from_backup(backup_path: Path, live_path: Path) -> None:
