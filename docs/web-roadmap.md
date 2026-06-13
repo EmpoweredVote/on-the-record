@@ -6,7 +6,7 @@ Reference product: [CalMatters Digital Democracy](https://calmatters.digitaldemo
 
 Three pieces, two repos:
 
-1. **Pipeline (this repo)** — `src/publish.py` writes meetings, speakers, and segments over direct Postgres (`DATABASE_URL`) into the `meetings.*` schema of the E.V Backend database. Idempotent by meeting slug; `python run_local.py --publish` / `--publish-meeting`.
+1. **Pipeline (this repo)** — `src/publish.py` writes meetings, speakers, and segments over direct Postgres (`DATABASE_URL`) into the `meetings.*` schema of the E.V Backend database. Idempotent by meeting slug; `python run_local.py --publish` / `--publish-meeting`. During review you can link a named speaker to an essentials politician/candidate (a `search-by-name` typeahead); the link rides the voice profile, so once linked a person arrives pre-linked in future meetings (and `publish.py` writes `politician_slug`/`politician_id` to `meetings.speakers`/`segments`). Fix a wrong link by re-naming/unlinking in review then re-publishing; rebuild propagated links with `python reenroll_profiles.py`.
 2. **ev-accounts (essentials.city backend repo)** — serves the public API the site consumes: `/api/meetings`, `/api/meetings/[id]`, `/api/meetings/[id]/transcript` (paginated, 200 segments/page). **All new server-side features land here**, since it owns the database and is shared with essentials.city.
 3. **Site (`web/`, this repo)** — Next.js **static export** (`output: "export"`) deployed as a Render static site. Fetches ev-accounts at build time via `EV_ACCOUNTS_URL` (build-time only, not exposed to the browser). Player adapters for YouTube + direct file/HLS, transcript sync, click-to-seek, `?t=` deep links, in-meeting search.
 
