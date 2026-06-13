@@ -164,6 +164,14 @@ Concretely, `resolve_enrollment_key` (or a thin wrapper it feeds) gains a
 "mapping already has identity" branch that short-circuits to
 `("essentials:<slug>", slug, id)` before the roster lookup.
 
+**`reenroll_profiles.py` inherits this for free.** It already rebuilds the
+profile DB from each meeting's `transcript_named.json` by reconstructing
+`SpeakerMapping`s and calling the shared `enroll_speakers`. Because those
+reconstructed mappings carry `politician_slug`/`politician_id` (round-tripped in
+the transcript), the new mapping-aware key resolution means a rebuild reproduces
+all manual links — not just roster matches. This is what makes the profile DB a
+fully rebuildable cache (see Correction process).
+
 ### 5. Persistence & publish — no changes
 
 `SpeakerMapping` serialization, `transcript_named.json` round-trip, and
@@ -191,6 +199,29 @@ Review: name speaker ──▶ optional link (search_politicians → pick)
                        (no human step needed)
 ```
 
+## Correction process (fixing a wrong link)
+
+A link lives in three places; the per-meeting transcript is the source of truth
+and the profile DB is a **derived, rebuildable cache**, so no wrong link — even a
+wrong cross-person merge — is a dead end.
+
+| Where the wrong link lives | How it is corrected | Mechanism |
+| --- | --- | --- |
+| Current meeting, mid-review | Re-name the speaker, or `n` to unlink | Inline; rewrites `transcript_named.json` + mappings |
+| A published meeting's DB rows | Re-publish that meeting | `publish.py` is idempotent by slug; overwrites `meetings.speakers`/`segments` |
+| The propagating profile cache (incl. a bad merge) | Fix the transcript(s), then `python reenroll_profiles.py` | Rebuilds profiles from source-of-truth; the bad centroid disappears |
+
+The only enabling change is **Wire 2 living in the shared enroll path**
+(Component 4) so `reenroll_profiles.py` carries manual links on rebuild. With
+that, "nuke and rebuild" cleanly undoes a wrong merge — which is why this design
+deliberately does **not** add per-embedding provenance or custom un-merge logic.
+
+**Known caveat:** a full `reenroll` re-extracts embeddings from stored audio, so
+it is heavier than ideal for fixing a single link. If that friction shows up in
+practice, a lightweight "edit one profile's identity" CLI (set / clear / re-key
+a single profile via the existing `rename_profile` / `merge_profiles` helpers,
+no audio needed) is a small, clean follow-up — **out of scope for v1.**
+
 ## Testing
 
 - `search_politicians`: success parse → normalized dicts; `<2`-char guard →
@@ -207,8 +238,14 @@ Review: name speaker ──▶ optional link (search_politicians → pick)
 
 ## Out of scope (deferred, not missed)
 
-- No web/admin panel and no post-publish correction UI (Approach B/C). Today,
-  correcting a wrong link = re-name + re-run.
+- No web/admin panel and no post-publish correction UI (Approach B/C). Its cost
+  is the web/auth/UI surface in ev-accounts; when wanted, it is a thin layer over
+  operations that already exist (write `meetings.speakers`; run `reenroll`), so
+  deferring it creates no rework. Correction in v1 is the Correction process above.
+- No per-embedding provenance or custom un-merge logic — the rebuildable cache
+  (reenroll) covers wrong merges instead.
+- No standalone profile-edit CLI in v1 — noted as a possible follow-up if full
+  reenroll proves too heavy for one-off fixes.
 - No back-link pass over already-published meetings. Forward-only: new meetings
   auto-propagate; re-publishing an older meeting after linking picks up the ids.
 - No new candidate entity — candidates are `essentials.politicians` rows with
@@ -217,10 +254,8 @@ Review: name speaker ──▶ optional link (search_politicians → pick)
 
 ## Open considerations
 
-- **Wrong-link correction.** Re-naming the same speaker re-opens the link prompt;
-  choosing `n` clears it. A profile that was wrongly merged is harder to undo —
-  acceptable for now; an admin correction surface (Approach C) is the eventual
-  answer.
+- **Wrong-link correction.** Covered by the Correction process section above
+  (inline re-name/unlink → re-publish → reenroll rebuild).
 - **Two speakers → same politician in one meeting** (diarization over-split):
   both mappings get the same slug; `publish` upserts by label, the people page
   shows one person. Acceptable.
