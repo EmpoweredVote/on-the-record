@@ -1976,6 +1976,8 @@ def _enroll_after_review(
             mapping = current_mappings.get(e["label"]) or SpeakerMapping(
                 speaker_label=e["label"], speaker_name=e["name"])
             seg_count = sum(1 for s in segments if s.speaker_label == e["label"])
+            # roster=None on purpose: identity here comes from the mapping itself
+            # (set when the speaker was linked during review), not a roster lookup.
             _enroll_mapping(
                 profile_db, mapping,
                 speaker_embeddings[e["label"]],

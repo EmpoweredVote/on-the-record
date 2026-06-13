@@ -262,3 +262,9 @@ no audio needed) is a small, clean follow-up — **out of scope for v1.**
   shows one person. Acceptable.
 - **Offline review.** Fully supported via the degrade path; the person just stays
   unlinked until a later run (or re-publish) links them.
+- **Identify-layer override.** A voice-propagated link (Wire 1) survives a
+  higher-confidence pattern/LLM override only when the override names the *same*
+  person (`_carry_link` in `identify.py`). A genuine rename override drops the
+  link — intentionally, since carrying identity across a name change would
+  mislink one person's id onto another. The dropped case is recoverable by
+  re-linking in review; roster members also self-heal via `correct_mappings`.
