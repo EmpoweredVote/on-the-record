@@ -1675,6 +1675,68 @@ def _resolve_metadata(args) -> None:
         args.meeting_type = ans or MEETING_TYPE_DEFAULT
 
 
+def _prompt_link_politician(mappings: dict, label: str, query: str) -> None:
+    """Offer to link a just-named speaker to an essentials politician/candidate.
+
+    No-op when the speaker is already linked (e.g. roster auto-match) or when
+    not attached to a TTY. Best-effort: any search failure degrades to a manual
+    slug paste or a skip — never blocks or crashes review.
+    """
+    from src import review
+    from src.essentials_client import EssentialsClientError, search_politicians
+
+    mapping = mappings.get(label)
+    if mapping is None or mapping.politician_slug:
+        return
+    if not sys.stdin.isatty():
+        return
+
+    def _do_search(q: str):
+        try:
+            return search_politicians(q)
+        except EssentialsClientError as e:
+            print(f"  (politician search unavailable: {e})")
+            return None
+
+    matches = _do_search(query)
+    while True:
+        if matches:
+            print("  Link to a politician/candidate? (Enter = leave unlinked)")
+            for i, mt in enumerate(matches):
+                print(review.format_match_line(mt, i))
+            prompt = "  [number] pick · [m] search again · [p] paste slug · [Enter/s] skip · [n] none/unlink: "
+        else:
+            prompt = "  Link politician? [m] search · [p] paste slug · [Enter/s] skip: "
+
+        choice = input(prompt).strip()
+        action, idx = review.parse_link_selection(choice, len(matches or []))
+
+        if action == "skip":
+            return
+        if action == "none":
+            review.link_speaker(mappings, label, None, None)
+            print("  Left unlinked.")
+            return
+        if action == "search":
+            q = input("    Search name: ").strip()
+            if q:
+                matches = _do_search(q)
+            continue
+        if action == "pick":
+            mt = matches[idx]
+            review.link_speaker(mappings, label, mt["politician_slug"], mt["politician_id"])
+            print(f"  Linked → {mt['full_name']} ({mt['politician_slug']})")
+            return
+        # 'invalid' — allow a manual slug paste (handy when there are no matches).
+        if choice.lower() == "p":
+            slug = input("    politician_slug: ").strip()
+            if slug:
+                review.link_speaker(mappings, label, slug, None)
+                print(f"  Linked → {slug} (id unknown)")
+            return
+        print("  Not understood.")
+
+
 def _interactive_speaker_review(
     segments,
     mappings: dict,
@@ -1817,6 +1879,7 @@ def _interactive_speaker_review(
                     mappings[label].id_method = "human_confirmed"
                     changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
                     print(f"  Confirmed: {label} -> {res.new_name}")
+                    _prompt_link_politician(mappings, label, res.new_name)
                     break
                 else:
                     res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
@@ -1827,6 +1890,7 @@ def _interactive_speaker_review(
                         if add_alias(None, res.new_name, res.alias_suggestion, body_slug=body_slug):
                             target_label = body_slug or "council_roster.json"
                             print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
+                    _prompt_link_politician(mappings, label, res.new_name)
                     break
         finally:
             _stop_player(current_player)

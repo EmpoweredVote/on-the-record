@@ -21,6 +21,9 @@ def _drive(monkeypatch, inputs, segments, mappings):
     """Run _interactive_speaker_review with scripted input; return (changes, played starts)."""
     played = []
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    # The post-rename link prompt would otherwise call the essentials API; stub it
+    # to no matches so these loop tests stay deterministic and offline.
+    monkeypatch.setattr("src.essentials_client.search_politicians", lambda *a, **k: [])
     monkeypatch.setattr(
         run_local, "play_speaker_clip",
         lambda video, audio, start, duration=40.0, title="": played.append(start),
@@ -75,7 +78,8 @@ def test_out_of_range_jump_reprompts(monkeypatch, capsys):
 def test_typing_a_name_still_renames_after_viewing(monkeypatch):
     segments = [_seg("S0", 0, 50), _seg("S0", 100, 120)]
     mappings = {"S0": SpeakerMapping(speaker_label="S0")}
-    changes, played = _drive(monkeypatch, ["v", "Jane Doe"], segments, mappings)
+    # Trailing "" skips the post-rename politician-link prompt.
+    changes, played = _drive(monkeypatch, ["v", "Jane Doe", ""], segments, mappings)
     assert played == [0.0]
     assert changes == [{"label": "S0", "old_name": None, "new_name": "Jane Doe"}]
     assert mappings["S0"].speaker_name == "Jane Doe"
