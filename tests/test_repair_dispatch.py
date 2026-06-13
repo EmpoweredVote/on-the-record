@@ -35,10 +35,42 @@ def test_repair_transcript_dispatches_without_running_pipeline(monkeypatch):
 
 
 @pytest.mark.parametrize(
+    "abbreviated_args",
+    [
+        ["--comp", "local"],
+        ["--num-sp", "0"],
+    ],
+)
+def test_repair_transcript_rejects_abbreviated_long_options(
+    monkeypatch,
+    abbreviated_args,
+):
+    called = []
+    monkeypatch.setattr(
+        run_local,
+        "_repair_transcript_standalone",
+        called.append,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_local.py", "--repair-transcript", "repair-me"]
+        + abbreviated_args,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_local.main()
+
+    assert exc_info.value.code == 2
+    assert called == []
+
+
+@pytest.mark.parametrize(
     ("conflicting_args", "conflict_flags"),
     [
         (["--input", "meeting.mp4"], ["--input"]),
         (["--input=meeting.mp4"], ["--input"]),
+        (["-imeeting.mp4"], ["--input"]),
         (["--browse-catstv"], ["--browse-catstv"]),
         (["--resume", "meeting-1"], ["--resume"]),
         (

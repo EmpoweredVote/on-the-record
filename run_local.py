@@ -1512,7 +1512,13 @@ def _repair_transcript_standalone(meeting_id: str) -> None:
 def _option_supplied(argv: list[str], *options: str) -> bool:
     """Return whether argv explicitly contains any option or option=value."""
     return any(
-        argument == option or argument.startswith(f"{option}=")
+        argument == option
+        or argument.startswith(f"{option}=")
+        or (
+            option == "-i"
+            and argument.startswith("-i")
+            and not argument.startswith("--")
+        )
         for argument in argv
         for option in options
     )
@@ -2308,6 +2314,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="CouncilScribe — Automated City Council Meeting Transcription",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
         epilog="""
 Examples:
   %(prog)s --input meeting.mp4 --city Bloomington --date 2026-02-10
