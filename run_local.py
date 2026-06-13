@@ -876,6 +876,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     from src.transcribe import (
         load_raw_transcript,
         load_whisper_model,
+        remove_segment_overlaps,
         save_raw_transcript,
         transcribe_segments,
     )
@@ -886,7 +887,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
         print("  Already complete. Loading from checkpoint...")
         segments = load_raw_transcript(transcript_path)
         print(f"  Loaded {len(segments)} transcribed segments")
-    elif use_vtt:
+    else:
+        remove_segment_overlaps(segments)
+
+    if not state.is_complete(PipelineStage.TRANSCRIBED) and use_vtt:
         from src.vtt_align import align_vtt_to_segments
 
         t0 = time.time()
@@ -898,7 +902,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
         save_raw_transcript(segments, transcript_path)
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s")
-    elif getattr(args, "compute", "local") == "modal":
+    elif (
+        not state.is_complete(PipelineStage.TRANSCRIBED)
+        and getattr(args, "compute", "local") == "modal"
+    ):
         from src.modal_compute import run_transcription as _modal_transcribe, upload_audio as _modal_upload
 
         # When --diarizer api is used, run_diarization() on Modal was never called,
@@ -917,7 +924,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         save_raw_transcript(segments, transcript_path)
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s (Modal)")
-    else:
+    elif not state.is_complete(PipelineStage.TRANSCRIBED):
         resume_from = state.transcription_progress
         if resume_from > 0:
             print(f"  Resuming from segment {resume_from}/{len(segments)}")

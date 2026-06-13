@@ -12,6 +12,30 @@ from pathlib import Path
 from .models import Segment, Word
 
 
+def _token_key(token: str) -> str:
+    """Normalize a caption token for rolling-cue overlap comparisons."""
+    return re.sub(r"\W+", "", token).casefold()
+
+
+def _merge_rolling_lines(lines: list[str]) -> str:
+    """Collapse expanding/repeated lines inside one caption cue."""
+    merged: list[str] = []
+    merged_keys: list[str] = []
+
+    for line in lines:
+        tokens = re.sub(r"<[^>]+>", "", line).strip().split()
+        keys = [_token_key(token) for token in tokens]
+        overlap_count = 0
+        for count in range(min(len(merged_keys), len(keys)), 0, -1):
+            if merged_keys[-count:] == keys[:count]:
+                overlap_count = count
+                break
+        merged.extend(tokens[overlap_count:])
+        merged_keys.extend(keys[overlap_count:])
+
+    return " ".join(merged)
+
+
 def parse_vtt(vtt_path: str | Path) -> list[dict]:
     """Parse a WebVTT file into a list of cue dicts.
 
@@ -38,9 +62,7 @@ def parse_vtt(vtt_path: str | Path) -> list[dict]:
         if ts_line and text_lines:
             start, end = _parse_timestamp_line(ts_line)
             if start is not None:
-                # Strip HTML tags and speaker labels like <v Speaker>
-                text = " ".join(text_lines)
-                text = re.sub(r"<[^>]+>", "", text).strip()
+                text = _merge_rolling_lines(text_lines)
                 if text:
                     cues.append({"start": start, "end": end, "text": text})
 
@@ -72,6 +94,44 @@ def _overlap(seg_start: float, seg_end: float, cue_start: float, cue_end: float)
     return max(0.0, overlap_end - overlap_start)
 
 
+def _deduplicated_words(cues: list[dict]) -> list[Word]:
+    """Convert rolling VTT cues into one chronological, non-repeating stream."""
+    emitted_keys: list[str] = []
+    timed_words: list[Word] = []
+    previous_end: float | None = None
+
+    for cue in cues:
+        tokens = cue["text"].split()
+        keys = [_token_key(token) for token in tokens]
+
+        overlap_count = 0
+        if previous_end is not None and cue["start"] <= previous_end + 0.25:
+            max_overlap = min(len(emitted_keys), len(keys))
+            for count in range(max_overlap, 0, -1):
+                if emitted_keys[-count:] == keys[:count]:
+                    overlap_count = count
+                    break
+
+        duration = cue["end"] - cue["start"]
+        if duration <= 0 or not tokens:
+            continue
+
+        word_duration = duration / len(tokens)
+        for index in range(overlap_count, len(tokens)):
+            timed_words.append(
+                Word(
+                    word=tokens[index],
+                    start=round(cue["start"] + index * word_duration, 3),
+                    end=round(cue["start"] + (index + 1) * word_duration, 3),
+                )
+            )
+
+        emitted_keys.extend(keys[overlap_count:])
+        previous_end = cue["end"]
+
+    return timed_words
+
+
 def align_vtt_to_segments(
     vtt_path: str | Path,
     diarized_segments: list[Segment],
@@ -92,50 +152,44 @@ def align_vtt_to_segments(
     if not cues:
         print("  Warning: VTT file contains no cues")
         return diarized_segments
+    if not diarized_segments:
+        return diarized_segments
 
     for seg in diarized_segments:
-        matched_texts = []
+        seg.text = ""
+        seg.words = []
 
-        for cue in cues:
-            overlap_dur = _overlap(seg.start_time, seg.end_time, cue["start"], cue["end"])
+    for word in _deduplicated_words(cues):
+        midpoint = (word.start + word.end) / 2
+        target = next(
+            (
+                seg
+                for seg in diarized_segments
+                if seg.start_time <= midpoint < seg.end_time
+            ),
+            None,
+        )
+        if target is None:
+            candidates = [
+                (
+                    _overlap(
+                        seg.start_time,
+                        seg.end_time,
+                        word.start,
+                        word.end,
+                    ),
+                    seg,
+                )
+                for seg in diarized_segments
+            ]
+            overlap_dur, target = max(candidates, key=lambda item: item[0])
             if overlap_dur <= 0:
                 continue
 
-            cue_dur = cue["end"] - cue["start"]
-            if cue_dur <= 0:
-                continue
+        target.words.append(word)
 
-            # If the overlap covers most of the cue, take the full text
-            overlap_fraction = overlap_dur / cue_dur
-            if overlap_fraction >= 0.5:
-                matched_texts.append(cue["text"])
-            elif overlap_fraction >= 0.2:
-                # Partial overlap: take a proportional slice of words
-                words = cue["text"].split()
-                n_words = max(1, int(len(words) * overlap_fraction))
-                # Determine which portion of the cue overlaps
-                if seg.start_time <= cue["start"]:
-                    # Segment covers the beginning of the cue
-                    matched_texts.append(" ".join(words[:n_words]))
-                else:
-                    # Segment covers the end of the cue
-                    matched_texts.append(" ".join(words[-n_words:]))
-
-        if matched_texts:
-            seg.text = " ".join(matched_texts)
-            # Create simple word-level entries (without precise per-word timestamps)
-            seg_dur = seg.end_time - seg.start_time
-            words = seg.text.split()
-            if words and seg_dur > 0:
-                word_dur = seg_dur / len(words)
-                seg.words = [
-                    Word(
-                        word=w,
-                        start=round(seg.start_time + i * word_dur, 3),
-                        end=round(seg.start_time + (i + 1) * word_dur, 3),
-                    )
-                    for i, w in enumerate(words)
-                ]
+    for seg in diarized_segments:
+        seg.text = " ".join(word.word for word in seg.words)
 
     aligned_count = sum(1 for s in diarized_segments if s.text)
     total = len(diarized_segments)
