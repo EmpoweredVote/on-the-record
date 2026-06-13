@@ -311,3 +311,41 @@ def test_voice_match_no_identity_stays_none():
     out = match_voice_profiles(speaker_embeddings, centroids, profile_db=db)
     assert out["SPEAKER_00"].politician_slug is None
     assert out["SPEAKER_00"].politician_id is None
+
+
+# ---------------------------------------------------------------------------
+# _carry_link: a politician link survives a same-person override, not a rename
+# ---------------------------------------------------------------------------
+
+from src.identify import _carry_link
+
+
+def test_carry_link_same_name_preserves_identity():
+    prior = SpeakerMapping(speaker_label="S0", speaker_name="John Hamilton",
+                           confidence=0.9, politician_slug="john-hamilton",
+                           politician_id="uuid-ham")
+    new = SpeakerMapping(speaker_label="S0", speaker_name="John Hamilton",
+                         confidence=0.95)
+    out = _carry_link(prior, new)
+    assert out.politician_slug == "john-hamilton"
+    assert out.politician_id == "uuid-ham"
+
+
+def test_carry_link_different_name_drops_identity():
+    prior = SpeakerMapping(speaker_label="S0", speaker_name="John Hamilton",
+                           confidence=0.9, politician_slug="john-hamilton",
+                           politician_id="uuid-ham")
+    new = SpeakerMapping(speaker_label="S0", speaker_name="Jane Smith",
+                         confidence=0.95)
+    out = _carry_link(prior, new)
+    assert out.politician_slug is None
+    assert out.politician_id is None
+
+
+def test_carry_link_does_not_overwrite_existing_link():
+    prior = SpeakerMapping(speaker_label="S0", speaker_name="John Hamilton",
+                           politician_slug="john-hamilton", politician_id="uuid-ham")
+    new = SpeakerMapping(speaker_label="S0", speaker_name="John Hamilton",
+                         politician_slug="other-slug", politician_id="uuid-other")
+    out = _carry_link(prior, new)
+    assert out.politician_slug == "other-slug"
