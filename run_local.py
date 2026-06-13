@@ -1509,6 +1509,15 @@ def _repair_transcript_standalone(meeting_id: str) -> None:
         print(f"    {export_name}: {export_path}")
 
 
+def _option_supplied(argv: list[str], *options: str) -> bool:
+    """Return whether argv explicitly contains any option or option=value."""
+    return any(
+        argument == option or argument.startswith(f"{option}=")
+        for argument in argv
+        for option in options
+    )
+
+
 def _publish_meeting_standalone(meeting_id: str) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
@@ -2441,42 +2450,43 @@ Environment Variables:
     args = parser.parse_args()
 
     if args.repair_transcript:
+        cli_argv = sys.argv[1:]
         repair_conflict_map = {
-            "--input": args.input is not None,
-            "--browse-catstv": args.browse_catstv,
-            "--resume": args.resume is not None,
-            "--city": args.city is not None,
-            "--date": args.date != "",
-            "--meeting-type": args.meeting_type is not None,
-            "--meeting-id": args.meeting_id != "",
-            "--num-speakers": args.num_speakers != 0,
-            "--noise-reduce": args.noise_reduce,
-            "--cookies": args.cookies is not None,
-            "--skip-llm": args.skip_llm,
-            "--skip-summary": args.skip_summary,
-            "--confirm-enroll": args.confirm_enroll,
-            "--merge": args.merge,
-            "--use-vtt": args.use_vtt,
-            "--diarizer": args.diarizer != "oss",
-            "--compute": args.compute != "local",
-            "--default": args.default,
-            "--list-profiles": args.list_profiles,
-            "--fix-profiles": args.fix_profiles,
-            "--fix-transcripts": args.fix_transcripts,
-            "--publish": args.publish,
-            "--publish-meeting": args.publish_meeting is not None,
-            "--merge-profiles": args.merge_profiles is not None,
-            "--show-roster": args.show_roster,
-            "--no-review": args.no_review,
-            "--review": args.review is not None,
-            "--review-meeting": args.review_meeting is not None,
-            "--identify-speakers": args.identify_speakers is not None,
-            "--pre-identify": args.pre_identify,
-            "--batch": args.batch is not None,
-            "--batch-resume": args.batch_resume,
-            "--body": args.body is not None,
-            "--force-retag": args.force_retag,
-            "--redo": args.redo is not None,
+            "--input": _option_supplied(cli_argv, "--input", "-i"),
+            "--browse-catstv": _option_supplied(cli_argv, "--browse-catstv"),
+            "--resume": _option_supplied(cli_argv, "--resume"),
+            "--city": _option_supplied(cli_argv, "--city"),
+            "--date": _option_supplied(cli_argv, "--date"),
+            "--meeting-type": _option_supplied(cli_argv, "--meeting-type"),
+            "--meeting-id": _option_supplied(cli_argv, "--meeting-id"),
+            "--num-speakers": _option_supplied(cli_argv, "--num-speakers"),
+            "--noise-reduce": _option_supplied(cli_argv, "--noise-reduce"),
+            "--cookies": _option_supplied(cli_argv, "--cookies"),
+            "--skip-llm": _option_supplied(cli_argv, "--skip-llm"),
+            "--skip-summary": _option_supplied(cli_argv, "--skip-summary"),
+            "--confirm-enroll": _option_supplied(cli_argv, "--confirm-enroll"),
+            "--merge": _option_supplied(cli_argv, "--merge"),
+            "--use-vtt": _option_supplied(cli_argv, "--use-vtt"),
+            "--diarizer": _option_supplied(cli_argv, "--diarizer"),
+            "--compute": _option_supplied(cli_argv, "--compute"),
+            "--default": _option_supplied(cli_argv, "--default"),
+            "--list-profiles": _option_supplied(cli_argv, "--list-profiles"),
+            "--fix-profiles": _option_supplied(cli_argv, "--fix-profiles"),
+            "--fix-transcripts": _option_supplied(cli_argv, "--fix-transcripts"),
+            "--publish": _option_supplied(cli_argv, "--publish"),
+            "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
+            "--merge-profiles": _option_supplied(cli_argv, "--merge-profiles"),
+            "--show-roster": _option_supplied(cli_argv, "--show-roster"),
+            "--no-review": _option_supplied(cli_argv, "--no-review"),
+            "--review": _option_supplied(cli_argv, "--review"),
+            "--review-meeting": _option_supplied(cli_argv, "--review-meeting"),
+            "--identify-speakers": _option_supplied(cli_argv, "--identify-speakers"),
+            "--pre-identify": _option_supplied(cli_argv, "--pre-identify"),
+            "--batch": _option_supplied(cli_argv, "--batch"),
+            "--batch-resume": _option_supplied(cli_argv, "--batch-resume"),
+            "--body": _option_supplied(cli_argv, "--body"),
+            "--force-retag": _option_supplied(cli_argv, "--force-retag"),
+            "--redo": _option_supplied(cli_argv, "--redo"),
         }
         repair_conflicts = [
             flag

@@ -38,6 +38,7 @@ def test_repair_transcript_dispatches_without_running_pipeline(monkeypatch):
     ("conflicting_args", "conflict_flags"),
     [
         (["--input", "meeting.mp4"], ["--input"]),
+        (["--input=meeting.mp4"], ["--input"]),
         (["--browse-catstv"], ["--browse-catstv"]),
         (["--resume", "meeting-1"], ["--resume"]),
         (
@@ -74,8 +75,13 @@ def test_repair_transcript_dispatches_without_running_pipeline(monkeypatch):
         (["--merge"], ["--merge"]),
         (["--use-vtt"], ["--use-vtt"]),
         (["--compute", "modal"], ["--compute"]),
+        (["--compute", "local"], ["--compute"]),
         (["--diarizer", "api"], ["--diarizer"]),
+        (["--diarizer", "oss"], ["--diarizer"]),
         (["--num-speakers", "2"], ["--num-speakers"]),
+        (["--num-speakers", "0"], ["--num-speakers"]),
+        (["--date", ""], ["--date"]),
+        (["--meeting-id", ""], ["--meeting-id"]),
         (["--default"], ["--default"]),
         (["--publish"], ["--publish"]),
         (["--no-review"], ["--no-review"]),
