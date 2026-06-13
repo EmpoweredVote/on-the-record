@@ -203,3 +203,57 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
 def speakers_needing_review(mappings) -> list[str]:
     """Labels whose mapping is flagged needs_review."""
     return [label for label, m in mappings.items() if getattr(m, "needs_review", False)]
+
+
+def link_speaker(mappings, label, politician_slug, politician_id):
+    """Set (or clear, when both are None) the politician identity on a mapping.
+
+    Mutates `mappings` in place; returns the updated SpeakerMapping. Creates a
+    bare mapping if the label has none yet.
+    """
+    from src.models import SpeakerMapping
+
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    mapping.politician_slug = politician_slug
+    mapping.politician_id = politician_id
+    mappings[label] = mapping
+    return mapping
+
+
+def parse_link_selection(token, n_matches):
+    """Parse the reviewer's link-prompt input.
+
+    Returns (action, index): action in {'pick','skip','search','none','invalid'}.
+    'pick' carries a 0-based index into the match list.
+    """
+    t = (token or "").strip().lower()
+    if t in ("", "s", "skip"):
+        return ("skip", None)
+    if t in ("m", "search"):
+        return ("search", None)
+    if t in ("n", "none"):
+        return ("none", None)
+    if t.isdigit():
+        idx = int(t) - 1
+        if 0 <= idx < n_matches:
+            return ("pick", idx)
+        return ("invalid", None)
+    return ("invalid", None)
+
+
+def format_match_line(match, index):
+    """One-line rendering of a search_politicians() result for the link menu.
+
+    No affiliation detail — the pipeline never surfaces it (antipartisan
+    rule, tests/test_antipartisan.py).
+    """
+    tag = "incumbent" if match.get("is_incumbent") else "candidate"
+    detail = []
+    if match.get("office_title"):
+        loc = match.get("government_name") or match.get("district_label") or ""
+        detail.append(f"{match['office_title']}{', ' + loc if loc else ''}")
+    elif match.get("district_label"):
+        detail.append(match["district_label"])
+    suffix = f" · {' · '.join(detail)}" if detail else ""
+    name = match.get("full_name") or "(unknown)"
+    return f"  {index + 1}. {name}{suffix} [{tag}]"

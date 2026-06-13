@@ -231,3 +231,61 @@ def test_build_review_state_mixed_turns_keep_longest_first_order():
     mappings = {"S0": SpeakerMapping(speaker_label="S0")}
     views = review.build_review_state(segs, mappings, {}, _FakeProfileDB({}), show_text=False)
     assert views[0].clip_candidates == [0.0, 60.0, 100.0]
+
+
+# ---------------------------------------------------------------------------
+# Politician linking core (spec 2026-06-12-speaker-politician-linking)
+# ---------------------------------------------------------------------------
+
+
+def test_link_speaker_sets_identity():
+    mappings = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Jane Adams")}
+    out = review.link_speaker(mappings, "SPEAKER_00", "jane-adams", "uuid-ja")
+    assert out.politician_slug == "jane-adams"
+    assert out.politician_id == "uuid-ja"
+    assert mappings["SPEAKER_00"].politician_slug == "jane-adams"
+
+
+def test_link_speaker_clears_identity():
+    mappings = {"SPEAKER_00": SpeakerMapping(
+        speaker_label="SPEAKER_00", speaker_name="Jane Adams",
+        politician_slug="jane-adams", politician_id="uuid-ja")}
+    review.link_speaker(mappings, "SPEAKER_00", None, None)
+    assert mappings["SPEAKER_00"].politician_slug is None
+    assert mappings["SPEAKER_00"].politician_id is None
+
+
+def test_link_speaker_creates_mapping_when_absent():
+    mappings = {}
+    out = review.link_speaker(mappings, "SPEAKER_09", "x-y", "uuid-xy")
+    assert out.speaker_label == "SPEAKER_09"
+    assert mappings["SPEAKER_09"].politician_slug == "x-y"
+
+
+def test_parse_link_selection():
+    assert review.parse_link_selection("", 3) == ("skip", None)
+    assert review.parse_link_selection("s", 3) == ("skip", None)
+    assert review.parse_link_selection("m", 3) == ("search", None)
+    assert review.parse_link_selection("n", 3) == ("none", None)
+    assert review.parse_link_selection("2", 3) == ("pick", 1)
+    assert review.parse_link_selection("9", 3) == ("invalid", None)
+    assert review.parse_link_selection("zzz", 3) == ("invalid", None)
+
+
+def test_format_match_line_contains_key_facts():
+    match = {
+        "full_name": "John Hamilton", "office_title": "Mayor",
+        "government_name": "Bloomington",
+        "district_label": "", "is_incumbent": True,
+    }
+    line = review.format_match_line(match, 0)
+    assert "1." in line
+    assert "John Hamilton" in line
+    assert "Mayor" in line
+    assert "[incumbent]" in line
+
+
+def test_format_match_line_candidate_tag():
+    match = {"full_name": "Jane Doe", "office_title": "", "district_label": "IN-09",
+             "government_name": "", "is_incumbent": False}
+    assert "[candidate]" in review.format_match_line(match, 1)
