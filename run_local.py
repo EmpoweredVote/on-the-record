@@ -1916,7 +1916,12 @@ def _enroll_after_review(
     """
     import numpy as np
 
-    from src.enroll import _enroll_mapping, _name_to_slug, load_profiles, save_profiles
+    from src.enroll import (
+        _enroll_mapping,
+        load_profiles,
+        resolve_mapping_enrollment,
+        save_profiles,
+    )
     from src.models import SpeakerMapping
 
     embeddings_path = meeting_dir / "embeddings.json"
@@ -1944,12 +1949,11 @@ def _enroll_after_review(
         new_name = change["new_name"]
         if not new_name or label not in speaker_embeddings:
             continue
-        mapping = current_mappings.get(label)
-        # Mapping identity (from an inline link) wins over the name-derived slug.
-        if mapping is not None and mapping.politician_slug:
-            slug = f"essentials:{mapping.politician_slug}"
-        else:
-            slug = _name_to_slug(new_name)
+        # Show the exact key the speaker will enroll under — same resolver
+        # _enroll_mapping uses, so the NEW/UPDATE tag can't drift from reality.
+        mapping = current_mappings.get(label) or SpeakerMapping(
+            speaker_label=label, speaker_name=new_name)
+        slug, _, _ = resolve_mapping_enrollment(mapping)
         is_new = slug not in profile_db.profiles
         enrollable.append({
             "label": label,

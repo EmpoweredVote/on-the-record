@@ -180,6 +180,22 @@ def _enroll_one(
         db.profiles[slug] = profile
 
 
+def resolve_mapping_enrollment(
+    mapping: SpeakerMapping,
+    roster: Optional["Roster"] = None,
+) -> tuple[str, Optional[str], Optional[str]]:
+    """Return (profile_key, politician_slug, politician_id) a mapping enrolls under.
+
+    The mapping's own identity (from a manual link or Wire 1 voice propagation)
+    wins over a roster lookup; otherwise falls back to resolve_enrollment_key.
+    Single source of truth shared by _enroll_mapping and any display that needs
+    to show the key the speaker will land under.
+    """
+    if mapping.politician_slug:
+        return f"essentials:{mapping.politician_slug}", mapping.politician_slug, mapping.politician_id
+    return resolve_enrollment_key(mapping.speaker_name, roster)
+
+
 def _enroll_mapping(
     db: ProfileDB,
     mapping: SpeakerMapping,
@@ -195,11 +211,7 @@ def _enroll_mapping(
     local-slug profile for the same display name is absorbed into it so there is
     one profile per real person. Otherwise falls back to resolve_enrollment_key.
     """
-    if mapping.politician_slug:
-        key = f"essentials:{mapping.politician_slug}"
-        pol_slug, pol_id = mapping.politician_slug, mapping.politician_id
-    else:
-        key, pol_slug, pol_id = resolve_enrollment_key(mapping.speaker_name, roster)
+    key, pol_slug, pol_id = resolve_mapping_enrollment(mapping, roster)
 
     _enroll_one(
         db, key, mapping.speaker_name, embedding,

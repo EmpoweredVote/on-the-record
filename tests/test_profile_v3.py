@@ -431,3 +431,24 @@ def test_linking_absorbs_existing_local_profile():
     assert prof.politician_id == "uuid-ja"
     assert len(prof.embeddings) == 2  # m1 + m2 merged
     assert set(prof.meetings_seen) == {"m1", "m2"}
+
+
+# ---------------------------------------------------------------------------
+# resolve_mapping_enrollment: single source for the enrollment key
+# ---------------------------------------------------------------------------
+
+from src.enroll import resolve_mapping_enrollment
+
+
+def test_resolve_mapping_enrollment_linked_uses_essentials_key():
+    m = SpeakerMapping(
+        speaker_label="SPEAKER_00", speaker_name="Jane Adams",
+        politician_slug="jane-adams", politician_id="uuid-ja")
+    assert resolve_mapping_enrollment(m) == ("essentials:jane-adams", "jane-adams", "uuid-ja")
+
+
+def test_resolve_mapping_enrollment_unlinked_uses_local_slug():
+    m = SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Jane Adams")
+    key, slug, pid = resolve_mapping_enrollment(m)
+    assert key == "adams_jane"
+    assert slug is None and pid is None
