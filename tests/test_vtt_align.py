@@ -73,3 +73,23 @@ No
     result = align_vtt_to_segments(vtt, segments)
 
     assert result[0].text == "No No"
+
+
+def test_repeated_text_in_adjacent_cues_is_preserved(tmp_path):
+    vtt = tmp_path / "captions.vtt"
+    vtt.write_text(
+        """WEBVTT
+
+00:00:10.000 --> 00:00:11.000
+No
+
+00:00:11.200 --> 00:00:12.200
+No
+""",
+        encoding="utf-8",
+    )
+    segments = [Segment(0, 0.0, 30.0, "SPEAKER_00")]
+
+    result = align_vtt_to_segments(vtt, segments)
+
+    assert result[0].text == "No No"

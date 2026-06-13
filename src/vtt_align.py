@@ -105,7 +105,7 @@ def _deduplicated_words(cues: list[dict]) -> list[Word]:
         keys = [_token_key(token) for token in tokens]
 
         overlap_count = 0
-        if previous_end is not None and cue["start"] <= previous_end + 0.25:
+        if previous_end is not None and cue["start"] < previous_end:
             max_overlap = min(len(emitted_keys), len(keys))
             for count in range(max_overlap, 0, -1):
                 if emitted_keys[-count:] == keys[:count]:
@@ -136,10 +136,12 @@ def align_vtt_to_segments(
     vtt_path: str | Path,
     diarized_segments: list[Segment],
 ) -> list[Segment]:
-    """Align VTT cues to diarized segments by timestamp overlap.
+    """Deduplicate rolling VTT captions and align them to diarized segments.
 
-    For each diarized segment, finds overlapping VTT cues and assigns
-    the text proportionally. This replaces Whisper transcription.
+    Estimated word timestamps are distributed evenly across each cue. Each
+    deduplicated word is assigned exclusively to one chronological speaker
+    segment using its midpoint, with word/segment overlap as a fallback.
+    This replaces Whisper transcription.
 
     Args:
         vtt_path: Path to the VTT subtitle file.
