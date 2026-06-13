@@ -604,7 +604,7 @@ def parse_link_selection(token, n_matches):
 def format_match_line(match, index):
     """One-line rendering of a search_politicians() result for the link menu.
 
-    No affiliation/party detail — the pipeline never surfaces it (antipartisan
+    No affiliation detail — the pipeline never surfaces it (antipartisan
     rule, tests/test_antipartisan.py).
     """
     tag = "incumbent" if match.get("is_incumbent") else "candidate"
