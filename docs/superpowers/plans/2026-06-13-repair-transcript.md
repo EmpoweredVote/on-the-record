@@ -1,5 +1,18 @@
 # Repair Existing Transcript Implementation Plan
 
+> **Status: Completed on 2026-06-13**
+>
+> This is a historical pre-implementation execution plan, not current
+> instructions. Review-driven implementation evolved beyond draft snippets,
+> especially transactional rollback, dynamic transaction manifests, interrupt
+> rollback, and complete CLI conflict provenance.
+>
+> Authoritative behavior is in `src/repair.py`, `run_local.py`,
+> `tests/test_repair_transcript.py`, `tests/test_repair_dispatch.py`, and
+> `docs/pipeline.md`.
+>
+> **Do not execute or copy draft snippets from this plan.**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `run_local.py --repair-transcript <MEETING_ID>` to rebuild one caption-backed meeting's transcript and exports while preserving reviewed identities, metadata, summaries, and pipeline state.
@@ -47,7 +60,7 @@ Run:
 .venv/bin/python -m pytest -q tests/test_transcribe.py tests/test_vtt_align.py
 ```
 
-Expected: `5 passed`.
+Expected: all focused tests pass.
 
 - [ ] **Step 3: Confirm future Stage 3 runs use the shared normalization**
 
@@ -82,7 +95,7 @@ Run:
 .venv/bin/python -m pytest -q
 ```
 
-Expected: `210 passed`.
+Expected: full suite passes.
 
 - [ ] **Step 5: Verify secrets and stage only the shared transcript fix**
 

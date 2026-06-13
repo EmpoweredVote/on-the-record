@@ -163,7 +163,7 @@ For a processed meeting with an existing `captions.vtt`, rebuild only its
 transcript text and exports:
 
 ```bash
-.venv/bin/python run_local.py --repair-transcript <MEETING_ID>
+python run_local.py --repair-transcript <MEETING_ID>
 ```
 
 The repair preserves reviewed speaker identities, politician links, metadata,
