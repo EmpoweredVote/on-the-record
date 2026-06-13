@@ -1,5 +1,8 @@
 import json
+import os
 from datetime import datetime
+
+import pytest
 
 from src.models import (
     Meeting,
@@ -8,7 +11,57 @@ from src.models import (
     Segment,
     SpeakerMapping,
 )
-from src.repair import repair_transcript
+from src.repair import RepairError, repair_transcript
+
+
+def _write_minimal_meeting(meeting_dir, *, summary):
+    exports_dir = meeting_dir / "exports"
+    exports_dir.mkdir(parents=True)
+    (meeting_dir / "pipeline_state.json").write_text(
+        '{"completed_stage": 7}',
+        encoding="utf-8",
+    )
+    (meeting_dir / "diarization.json").write_text(
+        json.dumps([Segment(0, 10.0, 20.0, "SPEAKER_00").to_dict()]),
+        encoding="utf-8",
+    )
+    (meeting_dir / "captions.vtt").write_text(
+        """WEBVTT
+
+00:00:10.000 --> 00:00:15.000
+Repaired caption text
+""",
+        encoding="utf-8",
+    )
+    meeting = Meeting(
+        meeting_id=meeting_dir.name,
+        city="Los Angeles",
+        date="2026-06-13",
+        segments=[
+            Segment(
+                0,
+                10.0,
+                20.0,
+                "SPEAKER_00",
+                text="OLD NAMED",
+                speaker_name="Nithya Raman",
+            )
+        ],
+        speakers={
+            "SPEAKER_00": SpeakerMapping(
+                speaker_label="SPEAKER_00",
+                speaker_name="Nithya Raman",
+                confidence=0.98,
+                id_method="voice_profile",
+            )
+        },
+        summary=summary,
+    )
+    (meeting_dir / "transcript_named.json").write_text(
+        json.dumps(meeting.to_dict()),
+        encoding="utf-8",
+    )
+    return exports_dir
 
 
 def test_repair_transcript_rebuilds_from_captions_and_backs_up_live_files(tmp_path):
@@ -174,3 +227,69 @@ Do you have a permit No
         assert (backup_dir / "exports" / filename).read_text(
             encoding="utf-8"
         ) == content
+
+
+def test_install_failure_rolls_back_every_changed_live_artifact(
+    tmp_path, monkeypatch
+):
+    meeting_dir = tmp_path / "rollback-meeting"
+    exports_dir = _write_minimal_meeting(
+        meeting_dir,
+        summary=MeetingSummary(executive_summary="Preserved summary."),
+    )
+    tracked_paths = [
+        meeting_dir / "transcript_raw.json",
+        meeting_dir / "transcript_named.json",
+        exports_dir / "transcript.md",
+        exports_dir / "transcript.json",
+        exports_dir / "subtitles.srt",
+        exports_dir / "summary.md",
+    ]
+    original_bytes = {}
+    for path in tracked_paths:
+        if path.name == "transcript.md":
+            continue
+        if path.name == "transcript_named.json":
+            original_bytes[path] = path.read_bytes()
+        else:
+            original_bytes[path] = f"ORIGINAL {path.name}".encode()
+    for path, content in original_bytes.items():
+        path.write_bytes(content)
+
+    real_replace = os.replace
+    install_failure = OSError("simulated install failure")
+
+    def fail_during_install(source, destination):
+        if (
+            destination == exports_dir / "transcript.json"
+            and ".transcript-repair-" in str(source)
+        ):
+            raise install_failure
+        real_replace(source, destination)
+
+    monkeypatch.setattr("src.repair.os.replace", fail_during_install)
+
+    with pytest.raises(RepairError, match="simulated install failure"):
+        repair_transcript(
+            meeting_dir,
+            now=datetime(2026, 6, 13, 14, 0, 0),
+        )
+
+    for path, content in original_bytes.items():
+        assert path.read_bytes() == content
+    assert not (exports_dir / "transcript.md").exists()
+
+
+def test_repair_without_summary_removes_stale_summary_after_backing_it_up(tmp_path):
+    meeting_dir = tmp_path / "no-summary-meeting"
+    exports_dir = _write_minimal_meeting(meeting_dir, summary=None)
+    old_summary = b"OLD STALE SUMMARY"
+    (exports_dir / "summary.md").write_bytes(old_summary)
+
+    result = repair_transcript(
+        meeting_dir,
+        now=datetime(2026, 6, 13, 14, 5, 0),
+    )
+
+    assert not (exports_dir / "summary.md").exists()
+    assert (result.backup_dir / "exports" / "summary.md").read_bytes() == old_summary

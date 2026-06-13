@@ -112,6 +112,70 @@ def _create_backup(meeting_dir: Path, backup_dir: Path) -> None:
         raise RepairError(f"Could not create transcript repair backup: {exc}") from exc
 
 
+def _restore_from_backup(backup_path: Path, live_path: Path) -> None:
+    fd, temporary_path = tempfile.mkstemp(
+        prefix=".repair-rollback-",
+        dir=live_path.parent,
+    )
+    os.close(fd)
+    temporary = Path(temporary_path)
+    try:
+        shutil.copy2(backup_path, temporary)
+        os.replace(temporary, live_path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _install_transaction(
+    meeting_dir: Path,
+    backup_dir: Path,
+    staged_files: dict[Path, Path | None],
+) -> None:
+    existed_before = {
+        relative_path: (meeting_dir / relative_path).exists()
+        for relative_path in staged_files
+    }
+    changed: list[Path] = []
+
+    try:
+        for relative_path, staged_path in staged_files.items():
+            live_path = meeting_dir / relative_path
+            if staged_path is None:
+                if live_path.exists():
+                    live_path.unlink()
+                    changed.append(relative_path)
+                continue
+
+            live_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged_path, live_path)
+            changed.append(relative_path)
+    except Exception as install_error:
+        rollback_errors = []
+        for relative_path in reversed(changed):
+            live_path = meeting_dir / relative_path
+            try:
+                if existed_before[relative_path]:
+                    _restore_from_backup(
+                        backup_dir / relative_path,
+                        live_path,
+                    )
+                elif live_path.exists():
+                    live_path.unlink()
+            except Exception as rollback_error:
+                rollback_errors.append(f"{relative_path}: {rollback_error}")
+
+        if rollback_errors:
+            details = "; ".join(rollback_errors)
+            raise RepairError(
+                f"Could not install repaired transcript: {install_error}; "
+                f"rollback also failed: {details}"
+            ) from install_error
+        raise RepairError(
+            f"Could not install repaired transcript: {install_error}"
+        ) from install_error
+
+
 def repair_transcript(
     meeting_dir: str | Path,
     *,
@@ -172,16 +236,19 @@ def repair_transcript(
 
         _create_backup(meeting_dir, backup_dir)
 
-        live_exports_dir = meeting_dir / "exports"
-        live_exports_dir.mkdir(parents=True, exist_ok=True)
-        os.replace(staged_raw, meeting_dir / "transcript_raw.json")
-        os.replace(staged_named, meeting_dir / "transcript_named.json")
-
-        live_exports: dict[str, Path] = {}
+        staged_files: dict[Path, Path | None] = {
+            Path("transcript_raw.json"): staged_raw,
+            Path("transcript_named.json"): staged_named,
+            Path("exports/summary.md"): staged_exports.get("summary"),
+        }
+        live_exports = {}
         for export_type, staged_path in staged_exports.items():
-            live_path = live_exports_dir / staged_path.name
-            os.replace(staged_path, live_path)
-            live_exports[export_type] = live_path
+            relative_path = Path("exports") / staged_path.name
+            live_exports[export_type] = meeting_dir / relative_path
+            if export_type != "summary":
+                staged_files[relative_path] = staged_path
+
+        _install_transaction(meeting_dir, backup_dir, staged_files)
     except RepairError:
         raise
     except Exception as exc:
