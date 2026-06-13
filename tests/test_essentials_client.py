@@ -149,3 +149,86 @@ def test_fetch_body_roster_non_json_200_wrapped(mock_get):
     msg = str(exc_info.value)
     assert "Non-JSON response" in msg
     assert "<!doctype html" in msg
+
+
+# ---------------------------------------------------------------------------
+# search_politicians
+# ---------------------------------------------------------------------------
+
+from src.essentials_client import search_politicians
+
+_SAMPLE_FLAT = [
+    {
+        "id": "uuid-ham",
+        "slug": "john-hamilton",
+        "full_name": "John Hamilton",
+        "office_title": "Mayor",
+        "party": "Democratic",
+        "district_label": "",
+        "government_name": "Bloomington",
+        "is_incumbent": True,
+    },
+    {
+        "id": "uuid-can",
+        "slug": "jane-doe",
+        "full_name": "Jane Doe",
+        "office_title": "",
+        "party": "",
+        "district_label": "IN-09",
+        "government_name": "",
+        "is_incumbent": False,
+    },
+]
+
+
+@patch("src.essentials_client.requests.get")
+def test_search_politicians_success(mock_get):
+    mock_get.return_value = _mock_response(200, _SAMPLE_FLAT)
+    out = search_politicians("hamilton")
+    assert out[0] == {
+        "politician_id": "uuid-ham",
+        "politician_slug": "john-hamilton",
+        "full_name": "John Hamilton",
+        "office_title": "Mayor",
+        "district_label": "",
+        "is_incumbent": True,
+        "government_name": "Bloomington",
+    }
+    assert out[1]["politician_slug"] == "jane-doe"
+    assert out[1]["is_incumbent"] is False
+    called_url = mock_get.call_args[0][0]
+    assert called_url == (
+        "https://accounts.empowered.vote"
+        "/api/essentials/candidates/search-by-name"
+    )
+    assert mock_get.call_args.kwargs["params"] == {"q": "hamilton"}
+
+
+@patch("src.essentials_client.requests.get")
+def test_search_politicians_truncates_to_limit(mock_get):
+    mock_get.return_value = _mock_response(200, _SAMPLE_FLAT)
+    out = search_politicians("doe", limit=1)
+    assert len(out) == 1
+
+
+@patch("src.essentials_client.requests.get")
+def test_search_politicians_short_query_raises(mock_get):
+    with pytest.raises(EssentialsClientError) as exc_info:
+        search_politicians("a")
+    assert exc_info.value.code == "INVALID_QUERY"
+    mock_get.assert_not_called()
+
+
+@patch("src.essentials_client.requests.get")
+def test_search_politicians_network_error(mock_get):
+    import requests as _rq
+    mock_get.side_effect = _rq.exceptions.ConnectionError("down")
+    with pytest.raises(EssentialsClientError):
+        search_politicians("hamilton")
+
+
+@patch("src.essentials_client.requests.get")
+def test_search_politicians_non_list_raises(mock_get):
+    mock_get.return_value = _mock_response(200, {"oops": True})
+    with pytest.raises(EssentialsClientError):
+        search_politicians("hamilton")

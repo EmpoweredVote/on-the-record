@@ -52,22 +52,16 @@ def _validate_slug(body_slug: str) -> None:
         )
 
 
-def fetch_body_roster(body_slug: str, base_url: str | None = None) -> dict:
-    """Fetch the roster JSON for a body slug from ev-accounts.
-
-    Raises EssentialsClientError on any non-200 status, transport failure,
-    invalid slug, or oversized response.
+def _request_json(url: str, *, params: dict | None = None) -> object:
+    """GET `url` and return parsed JSON, applying the shared hardening:
+    timeouts, 5 MB cap, and EssentialsClientError on any non-200/transport/
+    non-JSON failure. Used by fetch_body_roster and search_politicians.
     """
-    _validate_slug(body_slug)
-    base = _resolve_base_url(base_url)
-    url = f"{base}/api/essentials/bodies/{body_slug}/roster"
-
     try:
-        resp = requests.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        resp = requests.get(url, params=params, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
     except requests.exceptions.RequestException as exc:
         raise EssentialsClientError(f"Network error: {exc}") from exc
 
-    # T-108-01: reject oversized responses before parsing.
     content_length = resp.headers.get("Content-Length")
     if content_length is not None:
         try:
@@ -119,3 +113,62 @@ def fetch_body_roster(body_slug: str, base_url: str | None = None) -> dict:
             f"Non-JSON response from {url}: {snippet}",
             status=resp.status_code,
         ) from exc
+
+
+def fetch_body_roster(body_slug: str, base_url: str | None = None) -> dict:
+    """Fetch the roster JSON for a body slug from ev-accounts.
+
+    Raises EssentialsClientError on any non-200 status, transport failure,
+    invalid slug, or oversized response.
+    """
+    _validate_slug(body_slug)
+    base = _resolve_base_url(base_url)
+    url = f"{base}/api/essentials/bodies/{body_slug}/roster"
+    return _request_json(url)
+
+
+def _normalize_politician(rec: dict) -> dict:
+    """Whitelist the fields the pipeline needs from a PoliticianFlatRecord."""
+    return {
+        "politician_id": rec.get("id"),
+        "politician_slug": rec.get("slug"),
+        "full_name": rec.get("full_name", ""),
+        "office_title": rec.get("office_title", ""),
+        "district_label": rec.get("district_label", ""),
+        "is_incumbent": bool(rec.get("is_incumbent", False)),
+        "government_name": rec.get("government_name", ""),
+    }
+
+
+def search_politicians(
+    q: str, *, limit: int = 10, base_url: str | None = None
+) -> list[dict]:
+    """Name-search essentials politicians AND candidates (one ID space).
+
+    Calls GET /api/essentials/candidates/search-by-name (incumbents +
+    challengers). Returns up to `limit` normalized dicts, each with
+    politician_id, politician_slug, full_name, office_title,
+    district_label, is_incumbent, government_name.
+
+    Note: affiliation fields are intentionally excluded — the pipeline never
+    reads or persists them (enforced by tests/test_antipartisan.py).
+
+    Raises EssentialsClientError on a <2-char query (INVALID_QUERY) or any
+    transport/HTTP/parse failure. Callers in review treat this as best-effort.
+    """
+    query = (q or "").strip()
+    if len(query) < 2:
+        raise EssentialsClientError(
+            "Search query must be at least 2 characters",
+            code="INVALID_QUERY",
+            status=None,
+        )
+    base = _resolve_base_url(base_url)
+    url = f"{base}/api/essentials/candidates/search-by-name"
+    data = _request_json(url, params={"q": query})
+    if not isinstance(data, list):
+        raise EssentialsClientError(
+            f"Expected a list from {url}, got {type(data).__name__}",
+            status=None,
+        )
+    return [_normalize_politician(r) for r in data[:limit]]

@@ -68,6 +68,12 @@ def match_voice_profiles(
                     confidence=round(best_score, 3),
                     id_method=method,
                 )
+                # Wire 1: carry the matched profile's politician identity so a
+                # returning, already-linked speaker arrives pre-linked.
+                if profile_db and best_name in profile_db.profiles:
+                    prof = profile_db.profiles[best_name]
+                    mappings[label].politician_slug = getattr(prof, "politician_slug", None)
+                    mappings[label].politician_id = getattr(prof, "politician_id", None)
 
     return mappings
 
@@ -301,6 +307,27 @@ def _find_next_speaker(
 # Combined identification orchestrator
 # ---------------------------------------------------------------------------
 
+def _carry_link(prior: Optional[SpeakerMapping], new: SpeakerMapping) -> SpeakerMapping:
+    """Carry a politician link onto a higher-confidence override of the SAME person.
+
+    When a later layer (pattern/LLM) overrides a voice-matched mapping that
+    carried a politician link, the link survives ONLY if the override names the
+    same person and brings no link of its own. Identity is never transferred
+    across a name change — that would mislink one person's id onto another.
+    Returns `new` (mutated in place when the link is carried).
+    """
+    if (
+        prior is not None
+        and prior.politician_slug
+        and not new.politician_slug
+        and new.speaker_name
+        and new.speaker_name == prior.speaker_name
+    ):
+        new.politician_slug = prior.politician_slug
+        new.politician_id = prior.politician_id
+    return new
+
+
 def identify_speakers(
     segments: list[Segment],
     speaker_embeddings: dict[str, np.ndarray],
@@ -338,14 +365,14 @@ def identify_speakers(
     for label, candidates in pattern_candidates.items():
         best = max(candidates, key=lambda c: c.confidence)
         if label not in mappings or best.confidence > mappings[label].confidence:
-            mappings[label] = best
+            mappings[label] = _carry_link(mappings.get(label), best)
 
     # Layer 3: LLM-assisted (optional)
     if llm_identify_fn:
         llm_results = llm_identify_fn(segments, mappings)
         for label, mapping in llm_results.items():
             if label not in mappings or mapping.confidence > mappings[label].confidence:
-                mappings[label] = mapping
+                mappings[label] = _carry_link(mappings.get(label), mapping)
 
     # Roster correction: fix misspelled/mistranscribed names
     if roster:

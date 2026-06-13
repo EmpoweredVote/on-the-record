@@ -379,3 +379,76 @@ def test_reenroll_untagged_meeting_local_slug(
     assert not any(k.startswith("essentials:") for k in keys)
     # _name_to_slug("Councilmember Piedmont-Smith") strips "councilmember" -> "piedmont-smith"
     assert "piedmont-smith" in keys
+
+
+# ---------------------------------------------------------------------------
+# Wire 2: a mapping's own identity keys it under essentials:<slug>
+# ---------------------------------------------------------------------------
+
+import numpy as np
+from src.models import Segment, SpeakerMapping
+from src.enroll import ProfileDB, enroll_speakers
+
+
+def _seg(label):
+    return Segment(segment_id=0, start_time=0.0, end_time=30.0, speaker_label=label, text="hi")
+
+
+def test_mapping_identity_uses_essentials_key_without_roster():
+    emb = {"SPEAKER_00": np.array([1.0, 0.0, 0.0])}
+    mappings = {
+        "SPEAKER_00": SpeakerMapping(
+            speaker_label="SPEAKER_00",
+            speaker_name="Jane Adams",
+            confidence=1.0,
+            politician_slug="jane-adams",
+            politician_id="uuid-ja",
+        )
+    }
+    db = enroll_speakers(ProfileDB(), emb, mappings, "m1", [_seg("SPEAKER_00")], roster=None)
+    assert "essentials:jane-adams" in db.profiles
+    prof = db.profiles["essentials:jane-adams"]
+    assert prof.politician_slug == "jane-adams"
+    assert prof.politician_id == "uuid-ja"
+
+
+def test_linking_absorbs_existing_local_profile():
+    emb = {"SPEAKER_00": np.array([1.0, 0.0, 0.0])}
+    seg = [_seg("SPEAKER_00")]
+    # Meeting 1: enrolled unlinked → local slug profile.
+    m1 = {"SPEAKER_00": SpeakerMapping(
+        speaker_label="SPEAKER_00", speaker_name="Jane Adams", confidence=1.0)}
+    db = enroll_speakers(ProfileDB(), emb, m1, "m1", seg, roster=None)
+    assert "adams_jane" in db.profiles
+    # Meeting 2: now linked → must re-key to essentials and absorb the local one.
+    m2 = {"SPEAKER_00": SpeakerMapping(
+        speaker_label="SPEAKER_00", speaker_name="Jane Adams", confidence=1.0,
+        politician_slug="jane-adams", politician_id="uuid-ja")}
+    db = enroll_speakers(db, emb, m2, "m2", seg, roster=None)
+    assert "essentials:jane-adams" in db.profiles
+    assert "adams_jane" not in db.profiles
+    prof = db.profiles["essentials:jane-adams"]
+    assert prof.politician_id == "uuid-ja"
+    assert len(prof.embeddings) == 2  # m1 + m2 merged
+    assert set(prof.meetings_seen) == {"m1", "m2"}
+
+
+# ---------------------------------------------------------------------------
+# resolve_mapping_enrollment: single source for the enrollment key
+# ---------------------------------------------------------------------------
+
+from src.enroll import resolve_mapping_enrollment
+
+
+def test_resolve_mapping_enrollment_linked_uses_essentials_key():
+    m = SpeakerMapping(
+        speaker_label="SPEAKER_00", speaker_name="Jane Adams",
+        politician_slug="jane-adams", politician_id="uuid-ja")
+    assert resolve_mapping_enrollment(m) == ("essentials:jane-adams", "jane-adams", "uuid-ja")
+
+
+def test_resolve_mapping_enrollment_unlinked_uses_local_slug():
+    m = SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Jane Adams")
+    key, slug, pid = resolve_mapping_enrollment(m)
+    assert key == "adams_jane"
+    assert slug is None and pid is None
