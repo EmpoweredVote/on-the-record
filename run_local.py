@@ -1488,6 +1488,27 @@ def _run_batch(args: argparse.Namespace) -> None:
         print(f"\nUse --review-meeting MEETING_ID to review speaker identifications.")
 
 
+def _repair_transcript_standalone(meeting_id: str) -> None:
+    """Repair transcript artifacts for one already-processed meeting."""
+    from src import config
+    from src.repair import RepairError, repair_transcript
+
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    try:
+        result = repair_transcript(meeting_dir)
+    except RepairError as exc:
+        print(f"Transcript repair failed: {exc}")
+        sys.exit(1)
+
+    print("Transcript repair complete:")
+    print(f"  Meeting: {result.meeting_id}")
+    print(f"  Segments: {result.segment_count}")
+    print(f"  Backup: {result.backup_dir}")
+    print("  Exports:")
+    for export_name, export_path in result.exports.items():
+        print(f"    {export_name}: {export_path}")
+
+
 def _publish_meeting_standalone(meeting_id: str) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
@@ -2365,6 +2386,12 @@ Environment Variables:
                         help="Rename stored voice profiles using the council roster and exit")
     parser.add_argument("--fix-transcripts", action="store_true",
                         help="Re-correct speaker names in all existing transcripts using the roster and re-export")
+    parser.add_argument(
+        "--repair-transcript",
+        metavar="MEETING_ID",
+        help="Rebuild one processed caption-backed transcript/exports without "
+             "rerunning diarization or speaker identification.",
+    )
     parser.add_argument("--publish", action="store_true",
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
@@ -2412,6 +2439,29 @@ Environment Variables:
     )
 
     args = parser.parse_args()
+
+    if args.repair_transcript:
+        repair_conflicts = [
+            flag
+            for flag, value in (
+                ("--input", args.input),
+                ("--browse-catstv", args.browse_catstv),
+                ("--resume", args.resume),
+                ("--redo", args.redo),
+                ("--batch", args.batch),
+                ("--review", args.review),
+                ("--review-meeting", args.review_meeting),
+                ("--identify-speakers", args.identify_speakers),
+            )
+            if value
+        ]
+        if repair_conflicts:
+            parser.error(
+                "--repair-transcript cannot be combined with "
+                + ", ".join(repair_conflicts)
+            )
+        _repair_transcript_standalone(args.repair_transcript)
+        return
 
     # D-12: --force-retag requires --body
     if args.force_retag and not args.body:
