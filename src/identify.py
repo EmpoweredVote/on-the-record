@@ -68,6 +68,12 @@ def match_voice_profiles(
                     confidence=round(best_score, 3),
                     id_method=method,
                 )
+                # Wire 1: carry the matched profile's politician identity so a
+                # returning, already-linked speaker arrives pre-linked.
+                if profile_db and best_name in profile_db.profiles:
+                    prof = profile_db.profiles[best_name]
+                    mappings[label].politician_slug = getattr(prof, "politician_slug", None)
+                    mappings[label].politician_id = getattr(prof, "politician_id", None)
 
     return mappings
 
