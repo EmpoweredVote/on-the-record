@@ -1497,7 +1497,7 @@ def _repair_transcript_standalone(meeting_id: str) -> None:
     try:
         result = repair_transcript(meeting_dir)
     except RepairError as exc:
-        print(f"Transcript repair failed: {exc}")
+        print(f"Transcript repair failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
     print("Transcript repair complete:")
@@ -2441,19 +2441,47 @@ Environment Variables:
     args = parser.parse_args()
 
     if args.repair_transcript:
+        repair_conflict_map = {
+            "--input": args.input is not None,
+            "--browse-catstv": args.browse_catstv,
+            "--resume": args.resume is not None,
+            "--city": args.city is not None,
+            "--date": args.date != "",
+            "--meeting-type": args.meeting_type is not None,
+            "--meeting-id": args.meeting_id != "",
+            "--num-speakers": args.num_speakers != 0,
+            "--noise-reduce": args.noise_reduce,
+            "--cookies": args.cookies is not None,
+            "--skip-llm": args.skip_llm,
+            "--skip-summary": args.skip_summary,
+            "--confirm-enroll": args.confirm_enroll,
+            "--merge": args.merge,
+            "--use-vtt": args.use_vtt,
+            "--diarizer": args.diarizer != "oss",
+            "--compute": args.compute != "local",
+            "--default": args.default,
+            "--list-profiles": args.list_profiles,
+            "--fix-profiles": args.fix_profiles,
+            "--fix-transcripts": args.fix_transcripts,
+            "--publish": args.publish,
+            "--publish-meeting": args.publish_meeting is not None,
+            "--merge-profiles": args.merge_profiles is not None,
+            "--show-roster": args.show_roster,
+            "--no-review": args.no_review,
+            "--review": args.review is not None,
+            "--review-meeting": args.review_meeting is not None,
+            "--identify-speakers": args.identify_speakers is not None,
+            "--pre-identify": args.pre_identify,
+            "--batch": args.batch is not None,
+            "--batch-resume": args.batch_resume,
+            "--body": args.body is not None,
+            "--force-retag": args.force_retag,
+            "--redo": args.redo is not None,
+        }
         repair_conflicts = [
             flag
-            for flag, value in (
-                ("--input", args.input),
-                ("--browse-catstv", args.browse_catstv),
-                ("--resume", args.resume),
-                ("--redo", args.redo),
-                ("--batch", args.batch),
-                ("--review", args.review),
-                ("--review-meeting", args.review_meeting),
-                ("--identify-speakers", args.identify_speakers),
-            )
-            if value
+            for flag, supplied in repair_conflict_map.items()
+            if supplied
         ]
         if repair_conflicts:
             parser.error(

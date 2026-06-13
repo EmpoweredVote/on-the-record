@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 
 import run_local
-from src.repair import RepairError, RepairResult
 
 
 def test_repair_transcript_dispatches_without_running_pipeline(monkeypatch):
@@ -48,6 +48,39 @@ def test_repair_transcript_dispatches_without_running_pipeline(monkeypatch):
         (["--review", "meeting-1"], ["--review"]),
         (["--review-meeting", "meeting-1"], ["--review-meeting"]),
         (["--identify-speakers", "meeting-1"], ["--identify-speakers"]),
+        (["--fix-transcripts"], ["--fix-transcripts"]),
+        (["--publish-meeting", "meeting-1"], ["--publish-meeting"]),
+        (["--list-profiles"], ["--list-profiles"]),
+        (["--fix-profiles"], ["--fix-profiles"]),
+        (["--show-roster"], ["--show-roster"]),
+        (
+            ["--merge-profiles", "source", "destination"],
+            ["--merge-profiles"],
+        ),
+        (["--body", "council"], ["--body"]),
+        (
+            ["--force-retag", "--body", "council"],
+            ["--force-retag", "--body"],
+        ),
+        (["--city", "Bloomington"], ["--city"]),
+        (["--date", "2026-01-01"], ["--date"]),
+        (["--meeting-type", "Regular"], ["--meeting-type"]),
+        (["--meeting-id", "custom-id"], ["--meeting-id"]),
+        (["--noise-reduce"], ["--noise-reduce"]),
+        (["--cookies", "cookies.txt"], ["--cookies"]),
+        (["--skip-llm"], ["--skip-llm"]),
+        (["--skip-summary"], ["--skip-summary"]),
+        (["--confirm-enroll"], ["--confirm-enroll"]),
+        (["--merge"], ["--merge"]),
+        (["--use-vtt"], ["--use-vtt"]),
+        (["--compute", "modal"], ["--compute"]),
+        (["--diarizer", "api"], ["--diarizer"]),
+        (["--num-speakers", "2"], ["--num-speakers"]),
+        (["--default"], ["--default"]),
+        (["--publish"], ["--publish"]),
+        (["--no-review"], ["--no-review"]),
+        (["--pre-identify"], ["--pre-identify"]),
+        (["--batch-resume"], ["--batch-resume"]),
     ],
 )
 def test_repair_transcript_rejects_conflicting_commands(
@@ -94,7 +127,7 @@ def test_repair_transcript_handler_prints_result(monkeypatch, tmp_path, capsys):
 
     def fake_repair_transcript(meeting_dir):
         called.append(meeting_dir)
-        return RepairResult(
+        return SimpleNamespace(
             meeting_id=meeting_id,
             segment_count=7,
             backup_dir=backup_dir,
@@ -119,6 +152,8 @@ def test_repair_transcript_handler_exits_on_repair_error(
     monkeypatch,
     capsys,
 ):
+    from src.repair import RepairError
+
     def fail_repair(meeting_dir):
         raise RepairError("captions are unavailable")
 
@@ -128,6 +163,7 @@ def test_repair_transcript_handler_exits_on_repair_error(
         run_local._repair_transcript_standalone("meeting-1")
 
     assert exc_info.value.code == 1
-    output = capsys.readouterr().out
-    assert "Transcript repair failed:" in output
-    assert "captions are unavailable" in output
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Transcript repair failed:" in captured.err
+    assert "captions are unavailable" in captured.err
