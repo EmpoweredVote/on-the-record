@@ -67,15 +67,17 @@ function mapAppearance(a: any): Appearance {
   };
 }
 
+const NO_CACHE: RequestInit = { cache: "no-store" };
+
 export async function fetchPeople(): Promise<Person[]> {
-  const res = await fetch(`${BASE}/api/people`);
+  const res = await fetch(`${BASE}/api/people`, NO_CACHE);
   if (!res.ok) throw new Error(`people fetch failed: ${res.status}`);
   const data = await res.json();
   return (data as unknown[]).map(mapPerson);
 }
 
 export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
-  const res = await fetch(`${BASE}/api/people/${encodeURIComponent(slug)}`);
+  const res = await fetch(`${BASE}/api/people/${encodeURIComponent(slug)}`, NO_CACHE);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`person fetch failed: ${res.status}`);
   const p = await res.json();
@@ -84,7 +86,8 @@ export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
 
 export async function fetchAppearances(slug: string): Promise<Appearance[]> {
   const res = await fetch(
-    `${BASE}/api/people/${encodeURIComponent(slug)}/appearances`
+    `${BASE}/api/people/${encodeURIComponent(slug)}/appearances`,
+    NO_CACHE
   );
   if (!res.ok) throw new Error(`appearances fetch failed: ${res.status}`);
   const { appearances } = (await res.json()) as { appearances: unknown[] };
@@ -92,14 +95,14 @@ export async function fetchAppearances(slug: string): Promise<Appearance[]> {
 }
 
 export async function fetchMeetings(): Promise<Meeting[]> {
-  const res = await fetch(`${BASE}/api/meetings`);
+  const res = await fetch(`${BASE}/api/meetings`, NO_CACHE);
   if (!res.ok) throw new Error(`meetings fetch failed: ${res.status}`);
   const data = await res.json();
   return (data as unknown[]).map(mapMeeting);
 }
 
 export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
-  const res = await fetch(`${BASE}/api/meetings/${meetingId}`);
+  const res = await fetch(`${BASE}/api/meetings/${meetingId}`, NO_CACHE);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`meeting fetch failed: ${res.status}`);
   return mapMeeting(await res.json());
@@ -110,7 +113,8 @@ export async function fetchSegments(meetingId: string): Promise<Segment[]> {
   const all: Segment[] = [];
   for (let page = 1; ; page++) {
     const res = await fetch(
-      `${BASE}/api/meetings/${meetingId}/transcript?page=${page}`
+      `${BASE}/api/meetings/${meetingId}/transcript?page=${page}`,
+      NO_CACHE
     );
     if (!res.ok) throw new Error(`transcript fetch failed: ${res.status}`);
     const { segments, totalCount } = (await res.json()) as {
