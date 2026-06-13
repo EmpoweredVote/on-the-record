@@ -35,14 +35,6 @@ _REQUIRED_FILES = (
     "captions.vtt",
     "transcript_named.json",
 )
-_BACKUP_FILES = (
-    Path("transcript_raw.json"),
-    Path("transcript_named.json"),
-    Path("exports/transcript.md"),
-    Path("exports/transcript.json"),
-    Path("exports/subtitles.srt"),
-    Path("exports/summary.md"),
-)
 
 
 def _load_json(path: Path) -> object:
@@ -96,18 +88,21 @@ def _serialize_json(path: Path, data: object) -> None:
     )
 
 
-def _create_backup(meeting_dir: Path, backup_dir: Path) -> None:
+def _create_backup(
+    meeting_dir: Path,
+    backup_dir: Path,
+    existing_live_paths: set[Path],
+) -> None:
     created = False
     try:
         backup_dir.parent.mkdir(parents=True, exist_ok=True)
         backup_dir.mkdir(exist_ok=False)
         created = True
-        for relative_path in _BACKUP_FILES:
+        for relative_path in existing_live_paths:
             source = meeting_dir / relative_path
-            if source.is_file():
-                destination = backup_dir / relative_path
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
+            destination = backup_dir / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
     except Exception as exc:
         if created:
             shutil.rmtree(backup_dir, ignore_errors=True)
@@ -133,11 +128,8 @@ def _install_transaction(
     meeting_dir: Path,
     backup_dir: Path,
     staged_files: dict[Path, Path | None],
+    existing_live_paths: set[Path],
 ) -> None:
-    existed_before = {
-        relative_path: (meeting_dir / relative_path).exists()
-        for relative_path in staged_files
-    }
     changed: list[Path] = []
 
     try:
@@ -157,7 +149,7 @@ def _install_transaction(
         for relative_path in reversed(changed):
             live_path = meeting_dir / relative_path
             try:
-                if existed_before[relative_path]:
+                if relative_path in existing_live_paths:
                     _restore_from_backup(
                         backup_dir / relative_path,
                         live_path,
@@ -231,32 +223,48 @@ def repair_transcript(
         staged_named = staging_dir / "transcript_named.json"
         staged_exports_dir = staging_dir / "exports"
 
-        _serialize_json(
-            staged_raw,
-            [segment.to_dict() for segment in raw_segments],
-        )
-        _serialize_json(staged_named, meeting.to_dict())
-        staged_exports = export_all(meeting, staged_exports_dir)
+        try:
+            _serialize_json(
+                staged_raw,
+                [segment.to_dict() for segment in raw_segments],
+            )
+            _serialize_json(staged_named, meeting.to_dict())
+            staged_exports = export_all(meeting, staged_exports_dir)
 
-        _create_backup(meeting_dir, backup_dir)
-
-        staged_files: dict[Path, Path | None] = {
-            Path("transcript_raw.json"): staged_raw,
-            Path("transcript_named.json"): staged_named,
-            Path("exports/summary.md"): staged_exports.get("summary"),
-        }
-        live_exports = {}
-        for export_type, staged_path in staged_exports.items():
-            relative_path = Path("exports") / staged_path.name
-            live_exports[export_type] = meeting_dir / relative_path
-            if export_type != "summary":
+            staged_files: dict[Path, Path | None] = {
+                staged_raw.relative_to(staging_dir): staged_raw,
+                staged_named.relative_to(staging_dir): staged_named,
+            }
+            live_exports = {}
+            for export_type, staged_path in staged_exports.items():
+                relative_path = staged_path.relative_to(staging_dir)
                 staged_files[relative_path] = staged_path
+                live_exports[export_type] = meeting_dir / relative_path
 
-        _install_transaction(meeting_dir, backup_dir, staged_files)
-    except RepairError:
-        raise
-    except Exception as exc:
-        raise RepairError(f"Could not install repaired transcript: {exc}") from exc
+            summary_path = Path("exports/summary.md")
+            if (
+                "summary" not in staged_exports
+                and (meeting_dir / summary_path).is_file()
+            ):
+                staged_files[summary_path] = None
+
+            existing_live_paths = {
+                relative_path
+                for relative_path in staged_files
+                if (meeting_dir / relative_path).is_file()
+            }
+        except RepairError:
+            raise
+        except Exception as exc:
+            raise RepairError(f"Transcript repair failed: {exc}") from exc
+
+        _create_backup(meeting_dir, backup_dir, existing_live_paths)
+        _install_transaction(
+            meeting_dir,
+            backup_dir,
+            staged_files,
+            existing_live_paths,
+        )
     finally:
         shutil.rmtree(staging_dir, ignore_errors=True)
 

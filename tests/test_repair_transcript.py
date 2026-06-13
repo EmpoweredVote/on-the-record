@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pytest
 
+from src.export import export_all as real_export_all
 from src.models import (
     Meeting,
     MeetingSummary,
@@ -93,6 +94,11 @@ def _assert_live_artifacts_unchanged(original_bytes):
         assert path.read_bytes() == content
 
 
+def _assert_no_repair_residue(meeting_dir):
+    assert not (meeting_dir / "backups").exists()
+    assert not list(meeting_dir.glob(".transcript-repair-*"))
+
+
 @pytest.mark.parametrize(
     "missing_filename",
     [
@@ -105,10 +111,15 @@ def _assert_live_artifacts_unchanged(original_bytes):
 def test_repair_requires_every_input_file(tmp_path, missing_filename):
     meeting_dir = tmp_path / "missing-input-meeting"
     _write_minimal_meeting(meeting_dir, summary=None)
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
     (meeting_dir / missing_filename).unlink()
+    original_bytes.pop(meeting_dir / missing_filename, None)
 
     with pytest.raises(RepairError, match=missing_filename):
         repair_transcript(meeting_dir)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    _assert_no_repair_residue(meeting_dir)
 
 
 def test_invalid_named_json_fails_before_backup_or_live_changes(tmp_path):
@@ -172,11 +183,15 @@ def test_export_failure_fails_before_backup_or_live_changes(tmp_path, monkeypatc
 
     monkeypatch.setattr("src.repair.export_all", fail_export)
 
-    with pytest.raises(RepairError, match="simulated serialization failure"):
+    with pytest.raises(
+        RepairError,
+        match="Transcript repair failed: simulated serialization failure",
+    ) as exc_info:
         repair_transcript(meeting_dir)
 
+    assert "Could not install" not in str(exc_info.value)
     _assert_live_artifacts_unchanged(original_bytes)
-    assert not (meeting_dir / "backups").exists()
+    _assert_no_repair_residue(meeting_dir)
 
 
 def test_backup_copy_failure_cleans_new_backup_without_touching_live_files(
@@ -231,6 +246,48 @@ def test_existing_backup_timestamp_collision_is_not_modified(tmp_path):
     assert sorted(path.name for path in existing_backup.iterdir()) == [
         "sentinel.txt"
     ]
+
+
+def test_dynamic_export_is_backed_up_and_restored_after_later_install_failure(
+    tmp_path, monkeypatch
+):
+    meeting_dir = tmp_path / "dynamic-export-rollback-meeting"
+    exports_dir = _write_minimal_meeting(
+        meeting_dir,
+        summary=MeetingSummary(executive_summary="Preserved summary."),
+    )
+    original_bytes = _write_and_capture_live_artifacts(meeting_dir)
+    live_extra = exports_dir / "extra.txt"
+    old_extra = b"ORIGINAL EXTRA EXPORT"
+    live_extra.write_bytes(old_extra)
+    now = datetime(2026, 6, 13, 15, 45, 0)
+    backup_dir = meeting_dir / "backups" / "transcript-repair-20260613-154500"
+
+    def export_with_extra(meeting, export_dir):
+        exports = real_export_all(meeting, export_dir)
+        staged_extra = export_dir / "extra.txt"
+        staged_extra.write_bytes(b"REPAIRED EXTRA EXPORT")
+        return {"extra": staged_extra, **exports}
+
+    real_replace = os.replace
+
+    def fail_after_extra_install(source, destination):
+        if (
+            destination == exports_dir / "transcript.json"
+            and ".transcript-repair-" in str(source)
+        ):
+            raise OSError("simulated later install failure")
+        real_replace(source, destination)
+
+    monkeypatch.setattr("src.repair.export_all", export_with_extra)
+    monkeypatch.setattr("src.repair.os.replace", fail_after_extra_install)
+
+    with pytest.raises(RepairError, match="simulated later install failure"):
+        repair_transcript(meeting_dir, now=now)
+
+    _assert_live_artifacts_unchanged(original_bytes)
+    assert live_extra.read_bytes() == old_extra
+    assert (backup_dir / "exports" / "extra.txt").read_bytes() == old_extra
 
 
 def test_repair_transcript_rebuilds_from_captions_and_backs_up_live_files(tmp_path):
