@@ -6,6 +6,7 @@ Replaces Whisper transcription by mapping pre-existing VTT captions
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 
@@ -23,7 +24,8 @@ def _merge_rolling_lines(lines: list[str]) -> str:
     merged_keys: list[str] = []
 
     for line in lines:
-        tokens = re.sub(r"<[^>]+>", "", line).strip().split()
+        clean_line = html.unescape(re.sub(r"<[^>]+>", "", line))
+        tokens = clean_line.strip().split()
         keys = [_token_key(token) for token in tokens]
         overlap_count = 0
         for count in range(min(len(merged_keys), len(keys)), 0, -1):
@@ -103,18 +105,23 @@ def _deduplicated_words(cues: list[dict]) -> list[Word]:
     for cue in cues:
         tokens = cue["text"].split()
         keys = [_token_key(token) for token in tokens]
+        duration = cue["end"] - cue["start"]
 
         overlap_count = 0
-        if previous_end is not None and cue["start"] < previous_end:
+        if previous_end is not None and cue["start"] <= previous_end + 0.05:
             max_overlap = min(len(emitted_keys), len(keys))
             for count in range(max_overlap, 0, -1):
                 if emitted_keys[-count:] == keys[:count]:
                     overlap_count = count
                     break
 
-        duration = cue["end"] - cue["start"]
         if duration <= 0 or not tokens:
             continue
+        if duration <= 0.05 and overlap_count == len(keys):
+            previous_end = cue["end"]
+            continue
+        if cue["start"] >= (previous_end or 0) and overlap_count == len(keys):
+            overlap_count = 0
 
         word_duration = duration / len(tokens)
         for index in range(overlap_count, len(tokens)):
