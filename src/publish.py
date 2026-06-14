@@ -319,6 +319,46 @@ def _replace_segments(
     return len(rows)
 
 
+def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
+    """Delete-then-insert meeting_topics rows from meeting.section_topics.
+
+    Denormalizes section metadata (title/type/times) so topic pages are a
+    single query. status is always 'predicted' in this build.
+    """
+    cur.execute(
+        "DELETE FROM meetings.meeting_topics WHERE meeting_id = %s",
+        (meeting_uuid,),
+    )
+    if not meeting.section_topics or not meeting.summary:
+        return
+
+    sections = meeting.summary.sections
+    model = meeting.summary.model or None
+    rows = []
+    for st in meeting.section_topics:
+        if st.section_index < 0 or st.section_index >= len(sections):
+            continue
+        sec = sections[st.section_index]
+        for key in st.topic_keys:
+            rows.append((
+                meeting_uuid, st.section_index, key, "predicted",
+                st.confidence, model,
+                sec.title, sec.section_type, sec.start_time, sec.end_time,
+            ))
+
+    if rows:
+        psycopg2.extras.execute_values(
+            cur,
+            """
+            INSERT INTO meetings.meeting_topics
+              (meeting_id, section_index, topic_key, status, confidence, model,
+               section_title, section_type, start_time, end_time)
+            VALUES %s
+            """,
+            rows,
+        )
+
+
 def publish_meeting(
     meeting: Meeting, body_slug: Optional[str] = None
 ) -> PublishResult:
@@ -334,6 +374,7 @@ def publish_meeting(
                 segment_count = _replace_segments(
                     cur, meeting, meeting_uuid, label_to_uuid
                 )
+                _replace_topics(cur, meeting_uuid, meeting)
                 speaker_count = len(label_to_uuid)
 
                 cur.execute(
