@@ -1,6 +1,9 @@
 import threading
 import time
 from contextlib import nullcontext
+from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -12,6 +15,23 @@ from bench.gpu_sweep import (
     render_markdown,
 )
 from bench.run_vibevoice_gpu_sweep import dispatch_sweep
+
+
+def test_gpu_sweep_script_can_run_directly():
+    repo_root = Path(__file__).resolve().parent.parent
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "bench" / "run_vibevoice_gpu_sweep.py"),
+            "--help",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "--meeting-id" in completed.stdout
 
 
 def test_modal_app_exposes_all_gpu_sweep_functions():

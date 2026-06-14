@@ -8,6 +8,10 @@ import json
 from pathlib import Path
 import sys
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from bench.gpu_sweep import render_markdown
 
 
@@ -46,9 +50,6 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parent.parent
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
     from bench import modal_app
 
     results = dispatch_sweep(args.meeting_id, modal_app)
