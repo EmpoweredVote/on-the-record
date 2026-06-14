@@ -10,6 +10,110 @@ import pytest
 import run_local
 
 
+@pytest.mark.parametrize(
+    "meeting_id",
+    [
+        "../outside",
+        ".",
+        "..",
+    ],
+)
+def test_repair_transcript_handler_rejects_non_child_meeting_ids(
+    monkeypatch,
+    tmp_path,
+    capsys,
+    meeting_id,
+):
+    called = []
+    monkeypatch.setattr("src.config.MEETINGS_DIR", tmp_path / "meetings")
+    monkeypatch.setattr("src.repair.repair_transcript", called.append)
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_local._repair_transcript_standalone(meeting_id)
+
+    assert exc_info.value.code == 1
+    assert called == []
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Transcript repair failed:" in captured.err
+
+
+def test_repair_transcript_handler_rejects_absolute_meeting_id(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    called = []
+    monkeypatch.setattr("src.config.MEETINGS_DIR", tmp_path / "meetings")
+    monkeypatch.setattr("src.repair.repair_transcript", called.append)
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_local._repair_transcript_standalone(str(tmp_path / "outside"))
+
+    assert exc_info.value.code == 1
+    assert called == []
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Transcript repair failed:" in captured.err
+
+
+def test_repair_transcript_handler_rejects_symlink_escape(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    meetings_dir = tmp_path / "meetings"
+    meetings_dir.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    symlink = meetings_dir / "linked-meeting"
+    try:
+        symlink.symlink_to(outside_dir, target_is_directory=True)
+    except (NotImplementedError, OSError):
+        pytest.skip("platform cannot create directory symlinks")
+
+    called = []
+    monkeypatch.setattr("src.config.MEETINGS_DIR", meetings_dir)
+    monkeypatch.setattr("src.repair.repair_transcript", called.append)
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_local._repair_transcript_standalone(symlink.name)
+
+    assert exc_info.value.code == 1
+    assert called == []
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Transcript repair failed:" in captured.err
+
+
+def test_repair_transcript_handler_accepts_resolved_direct_child(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    meetings_dir = tmp_path / "meetings"
+    meeting_dir = meetings_dir / "meeting-1"
+    meeting_dir.mkdir(parents=True)
+    called = []
+    monkeypatch.setattr("src.config.MEETINGS_DIR", meetings_dir)
+
+    def fake_repair_transcript(resolved_meeting_dir):
+        called.append(resolved_meeting_dir)
+        return SimpleNamespace(
+            meeting_id="meeting-1",
+            segment_count=1,
+            backup_dir=meeting_dir / "backups" / "repair",
+            exports={},
+        )
+
+    monkeypatch.setattr("src.repair.repair_transcript", fake_repair_transcript)
+
+    run_local._repair_transcript_standalone("meeting-1")
+
+    assert called == [meeting_dir.resolve()]
+    assert "Transcript repair complete:" in capsys.readouterr().out
+
+
 def test_repair_transcript_dispatches_without_running_pipeline(monkeypatch):
     called = {}
     monkeypatch.setattr(

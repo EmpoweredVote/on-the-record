@@ -1488,12 +1488,34 @@ def _run_batch(args: argparse.Namespace) -> None:
         print(f"\nUse --review-meeting MEETING_ID to review speaker identifications.")
 
 
+def _meeting_dir_for_id(meeting_id: str) -> Path:
+    """Resolve a simple meeting ID to a direct child of MEETINGS_DIR."""
+    meeting_path = Path(meeting_id)
+    if (
+        not meeting_id
+        or meeting_path.is_absolute()
+        or meeting_id in {".", ".."}
+        or meeting_path.name != meeting_id
+    ):
+        raise ValueError("invalid meeting ID")
+
+    meetings_root = config.MEETINGS_DIR.resolve(strict=False)
+    candidate = (meetings_root / meeting_path).resolve(strict=False)
+    if candidate.parent != meetings_root:
+        raise ValueError("meeting ID resolves outside the meetings directory")
+    return candidate
+
+
 def _repair_transcript_standalone(meeting_id: str) -> None:
     """Repair transcript artifacts for one already-processed meeting."""
-    from src import config
+    try:
+        meeting_dir = _meeting_dir_for_id(meeting_id)
+    except ValueError as exc:
+        print(f"Transcript repair failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     from src.repair import RepairError, repair_transcript
 
-    meeting_dir = config.MEETINGS_DIR / meeting_id
     try:
         result = repair_transcript(meeting_dir)
     except RepairError as exc:

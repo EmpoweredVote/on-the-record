@@ -441,7 +441,7 @@ def merge_adjacent_segments(
 
         if prev_speaker == curr_speaker and gap < gap_threshold:
             # Merge: extend the previous segment
-            prev.end_time = seg.end_time
+            prev.end_time = max(prev.end_time, seg.end_time)
             if seg.text:
                 if prev.text:
                     prev.text = prev.text + " " + seg.text
