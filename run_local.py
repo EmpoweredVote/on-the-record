@@ -1585,7 +1585,7 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
     from src.checkpoint import PipelineState
-    from src.models import Meeting
+    from src.models import Meeting, SectionTopic
     from src.publish import publish_meeting
 
     meeting_dir = config.MEETINGS_DIR / meeting_id
@@ -1597,6 +1597,14 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
 
     with open(named_path, "r", encoding="utf-8") as f:
         meeting = Meeting.from_dict(json.load(f))
+
+    # section_topics isn't serialized into transcript_named.json (kept off the
+    # summary JSONB); load it from its own checkpoint so a standalone re-publish
+    # carries topic tags instead of wiping them.
+    topics_path = meeting_dir / "topics.json"
+    if topics_path.exists():
+        with open(topics_path, "r", encoding="utf-8") as f:
+            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
 
     body_slug = PipelineState(meeting_dir).body_slug
 

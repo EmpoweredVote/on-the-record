@@ -324,13 +324,20 @@ def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
 
     Denormalizes section metadata (title/type/times) so topic pages are a
     single query. status is always 'predicted' in this build.
+
+    Guard runs BEFORE the delete: an empty section_topics almost always means
+    classification wasn't loaded for this publish (e.g. a standalone
+    --publish-meeting where topics.json wasn't read), not that the meeting
+    genuinely has no topics. Deleting first would wipe previously-published
+    tags on every plain re-publish. Only replace when we have a fresh set.
     """
+    if not meeting.section_topics or not meeting.summary:
+        return
+
     cur.execute(
         "DELETE FROM meetings.meeting_topics WHERE meeting_id = %s",
         (meeting_uuid,),
     )
-    if not meeting.section_topics or not meeting.summary:
-        return
 
     sections = meeting.summary.sections
     model = meeting.summary.model or None
