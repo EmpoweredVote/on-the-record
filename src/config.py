@@ -70,6 +70,11 @@ ROSTER_SURNAME_THRESHOLD = 0.80  # Reject pattern match if surname similarity be
 # --- Checkpoint ---
 CHECKPOINT_EVERY_N_SEGMENTS = 50
 
+# --- Topic classification (Phase 6) ---
+TOPIC_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"
+# Section types worth tagging with a topic (procedural/roll_call/opening/closing skipped)
+SUBSTANTIVE_SECTION_TYPES = ("discussion", "public_comment", "consent_agenda", "vote")
+
 # --- Profile DB ---
 PROFILE_DB_FILENAME = "speaker_profiles.pkl"
 # Bumped to 2 on 2026-04-10 when EMBEDDING_MODEL switched from pyannote/embedding
