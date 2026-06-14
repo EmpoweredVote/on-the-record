@@ -40,6 +40,22 @@ if _env_file.exists():
 
 from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
 
+
+def _validate_diarizer_compute(args) -> None:
+    if args.diarizer == "vibevoice" and args.compute != "modal":
+        raise ValueError("--diarizer vibevoice requires --compute modal")
+
+
+def _diarization_model_name(diarizer: str) -> str:
+    if diarizer == "api":
+        return "pyannote/ai-precision-2"
+    if diarizer == "vibevoice":
+        from src.vibevoice import VIBEVOICE_MODEL_ID, VIBEVOICE_MODEL_REVISION
+
+        return f"{VIBEVOICE_MODEL_ID}@{VIBEVOICE_MODEL_REVISION}"
+    return config.DIARIZATION_MODEL
+
+
 # ---------------------------------------------------------------------------
 # Phase 109: pre-Stage-1 fail-fast guard (CSMEETING-02, D-07/D-08/D-09/D-13)
 # ---------------------------------------------------------------------------
@@ -638,11 +654,19 @@ def run_pipeline(args: argparse.Namespace) -> None:
     else:
         _compute = getattr(args, "compute", "local")
         if _compute == "modal" and getattr(args, "diarizer", "oss") != "api":
+            if args.diarizer == "vibevoice" and num_speakers is not None:
+                print(
+                    f"  ! --num-speakers={num_speakers} is ignored by VibeVoice "
+                    "(the model does not accept a speaker-count hint)."
+                )
             if not diarization_path.exists() or not embeddings_path.exists():
                 from src.modal_compute import run_diarization as _modal_diarize
                 t0 = time.time()
                 _segs_data, _emb_data = _modal_diarize(
-                    wav_path, meeting_id, use_merge=args.merge
+                    wav_path,
+                    meeting_id,
+                    use_merge=args.merge and args.diarizer == "oss",
+                    diarizer=args.diarizer,
                 )
                 elapsed = time.time() - t0
                 segments = [Segment.from_dict(d) for d in _segs_data]
@@ -726,20 +750,19 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     unique_speakers = set(s.speaker_label for s in segments)
     print(f"  {len(segments)} segments, {len(unique_speakers)} speakers detected")
-    if getattr(args, "diarizer", "oss") == "api":
-        meeting.processing_metadata.diarization_model = "pyannote/ai-precision-2"
-    else:
-        meeting.processing_metadata.diarization_model = config.DIARIZATION_MODEL
+    meeting.processing_metadata.diarization_model = _diarization_model_name(
+        getattr(args, "diarizer", "oss")
+    )
     print()
 
     # ======================================================================
     # Stage 2.5: Auto-merge fragmented speakers (opt-in via --merge)
     # ======================================================================
-    if args.merge and getattr(args, "diarizer", "oss") == "api":
+    if args.merge and getattr(args, "diarizer", "oss") in ("api", "vibevoice"):
+        backend = getattr(args, "diarizer", "oss")
         print(
-            "  ! --merge requested with --diarizer api: skipping merge stage. "
-            "Precision-2 already produces continuous turns; merge was designed "
-            "for OSS pyannote 3.1 fragmentation."
+            f"  ! --merge requested with --diarizer {backend}: skipping merge stage. "
+            "Speaker merge is only supported for OSS pyannote."
         )
     elif args.merge and getattr(args, "compute", "local") == "modal":
         print("  (--merge was applied inside Modal — skipping local merge step)")
@@ -2441,12 +2464,14 @@ Environment Variables:
                              "and embeddings have known NaN issues. See bench/diagnose_merge.py.")
     parser.add_argument("--use-vtt", action="store_true",
                         help="Use VTT subtitles instead of Whisper (auto-detected if captions.vtt exists)")
-    parser.add_argument("--diarizer", choices=["oss", "api"], default="oss",
+    parser.add_argument("--diarizer", choices=["oss", "api", "vibevoice"], default="oss",
                         help="Diarization backend. 'oss' uses local pyannote 3.1 "
                              "(default, free, ~50min/3hr meeting on L4). 'api' uses "
                              "pyannote.ai Precision-2 (cleaner segmentation, ~3min "
                              "for the same meeting, ~$0.45 per audio hour). "
-                             "Requires PYANNOTE_AI_KEY in env. "
+                             "Requires PYANNOTE_AI_KEY in env. 'vibevoice' uses "
+                             "Microsoft VibeVoice-ASR on Modal and requires "
+                             "--compute modal. "
                              "Recommended per bench/FINDINGS.md.")
     parser.add_argument("--compute", choices=["local", "modal"], default="local",
                         help="Compute backend for GPU-intensive stages (diarization "
@@ -2572,6 +2597,11 @@ Environment Variables:
             )
         _repair_transcript_standalone(args.repair_transcript)
         return
+
+    try:
+        _validate_diarizer_compute(args)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # D-12: --force-retag requires --body
     if args.force_retag and not args.body:

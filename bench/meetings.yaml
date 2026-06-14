@@ -45,4 +45,13 @@ models:
   - pyannote_oss
   - pyannote_merged
   - pyannote_ai
+  - vibevoice
   # - nemo_sortformer  # OOM on L4 for long meetings; see note above
+
+# Optional hand-labeled evaluation fields can be added to any meeting:
+#
+#   reference_rttm: references/<clip-name>/reference.rttm
+#   uem: references/<clip-name>/region.uem
+#
+# RTTM timestamps stay relative to the full meeting. The UEM limits DER to
+# the labeled interval. See bench/references/README.md.

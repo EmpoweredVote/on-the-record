@@ -1,10 +1,11 @@
 """Modal App: diarization benchmark for CouncilScribe.
 
-Runs 4 diarization models against a shared meeting set:
+Runs diarization models against a shared meeting set:
     - pyannote_oss        — pyannote/speaker-diarization-3.1 (current baseline)
     - pyannote_merged     — pyannote OSS + speaker-merge (src/merge.py)
     - pyannote_ai         — pyannote.ai Precision-2 (paid API)
     - nemo_sortformer     — NVIDIA NeMo Sortformer
+    - vibevoice           — Microsoft VibeVoice-ASR (chunked long-form)
 
 Each function consumes a pre-normalized 16kHz mono WAV from the shared
 Modal Volume and writes a `.rttm` file back to the volume. The local
@@ -124,6 +125,28 @@ nemo_image = (
     .env({"HF_HOME": "/vol/cache/huggingface", "NEMO_CACHE_DIR": "/vol/cache/nemo"})
 )
 
+# Microsoft VibeVoice-ASR. Code and model weights are pinned independently:
+# the GitHub revision controls the Python package, while the Hugging Face
+# revision is passed to from_pretrained at runtime.
+VIBEVOICE_CODE_REVISION = "303b2833e01cff4578ec278bbfe536da54bd19fe"
+vibevoice_image = (
+    modal.Image.from_registry(
+        "nvcr.io/nvidia/pytorch:25.12-py3",
+    )
+    .apt_install("ffmpeg", "libsndfile1", "git")
+    .pip_install(
+        f"git+https://github.com/microsoft/VibeVoice.git@{VIBEVOICE_CODE_REVISION}",
+        "soundfile==0.12.1",
+    )
+    .env(
+        {
+            "HF_HOME": "/vol/cache/huggingface",
+            "HF_XET_HIGH_PERFORMANCE": "1",
+        }
+    )
+    .add_local_dir("./src", remote_path="/root/cs_src")
+)
+
 
 # ---------------------------------------------------------------------------
 # RTTM helper (shared by all models)
@@ -172,7 +195,11 @@ def turns_to_rttm(meeting_id: str, turns: list[tuple[float, float, str]]) -> str
     return "\n".join(lines) + "\n"
 
 
-def _cached_result(meeting_id: str, model_name: str) -> dict | None:
+def _cached_result(
+    meeting_id: str,
+    model_name: str,
+    required_extra: dict | None = None,
+) -> dict | None:
     """Return cached meta dict if both .rttm and .meta.json already exist.
 
     Lets the orchestrator be safely restarted — any (model, meeting) pair
@@ -185,6 +212,10 @@ def _cached_result(meeting_id: str, model_name: str) -> dict | None:
     meta_path = results_dir / f"{model_name}.meta.json"
     if rttm_path.exists() and meta_path.exists():
         meta = json.loads(meta_path.read_text())
+        if required_extra and any(
+            meta.get(key) != value for key, value in required_extra.items()
+        ):
+            return None
         meta["cached"] = True
         print(f"  Cached — skipping. ({rttm_path})")
         return meta
@@ -706,11 +737,463 @@ def diarize_nemo_sortformer(meeting_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Model 5: Microsoft VibeVoice-ASR
+# ---------------------------------------------------------------------------
+
+@app.function(
+    image=vibevoice_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu=["A100-80GB", "H100"],
+    timeout=60 * 60 * 6,
+)
+def vibevoice_infer_chunks(meeting_id: str) -> str:
+    """Run VibeVoice only and persist chunk-local turns for L4 reconciliation."""
+    import json
+    import os
+    import subprocess
+    import sys
+
+    import soundfile as sf
+    import torch
+    from vibevoice.modular.modeling_vibevoice_asr import (
+        VibeVoiceASRForConditionalGeneration,
+    )
+    from vibevoice.modular.modular_vibevoice_text_tokenizer import (
+        VibeVoiceASRTextTokenizerFast,
+    )
+    from vibevoice.processor.vibevoice_asr_processor import VibeVoiceASRProcessor
+
+    sys.path.insert(0, "/root")
+    from cs_src.vibevoice import (
+        VIBEVOICE_CODE_REVISION,
+        VIBEVOICE_MAX_NEW_TOKENS,
+        VIBEVOICE_MODEL_ID,
+        VIBEVOICE_MODEL_REVISION,
+        VIBEVOICE_TARGET_SAMPLE_RATE,
+        VIBEVOICE_TOKENIZER_ID,
+        VIBEVOICE_TOKENIZER_REVISION,
+        build_chunk_windows,
+        parse_vibevoice_segments,
+        resample_audio,
+    )
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(f"{wav_path} not found. Upload or fetch audio first.")
+
+    inference_dir = Path(VOLUME_PATH) / "vibevoice" / meeting_id
+    inference_dir.mkdir(parents=True, exist_ok=True)
+    inference_path = inference_dir / "inference.json"
+    if inference_path.exists():
+        cached = json.loads(inference_path.read_text())
+        if (
+            cached.get("model_revision") == VIBEVOICE_MODEL_REVISION
+            and cached.get("code_revision") == VIBEVOICE_CODE_REVISION
+            and cached.get(
+                "tokenizer_revision", VIBEVOICE_TOKENIZER_REVISION
+            ) == VIBEVOICE_TOKENIZER_REVISION
+            and cached.get("max_new_tokens") == VIBEVOICE_MAX_NEW_TOKENS
+            and cached.get("target_sample_rate") == VIBEVOICE_TARGET_SAMPLE_RATE
+        ):
+            cached.setdefault("tokenizer_id", VIBEVOICE_TOKENIZER_ID)
+            cached.setdefault(
+                "tokenizer_revision", VIBEVOICE_TOKENIZER_REVISION
+            )
+            inference_path.write_text(json.dumps(cached, indent=2))
+            volume.commit()
+            print(f"  Cached VibeVoice inference: {inference_path}")
+            return str(inference_path)
+
+    inference_started = time.time()
+    samples, sample_rate = sf.read(str(wav_path), dtype="float32")
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+    audio_duration = len(samples) / sample_rate
+    windows = build_chunk_windows(audio_duration)
+
+    tokenizer = VibeVoiceASRTextTokenizerFast.from_pretrained(
+        VIBEVOICE_TOKENIZER_ID,
+        revision=VIBEVOICE_TOKENIZER_REVISION,
+        token=os.environ.get("HF_TOKEN"),
+    )
+    processor = VibeVoiceASRProcessor(tokenizer=tokenizer)
+    if processor.target_sample_rate != VIBEVOICE_TARGET_SAMPLE_RATE:
+        raise RuntimeError(
+            "Unexpected VibeVoice target sample rate: "
+            f"{processor.target_sample_rate}"
+        )
+    model = VibeVoiceASRForConditionalGeneration.from_pretrained(
+        VIBEVOICE_MODEL_ID,
+        revision=VIBEVOICE_MODEL_REVISION,
+        token=os.environ.get("HF_TOKEN"),
+        dtype=torch.bfloat16,
+        attn_implementation="flash_attention_2",
+        trust_remote_code=True,
+    ).to("cuda").eval()
+
+    parsed_chunks = []
+    chunk_diagnostics = []
+    for window in windows:
+        print(
+            f"  VibeVoice chunk {window.index + 1}/{len(windows)}: "
+            f"{window.start:.1f}-{window.end:.1f}s",
+            flush=True,
+        )
+        i0 = int(window.start * sample_rate)
+        i1 = int(window.end * sample_rate)
+        chunk_audio = resample_audio(
+            samples[i0:i1],
+            sample_rate,
+            VIBEVOICE_TARGET_SAMPLE_RATE,
+        )
+        inputs = processor(
+            audio=chunk_audio,
+            sampling_rate=VIBEVOICE_TARGET_SAMPLE_RATE,
+            return_tensors="pt",
+            padding=True,
+            add_generation_prompt=True,
+        )
+        inputs = {
+            key: value.to("cuda") if isinstance(value, torch.Tensor) else value
+            for key, value in inputs.items()
+        }
+        input_length = inputs["input_ids"].shape[1]
+        started = time.time()
+        with torch.inference_mode():
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=VIBEVOICE_MAX_NEW_TOKENS,
+                do_sample=False,
+                pad_token_id=processor.pad_id,
+                eos_token_id=processor.tokenizer.eos_token_id,
+            )
+        generated = output_ids[0, input_length:]
+        generated_tokens = int(generated.numel())
+        reached_token_limit = generated_tokens >= VIBEVOICE_MAX_NEW_TOKENS
+        raw_text = processor.decode(generated, skip_special_tokens=True)
+        try:
+            structured = processor.post_process_transcription(raw_text)
+            processor_error = None
+        except Exception as exc:
+            structured = []
+            processor_error = str(exc)
+        turns, parse_errors = parse_vibevoice_segments(structured, window)
+        parsed_chunks.append(
+            {
+                "window": {
+                    "index": window.index,
+                    "start": window.start,
+                    "end": window.end,
+                },
+                "turns": [
+                    {
+                        "chunk_index": turn.chunk_index,
+                        "start": turn.start,
+                        "end": turn.end,
+                        "local_speaker": turn.local_speaker,
+                    }
+                    for turn in turns
+                ],
+            }
+        )
+        chunk_diagnostics.append(
+            {
+                "index": window.index,
+                "start": window.start,
+                "end": window.end,
+                "generation_seconds": round(time.time() - started, 2),
+                "generated_tokens": generated_tokens,
+                "reached_token_limit": reached_token_limit,
+                "num_turns": len(turns),
+                "processor_error": processor_error,
+                "parse_errors": parse_errors,
+                "raw_text": raw_text,
+            }
+        )
+        print(
+            f"  Chunk {window.index + 1} complete: {len(turns)} turns, "
+            f"{len(parse_errors)} parse errors, {generated_tokens} tokens",
+            flush=True,
+        )
+
+    gpu_name = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    diagnostics = {
+        "model_id": VIBEVOICE_MODEL_ID,
+        "model_revision": VIBEVOICE_MODEL_REVISION,
+        "code_revision": VIBEVOICE_CODE_REVISION,
+        "tokenizer_id": VIBEVOICE_TOKENIZER_ID,
+        "tokenizer_revision": VIBEVOICE_TOKENIZER_REVISION,
+        "max_new_tokens": VIBEVOICE_MAX_NEW_TOKENS,
+        "source_sample_rate": sample_rate,
+        "target_sample_rate": VIBEVOICE_TARGET_SAMPLE_RATE,
+        "gpu": gpu_name,
+        "audio_duration_seconds": audio_duration,
+        "inference_seconds": round(time.time() - inference_started, 2),
+        "parsed_chunks": parsed_chunks,
+        "chunks": chunk_diagnostics,
+    }
+    inference_path.write_text(json.dumps(diagnostics, indent=2))
+    volume.commit()
+    limited_chunks = [
+        chunk["index"]
+        for chunk in chunk_diagnostics
+        if chunk["reached_token_limit"]
+    ]
+    if limited_chunks:
+        raise RuntimeError(
+            "VibeVoice hit its generation token limit for chunks "
+            f"{limited_chunks}; inspect {inference_path}"
+        )
+    if not any(chunk["turns"] for chunk in parsed_chunks):
+        raise RuntimeError(
+            "VibeVoice produced no valid diarization turns; inspect "
+            f"{inference_path} for parser diagnostics"
+        )
+    return str(inference_path)
+
+
+def _reconcile_vibevoice(
+    meeting_id: str,
+    inference_path: str,
+) -> tuple[list[tuple[float, float, str]], dict]:
+    """Add WeSpeaker embeddings and reconcile chunk-local VibeVoice labels."""
+    import json
+    import os
+    import sys
+
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from pyannote.audio import Inference, Model
+
+    sys.path.insert(0, "/root")
+    from cs_src.vibevoice import (
+        ChunkResult,
+        ChunkWindow,
+        LocalTurn,
+        VIBEVOICE_TOKENIZER_ID,
+        VIBEVOICE_TOKENIZER_REVISION,
+        reconcile_chunks,
+    )
+
+    started = time.time()
+    diagnostics = json.loads(Path(inference_path).read_text())
+    diagnostics.setdefault("tokenizer_id", VIBEVOICE_TOKENIZER_ID)
+    diagnostics.setdefault("tokenizer_revision", VIBEVOICE_TOKENIZER_REVISION)
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    samples, sample_rate = sf.read(str(wav_path), dtype="float32")
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+
+    parsed_chunks = []
+    for item in diagnostics["parsed_chunks"]:
+        window = ChunkWindow(**item["window"])
+        parsed_chunks.append(
+            ChunkResult(
+                window=window,
+                turns=[LocalTurn(**turn) for turn in item["turns"]],
+            )
+        )
+
+    embedding_model = Model.from_pretrained(
+        "pyannote/wespeaker-voxceleb-resnet34-LM",
+        token=os.environ.get("HF_TOKEN"),
+    )
+    embedding_inference = Inference(
+        embedding_model, window="whole", device=torch.device("cuda")
+    )
+    for chunk in parsed_chunks:
+        per_speaker: dict[str, list[np.ndarray]] = {}
+        speech_seconds: dict[str, float] = {}
+        for turn in chunk.turns:
+            start = int(turn.start * sample_rate)
+            end = int(turn.end * sample_rate)
+            speech_seconds[turn.local_speaker] = (
+                speech_seconds.get(turn.local_speaker, 0.0) + turn.end - turn.start
+            )
+            if end - start < int(sample_rate * 0.3):
+                continue
+            waveform = (
+                torch.tensor(samples[start:end], dtype=torch.float32)
+                .unsqueeze(0)
+                .to("cuda")
+            )
+            embedding = np.asarray(
+                embedding_inference(
+                    {"waveform": waveform, "sample_rate": sample_rate}
+                )
+            ).reshape(-1)
+            if np.all(np.isfinite(embedding)):
+                per_speaker.setdefault(turn.local_speaker, []).append(embedding)
+        chunk.embeddings = {
+            speaker: np.mean(vectors, axis=0)
+            for speaker, vectors in per_speaker.items()
+        }
+        chunk.speech_seconds = speech_seconds
+
+    reconciled = reconcile_chunks(parsed_chunks)
+    diagnostics["reconciliation"] = reconciled.diagnostics
+    diagnostics["reconciliation_seconds"] = round(time.time() - started, 2)
+    turns = [(turn.start, turn.end, turn.speaker) for turn in reconciled.turns]
+    return turns, diagnostics
+
+
+@app.function(
+    image=pyannote_merged_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="L4",
+    timeout=60 * 60 * 2,
+)
+def diarize_vibevoice(meeting_id: str, inference_path: str) -> dict:
+    """Reconcile VibeVoice inference and write benchmark artifacts."""
+    import json
+
+    inference_metadata = json.loads(Path(inference_path).read_text())
+    cached = _cached_result(
+        meeting_id,
+        "vibevoice",
+        required_extra={
+            "model_revision": inference_metadata["model_revision"],
+            "code_revision": inference_metadata["code_revision"],
+            "max_new_tokens": inference_metadata["max_new_tokens"],
+            "target_sample_rate": inference_metadata["target_sample_rate"],
+        },
+    )
+    if cached is not None:
+        return cached
+
+    turns, diagnostics = _reconcile_vibevoice(meeting_id, inference_path)
+    results_dir = Path(VOLUME_PATH) / "results" / meeting_id
+    results_dir.mkdir(parents=True, exist_ok=True)
+    diagnostics_path = results_dir / "vibevoice.diagnostics.json"
+    diagnostics_path.write_text(json.dumps(diagnostics, indent=2))
+
+    # Approximate list-price estimate; actual Modal billing is authoritative.
+    hourly_rate = 2.50 if "A100" in diagnostics["gpu"] else 3.95
+    inference_seconds = diagnostics["inference_seconds"]
+    reconciliation_seconds = diagnostics["reconciliation_seconds"]
+    elapsed = inference_seconds + reconciliation_seconds
+    cost = (
+        (inference_seconds / 3600) * hourly_rate
+        + (reconciliation_seconds / 3600) * 0.80
+    )
+    summary = _write_result(
+        meeting_id,
+        "vibevoice",
+        turns,
+        elapsed,
+        diagnostics["audio_duration_seconds"],
+        cost,
+        extra={
+            "model_id": diagnostics["model_id"],
+            "model_revision": diagnostics["model_revision"],
+            "code_revision": diagnostics["code_revision"],
+            "tokenizer_id": diagnostics["tokenizer_id"],
+            "tokenizer_revision": diagnostics["tokenizer_revision"],
+            "max_new_tokens": diagnostics["max_new_tokens"],
+            "source_sample_rate": diagnostics["source_sample_rate"],
+            "target_sample_rate": diagnostics["target_sample_rate"],
+            "gpu": diagnostics["gpu"],
+            "num_chunks": len(diagnostics["chunks"]),
+            "inference_seconds": inference_seconds,
+            "reconciliation_seconds": reconciliation_seconds,
+            "diagnostics_path": str(diagnostics_path),
+            "cost_is_estimate": True,
+        },
+    )
+    volume.commit()
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # Production pipeline functions (called by src/modal_compute.py)
 # ---------------------------------------------------------------------------
 # These mirror the benchmark functions above but return JSON-serialisable
 # dicts directly instead of writing RTTM files to the volume. run_local.py
 # uses these when --compute modal is passed.
+
+@app.function(
+    image=pyannote_merged_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="L4",
+    timeout=60 * 60 * 2,
+)
+def pipeline_vibevoice_diarize(meeting_id: str, inference_path: str) -> str:
+    """Reconcile persisted VibeVoice chunks for run_local.py."""
+    import json
+
+    turns, diagnostics = _reconcile_vibevoice(meeting_id, inference_path)
+    segments = [
+        {
+            "segment_id": index,
+            "start_time": round(start, 3),
+            "end_time": round(end, 3),
+            "speaker_label": speaker,
+            "text": "",
+            "words": [],
+        }
+        for index, (start, end, speaker) in enumerate(turns)
+    ]
+    return json.dumps({"segments": segments, "diagnostics": diagnostics})
+
+
+@app.function(
+    image=pyannote_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="L4",
+    timeout=60 * 60 * 2,
+)
+def pipeline_extract_embeddings(meeting_id: str, segments_json: str) -> str:
+    """Extract normal pipeline WeSpeaker centroids for supplied segments."""
+    import json
+    import os
+
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from pyannote.audio import Inference, Model
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    segments = json.loads(segments_json)
+    samples, sample_rate = sf.read(str(wav_path), dtype="float32")
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+
+    model = Model.from_pretrained(
+        "pyannote/wespeaker-voxceleb-resnet34-LM",
+        token=os.environ["HF_TOKEN"],
+    )
+    inference = Inference(model, window="whole", device=torch.device("cuda"))
+    per_speaker: dict[str, list[np.ndarray]] = {}
+    for segment in segments:
+        start = int(segment["start_time"] * sample_rate)
+        end = int(segment["end_time"] * sample_rate)
+        if end - start < int(sample_rate * 0.3):
+            continue
+        waveform = (
+            torch.tensor(samples[start:end], dtype=torch.float32)
+            .unsqueeze(0)
+            .to("cuda")
+        )
+        embedding = np.asarray(
+            inference({"waveform": waveform, "sample_rate": sample_rate})
+        )
+        if np.all(np.isfinite(embedding)):
+            per_speaker.setdefault(segment["speaker_label"], []).append(embedding)
+    centroids = {
+        speaker: np.mean(vectors, axis=0).tolist()
+        for speaker, vectors in per_speaker.items()
+    }
+    return json.dumps(centroids)
 
 @app.function(
     image=pyannote_merged_image,  # has cs_src for merge.py

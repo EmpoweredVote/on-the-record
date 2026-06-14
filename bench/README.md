@@ -15,6 +15,7 @@ Modal, writes RTTM outputs back, and scores them locally.
 | `pyannote_oss` | `pyannote.audio==4.0.4` | L4 | GPU time only | active |
 | `pyannote_merged` | same as above + bundles `src/merge.py` | L4 | GPU time only | active |
 | `pyannote_ai` | requests (Precision-2 REST API) | none | ~$0.15 / audio hour | active |
+| `vibevoice` | pinned Microsoft VibeVoice-ASR | A100-80GB/H100 | GPU time | active, research |
 | `nemo_sortformer` | NeMo 2.7 from `nvcr.io/nvidia/pytorch:24.07` | L4 | GPU time only | **disabled** (OOM on L4, see FINDINGS.md) |
 
 ## One-time setup
@@ -60,6 +61,10 @@ python bench/run.py
 python bench/run.py --models pyannote_oss pyannote_ai \
                     --meetings 2026-02-25-council latest-council
 
+# Free-model comparison
+python bench/run.py --models pyannote_oss vibevoice \
+                    --meetings 2026-02-25-council
+
 # Re-score an existing run dir without re-running anything on Modal
 python bench/score.py bench/results/2026-05-13_18-22-04
 ```
@@ -91,10 +96,15 @@ bench/results/2026-05-13_18-22-04/
 realtime_factor, cost_usd, num_turns, num_speakers, expected_speakers,
 speaker_delta, avg_turn_s, silence_fraction`.
 
-## How to pick a winner (no ground truth)
+When a meeting supplies `reference_rttm` and optional `uem`, the CSV also
+includes strict DER and its confusion, missed-detection, and false-alarm
+components, plus DER with a 0.25-second collar. See
+[`references/README.md`](references/README.md).
 
-We don't have hand-labeled RTTMs, so the scorer doesn't compute DER. Use
-this decision framework instead:
+## How to pick a winner
+
+For meetings without hand-labeled RTTMs, use this heuristic decision
+framework:
 
 1. **Speaker count delta.** Compare `num_speakers` to `expected_speakers`.
    Big positive = fragmentation (the diarizer split one person into many);
@@ -118,9 +128,11 @@ A full sweep on the 4 meetings:
 - pyannote OSS + merged: ~30–60 min L4 GPU × 2 = ~$0.50–1.00
 - pyannote.ai: ~8 hours of audio × $0.15 = ~$1.20
 - NeMo Sortformer: ~30 min L4 GPU = ~$0.40
+- VibeVoice: measured GPU time at ~$2.50/hr on A100-80GB or ~$3.95/hr on H100
 
-Total: **~$2–3 for a full sweep**. NeMo image is the biggest variable —
-the first build pulls a ~7GB CUDA base image and may take 10–15 min.
+VibeVoice's total is intentionally left as a measured result until the first
+council sweep establishes its real-time factor. Its first image/model download
+is also substantially larger than pyannote.
 
 ## Known caveats
 
@@ -130,6 +142,10 @@ the first build pulls a ~7GB CUDA base image and may take 10–15 min.
   expected to surface as a large negative `speaker_delta`. If it otherwise
   looks fast/accurate, the follow-up is to switch to NeMo's MSDD
   clustering pipeline (arbitrary N speakers).
+- **VibeVoice is a joint ASR/diarization research model.** CouncilScribe uses
+  only speaker IDs and timestamps. Long audio is processed in overlapping
+  50-minute chunks and reconciled with overlap agreement plus WeSpeaker
+  embeddings. Generated transcript text is diagnostic-only.
 - **pyannote.ai API contract.** The wrapper assumes Precision-2's REST
   flow as of mid-2026 (upload → diarize → poll). If their API has shifted,
   the `diarize_pyannote_ai` function is the only place to update.

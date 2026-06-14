@@ -214,6 +214,7 @@ def test_repair_transcript_rejects_abbreviated_long_options(
         (["--compute", "local"], ["--compute"]),
         (["--diarizer", "api"], ["--diarizer"]),
         (["--diarizer", "oss"], ["--diarizer"]),
+        (["--diarizer", "vibevoice"], ["--diarizer"]),
         (["--num-speakers", "2"], ["--num-speakers"]),
         (["--num-speakers", "0"], ["--num-speakers"]),
         (["--date", ""], ["--date"]),
