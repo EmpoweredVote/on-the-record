@@ -20,7 +20,10 @@ function fmt(seconds: number | null): string {
 
 export default async function TopicPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
-  const topic = await fetchTopic(key);
+  // Don't fail the whole static build if the topics API hiccups (or isn't
+  // migrated yet) — treat a fetch error like a missing topic. fetchTopic
+  // already returns null on 404.
+  const topic = await fetchTopic(key).catch(() => null);
   if (!topic) notFound();
 
   return (
