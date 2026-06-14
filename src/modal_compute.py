@@ -59,11 +59,13 @@ def run_diarization(
     wav_path: Path,
     meeting_id: str,
     use_merge: bool = False,
+    diarizer: str = "oss",
 ) -> tuple[list[dict], dict[str, list[float]]]:
-    """Run pyannote OSS diarization + embedding extraction on Modal GPU.
+    """Run the selected open-source diarizer + embeddings on Modal GPUs.
 
-    Uploads the WAV to the Modal volume if not already present, then calls
-    pipeline_diarize_and_embed on an L4 GPU.
+    Pyannote runs as one L4 function. VibeVoice runs on A100-80GB/H100, saves
+    diagnostics locally, then uses a separate L4 function for normal
+    WeSpeaker embeddings.
 
     Returns:
         segments_data — list of Segment.to_dict() dicts (text/words empty).
@@ -74,8 +76,23 @@ def run_diarization(
     upload_audio(wav_path, meeting_id)
 
     merge_label = " (with merge)" if use_merge else ""
-    print(f"  Dispatching diarization{merge_label} to Modal GPU...")
+    backend_label = "VibeVoice" if diarizer == "vibevoice" else "pyannote OSS"
+    print(f"  Dispatching {backend_label} diarization{merge_label} to Modal GPU...")
     with app.app.run():
+        if diarizer == "vibevoice":
+            inference_path = app.vibevoice_infer_chunks.remote(meeting_id)
+            result_json = app.pipeline_vibevoice_diarize.remote(
+                meeting_id, inference_path
+            )
+            result = json.loads(result_json)
+            diagnostics_path = wav_path.parent / "vibevoice_diagnostics.json"
+            diagnostics_path.write_text(
+                json.dumps(result.get("diagnostics", {}), indent=2)
+            )
+            embeddings_json = app.pipeline_extract_embeddings.remote(
+                meeting_id, json.dumps(result["segments"])
+            )
+            return result["segments"], json.loads(embeddings_json)
         result_json = app.pipeline_diarize_and_embed.remote(
             meeting_id, use_merge=use_merge
         )
