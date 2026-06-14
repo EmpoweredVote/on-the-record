@@ -9,7 +9,8 @@ Automated meeting transcription with speaker diarization and identification. Run
 CouncilScribe processes a meeting recording through a 6-stage pipeline:
 
 1. **Ingest** — Normalize audio to 16kHz mono WAV via ffmpeg
-2. **Diarize** — Speaker segmentation with pyannote.audio 3.x
+2. **Diarize** — Speaker segmentation with pyannote.audio 3.x, pyannote.ai,
+   or Modal-hosted VibeVoice-ASR
 3. **Transcribe** — Speech-to-text with faster-whisper (large-v3 on GPU, medium on CPU)
 4. **Identify** — Map speaker labels to real names using voice profiles, rule-based patterns, and an optional local LLM
 5. **Enroll** — Save confirmed voice profiles for future meetings
@@ -86,9 +87,14 @@ CouncilScribe/
 ## Diarization benchmarking
 
 `bench/` contains a Modal-based harness for comparing diarization models
-(`pyannote_oss`, `pyannote_merged`, `pyannote_ai` Precision-2, `nemo_sortformer`)
-against a fixed test set. See [`bench/README.md`](bench/README.md) for
+(`pyannote_oss`, `pyannote_merged`, `pyannote_ai` Precision-2, `vibevoice`,
+`nemo_sortformer`)
+against a fixed test set. See [`bench/README.md`](../bench/README.md) for
 setup and how to use the output to pick a model for production.
+
+Select VibeVoice with `--diarizer vibevoice --compute modal`. It ignores
+`--num-speakers`, chunks meetings longer than 60 minutes, and preserves the
+normal VTT/Whisper transcription stage.
 
 ## Speaker identification strategy
 

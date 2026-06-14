@@ -44,14 +44,20 @@ def fetch_one(meeting: dict, app) -> dict:
 
 def diarize_one(model: str, meeting_id: str, app) -> dict:
     """Dispatch a diarization run to the matching Modal function."""
-    fn = {
-        "pyannote_oss": app.diarize_pyannote_oss,
-        "pyannote_merged": app.diarize_pyannote_merged,
-        "pyannote_ai": app.diarize_pyannote_ai,
-        "nemo_sortformer": app.diarize_nemo_sortformer,
-    }.get(model)
-    if fn is None:
+    if model == "vibevoice":
+        inference_path = app.vibevoice_infer_chunks.remote(meeting_id)
+        return app.diarize_vibevoice.remote(meeting_id, inference_path)
+
+    function_names = {
+        "pyannote_oss": "diarize_pyannote_oss",
+        "pyannote_merged": "diarize_pyannote_merged",
+        "pyannote_ai": "diarize_pyannote_ai",
+        "nemo_sortformer": "diarize_nemo_sortformer",
+    }
+    function_name = function_names.get(model)
+    if function_name is None:
         raise ValueError(f"Unknown model: {model}")
+    fn = getattr(app, function_name)
     return fn.remote(meeting_id)
 
 

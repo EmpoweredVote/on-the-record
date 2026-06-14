@@ -1,7 +1,7 @@
 """Score diarization benchmark outputs.
 
-We don't have hand-labeled ground truth, so this is a "good enough to pick
-a winner" scorer rather than an academic DER measurement. It produces:
+Without reference RTTM this produces heuristic comparison signals. Meetings
+with reference RTTM/UEM additionally receive standard DER measurements:
 
     - speaker count vs. expected (fragmentation / under-segmentation signal)
     - average turn duration (very short turns suggest fragmentation)
@@ -24,6 +24,8 @@ import random
 import subprocess
 from pathlib import Path
 
+BENCH_DIR = Path(__file__).resolve().parent
+
 # Deterministic spot-checks across re-runs
 SPOT_CHECK_SEED = 42
 SPOT_CHECK_COUNT = 5
@@ -44,6 +46,68 @@ def parse_rttm(rttm_path: Path) -> list[tuple[float, float, str]]:
         turns.append((start, start + duration, speaker))
     turns.sort()
     return turns
+
+
+def _load_rttm_annotation(rttm_path: Path):
+    from pyannote.core import Annotation, Segment
+
+    annotation = Annotation()
+    track = 0
+    for line in rttm_path.read_text().splitlines():
+        if not line.startswith("SPEAKER"):
+            continue
+        parts = line.split()
+        annotation.uri = annotation.uri or parts[1]
+        start = float(parts[3])
+        end = start + float(parts[4])
+        annotation[Segment(start, end), track] = parts[7]
+        track += 1
+    return annotation
+
+
+def _load_uem_timeline(uem_path: Path | None):
+    if uem_path is None:
+        return None
+    from pyannote.core import Segment, Timeline
+
+    timeline = Timeline()
+    for line in uem_path.read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            raise ValueError(f"Invalid UEM line in {uem_path}: {line}")
+        timeline.uri = timeline.uri or parts[0]
+        timeline.add(Segment(float(parts[2]), float(parts[3])))
+    return timeline
+
+
+def calculate_der(
+    reference_rttm: Path,
+    hypothesis_rttm: Path,
+    uem_path: Path | None = None,
+    collar: float = 0.0,
+) -> dict[str, float]:
+    """Calculate DER and normalized error components with pyannote.metrics."""
+    from pyannote.metrics.diarization import DiarizationErrorRate
+
+    reference = _load_rttm_annotation(reference_rttm)
+    hypothesis = _load_rttm_annotation(hypothesis_rttm)
+    uem = _load_uem_timeline(uem_path)
+    details = DiarizationErrorRate(
+        collar=collar, skip_overlap=False
+    )(reference, hypothesis, detailed=True, uem=uem)
+    total = float(details["total"])
+
+    def rate(key: str) -> float:
+        return float(details[key]) / total if total > 0 else 0.0
+
+    return {
+        "der": float(details["diarization error rate"]),
+        "confusion": rate("confusion"),
+        "missed_detection": rate("missed detection"),
+        "false_alarm": rate("false alarm"),
+    }
 
 
 def silence_fraction(turns: list[tuple[float, float, str]], total_duration: float) -> float:
@@ -144,7 +208,7 @@ def score_run(run_dir: Path, config: dict) -> None:
         print(f"  No results directory at {results_root} — nothing to score.")
         return
 
-    by_meeting_expected = {m["id"]: m.get("expected_speakers") for m in config["meetings"]}
+    meeting_config = {m["id"]: m for m in config["meetings"]}
 
     rows: list[dict] = []
     for meta_path in sorted(results_root.rglob("*.meta.json")):
@@ -161,7 +225,8 @@ def score_run(run_dir: Path, config: dict) -> None:
 
         turns = parse_rttm(rttm_path)
         audio_duration = meta.get("audio_duration_seconds", 0.0)
-        expected = by_meeting_expected.get(meeting_id)
+        meeting = meeting_config.get(meeting_id, {})
+        expected = meeting.get("expected_speakers")
 
         avg_turn = (sum(e - s for s, e, _ in turns) / len(turns)) if turns else 0.0
         silence = silence_fraction(turns, audio_duration)
@@ -181,6 +246,43 @@ def score_run(run_dir: Path, config: dict) -> None:
             "avg_turn_s": round(avg_turn, 2),
             "silence_fraction": round(silence, 3),
         }
+        reference_value = meeting.get("reference_rttm")
+        if reference_value:
+            reference_path = BENCH_DIR / reference_value
+            uem_value = meeting.get("uem")
+            uem_path = BENCH_DIR / uem_value if uem_value else None
+            if not reference_path.exists():
+                raise FileNotFoundError(
+                    f"Reference RTTM for {meeting_id} not found: {reference_path}"
+                )
+            if uem_path is not None and not uem_path.exists():
+                raise FileNotFoundError(
+                    f"UEM for {meeting_id} not found: {uem_path}"
+                )
+            strict = calculate_der(reference_path, rttm_path, uem_path, collar=0.0)
+            collar_025 = calculate_der(
+                reference_path, rttm_path, uem_path, collar=0.25
+            )
+            row.update(
+                {
+                    "der_strict": round(strict["der"], 4),
+                    "confusion_strict": round(strict["confusion"], 4),
+                    "missed_detection_strict": round(
+                        strict["missed_detection"], 4
+                    ),
+                    "false_alarm_strict": round(strict["false_alarm"], 4),
+                    "der_collar_025": round(collar_025["der"], 4),
+                    "confusion_collar_025": round(
+                        collar_025["confusion"], 4
+                    ),
+                    "missed_detection_collar_025": round(
+                        collar_025["missed_detection"], 4
+                    ),
+                    "false_alarm_collar_025": round(
+                        collar_025["false_alarm"], 4
+                    ),
+                }
+            )
         rows.append(row)
 
         # Spot-checks: try to find audio in the volume mirror; degrade
@@ -194,7 +296,9 @@ def score_run(run_dir: Path, config: dict) -> None:
         return
 
     csv_path = run_dir / "scores.csv"
-    fieldnames = list(rows[0].keys())
+    fieldnames = list(
+        dict.fromkeys(key for row in rows for key in row.keys())
+    )
     with csv_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
