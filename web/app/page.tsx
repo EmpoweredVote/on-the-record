@@ -28,6 +28,7 @@ export default async function HomePage() {
       <nav className="siteNav">
         <Link href="/people">People →</Link>
         <Link href="/search">Search →</Link>
+        <Link href="/topics">Topics →</Link>
       </nav>
       {loadError ? (
         <p>Meetings are temporarily unavailable. Please try again shortly.</p>
@@ -50,6 +51,7 @@ export default async function HomePage() {
                 {m.playback_kind ? (
                   <span className="hasVideo">▶ video</span>
                 ) : null}
+                {m.summary_preview && <span className="meetingPreview">{m.summary_preview}</span>}
               </Link>
             </li>
           ))}
