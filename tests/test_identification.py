@@ -10,9 +10,13 @@ Covers:
 
 from __future__ import annotations
 
-from src.models import Segment, SpeakerMapping
+from src.models import Segment, SpeakerMapping, Word
 from src.roster import Roster, RosterMember, correct_mappings, roster_names_for_prompt
-from src.identify import apply_pattern_matching, identify_speakers
+from src.identify import (
+    apply_pattern_matching,
+    identify_speakers,
+    merge_adjacent_segments,
+)
 
 
 def _make_roster():
@@ -44,6 +48,68 @@ def _make_roster():
             ),
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# Segment merging
+# ---------------------------------------------------------------------------
+
+
+def test_merge_adjacent_segments_retains_end_time_for_contained_segment():
+    segments = [
+        Segment(
+            segment_id=0,
+            start_time=10.0,
+            end_time=20.0,
+            speaker_label="SPEAKER_00",
+            speaker_name="Alex Smith",
+            text="First",
+            words=[Word(word="First", start=10.0, end=11.0)],
+        ),
+        Segment(
+            segment_id=1,
+            start_time=12.0,
+            end_time=14.0,
+            speaker_label="SPEAKER_00",
+            speaker_name="Alex Smith",
+            text="second",
+            words=[Word(word="second", start=12.0, end=13.0)],
+        ),
+    ]
+
+    merged = merge_adjacent_segments(segments)
+
+    assert len(merged) == 1
+    assert merged[0].end_time == 20.0
+    assert merged[0].text == "First second"
+    assert [word.word for word in merged[0].words] == ["First", "second"]
+
+
+def test_merge_adjacent_segments_extends_to_later_end_time():
+    segments = [
+        Segment(
+            segment_id=0,
+            start_time=10.0,
+            end_time=12.0,
+            speaker_label="SPEAKER_00",
+            speaker_name="Alex Smith",
+            text="First",
+        ),
+        Segment(
+            segment_id=1,
+            start_time=12.5,
+            end_time=15.0,
+            speaker_label="SPEAKER_00",
+            speaker_name="Alex Smith",
+            text="second",
+        ),
+    ]
+
+    merged = merge_adjacent_segments(segments, gap_threshold=1.0)
+
+    assert len(merged) == 1
+    assert merged[0].end_time == 15.0
+    assert merged[0].text == "First second"
 
 
 # ---------------------------------------------------------------------------

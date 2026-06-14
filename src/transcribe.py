@@ -14,6 +14,25 @@ from .audio_utils import load_wav, slice_audio
 from .models import Segment, Word
 
 
+def remove_segment_overlaps(segments: list[Segment]) -> list[Segment]:
+    """Trim later segments so each instant of audio is transcribed once.
+
+    Diarization may represent simultaneous speech with overlapping turns. A
+    readable video transcript needs a single chronological stream, so the
+    earlier turn owns the overlap and the later turn begins after it.
+    """
+    if not segments:
+        return segments
+
+    occupied_until = segments[0].end_time
+    for seg in segments[1:]:
+        if seg.start_time < occupied_until:
+            seg.start_time = round(min(occupied_until, seg.end_time), 3)
+        occupied_until = max(occupied_until, seg.end_time)
+
+    return segments
+
+
 def load_whisper_model():
     """Load faster-whisper model. GPU: large-v3 float16, CPU: medium int8."""
     from faster_whisper import WhisperModel
@@ -53,6 +72,7 @@ def transcribe_segments(
     Returns:
         The same segments list with text and words populated.
     """
+    remove_segment_overlaps(segments)
     samples, sr = load_wav(wav_path)
     total = len(segments)
 

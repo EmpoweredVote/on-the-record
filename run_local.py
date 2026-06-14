@@ -876,6 +876,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     from src.transcribe import (
         load_raw_transcript,
         load_whisper_model,
+        remove_segment_overlaps,
         save_raw_transcript,
         transcribe_segments,
     )
@@ -886,7 +887,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
         print("  Already complete. Loading from checkpoint...")
         segments = load_raw_transcript(transcript_path)
         print(f"  Loaded {len(segments)} transcribed segments")
-    elif use_vtt:
+    else:
+        remove_segment_overlaps(segments)
+
+    if not state.is_complete(PipelineStage.TRANSCRIBED) and use_vtt:
         from src.vtt_align import align_vtt_to_segments
 
         t0 = time.time()
@@ -898,7 +902,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
         save_raw_transcript(segments, transcript_path)
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s")
-    elif getattr(args, "compute", "local") == "modal":
+    elif (
+        not state.is_complete(PipelineStage.TRANSCRIBED)
+        and getattr(args, "compute", "local") == "modal"
+    ):
         from src.modal_compute import run_transcription as _modal_transcribe, upload_audio as _modal_upload
 
         # When --diarizer api is used, run_diarization() on Modal was never called,
@@ -917,7 +924,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         save_raw_transcript(segments, transcript_path)
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s (Modal)")
-    else:
+    elif not state.is_complete(PipelineStage.TRANSCRIBED):
         resume_from = state.transcription_progress
         if resume_from > 0:
             print(f"  Resuming from segment {resume_from}/{len(segments)}")
@@ -1479,6 +1486,64 @@ def _run_batch(args: argparse.Namespace) -> None:
 
     if completed or skipped:
         print(f"\nUse --review-meeting MEETING_ID to review speaker identifications.")
+
+
+def _meeting_dir_for_id(meeting_id: str) -> Path:
+    """Resolve a simple meeting ID to a direct child of MEETINGS_DIR."""
+    meeting_path = Path(meeting_id)
+    if (
+        not meeting_id
+        or meeting_path.is_absolute()
+        or meeting_id in {".", ".."}
+        or meeting_path.name != meeting_id
+    ):
+        raise ValueError("invalid meeting ID")
+
+    meetings_root = config.MEETINGS_DIR.resolve(strict=False)
+    candidate = (meetings_root / meeting_path).resolve(strict=False)
+    if candidate.parent != meetings_root:
+        raise ValueError("meeting ID resolves outside the meetings directory")
+    return candidate
+
+
+def _repair_transcript_standalone(meeting_id: str) -> None:
+    """Repair transcript artifacts for one already-processed meeting."""
+    try:
+        meeting_dir = _meeting_dir_for_id(meeting_id)
+    except ValueError as exc:
+        print(f"Transcript repair failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    from src.repair import RepairError, repair_transcript
+
+    try:
+        result = repair_transcript(meeting_dir)
+    except RepairError as exc:
+        print(f"Transcript repair failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Transcript repair complete:")
+    print(f"  Meeting: {result.meeting_id}")
+    print(f"  Segments: {result.segment_count}")
+    print(f"  Backup: {result.backup_dir}")
+    print("  Exports:")
+    for export_name, export_path in result.exports.items():
+        print(f"    {export_name}: {export_path}")
+
+
+def _option_supplied(argv: list[str], *options: str) -> bool:
+    """Return whether argv explicitly contains any option or option=value."""
+    return any(
+        argument == option
+        or argument.startswith(f"{option}=")
+        or (
+            option == "-i"
+            and argument.startswith("-i")
+            and not argument.startswith("--")
+        )
+        for argument in argv
+        for option in options
+    )
 
 
 def _publish_meeting_standalone(meeting_id: str) -> None:
@@ -2271,6 +2336,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="CouncilScribe — Automated City Council Meeting Transcription",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
         epilog="""
 Examples:
   %(prog)s --input meeting.mp4 --city Bloomington --date 2026-02-10
@@ -2358,6 +2424,12 @@ Environment Variables:
                         help="Rename stored voice profiles using the council roster and exit")
     parser.add_argument("--fix-transcripts", action="store_true",
                         help="Re-correct speaker names in all existing transcripts using the roster and re-export")
+    parser.add_argument(
+        "--repair-transcript",
+        metavar="MEETING_ID",
+        help="Rebuild one processed caption-backed transcript/exports without "
+             "rerunning diarization or speaker identification.",
+    )
     parser.add_argument("--publish", action="store_true",
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
@@ -2405,6 +2477,58 @@ Environment Variables:
     )
 
     args = parser.parse_args()
+
+    if args.repair_transcript:
+        cli_argv = sys.argv[1:]
+        repair_conflict_map = {
+            "--input": _option_supplied(cli_argv, "--input", "-i"),
+            "--browse-catstv": _option_supplied(cli_argv, "--browse-catstv"),
+            "--resume": _option_supplied(cli_argv, "--resume"),
+            "--city": _option_supplied(cli_argv, "--city"),
+            "--date": _option_supplied(cli_argv, "--date"),
+            "--meeting-type": _option_supplied(cli_argv, "--meeting-type"),
+            "--meeting-id": _option_supplied(cli_argv, "--meeting-id"),
+            "--num-speakers": _option_supplied(cli_argv, "--num-speakers"),
+            "--noise-reduce": _option_supplied(cli_argv, "--noise-reduce"),
+            "--cookies": _option_supplied(cli_argv, "--cookies"),
+            "--skip-llm": _option_supplied(cli_argv, "--skip-llm"),
+            "--skip-summary": _option_supplied(cli_argv, "--skip-summary"),
+            "--confirm-enroll": _option_supplied(cli_argv, "--confirm-enroll"),
+            "--merge": _option_supplied(cli_argv, "--merge"),
+            "--use-vtt": _option_supplied(cli_argv, "--use-vtt"),
+            "--diarizer": _option_supplied(cli_argv, "--diarizer"),
+            "--compute": _option_supplied(cli_argv, "--compute"),
+            "--default": _option_supplied(cli_argv, "--default"),
+            "--list-profiles": _option_supplied(cli_argv, "--list-profiles"),
+            "--fix-profiles": _option_supplied(cli_argv, "--fix-profiles"),
+            "--fix-transcripts": _option_supplied(cli_argv, "--fix-transcripts"),
+            "--publish": _option_supplied(cli_argv, "--publish"),
+            "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
+            "--merge-profiles": _option_supplied(cli_argv, "--merge-profiles"),
+            "--show-roster": _option_supplied(cli_argv, "--show-roster"),
+            "--no-review": _option_supplied(cli_argv, "--no-review"),
+            "--review": _option_supplied(cli_argv, "--review"),
+            "--review-meeting": _option_supplied(cli_argv, "--review-meeting"),
+            "--identify-speakers": _option_supplied(cli_argv, "--identify-speakers"),
+            "--pre-identify": _option_supplied(cli_argv, "--pre-identify"),
+            "--batch": _option_supplied(cli_argv, "--batch"),
+            "--batch-resume": _option_supplied(cli_argv, "--batch-resume"),
+            "--body": _option_supplied(cli_argv, "--body"),
+            "--force-retag": _option_supplied(cli_argv, "--force-retag"),
+            "--redo": _option_supplied(cli_argv, "--redo"),
+        }
+        repair_conflicts = [
+            flag
+            for flag, supplied in repair_conflict_map.items()
+            if supplied
+        ]
+        if repair_conflicts:
+            parser.error(
+                "--repair-transcript cannot be combined with "
+                + ", ".join(repair_conflicts)
+            )
+        _repair_transcript_standalone(args.repair_transcript)
+        return
 
     # D-12: --force-retag requires --body
     if args.force_retag and not args.body:
