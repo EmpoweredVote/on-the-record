@@ -740,15 +740,21 @@ def diarize_nemo_sortformer(meeting_id: str) -> dict:
 # Model 5: Microsoft VibeVoice-ASR
 # ---------------------------------------------------------------------------
 
-@app.function(
-    image=vibevoice_image,
-    volumes={VOLUME_PATH: volume},
-    secrets=[hf_secret],
-    gpu=["A100-80GB", "H100"],
-    timeout=60 * 60 * 6,
-)
-def vibevoice_infer_chunks(meeting_id: str) -> str:
-    """Run VibeVoice only and persist chunk-local turns for L4 reconciliation."""
+VIBEVOICE_SWEEP_GPU_PRICES = {
+    "L40S": 0.000542,
+    "A100-40GB": 0.000583,
+    "A100-80GB": 0.000694,
+}
+L4_PRICE_PER_SECOND = 0.000222
+
+
+def _run_vibevoice_inference(
+    meeting_id: str,
+    inference_path: Path,
+    requested_gpu: str | None = None,
+    use_cache: bool = True,
+) -> dict:
+    """Run VibeVoice and persist a chunk-local inference manifest."""
     import json
     import os
     import subprocess
@@ -782,10 +788,8 @@ def vibevoice_infer_chunks(meeting_id: str) -> str:
     if not wav_path.exists():
         raise FileNotFoundError(f"{wav_path} not found. Upload or fetch audio first.")
 
-    inference_dir = Path(VOLUME_PATH) / "vibevoice" / meeting_id
-    inference_dir.mkdir(parents=True, exist_ok=True)
-    inference_path = inference_dir / "inference.json"
-    if inference_path.exists():
+    inference_path.parent.mkdir(parents=True, exist_ok=True)
+    if use_cache and inference_path.exists():
         cached = json.loads(inference_path.read_text())
         if (
             cached.get("model_revision") == VIBEVOICE_MODEL_REVISION
@@ -803,7 +807,14 @@ def vibevoice_infer_chunks(meeting_id: str) -> str:
             inference_path.write_text(json.dumps(cached, indent=2))
             volume.commit()
             print(f"  Cached VibeVoice inference: {inference_path}")
-            return str(inference_path)
+            return {
+                "requested_gpu": requested_gpu,
+                "actual_gpu": cached["gpu"],
+                "manifest_path": str(inference_path),
+                "inference_seconds": cached["inference_seconds"],
+                "peak_allocated_gib": cached.get("peak_allocated_gib"),
+                "peak_reserved_gib": cached.get("peak_reserved_gib"),
+            }
 
     inference_started = time.time()
     samples, sample_rate = sf.read(str(wav_path), dtype="float32")
@@ -823,6 +834,7 @@ def vibevoice_infer_chunks(meeting_id: str) -> str:
             "Unexpected VibeVoice target sample rate: "
             f"{processor.target_sample_rate}"
         )
+    torch.cuda.reset_peak_memory_stats()
     model = VibeVoiceASRForConditionalGeneration.from_pretrained(
         VIBEVOICE_MODEL_ID,
         revision=VIBEVOICE_MODEL_REVISION,
@@ -923,6 +935,7 @@ def vibevoice_infer_chunks(meeting_id: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+    gib = 1024 ** 3
     diagnostics = {
         "model_id": VIBEVOICE_MODEL_ID,
         "model_revision": VIBEVOICE_MODEL_REVISION,
@@ -932,7 +945,14 @@ def vibevoice_infer_chunks(meeting_id: str) -> str:
         "max_new_tokens": VIBEVOICE_MAX_NEW_TOKENS,
         "source_sample_rate": sample_rate,
         "target_sample_rate": VIBEVOICE_TARGET_SAMPLE_RATE,
+        "requested_gpu": requested_gpu,
         "gpu": gpu_name,
+        "peak_allocated_gib": round(
+            torch.cuda.max_memory_allocated() / gib, 3
+        ),
+        "peak_reserved_gib": round(
+            torch.cuda.max_memory_reserved() / gib, 3
+        ),
         "audio_duration_seconds": audio_duration,
         "inference_seconds": round(time.time() - inference_started, 2),
         "parsed_chunks": parsed_chunks,
@@ -955,7 +975,76 @@ def vibevoice_infer_chunks(meeting_id: str) -> str:
             "VibeVoice produced no valid diarization turns; inspect "
             f"{inference_path} for parser diagnostics"
         )
-    return str(inference_path)
+    return {
+        "requested_gpu": requested_gpu,
+        "actual_gpu": gpu_name,
+        "manifest_path": str(inference_path),
+        "inference_seconds": diagnostics["inference_seconds"],
+        "peak_allocated_gib": diagnostics["peak_allocated_gib"],
+        "peak_reserved_gib": diagnostics["peak_reserved_gib"],
+    }
+
+
+@app.function(
+    image=vibevoice_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu=["A100-80GB", "H100"],
+    timeout=60 * 60 * 6,
+)
+def vibevoice_infer_chunks(meeting_id: str) -> str:
+    """Run production VibeVoice inference with revision-aware caching."""
+    result = _run_vibevoice_inference(
+        meeting_id,
+        Path(VOLUME_PATH) / "vibevoice" / meeting_id / "inference.json",
+    )
+    return result["manifest_path"]
+
+
+def _run_vibevoice_sweep(meeting_id: str, requested_gpu: str, key: str) -> dict:
+    return _run_vibevoice_inference(
+        meeting_id,
+        Path(VOLUME_PATH)
+        / "vibevoice-gpu-sweep"
+        / meeting_id
+        / key
+        / "inference.json",
+        requested_gpu=requested_gpu,
+        use_cache=False,
+    )
+
+
+@app.function(
+    image=vibevoice_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="L40S",
+    timeout=60 * 60 * 6,
+)
+def vibevoice_sweep_l40s(meeting_id: str) -> dict:
+    return _run_vibevoice_sweep(meeting_id, "L40S", "l40s")
+
+
+@app.function(
+    image=vibevoice_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="A100-40GB",
+    timeout=60 * 60 * 6,
+)
+def vibevoice_sweep_a100_40gb(meeting_id: str) -> dict:
+    return _run_vibevoice_sweep(meeting_id, "A100-40GB", "a100-40gb")
+
+
+@app.function(
+    image=vibevoice_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="A100-80GB",
+    timeout=60 * 60 * 6,
+)
+def vibevoice_sweep_a100_80gb(meeting_id: str) -> dict:
+    return _run_vibevoice_sweep(meeting_id, "A100-80GB", "a100-80gb")
 
 
 def _reconcile_vibevoice(
@@ -1042,6 +1131,62 @@ def _reconcile_vibevoice(
     diagnostics["reconciliation_seconds"] = round(time.time() - started, 2)
     turns = [(turn.start, turn.end, turn.speaker) for turn in reconciled.turns]
     return turns, diagnostics
+
+
+@app.function(
+    image=pyannote_merged_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="L4",
+    timeout=60 * 60 * 2,
+)
+def vibevoice_sweep_reconcile(meeting_id: str, inference: dict) -> dict:
+    """Reconcile one GPU sweep manifest and return a compact comparison row."""
+    import json
+
+    requested_gpu = inference["requested_gpu"]
+    turns, diagnostics = _reconcile_vibevoice(
+        meeting_id, inference["manifest_path"]
+    )
+    inference_seconds = float(inference["inference_seconds"])
+    reconciliation_seconds = float(diagnostics["reconciliation_seconds"])
+    result = {
+        "meeting_id": meeting_id,
+        "requested_gpu": requested_gpu,
+        "actual_gpu": inference["actual_gpu"],
+        "status": "ok",
+        "inference_seconds": inference_seconds,
+        "reconciliation_seconds": reconciliation_seconds,
+        "total_seconds": inference_seconds + reconciliation_seconds,
+        "cost_usd": round(
+            inference_seconds * VIBEVOICE_SWEEP_GPU_PRICES[requested_gpu]
+            + reconciliation_seconds * L4_PRICE_PER_SECOND,
+            4,
+        ),
+        "peak_allocated_gib": inference["peak_allocated_gib"],
+        "peak_reserved_gib": inference["peak_reserved_gib"],
+        "audio_duration_seconds": diagnostics["audio_duration_seconds"],
+        "num_chunks": len(diagnostics["chunks"]),
+        "num_turns": len(turns),
+        "num_speakers": len({speaker for _, _, speaker in turns}),
+        "parse_errors": sum(
+            len(chunk["parse_errors"]) for chunk in diagnostics["chunks"]
+        ),
+        "temporal_matches": len(
+            diagnostics["reconciliation"]["temporal_matches"]
+        ),
+        "embedding_matches": len(
+            diagnostics["reconciliation"]["embedding_matches"]
+        ),
+        "model_revision": diagnostics["model_revision"],
+        "code_revision": diagnostics["code_revision"],
+        "tokenizer_revision": diagnostics["tokenizer_revision"],
+        "manifest_path": inference["manifest_path"],
+    }
+    summary_path = Path(inference["manifest_path"]).parent / "summary.json"
+    summary_path.write_text(json.dumps(result, indent=2) + "\n")
+    volume.commit()
+    return result
 
 
 @app.function(
