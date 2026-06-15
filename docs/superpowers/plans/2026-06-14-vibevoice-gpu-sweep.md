@@ -104,15 +104,15 @@ Run the focused test suite.
 ### Task 4: Execute and verify
 
 **Files:**
-- Create: `bench/results/vibevoice-gpu-sweep-2026-06-14/results.json`
-- Create: `bench/results/vibevoice-gpu-sweep-2026-06-14/README.md`
+- Create: `bench/snapshots/2026-06-14-vibevoice-gpu-sweep/results.json`
+- Create: `bench/snapshots/2026-06-14-vibevoice-gpu-sweep/README.md`
 
 - [ ] **Step 1: Run all three GPUs concurrently**
 
 ```bash
 python bench/run_vibevoice_gpu_sweep.py \
   --meeting-id 2026-02-04-council \
-  --output-dir bench/results/vibevoice-gpu-sweep-2026-06-14
+  --output-dir bench/snapshots/2026-06-14-vibevoice-gpu-sweep
 ```
 
 - [ ] **Step 2: Inspect measurements**

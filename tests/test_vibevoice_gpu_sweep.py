@@ -71,6 +71,7 @@ def test_render_markdown_includes_success_and_failure():
                 "actual_gpu": "NVIDIA L40S",
                 "status": "ok",
                 "inference_seconds": 100.0,
+                "reconciliation_seconds": 3.0,
                 "cost_usd": 0.0542,
                 "peak_reserved_gib": 31.25,
                 "num_turns": 120,
@@ -90,8 +91,10 @@ def test_render_markdown_includes_success_and_failure():
 
     assert "# VibeVoice GPU Sweep: meeting-1" in markdown
     assert "| L40S | NVIDIA L40S | ok |" in markdown
+    assert "100.0s | 3.0s" in markdown
     assert "31.25 GiB" in markdown
     assert "CUDA out of memory" in markdown
+    assert "requested GPU rate" in markdown
 
 
 def test_dispatch_sweep_starts_all_gpu_functions_concurrently():

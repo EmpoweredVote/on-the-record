@@ -39,7 +39,7 @@ chunking, and parser. It does not use production inference caches.
 The runner writes:
 
 ```text
-bench/results/vibevoice-gpu-sweep-2026-06-14/
+bench/snapshots/2026-06-14-vibevoice-gpu-sweep/
   results.json
   README.md
 ```

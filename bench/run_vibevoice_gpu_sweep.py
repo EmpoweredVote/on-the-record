@@ -56,6 +56,9 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "meeting_id": args.meeting_id,
+        "pricing_captured_on": "2026-06-14",
+        "pricing_source": "https://modal.com/pricing",
+        "gpu_docs": "https://modal.com/docs/guide/gpu",
         "results": results,
     }
     (args.output_dir / "results.json").write_text(

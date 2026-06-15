@@ -34,20 +34,22 @@ def render_markdown(meeting_id: str, results: list[dict[str, Any]]) -> str:
     lines = [
         f"# VibeVoice GPU Sweep: {meeting_id}",
         "",
-        "| Requested | Actual | Status | Time | Cost | Peak reserved | "
+        "| Requested | Actual | Status | Inference | Reconcile | Cost | Peak reserved | "
         "Turns | Speakers | Parse errors | Temporal | Embedding |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     failures = []
     for result in results:
         if result["status"] == "ok":
             lines.append(
                 "| {requested_gpu} | {actual_gpu} | ok | {seconds:.1f}s | "
-                "${cost:.4f} | {peak:.2f} GiB | {turns} | {speakers} | "
+                "{reconcile:.1f}s | ${cost:.4f} | {peak:.2f} GiB | "
+                "{turns} | {speakers} | "
                 "{parse_errors} | {temporal} | {embedding} |".format(
                     requested_gpu=result["requested_gpu"],
                     actual_gpu=result["actual_gpu"],
                     seconds=result["inference_seconds"],
+                    reconcile=result["reconciliation_seconds"],
                     cost=result["cost_usd"],
                     peak=result["peak_reserved_gib"],
                     turns=result["num_turns"],
@@ -59,7 +61,7 @@ def render_markdown(meeting_id: str, results: list[dict[str, Any]]) -> str:
             )
         else:
             lines.append(
-                f"| {result['requested_gpu']} | - | failed | - | - | - | "
+                f"| {result['requested_gpu']} | - | failed | - | - | - | - | "
                 "- | - | - | - | - |"
             )
             failures.append(
@@ -71,8 +73,16 @@ def render_markdown(meeting_id: str, results: list[dict[str, Any]]) -> str:
     lines.extend(
         [
             "",
-            "Costs use Modal list prices captured on 2026-06-14. "
-            "Actual billing is authoritative.",
+            "## Notes",
+            "",
+            "- Costs use the requested GPU rate from Modal list prices captured "
+            "on 2026-06-14, plus L4 reconciliation time. Actual billing is "
+            "authoritative.",
+            "- Modal may upgrade A100 requests to 80 GB hardware without changing "
+            "the requested GPU rate. Therefore requested and actual GPU names are "
+            "both shown.",
+            "- Minor turn and speaker-count differences can occur across hardware; "
+            "this is a cost/performance sweep, not a diarization-quality verdict.",
             "",
         ]
     )
