@@ -33,6 +33,7 @@ class PipelineState:
         self.transcription_progress: int = 0  # last completed segment index
         self.total_segments: int = 0
         self.body_slug: Optional[str] = None
+        self.race_id: Optional[str] = None
         self.roster_choice: Optional[str] = None  # None=unchosen, slug, "__legacy__", or "__none__"
         self._load()
 
@@ -44,6 +45,7 @@ class PipelineState:
             self.transcription_progress = data.get("transcription_progress", 0)
             self.total_segments = data.get("total_segments", 0)
             self.body_slug = data.get("body_slug")  # None if legacy/untagged — D-05 compat
+            self.race_id = data.get("race_id")
             self.roster_choice = data.get("roster_choice")  # None for pre-chooser state files
 
     def save(self) -> None:
@@ -53,6 +55,7 @@ class PipelineState:
             "transcription_progress": self.transcription_progress,
             "total_segments": self.total_segments,
             "body_slug": self.body_slug,
+            "race_id": self.race_id,
             "roster_choice": self.roster_choice,
         }
         fd, tmp_path = tempfile.mkstemp(

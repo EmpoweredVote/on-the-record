@@ -224,6 +224,7 @@ class Meeting:
     meeting_type: str = "Regular Session"
     title: Optional[str] = None
     event_kind: str = "council"
+    race_id: Optional[str] = None
     audio_source: str = ""
     duration_seconds: float = 0.0
     segments: list[Segment] = field(default_factory=list)
@@ -240,6 +241,7 @@ class Meeting:
             "meeting_type": self.meeting_type,
             "title": self.title,
             "event_kind": self.event_kind,
+            "race_id": self.race_id,
             "audio_source": self.audio_source,
             "duration_seconds": self.duration_seconds,
             "segments": [s.to_dict() for s in self.segments],
@@ -260,6 +262,7 @@ class Meeting:
             meeting_type=d.get("meeting_type", "Regular Session"),
             title=d.get("title"),
             event_kind=d.get("event_kind", "council"),
+            race_id=d.get("race_id"),
             audio_source=d.get("audio_source", ""),
             duration_seconds=d.get("duration_seconds", 0.0),
             segments=[Segment.from_dict(s) for s in d.get("segments", [])],

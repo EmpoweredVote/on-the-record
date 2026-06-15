@@ -23,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
+from uuid import UUID
 
 # Ensure src/ is importable when running from the repo root
 _REPO_DIR = Path(__file__).resolve().parent
@@ -238,6 +239,29 @@ def _resolve_roster(effective_body_slug: Optional[str], roster_choice: Optional[
     if roster_choice == "__legacy__":
         return load_roster()
     return None
+
+
+def _resolve_race_id(
+    state: "PipelineState",
+    cli_race_id: str | None,
+) -> str | None:
+    if cli_race_id is not None:
+        try:
+            cli_race_id = str(UUID(cli_race_id))
+        except ValueError as exc:
+            raise RuntimeError("--race-id must be a UUID") from exc
+
+    if state.race_id and cli_race_id and state.race_id != cli_race_id:
+        raise RuntimeError(
+            f"Meeting already linked to race {state.race_id}; "
+            "changing races requires editing the meeting metadata explicitly"
+        )
+
+    if cli_race_id and state.race_id is None:
+        state.race_id = cli_race_id
+        state.save()
+
+    return state.race_id
 
 
 def get_hf_token() -> str:
@@ -562,6 +586,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # Phase 109 D-07: fail fast if tagged meeting has no cached roster.
     # Must run before Stage 1 ingestion so operators don't burn GPU on a bad run.
     ensure_body_roster_cached(effective_body_slug)
+    effective_race_id = _resolve_race_id(
+        state,
+        getattr(args, "race_id", None),
+    )
 
     meeting = Meeting(
         meeting_id=meeting_id,
@@ -570,6 +598,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         meeting_type=args.meeting_type,
         title=args.title.strip() if args.title and args.title.strip() else None,
         event_kind=args.event_kind,
+        race_id=effective_race_id,
         audio_source=str(audio_path),
     )
 
@@ -1505,6 +1534,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             diarizer=getattr(args, "diarizer", "oss"),
             compute=getattr(args, "compute", "local"),
             body=getattr(args, "body", None),
+            race_id=getattr(args, "race_id", None),
             force_retag=getattr(args, "force_retag", False),
             batch_mode=True,  # suppress the interactive roster chooser (D3: batch uses no roster unless --body)
         )
@@ -1635,7 +1665,10 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
         with open(topics_path, "r", encoding="utf-8") as f:
             meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
 
-    body_slug = PipelineState(meeting_dir).body_slug
+    state = PipelineState(meeting_dir)
+    body_slug = state.body_slug
+    if meeting.race_id is None:
+        meeting.race_id = state.race_id
 
     print(f"Publishing {meeting_id} to Supabase...")
     result = publish_meeting(meeting, body_slug)
@@ -2551,6 +2584,11 @@ Environment Variables:
              "Persisted to pipeline_state.json on first run; omit on re-invocation.",
     )
     parser.add_argument(
+        "--race-id",
+        default=None,
+        help="essentials.races UUID for a debate/forum",
+    )
+    parser.add_argument(
         "--force-retag",
         action="store_true",
         default=False,
@@ -2610,6 +2648,7 @@ def main():
             "--batch": _option_supplied(cli_argv, "--batch"),
             "--batch-resume": _option_supplied(cli_argv, "--batch-resume"),
             "--body": _option_supplied(cli_argv, "--body"),
+            "--race-id": _option_supplied(cli_argv, "--race-id"),
             "--force-retag": _option_supplied(cli_argv, "--force-retag"),
             "--redo": _option_supplied(cli_argv, "--redo"),
             "--title": _option_supplied(cli_argv, "--title"),
@@ -2788,6 +2827,7 @@ def main():
             args.meeting_type = data.get("meeting_type", args.meeting_type)
             args.title = data.get("title", args.title)
             args.event_kind = data.get("event_kind", args.event_kind)
+            args.race_id = data.get("race_id", args.race_id)
         else:
             # Use the WAV file as input since audio is already ingested
             wav = meeting_dir / "audio.wav"
