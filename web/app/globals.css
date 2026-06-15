@@ -576,3 +576,18 @@ a {
 .topicItemLink { display: flex; justify-content: space-between; gap: 1rem; color: var(--accent); }
 .topicItemTime { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
 .topicItemMeta { color: var(--muted); font-size: 0.8rem; display: inline-flex; gap: 0.4rem; align-items: center; }
+
+.eventKind {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  opacity: 0.72;
+}

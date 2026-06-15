@@ -9,6 +9,8 @@ helpers below survived the refactor unchanged and remain worth covering.
 
 import pytest
 
+from src.models import Meeting
+from src.publish import _upsert_meeting
 from src.publish import extract_youtube_id, resolve_playback
 
 
@@ -76,3 +78,41 @@ def test_resolve_playback_catstv_page_falls_back_on_error(monkeypatch):
 
     monkeypatch.setattr(download, "_extract_blob_url_from_page", boom)
     assert resolve_playback("https://catstv.net/government.php?id=99") == (None, None)
+
+
+class RecordingCursor:
+    def __init__(self, select_row):
+        self.select_row = select_row
+        self.calls = []
+        self._fetchone = None
+
+    def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+        if "SELECT id FROM meetings.meetings" in sql:
+            self._fetchone = self.select_row
+        elif "RETURNING id" in sql:
+            self._fetchone = ("new-uuid",)
+
+    def fetchone(self):
+        return self._fetchone
+
+
+@pytest.mark.parametrize("existing_row", [("existing-uuid",), None])
+def test_upsert_meeting_writes_title_and_event_kind(existing_row):
+    cur = RecordingCursor(existing_row)
+    meeting = Meeting(
+        meeting_id="ca-governor-debate",
+        city=None,
+        date="2026-06-02",
+        meeting_type="Governor Debate",
+        title="California Governor Debate",
+        event_kind="debate",
+    )
+
+    _upsert_meeting(cur, meeting, None)
+
+    write_sql, write_params = cur.calls[1]
+    assert "title" in write_sql
+    assert "event_kind" in write_sql
+    assert "California Governor Debate" in write_params
+    assert "debate" in write_params

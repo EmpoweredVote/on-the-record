@@ -1,7 +1,18 @@
+export type EventKind =
+  | "council"
+  | "school_board"
+  | "debate"
+  | "forum"
+  | "community_meeting"
+  | "news_clip"
+  | "other";
+
 export interface Meeting {
   meeting_id: string;       // UUID from ev-accounts
   slug: string | null;      // human-readable slug (e.g. "2026-02-18-regular-session")
-  city: string;
+  title: string | null;
+  event_kind: EventKind;
+  city: string | null;
   body_slug: string | null;
   meeting_type: string;
   meeting_date: string;     // YYYY-MM-DD

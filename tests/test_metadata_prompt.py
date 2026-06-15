@@ -6,7 +6,7 @@ import run_local
 
 
 def _args(**kw):
-    base = dict(city=None, date="", meeting_type=None, default=False)
+    base = dict(city=None, date="", meeting_type=None, title=None, event_kind=None, default=False)
     base.update(kw)
     return argparse.Namespace(**base)
 
