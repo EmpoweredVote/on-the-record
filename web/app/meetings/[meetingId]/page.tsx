@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchMeeting, fetchMeetings, fetchSegments } from "@/lib/queries";
+import { fetchMeeting, fetchMeetings, fetchSegments, fetchSummary } from "@/lib/queries";
+import { formatMeetingDate } from "@/lib/format";
 import MeetingView from "./MeetingView";
 
 export const dynamicParams = false;
@@ -23,6 +24,8 @@ export async function generateStaticParams() {
   return meetings.map((m) => ({ meetingId: m.meeting_id }));
 }
 
+const SUBSTANTIVE = new Set(["discussion", "public_comment", "consent_agenda", "vote"]);
+
 export default async function MeetingPage({
   params,
 }: {
@@ -31,7 +34,12 @@ export default async function MeetingPage({
   const { meetingId } = await params;
   const meeting = await fetchMeeting(meetingId);
   if (!meeting) notFound();
-  const segments = await fetchSegments(meetingId);
+  const [segments, summary] = await Promise.all([
+    fetchSegments(meetingId),
+    fetchSummary(meetingId).catch(() => null),
+  ]);
+
+  const outline = (summary?.sections ?? []).filter((s) => SUBSTANTIVE.has(s.section_type));
 
   return (
     <main className="meetingPage">
@@ -40,7 +48,7 @@ export default async function MeetingPage({
           ← All meetings
         </Link>
         <h1>
-          {meeting.city} {meeting.meeting_type} — {meeting.meeting_date}
+          {meeting.city} {meeting.meeting_type} — {formatMeetingDate(meeting.meeting_date)}
         </h1>
         {meeting.source_url && (
           <a
@@ -53,7 +61,20 @@ export default async function MeetingPage({
           </a>
         )}
       </header>
-      <MeetingView meeting={meeting} segments={segments} />
+
+      {summary?.executive_summary && (
+        <section className="execSummary">
+          <h2>Summary</h2>
+          <p>{summary.executive_summary}</p>
+          {summary.key_decisions.length > 0 && (
+            <ul className="keyDecisions">
+              {summary.key_decisions.map((d, i) => <li key={i}>{d}</li>)}
+            </ul>
+          )}
+        </section>
+      )}
+
+      <MeetingView meeting={meeting} segments={segments} outline={outline} />
     </main>
   );
 }

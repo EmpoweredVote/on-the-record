@@ -136,6 +136,29 @@ class SummarySection:
 
 
 @dataclass
+class SectionTopic:
+    """AI-predicted topic tags for one summary section (by array index)."""
+    section_index: int
+    topic_keys: list[str] = field(default_factory=list)
+    confidence: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "section_index": self.section_index,
+            "topic_keys": self.topic_keys,
+            "confidence": self.confidence,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "SectionTopic":
+        return cls(
+            section_index=d["section_index"],
+            topic_keys=d.get("topic_keys", []),
+            confidence=d.get("confidence"),
+        )
+
+
+@dataclass
 class MeetingSummary:
     executive_summary: str = ""
     key_decisions: list[str] = field(default_factory=list)
@@ -204,6 +227,7 @@ class Meeting:
     segments: list[Segment] = field(default_factory=list)
     speakers: dict[str, SpeakerMapping] = field(default_factory=dict)
     summary: Optional[MeetingSummary] = None
+    section_topics: list[SectionTopic] = field(default_factory=list)
     processing_metadata: ProcessingMetadata = field(default_factory=ProcessingMetadata)
 
     def to_dict(self) -> dict:

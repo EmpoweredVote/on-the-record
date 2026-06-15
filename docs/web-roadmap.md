@@ -29,22 +29,27 @@ Each phase below tags work by where it lives: **[pipeline]**, **[ev-accounts]**,
 - **[ev-accounts]** `/api/search?q=&speaker=&city=`: `websearch_to_tsquery('english', $q)` against the segments FTS index + `ts_headline` snippets, joined to meeting metadata. CORS-allowlisted for the site origin (static export ⇒ browser calls it directly).
 - **[web]** `/search` page (client component): results grouped by meeting, each deep-linking to `/meetings/[id]?t=...#seg-...`.
 
-## Phase 4 — AI summaries & key moments  ← next up
+## Phase 4 — AI summaries & key moments ✅ (built 2026-06-14, with Phase 6)
 
-- **[pipeline]** During publish, generate per-meeting artifacts with an LLM pass over the named transcript: short summary, topic list, and notable moments (segment ranges + one-line description). Deterministic re-publish: store alongside the transcript so re-runs don't re-bill.
-- **[ev-accounts]** Columns + API: summary/topics/moments on the meeting payload.
-- **[web]** Summary block at the top of meeting pages; summary preview text on the index cards; "key moments" as jump links into the transcript.
+- **[pipeline]** Per-meeting summary already generated at publish (`src/summarize.py`): executive summary, key decisions, section breakdown, vote extraction — stored as the `meetings.meetings.summary` JSONB.
+- **[ev-accounts]** `/api/meetings/[id]/summary` now reads that JSONB (the prior read path queried tables no migration ever created); `summaryPreview` exposed on the meeting list payload.
+- **[web]** Executive-summary block + section outline (clickable table of contents into the transcript) on meeting pages; one-line summary preview on index cards. Shipped alongside Phase 6 because the topic outline requires the section display.
+- Deferred: "key moments" as a distinct notable-moment artifact (the section outline covers most of the value).
 
-## Phase 5 — Clips & sharing
+## Phase 5 — Clips & sharing  ← next up (or the event→entity model / curation app, per priority)
 
 - **[web]** Select a transcript range → shareable clip URL: a page showing the quoted text, speaker, meeting context, and the player cued to the range, plus OpenGraph card so links unfurl well.
 - **Prerequisite (pulled forward from ops): stable segment hashes** — e.g. hash of meeting_id + speaker + text prefix — so clip and `#seg-` links survive re-publishes that renumber segments. **[pipeline]** computes them, **[ev-accounts]** serves them, **[web]** uses them as anchors.
 
-## Phase 6 — Topics & issues
+## Phase 6 — Topics & provenance ✅ (built 2026-06-14; needs migration 365 + re-publish to go live)
 
-- **[pipeline]** Topic tagging falls out of the Phase 4 summarization pass — tag segments/meetings with a controlled topic vocabulary (zoning, budget, policing, ...).
-- **[ev-accounts]** `/api/topics`, `/api/topics/[slug]` (discussions across meetings).
-- **[web]** Topic pages collecting every discussion of an issue across meetings and bodies; topic chips on meeting pages.
+Specs: `docs/superpowers/specs/2026-06-13-topics-and-provenance-design.md`. Built ahead of Phases 4/5 per a re-prioritization.
+
+- **[pipeline]** New topic-classification stage (`src/topics.py`): classifies the summarizer's substantive sections against the **live Compass issue vocabulary** (`inform.compass_topics`, keyed by `topic_key` — the same spine `essentials.quotes` uses), AI-predicted, checkpointed to `topics.json`. Writes `meetings.meeting_topics` on publish.
+- **[ev-accounts]** `/api/topics`, `/api/topics/[key]` (discussions across meetings); section payload carries topic tags; **migration 365** creates `meetings.meeting_topics`.
+- **[web]** Topic labels on the meeting outline (not chips — a label on each discussion section); `/topics` index + `/topics/[key]` pages; CalMatters-style **provenance badge** (AI-predicted vs human-verified) on speaker attributions (from `id_method`) and topic tags (all predicted this build).
+- **To go live**: apply ev-accounts migration `365_meeting_topics.sql`, then re-publish meetings (with `DATABASE_URL` + `ANTHROPIC_API_KEY`) so summaries + topic tags generate. Until the migration is applied, `/api/topics` and the summary endpoint 500 (the site degrades gracefully).
+- **Deferred (own future phases)**: post-publish **curation web app** (verify/correct AI tags, clear the Uncategorized backlog, promote predicted→verified); **event kinds & flexible titling** + the deeper **event→EV-entity model** (debates→races, news clips→jurisdictions) — being grilled separately; official agenda ingestion; LA council-file linking.
 
 ## Phase 7 — Beyond council meetings
 

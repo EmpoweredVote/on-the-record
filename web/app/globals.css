@@ -109,6 +109,8 @@ a {
   font-size: 0.85rem;
 }
 
+.meetingPreview { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
 /* ---------- Meeting page ---------- */
 
 .meetingPage {
@@ -545,3 +547,32 @@ a {
   opacity: 0.45;
   cursor: default;
 }
+
+/* ---------- Summary & outline ---------- */
+.execSummary { margin: 1rem 0 1.5rem; }
+.execSummary p { color: var(--foreground); line-height: 1.55; }
+.keyDecisions { margin: 0.75rem 0 0 1.25rem; color: var(--muted); }
+.outline { margin-bottom: 1.5rem; }
+.outline h2, .execSummary h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.outlineItem { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.outlineLink { display: flex; justify-content: space-between; gap: 1rem; color: var(--accent); background: none; border: none; cursor: pointer; width: 100%; text-align: left; }
+.outlineTime { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.outlineTopics { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem; }
+.topicLabel { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; }
+.topicLabel a { background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 1px 7px; }
+
+/* ---------- Provenance badge ---------- */
+.provBadge { font-size: 0.7rem; padding: 0 5px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.prov-verified { color: #16a34a; border-color: #16a34a; }
+
+/* ---------- Topics ---------- */
+.topicList { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.topicRow { display: flex; justify-content: space-between; padding: 0.5rem 0.6rem; border-radius: 6px; }
+.topicRow:hover { background: var(--accent-soft); }
+.topicName { color: var(--accent); font-weight: 600; }
+.topicCount { color: var(--muted); font-size: 0.85rem; }
+.topicItems { list-style: none; display: flex; flex-direction: column; gap: 0.85rem; }
+.topicItem { border-left: 3px solid var(--border); padding-left: 0.75rem; }
+.topicItemLink { display: flex; justify-content: space-between; gap: 1rem; color: var(--accent); }
+.topicItemTime { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.topicItemMeta { color: var(--muted); font-size: 0.8rem; display: inline-flex; gap: 0.4rem; align-items: center; }

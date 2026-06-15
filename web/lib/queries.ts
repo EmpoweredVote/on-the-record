@@ -1,4 +1,4 @@
-import type { Appearance, Meeting, Person, PersonDetail, Segment } from "./types";
+import type { Appearance, Meeting, MeetingSpeaker, MeetingSummary, Person, PersonDetail, Segment, TopicDetail, TopicListEntry } from "./types";
 
 const BASE = (process.env.EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
 
@@ -15,6 +15,45 @@ function mapMeeting(m: any): Meeting {
     playback_kind: m.playbackKind ?? null,
     playback_url: m.videoUrl ?? null,
     duration_seconds: m.durationSeconds ?? null,
+    summary_preview: m.summaryPreview ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    speakers: ((m.speakers ?? []) as any[]).map((sp): MeetingSpeaker => ({
+      label: sp.label,
+      display_name: sp.displayName ?? null,
+      politician_slug: sp.politicianSlug ?? null,
+      id_method: sp.idMethod ?? null,
+      confidence: sp.confidence ?? null,
+    })),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapSummary(s: any): MeetingSummary {
+  return {
+    executive_summary: s.executiveSummary ?? "",
+    key_decisions: s.keyDecisions ?? [],
+    model: s.model ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sections: ((s.sections ?? []) as any[]).map((sec) => ({
+      section_type: sec.sectionType,
+      title: sec.title,
+      content: sec.content,
+      start_time: sec.startTime ?? null,
+      end_time: sec.endTime ?? null,
+      sort_order: sec.sortOrder ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      topics: ((sec.topics ?? []) as any[]).map((t) => ({
+        key: t.key, title: t.title ?? null, status: (t.status ?? "predicted"),
+      })),
+    })),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapTopicEntry(t: any): TopicListEntry {
+  return {
+    topic_key: t.topicKey, title: t.title ?? null,
+    item_count: t.itemCount ?? 0, meeting_count: t.meetingCount ?? 0,
   };
 }
 
@@ -122,4 +161,37 @@ export async function fetchSegments(meetingId: string): Promise<Segment[]> {
     if (all.length >= totalCount) break;
   }
   return all;
+}
+
+export async function fetchSummary(meetingId: string): Promise<MeetingSummary | null> {
+  const res = await fetch(`${BASE}/api/meetings/${encodeURIComponent(meetingId)}/summary`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`summary fetch failed: ${res.status}`);
+  return mapSummary(await res.json());
+}
+
+export async function fetchTopics(): Promise<TopicListEntry[]> {
+  const res = await fetch(`${BASE}/api/topics`);
+  if (!res.ok) throw new Error(`topics fetch failed: ${res.status}`);
+  const data = await res.json();
+  return ((data.topics ?? []) as unknown[]).map(mapTopicEntry);
+}
+
+export async function fetchTopic(key: string): Promise<TopicDetail | null> {
+  const res = await fetch(`${BASE}/api/topics/${encodeURIComponent(key)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`topic fetch failed: ${res.status}`);
+  const t = await res.json();
+  return {
+    topic_key: t.topicKey,
+    title: t.title ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items: ((t.items ?? []) as any[]).map((it) => ({
+      meeting_id: it.meetingId, city: it.city, meeting_type: it.meetingType,
+      meeting_date: it.date, playback_kind: it.playbackKind ?? null,
+      section_index: it.sectionIndex, section_title: it.sectionTitle ?? null,
+      section_type: it.sectionType ?? null, start_time: it.startTime ?? null,
+      status: (it.status ?? "predicted"),
+    })),
+  };
 }

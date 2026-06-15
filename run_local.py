@@ -1203,6 +1203,41 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     print()
 
+    # --- Stage 5b: Topic classification (Phase 6) ---
+    topics_path = meeting_dir / "topics.json"
+    if topics_path.exists():
+        from src.models import SectionTopic
+        with open(topics_path, "r") as f:
+            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
+        print(f"  Loaded topics ({len(meeting.section_topics)} sections)")
+    elif args.skip_summary or meeting.summary is None:
+        print("  Skipped topic classification (no summary).")
+    else:
+        db_url = os.environ.get("DATABASE_URL", "").strip()
+        if not db_url:
+            print("  No DATABASE_URL — skipping topic classification (vocabulary lives in the DB).")
+        else:
+            try:
+                import anthropic
+                import psycopg2
+                from src.topics import fetch_live_topics, classify_sections
+
+                conn = psycopg2.connect(db_url)
+                try:
+                    vocab = fetch_live_topics(conn)
+                finally:
+                    conn.close()
+                print(f"  Classifying topics against {len(vocab)} live Compass topics...")
+                client = anthropic.Anthropic()
+                meeting.section_topics = classify_sections(client, meeting.summary.sections, vocab)
+                with open(topics_path, "w") as f:
+                    json.dump([st.to_dict() for st in meeting.section_topics], f, indent=2)
+                tagged = sum(1 for st in meeting.section_topics if st.topic_keys)
+                print(f"  Tagged {tagged}/{len(meeting.section_topics)} substantive sections")
+            except Exception as e:
+                print(f"  ⚠ Skipping topic classification — {e}")
+                meeting.section_topics = []
+
     # ======================================================================
     # Stage 6: Voice Enrollment
     # ======================================================================
@@ -1573,7 +1608,7 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
     from src.checkpoint import PipelineState
-    from src.models import Meeting
+    from src.models import Meeting, SectionTopic
     from src.publish import publish_meeting
 
     meeting_dir = config.MEETINGS_DIR / meeting_id
@@ -1585,6 +1620,14 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
 
     with open(named_path, "r", encoding="utf-8") as f:
         meeting = Meeting.from_dict(json.load(f))
+
+    # section_topics isn't serialized into transcript_named.json (kept off the
+    # summary JSONB); load it from its own checkpoint so a standalone re-publish
+    # carries topic tags instead of wiping them.
+    topics_path = meeting_dir / "topics.json"
+    if topics_path.exists():
+        with open(topics_path, "r", encoding="utf-8") as f:
+            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
 
     body_slug = PipelineState(meeting_dir).body_slug
 

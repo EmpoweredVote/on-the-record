@@ -8,11 +8,12 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import type { Meeting, Segment } from "@/lib/types";
+import type { Meeting, Segment, SummarySection } from "@/lib/types";
 import type { PlayerAdapter } from "./players/adapter";
 import YouTubePlayer from "./players/YouTubePlayer";
 import FilePlayer from "./players/FilePlayer";
 import { formatTime } from "@/lib/format";
+import ProvenanceBadge, { speakerStatus } from "@/components/ProvenanceBadge";
 
 // Index of the segment playing at time t (last segment with start_time <= t).
 function segmentIndexAt(starts: number[], t: number): number {
@@ -49,9 +50,11 @@ function Highlighted({ text, query }: { text: string; query: string }) {
 export default function MeetingView({
   meeting,
   segments,
+  outline = [],
 }: {
   meeting: Meeting;
   segments: Segment[];
+  outline?: SummarySection[];
 }) {
   const adapterRef = useRef<PlayerAdapter | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -138,6 +141,14 @@ export default function MeetingView({
     setActiveIndex(i);
   };
 
+  const seekToTime = useCallback((seconds: number) => {
+    if (adapterRef.current) adapterRef.current.seekTo(seconds);
+    else pendingSeek.current = seconds;
+    const idx = segmentIndexAt(starts, seconds);
+    const target = idx === -1 ? segments.length - 1 : Math.max(0, idx);
+    document.getElementById(`seg-${segments[target]?.segment_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [segments, starts]);
+
   const copyLink = async (i: number) => {
     const seg = segments[i];
     const url = `${window.location.origin}/meetings/${meeting.meeting_id}?t=${Math.floor(seg.start_time)}#seg-${seg.segment_id}`;
@@ -167,6 +178,11 @@ export default function MeetingView({
         onAdapter={onAdapter}
       />
     ) : null;
+
+  // Build a label → provenance-status map from the meeting's speaker list.
+  const statusByLabel = new Map(
+    (meeting.speakers ?? []).map((sp) => [sp.label, speakerStatus(sp.id_method)] as const)
+  );
 
   return (
     <div className="meetingLayout">
@@ -212,6 +228,36 @@ export default function MeetingView({
             </label>
           )}
         </div>
+
+        {outline.length > 0 && (
+          <section className="outline">
+            <h2>Discussed</h2>
+            <ul>
+              {outline.map((sec) => (
+                <li key={sec.sort_order} className="outlineItem">
+                  <button
+                    type="button"
+                    className="outlineLink"
+                    onClick={() => seekToTime(Math.floor(sec.start_time ?? 0))}
+                  >
+                    <span className="outlineTitle">{sec.title}</span>
+                    <span className="outlineTime">{formatTime(sec.start_time ?? 0)}</span>
+                  </button>
+                  {sec.topics.length > 0 && (
+                    <span className="outlineTopics">
+                      {sec.topics.map((t) => (
+                        <span key={t.key} className="topicLabel">
+                          <Link href={`/topics/${t.key}`}>{t.title ?? t.key}</Link>
+                          <ProvenanceBadge status={t.status} />
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       <div className="transcriptPane" ref={listRef}>
@@ -242,6 +288,9 @@ export default function MeetingView({
                   seg.speaker_name || seg.speaker_label
                 )}
               </span>
+              {(i === 0 || segments[i - 1].speaker_label !== seg.speaker_label) && (
+                <ProvenanceBadge status={statusByLabel.get(seg.speaker_label) ?? "predicted"} />
+              )}
               <button
                 className="copyLink"
                 onClick={() => copyLink(i)}

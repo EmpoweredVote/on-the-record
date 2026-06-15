@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchAppearances, fetchPeople, fetchPerson } from "@/lib/queries";
-import { formatTime } from "@/lib/format";
+import { formatMeetingDate, formatTime } from "@/lib/format";
 
 export const dynamicParams = false;
 
@@ -78,7 +78,7 @@ export default async function PersonPage({
           <section key={a.meeting_id} className="appearance">
             <h3>
               <Link href={`/meetings/${a.meeting_id}`}>
-                {a.city} {a.meeting_type} — {a.meeting_date}
+                {a.city} {a.meeting_type} — {formatMeetingDate(a.meeting_date)}
               </Link>
               <span className="personMeta">
                 {" "}

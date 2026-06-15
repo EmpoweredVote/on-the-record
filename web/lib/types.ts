@@ -9,6 +9,8 @@ export interface Meeting {
   playback_kind: "youtube" | "file" | "hls" | null;
   playback_url: string | null;  // video_url from ev-accounts (resolved: YT id, file URL, etc.)
   duration_seconds: number | null;
+  summary_preview: string | null;
+  speakers: MeetingSpeaker[];
 }
 
 export interface Segment {
@@ -67,4 +69,63 @@ export interface SearchResult {
   speaker_name: string | null;
   politician_slug: string | null;
   snippet: string;               // [[[match]]] sentinels, rendered as <mark>
+}
+
+export type ProvenanceStatus = "predicted" | "verified";
+
+export interface SectionTopicRef {
+  key: string;
+  title: string | null;
+  status: ProvenanceStatus;
+}
+
+export interface SummarySection {
+  section_type: string;
+  title: string;
+  content: string;
+  start_time: number | null;
+  end_time: number | null;
+  sort_order: number;
+  topics: SectionTopicRef[];
+}
+
+export interface MeetingSummary {
+  executive_summary: string;
+  key_decisions: string[];
+  model: string | null;
+  sections: SummarySection[];
+}
+
+export interface MeetingSpeaker {
+  label: string;
+  display_name: string | null;
+  politician_slug: string | null;
+  id_method: string | null;   // "human_review" => verified; else predicted
+  confidence: number | null;
+}
+
+export interface TopicListEntry {
+  topic_key: string;
+  title: string | null;
+  item_count: number;
+  meeting_count: number;
+}
+
+export interface TopicItem {
+  meeting_id: string;
+  city: string;
+  meeting_type: string;
+  meeting_date: string;
+  playback_kind: string | null;
+  section_index: number;       // for keying; deep links use start_time
+  section_title: string | null;
+  section_type: string | null;
+  start_time: number | null;
+  status: ProvenanceStatus;
+}
+
+export interface TopicDetail {
+  topic_key: string;
+  title: string | null;
+  items: TopicItem[];
 }
