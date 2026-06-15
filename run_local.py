@@ -1082,6 +1082,20 @@ def run_pipeline(args: argparse.Namespace) -> None:
         if stored_centroids:
             print(f"  Loaded {len(stored_centroids)} voice profiles")
 
+        # Guard: re-extract embeddings if they don't match stored profile dimensions
+        if stored_centroids and speaker_embeddings:
+            emb_dim = next(iter(speaker_embeddings.values())).shape[0]
+            prof_dim = next(iter(stored_centroids.values())).shape[0]
+            if emb_dim != prof_dim:
+                print(f"  ! Stale embeddings ({emb_dim}-dim) don't match profiles ({prof_dim}-dim). Re-extracting...")
+                from src.diarize import extract_speaker_embeddings
+                speaker_embeddings = extract_speaker_embeddings(wav_path, segments, hf_token)
+                emb_data = {k: v.tolist() for k, v in speaker_embeddings.items()}
+                with open(embeddings_path, "w") as f:
+                    json.dump(emb_data, f)
+                new_dim = next(iter(speaker_embeddings.values())).shape[0]
+                print(f"  Re-extracted {len(speaker_embeddings)} embeddings ({new_dim}-dim)")
+
         # Layer 3: LLM (optional)
         llm_fn = None
         llm = None

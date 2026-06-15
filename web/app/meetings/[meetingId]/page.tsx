@@ -32,7 +32,12 @@ export default async function MeetingPage({
   params: Promise<{ meetingId: string }>;
 }) {
   const { meetingId } = await params;
-  const meeting = await fetchMeeting(meetingId);
+  let meeting: Awaited<ReturnType<typeof fetchMeeting>> = null;
+  try {
+    meeting = await fetchMeeting(meetingId);
+  } catch {
+    notFound();
+  }
   if (!meeting) notFound();
   const [segments, summary] = await Promise.all([
     fetchSegments(meetingId),
