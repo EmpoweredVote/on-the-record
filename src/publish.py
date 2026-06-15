@@ -141,6 +141,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
               city = %s,
               date = %s,
               meeting_type = %s,
+              title = %s,
+              event_kind = %s,
               duration_seconds = %s,
               audio_source = %s,
               video_url = %s,
@@ -157,6 +159,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 meeting.city,
                 date,
                 meeting.meeting_type,
+                meeting.title,
+                meeting.event_kind,
                 meeting.duration_seconds or None,
                 source or None,
                 playback_url,
@@ -173,13 +177,13 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
         cur.execute(
             """
             INSERT INTO meetings.meetings
-              (id, city, date, meeting_type, duration_seconds,
+              (id, city, date, meeting_type, title, event_kind, duration_seconds,
                audio_source, video_url, status,
                body_slug, source_url, playback_kind, slug,
                summary, processing_metadata,
                created_at, updated_at)
             VALUES
-              (gen_random_uuid(), %s, %s, %s, %s,
+              (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
                %s, %s, %s,
                %s, %s, %s, %s,
                %s, %s,
@@ -190,6 +194,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 meeting.city,
                 date,
                 meeting.meeting_type,
+                meeting.title,
+                meeting.event_kind,
                 meeting.duration_seconds or None,
                 source or None,
                 playback_url,

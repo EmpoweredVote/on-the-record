@@ -1,4 +1,15 @@
-import type { Appearance, Meeting, MeetingSpeaker, MeetingSummary, Person, PersonDetail, Segment, TopicDetail, TopicListEntry } from "./types";
+import type {
+  Appearance,
+  EventKind,
+  Meeting,
+  MeetingSpeaker,
+  MeetingSummary,
+  Person,
+  PersonDetail,
+  Segment,
+  TopicDetail,
+  TopicListEntry,
+} from "./types";
 
 const BASE = (process.env.EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
 
@@ -7,7 +18,9 @@ function mapMeeting(m: any): Meeting {
   return {
     meeting_id: m.id,
     slug: m.slug ?? null,
-    city: m.city,
+    title: m.title ?? null,
+    event_kind: (m.eventKind ?? "council") as EventKind,
+    city: m.city ?? null,
     body_slug: m.bodySlug ?? null,
     meeting_type: m.meetingType,
     meeting_date: m.date,
@@ -107,6 +120,7 @@ function mapAppearance(a: any): Appearance {
 }
 
 export async function fetchPeople(): Promise<Person[]> {
+  if (!BASE) return [];
   const res = await fetch(`${BASE}/api/people`);
   if (!res.ok) throw new Error(`people fetch failed: ${res.status}`);
   const data = await res.json();
@@ -114,6 +128,7 @@ export async function fetchPeople(): Promise<Person[]> {
 }
 
 export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
+  if (!BASE) return null;
   const res = await fetch(`${BASE}/api/people/${encodeURIComponent(slug)}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`person fetch failed: ${res.status}`);
@@ -122,6 +137,7 @@ export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
 }
 
 export async function fetchAppearances(slug: string): Promise<Appearance[]> {
+  if (!BASE) return [];
   const res = await fetch(
     `${BASE}/api/people/${encodeURIComponent(slug)}/appearances`
   );
@@ -131,6 +147,7 @@ export async function fetchAppearances(slug: string): Promise<Appearance[]> {
 }
 
 export async function fetchMeetings(): Promise<Meeting[]> {
+  if (!BASE) return [];
   const res = await fetch(`${BASE}/api/meetings`);
   if (!res.ok) throw new Error(`meetings fetch failed: ${res.status}`);
   const data = await res.json();
@@ -138,6 +155,7 @@ export async function fetchMeetings(): Promise<Meeting[]> {
 }
 
 export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
+  if (!BASE) return null;
   const res = await fetch(`${BASE}/api/meetings/${meetingId}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`meeting fetch failed: ${res.status}`);
@@ -146,6 +164,7 @@ export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
 
 // ev-accounts paginates the transcript at 200 segments/page
 export async function fetchSegments(meetingId: string): Promise<Segment[]> {
+  if (!BASE) return [];
   const all: Segment[] = [];
   for (let page = 1; ; page++) {
     const res = await fetch(
@@ -164,6 +183,7 @@ export async function fetchSegments(meetingId: string): Promise<Segment[]> {
 }
 
 export async function fetchSummary(meetingId: string): Promise<MeetingSummary | null> {
+  if (!BASE) return null;
   const res = await fetch(`${BASE}/api/meetings/${encodeURIComponent(meetingId)}/summary`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`summary fetch failed: ${res.status}`);
@@ -171,6 +191,7 @@ export async function fetchSummary(meetingId: string): Promise<MeetingSummary | 
 }
 
 export async function fetchTopics(): Promise<TopicListEntry[]> {
+  if (!BASE) return [];
   const res = await fetch(`${BASE}/api/topics`);
   if (!res.ok) throw new Error(`topics fetch failed: ${res.status}`);
   const data = await res.json();
@@ -178,6 +199,7 @@ export async function fetchTopics(): Promise<TopicListEntry[]> {
 }
 
 export async function fetchTopic(key: string): Promise<TopicDetail | null> {
+  if (!BASE) return null;
   const res = await fetch(`${BASE}/api/topics/${encodeURIComponent(key)}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`topic fetch failed: ${res.status}`);

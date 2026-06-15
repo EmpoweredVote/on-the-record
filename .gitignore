@@ -46,3 +46,6 @@ bench/results/
 
 # Brainstorming visual companion scratch
 .superpowers/
+
+# Local git worktrees
+.worktrees/

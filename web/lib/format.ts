@@ -1,3 +1,5 @@
+import type { EventKind, Meeting } from "./types";
+
 // Render a meeting date as a readable, locale-friendly string (e.g. "Feb 25, 2026").
 // Accepts a YYYY-MM-DD string (what the API returns) or a full ISO datetime
 // (legacy/cached rows). We parse only the date portion and construct the Date
@@ -24,4 +26,28 @@ export function formatTime(seconds: number): string {
   const mm = String(m).padStart(2, "0");
   const ss = String(s).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+export function meetingTitle(
+  meeting: Pick<Meeting, "title" | "city" | "meeting_type">
+): string {
+  const explicit = meeting.title?.trim();
+  if (explicit) return explicit;
+  return [meeting.city, meeting.meeting_type]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(" ");
+}
+
+const EVENT_KIND_LABELS: Record<EventKind, string> = {
+  council: "Council",
+  school_board: "School board",
+  debate: "Debate",
+  forum: "Forum",
+  community_meeting: "Community meeting",
+  news_clip: "News clip",
+  other: "Other",
+};
+
+export function eventKindLabel(kind: EventKind): string {
+  return EVENT_KIND_LABELS[kind];
 }

@@ -39,6 +39,7 @@ if _env_file.exists():
                 os.environ.setdefault(_key.strip(), _val.strip())
 
 from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
+from src.event_kinds import EVENT_KINDS, validate_event_kind
 
 
 def _validate_diarizer_compute(args) -> None:
@@ -567,10 +568,15 @@ def run_pipeline(args: argparse.Namespace) -> None:
         city=args.city,
         date=args.date,
         meeting_type=args.meeting_type,
+        title=args.title.strip() if args.title and args.title.strip() else None,
+        event_kind=args.event_kind,
         audio_source=str(audio_path),
     )
 
-    print(f"\nMeeting: {args.city} {args.meeting_type} ({args.date})")
+    display_title = meeting.title or " ".join(
+        part for part in (meeting.city, meeting.meeting_type) if part
+    )
+    print(f"\nMeeting: {display_title} ({meeting.date})")
     print(f"Meeting ID: {meeting_id}")
     print(f"Directory: {meeting_dir}")
     if state.completed_stage > PipelineStage.NOT_STARTED:
@@ -1785,9 +1791,14 @@ def _resolve_metadata(args) -> None:
     """
     interactive = sys.stdin.isatty() and not getattr(args, "default", False)
     today = _today_iso()
+    if args.event_kind is None:
+        args.event_kind = "council"
+    else:
+        args.event_kind = validate_event_kind(args.event_kind)
+    requires_city_default = args.event_kind in ("council", "school_board")
 
     if not interactive:
-        if args.city is None:
+        if args.city is None and requires_city_default:
             args.city = CITY_DEFAULT
         if args.meeting_type is None:
             args.meeting_type = MEETING_TYPE_DEFAULT
@@ -1795,7 +1806,7 @@ def _resolve_metadata(args) -> None:
             args.date = today
         return
 
-    if args.city is None:
+    if args.city is None and requires_city_default:
         ans = input(f"  City [{CITY_DEFAULT}]: ").strip()
         args.city = ans or CITY_DEFAULT
     if not args.date:
@@ -2398,7 +2409,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         print("\nNo identifications made.")
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="CouncilScribe — Automated City Council Meeting Transcription",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2440,6 +2451,17 @@ Environment Variables:
     parser.add_argument("--meeting-type", default=None,
                         help="Meeting type or name, free text "
                              "(e.g. \"Regular Session\", \"Plan Commission\"; prompted if omitted)")
+    parser.add_argument(
+        "--title",
+        default=None,
+        help="Optional human display title; blank/omitted uses city + meeting type",
+    )
+    parser.add_argument(
+        "--event-kind",
+        choices=EVENT_KINDS,
+        default=None,
+        help="Event format (default: council)",
+    )
     parser.add_argument("--meeting-id", default="", help="Custom meeting ID (auto-generated if omitted)")
 
     # Processing options
@@ -2544,6 +2566,12 @@ Environment Variables:
              "'all' re-runs everything from ingest.",
     )
 
+    return parser
+
+
+def main():
+    parser = build_parser()
+
     args = parser.parse_args()
 
     if args.repair_transcript:
@@ -2584,6 +2612,8 @@ Environment Variables:
             "--body": _option_supplied(cli_argv, "--body"),
             "--force-retag": _option_supplied(cli_argv, "--force-retag"),
             "--redo": _option_supplied(cli_argv, "--redo"),
+            "--title": _option_supplied(cli_argv, "--title"),
+            "--event-kind": _option_supplied(cli_argv, "--event-kind"),
         }
         repair_conflicts = [
             flag
@@ -2734,6 +2764,8 @@ Environment Variables:
         print(f"\nSelected: {selected['name']} ({selected['date']})")
         print(f"  URL: {args.input}\n")
 
+    named_transcript_loaded = False
+
     # --- Resume mode ---
     if args.resume:
         from src import config
@@ -2746,13 +2778,16 @@ Environment Variables:
 
         # Load meeting metadata from named transcript or reconstruct
         named_path = meeting_dir / "transcript_named.json"
-        if named_path.exists():
+        named_transcript_loaded = named_path.exists()
+        if named_transcript_loaded:
             with open(named_path, "r") as f:
                 data = json.load(f)
             args.input = data.get("audio_source", "")
             args.city = data.get("city", args.city)
             args.date = data.get("date", args.date)
             args.meeting_type = data.get("meeting_type", args.meeting_type)
+            args.title = data.get("title", args.title)
+            args.event_kind = data.get("event_kind", args.event_kind)
         else:
             # Use the WAV file as input since audio is already ingested
             wav = meeting_dir / "audio.wav"
@@ -2775,7 +2810,11 @@ Environment Variables:
     # Resolve city/date/meeting-type (prompt unless --default / non-interactive).
     # Skip prompting on resume (metadata comes from the existing meeting).
     if args.resume:
-        if args.city is None:
+        if args.event_kind is None:
+            args.event_kind = "council"
+        else:
+            args.event_kind = validate_event_kind(args.event_kind)
+        if args.city is None and not named_transcript_loaded:
             args.city = CITY_DEFAULT
         if args.meeting_type is None:
             args.meeting_type = MEETING_TYPE_DEFAULT

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchMeeting, fetchMeetings, fetchSegments, fetchSummary } from "@/lib/queries";
-import { formatMeetingDate } from "@/lib/format";
+import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
 import MeetingView from "./MeetingView";
 
 export const dynamicParams = false;
@@ -47,9 +47,9 @@ export default async function MeetingPage({
         <Link href="/" className="backLink">
           ← All meetings
         </Link>
-        <h1>
-          {meeting.city} {meeting.meeting_type} — {formatMeetingDate(meeting.meeting_date)}
-        </h1>
+        <h1>{meetingTitle(meeting)}</h1>
+        <span className="eventKind">{eventKindLabel(meeting.event_kind)}</span>
+        <p className="meetingDate">{formatMeetingDate(meeting.meeting_date)}</p>
         {meeting.source_url && (
           <a
             className="sourceLink"

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { fetchMeetings } from "@/lib/queries";
-import { formatMeetingDate } from "@/lib/format";
+import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "";
@@ -40,9 +40,8 @@ export default async function HomePage() {
           {meetings.map((m) => (
             <li key={m.meeting_id}>
               <Link href={`/meetings/${m.meeting_id}`}>
-                <span className="meetingTitle">
-                  {m.city} {m.meeting_type}
-                </span>
+                <span className="meetingTitle">{meetingTitle(m)}</span>
+                <span className="eventKind">{eventKindLabel(m.event_kind)}</span>
                 <span className="meetingDate">{formatMeetingDate(m.meeting_date)}</span>
                 {m.duration_seconds ? (
                   <span className="meetingDuration">

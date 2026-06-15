@@ -219,9 +219,11 @@ class ProcessingMetadata:
 @dataclass
 class Meeting:
     meeting_id: str
-    city: str
+    city: Optional[str]
     date: str
     meeting_type: str = "Regular Session"
+    title: Optional[str] = None
+    event_kind: str = "council"
     audio_source: str = ""
     duration_seconds: float = 0.0
     segments: list[Segment] = field(default_factory=list)
@@ -236,6 +238,8 @@ class Meeting:
             "city": self.city,
             "date": self.date,
             "meeting_type": self.meeting_type,
+            "title": self.title,
+            "event_kind": self.event_kind,
             "audio_source": self.audio_source,
             "duration_seconds": self.duration_seconds,
             "segments": [s.to_dict() for s in self.segments],
@@ -251,9 +255,11 @@ class Meeting:
         summary_data = d.get("summary")
         return cls(
             meeting_id=d["meeting_id"],
-            city=d["city"],
+            city=d.get("city"),
             date=d["date"],
             meeting_type=d.get("meeting_type", "Regular Session"),
+            title=d.get("title"),
+            event_kind=d.get("event_kind", "council"),
             audio_source=d.get("audio_source", ""),
             duration_seconds=d.get("duration_seconds", 0.0),
             segments=[Segment.from_dict(s) for s in d.get("segments", [])],
