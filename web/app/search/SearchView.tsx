@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { formatTime } from "@/lib/format";
+import { formatMeetingDate, formatTime } from "@/lib/format";
 import type { SearchResult } from "@/lib/types";
 
 // Runtime requests from the browser — needs the NEXT_PUBLIC_ env var,
@@ -225,7 +225,7 @@ export default function SearchView({
             <section key={g.meeting_id} className="searchGroup">
               <h2>
                 <Link href={`/meetings/${g.meeting_id}`}>
-                  {g.city} {g.meeting_type} — {g.meeting_date}
+                  {g.city} {g.meeting_type} — {formatMeetingDate(g.meeting_date)}
                 </Link>
               </h2>
               <ul className="searchHits">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fetchMeetings } from "@/lib/queries";
+import { formatMeetingDate } from "@/lib/format";
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "";
@@ -42,7 +43,7 @@ export default async function HomePage() {
                 <span className="meetingTitle">
                   {m.city} {m.meeting_type}
                 </span>
-                <span className="meetingDate">{m.meeting_date}</span>
+                <span className="meetingDate">{formatMeetingDate(m.meeting_date)}</span>
                 {m.duration_seconds ? (
                   <span className="meetingDuration">
                     {formatDuration(m.duration_seconds)}

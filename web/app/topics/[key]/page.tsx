@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchTopic, fetchTopics } from "@/lib/queries";
 import ProvenanceBadge from "@/components/ProvenanceBadge";
+import { formatMeetingDate } from "@/lib/format";
 
 export const dynamicParams = false;
 
@@ -39,7 +40,7 @@ export default async function TopicPage({ params }: { params: Promise<{ key: str
               <span className="topicItemTime">{fmt(it.start_time)}</span>
             </Link>
             <span className="topicItemMeta">
-              {it.city} {it.meeting_type} · {it.meeting_date} <ProvenanceBadge status={it.status} />
+              {it.city} {it.meeting_type} · {formatMeetingDate(it.meeting_date)} <ProvenanceBadge status={it.status} />
             </span>
           </li>
         ))}
