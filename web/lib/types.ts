@@ -13,7 +13,8 @@ export interface Meeting {
   title: string | null;
   event_kind: EventKind;
   city: string | null;
-  body_slug: string | null;
+  chamber_id: string | null;
+  race_id: string | null;
   meeting_type: string;
   meeting_date: string;     // YYYY-MM-DD
   source_url: string | null;

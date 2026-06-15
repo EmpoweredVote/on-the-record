@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlparse
 import psycopg2
 import psycopg2.extras
 
+from .event_entities import validate_event_entities
 from .models import Meeting
 
 SEGMENT_BATCH_SIZE = 500
@@ -114,8 +115,40 @@ def _validate_date(date_str: str) -> str:
         )
 
 
+def _resolve_chamber_id(cur, body_slug: Optional[str]) -> Optional[str]:
+    if body_slug is None:
+        return None
+
+    cur.execute(
+        """
+        SELECT id
+        FROM essentials.chambers
+        WHERE slug = %s
+        ORDER BY id
+        LIMIT 2
+        """,
+        (body_slug,),
+    )
+    rows = cur.fetchall()
+    if len(rows) != 1:
+        raise RuntimeError(
+            f"Body slug {body_slug!r} matched {len(rows)} chambers; "
+            "publishing requires exactly one"
+        )
+    return str(rows[0][0])
+
+
 def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
     """Insert or update the meeting row. Returns the meetings.meetings UUID."""
+    chamber_id = _resolve_chamber_id(cur, body_slug)
+    entity_error = validate_event_entities(
+        meeting.event_kind,
+        chamber_id,
+        meeting.race_id,
+    )
+    if entity_error:
+        raise RuntimeError(entity_error)
+
     source = (meeting.audio_source or "").strip()
     is_url = source.startswith(("http://", "https://"))
     kind, playback_url = resolve_playback(source)
@@ -147,7 +180,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
               audio_source = %s,
               video_url = %s,
               status = %s,
-              body_slug = %s,
+              chamber_id = %s,
+              race_id = %s,
               source_url = %s,
               playback_kind = %s,
               summary = %s,
@@ -165,7 +199,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 source or None,
                 playback_url,
                 "published",
-                body_slug,
+                chamber_id,
+                meeting.race_id,
                 source if is_url else None,
                 kind,
                 psycopg2.extras.Json(summary),
@@ -179,13 +214,13 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
             INSERT INTO meetings.meetings
               (id, city, date, meeting_type, title, event_kind, duration_seconds,
                audio_source, video_url, status,
-               body_slug, source_url, playback_kind, slug,
+               chamber_id, race_id, source_url, playback_kind, slug,
                summary, processing_metadata,
                created_at, updated_at)
             VALUES
               (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
                %s, %s, %s,
-               %s, %s, %s, %s,
+               %s, %s, %s, %s, %s,
                %s, %s,
                NOW(), NOW())
             RETURNING id
@@ -200,7 +235,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 source or None,
                 playback_url,
                 "published",
-                body_slug,
+                chamber_id,
+                meeting.race_id,
                 source if is_url else None,
                 kind,
                 meeting.meeting_id,
