@@ -131,10 +131,9 @@ def _resolve_chamber_id(cur, body_slug: Optional[str]) -> Optional[str]:
     )
     rows = cur.fetchall()
     if len(rows) != 1:
-        raise RuntimeError(
-            f"Body slug {body_slug!r} matched {len(rows)} chambers; "
-            "publishing requires exactly one"
-        )
+        # Multi-chamber body slugs (e.g. full council) can't be pinned to one
+        # seat — treat as unchambered rather than blocking publish.
+        return None
     return str(rows[0][0])
 
 
@@ -408,6 +407,28 @@ def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
         )
 
 
+def _trigger_deploy_hook() -> None:
+    """POST to the Render deploy hook URL if RENDER_DEPLOY_HOOK_URL is set.
+
+    Called after a successful DB publish so the static site rebuilds
+    automatically. Failures are logged but never raised so a hook error
+    never rolls back a completed publish.
+    """
+    url = os.environ.get("RENDER_DEPLOY_HOOK_URL", "").strip()
+    if not url:
+        return
+
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(url, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"  Deploy hook triggered (HTTP {resp.status})")
+    except Exception as exc:
+        print(f"  WARNING: Deploy hook failed — {exc}")
+        print(f"    Trigger manually: curl -X POST '{url}'")
+
+
 def publish_meeting(
     meeting: Meeting, body_slug: Optional[str] = None
 ) -> PublishResult:
@@ -436,6 +457,8 @@ def publish_meeting(
                 )
     finally:
         conn.close()
+
+    _trigger_deploy_hook()
 
     return PublishResult(
         meeting_id=meeting.meeting_id,

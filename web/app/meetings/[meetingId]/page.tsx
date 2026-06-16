@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchMeeting, fetchMeetings, fetchSegments, fetchSummary } from "@/lib/queries";
@@ -22,6 +23,44 @@ export async function generateStaticParams() {
   if (meetings.length === 0)
     return [{ meetingId: "00000000-0000-0000-0000-000000000000" }];
   return meetings.map((m) => ({ meetingId: m.meeting_id }));
+}
+
+const SITE = (process.env.SITE_URL ?? "").replace(/\/$/, "");
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ meetingId: string }>;
+}): Promise<Metadata> {
+  const { meetingId } = await params;
+
+  let meeting: Awaited<ReturnType<typeof fetchMeeting>> = null;
+  try {
+    meeting = await fetchMeeting(meetingId);
+  } catch { /* API unavailable at build time */ }
+
+  if (!meeting) return { title: "Meeting | On the Record" };
+
+  const summary = await fetchSummary(meetingId).catch(() => null);
+
+  const title = meetingTitle(meeting);
+  const description = summary?.executive_summary
+    ? summary.executive_summary.slice(0, 300)
+    : `Transcript of ${title} — ${formatMeetingDate(meeting.meeting_date)}`;
+
+  const canonical = SITE ? `${SITE}/meetings/${meetingId}` : undefined;
+
+  return {
+    title: `${title} | On the Record`,
+    description,
+    ...(canonical && { alternates: { canonical } }),
+    openGraph: {
+      title,
+      description,
+      ...(canonical && { url: canonical }),
+      type: "article",
+    },
+  };
 }
 
 const SUBSTANTIVE = new Set(["discussion", "public_comment", "consent_agenda", "vote"]);
