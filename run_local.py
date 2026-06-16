@@ -2640,6 +2640,8 @@ Environment Variables:
     )
     parser.add_argument("--publish", action="store_true",
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
+    parser.add_argument("--no-publish", action="store_true",
+                        help="Skip publishing even when resuming (overrides the auto-publish default on --resume)")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
                         help="Publish an already-processed meeting to Supabase and exit")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
@@ -2934,6 +2936,9 @@ def main():
                 args.meeting_type = _ps.meeting_type
 
         args.meeting_id = args.resume
+        # Auto-publish on resume unless the caller explicitly passed --no-publish.
+        if not getattr(args, "no_publish", False):
+            args.publish = True
         print(f"Resuming meeting: {args.resume}")
 
 

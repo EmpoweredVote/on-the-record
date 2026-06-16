@@ -39,6 +39,8 @@ def match_voice_profiles(
         best_name = None
 
         for profile_id, centroid in stored_profiles.items():
+            if centroid.shape != embedding.shape:
+                continue
             similarity = 1.0 - cosine(embedding, centroid)
             if similarity > best_score:
                 best_score = similarity
@@ -102,6 +104,8 @@ def soft_match_voice_profiles(
     for label, embedding in speaker_embeddings.items():
         matches = []
         for profile_id, centroid in stored_profiles.items():
+            if centroid.shape != embedding.shape:
+                continue
             similarity = 1.0 - cosine(embedding, centroid)
             if similarity >= config.SOFT_MATCH_THRESHOLD:
                 name = display_names.get(profile_id, profile_id)
