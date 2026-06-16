@@ -137,19 +137,17 @@ def test_resolve_chamber_id_returns_unique_match():
     )
 
 
-def test_resolve_chamber_id_rejects_missing_match():
+def test_resolve_chamber_id_returns_none_for_missing_match():
     cur = RecordingCursor(fetch_rows=[])
-    with pytest.raises(RuntimeError, match="matched 0 chambers"):
-        _resolve_chamber_id(cur, "missing")
+    assert _resolve_chamber_id(cur, "missing") is None
 
 
-def test_resolve_chamber_id_rejects_duplicate_slug():
+def test_resolve_chamber_id_returns_none_for_duplicate_slug():
     cur = RecordingCursor(fetch_rows=[
         ("11111111-1111-4111-8111-111111111111",),
         ("22222222-2222-4222-8222-222222222222",),
     ])
-    with pytest.raises(RuntimeError, match="matched 2 chambers"):
-        _resolve_chamber_id(cur, "duplicate")
+    assert _resolve_chamber_id(cur, "duplicate") is None
 
 
 @pytest.mark.parametrize(
