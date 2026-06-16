@@ -54,14 +54,24 @@ def normalize_audio(
     source_str = str(input_path)
 
     # Download from URL if needed
+    source_title = None
     if _is_url(source_str):
-        from .download import download_from_url
+        from .download import download_from_url, is_ytdlp_url
 
         # Use a placeholder stem; yt-dlp may change the extension
         download_path = output_path.parent / "source.mp4"
         print(f"  Downloading from URL...")
         actual_path = download_from_url(source_str, download_path, cookies_file=cookies_file)
         ffmpeg_input = str(actual_path)
+
+        if is_ytdlp_url(source_str):
+            try:
+                import yt_dlp
+                with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
+                    info = ydl.extract_info(source_str, download=False)
+                    source_title = info.get("title") or None
+            except Exception:
+                pass
     else:
         ffmpeg_input = str(Path(input_path))
 
@@ -95,4 +105,5 @@ def normalize_audio(
         "sample_rate": config.SAMPLE_RATE,
         "channels": config.CHANNELS,
         "noise_reduced": noise_reduce,
+        "source_title": source_title,
     }

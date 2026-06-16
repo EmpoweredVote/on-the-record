@@ -362,7 +362,7 @@ Do you have a permit No
         speakers=speakers,
         summary=MeetingSummary(
             executive_summary="Preserved summary.",
-            key_decisions=["Preserved decision."],
+            highlights=["Preserved decision."],
             model="summary-model",
             generated_at="2026-06-13T12:00:00",
         ),

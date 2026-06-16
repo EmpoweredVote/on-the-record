@@ -5,6 +5,7 @@ export type EventKind =
   | "forum"
   | "community_meeting"
   | "news_clip"
+  | "press_conference"
   | "other";
 
 export interface Meeting {
@@ -23,6 +24,8 @@ export interface Meeting {
   duration_seconds: number | null;
   summary_preview: string | null;
   speakers: MeetingSpeaker[];
+  event_orgs: string[];         // hosting/producing organizations; may be empty
+  source_title: string | null;  // title from yt-dlp metadata; used as title fallback
 }
 
 export interface Segment {
@@ -103,7 +106,8 @@ export interface SummarySection {
 
 export interface MeetingSummary {
   executive_summary: string;
-  key_decisions: string[];
+  highlights: string[];
+  key_decisions?: string[];  // legacy field; accepted from API but not rendered
   model: string | null;
   sections: SummarySection[];
 }

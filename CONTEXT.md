@@ -47,6 +47,15 @@ An event where a public body convenes to conduct official business (agenda, vote
 **Electoral event**
 An event focused on candidates contesting a race (debates, candidate forums). Event kinds: `debate`, `forum`. Anchor: Race.
 
+**Interview/Media event**
+A recording where a journalist, host, or organization interviews one or more identifiable subjects, or where a subject makes a public statement and takes questions. Event kinds: `news_clip` (journalist interviews a subject), `press_conference` (subject makes statement + takes questions). Both `chamber_id` and `race_id` are optional and may both be set (unlike other categories). The universal anchor is the politician(s) present in the transcript via `politician_slug` on speaker segments.
+
+**Event org**
+An organization associated with producing or hosting an event, stored in `meetings.event_orgs`. A single event may have multiple orgs (e.g. CBS and Telemundo co-hosting a debate). No role distinction — orgs are a flat list. Displayed as "Produced by X, Y" on the public site.
+
+**Highlights**
+The canonical field (formerly `key_decisions`) on `MeetingSummary` for the 3-5 most notable items from an event. For deliberative events: votes and directed actions. For interview/media events: key claims or commitments made by the subject. Neutral enough to cover all event categories.
+
 **Body Slug**
 *(deprecated)* A loose text reference to `essentials.chambers.slug` formerly stored on `meetings.meetings.body_slug`. Replaced by `chamber_id` UUID FK after backfill. Do not use in new code.
 

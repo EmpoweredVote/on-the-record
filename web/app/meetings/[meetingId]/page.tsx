@@ -93,6 +93,11 @@ export default async function MeetingPage({
         </Link>
         <h1>{meetingTitle(meeting)}</h1>
         <span className="eventKind">{eventKindLabel(meeting.event_kind)}</span>
+        {meeting.event_orgs.length > 0 && (
+          <p className="eventOrgs">
+            {meeting.event_orgs.join(" · ")}
+          </p>
+        )}
         <p className="meetingDate">{formatMeetingDate(meeting.meeting_date)}</p>
         {meeting.source_url && (
           <a
@@ -110,9 +115,9 @@ export default async function MeetingPage({
         <section className="execSummary">
           <h2>Summary</h2>
           <p>{summary.executive_summary}</p>
-          {summary.key_decisions.length > 0 && (
-            <ul className="keyDecisions">
-              {summary.key_decisions.map((d, i) => <li key={i}>{d}</li>)}
+          {summary.highlights.length > 0 && (
+            <ul className="highlights">
+              {summary.highlights.map((d, i) => <li key={i}>{d}</li>)}
             </ul>
           )}
         </section>

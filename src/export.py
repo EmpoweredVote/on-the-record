@@ -189,10 +189,10 @@ def export_summary_markdown(summary: MeetingSummary, meeting: Meeting, output_pa
         lines.append("")
 
     # Key decisions
-    if summary.key_decisions:
-        lines.append("## Key Decisions")
+    if summary.highlights:
+        lines.append("## Highlights")
         lines.append("")
-        for decision in summary.key_decisions:
+        for decision in summary.highlights:
             lines.append(f"- {decision}")
         lines.append("")
 

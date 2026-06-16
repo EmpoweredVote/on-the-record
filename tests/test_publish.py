@@ -10,7 +10,7 @@ helpers below survived the refactor unchanged and remain worth covering.
 import pytest
 
 from src.models import Meeting
-from src.publish import _resolve_chamber_id, _upsert_meeting
+from src.publish import _resolve_chamber_id, _upsert_event_orgs, _upsert_meeting
 from src.publish import extract_youtube_id, resolve_playback
 
 
@@ -81,6 +81,7 @@ def test_resolve_playback_catstv_page_falls_back_on_error(monkeypatch):
 
 
 RACE_ID = "22222222-2222-4222-8222-222222222222"
+MEETING_UUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 
 
 class RecordingCursor:
@@ -219,3 +220,19 @@ def test_publish_writes_race_id_for_debate(existing_row):
     assert "race_id" in write_sql
     assert None in write_params
     assert RACE_ID in write_params
+
+
+def test_event_orgs_upserted():
+    cur = RecordingCursor()
+    _upsert_event_orgs(cur, MEETING_UUID, ["California Courier"])
+    sqls = [sql for sql, _ in cur.calls]
+    assert any("event_orgs" in sql for sql in sqls)
+    params_list = [params for _, params in cur.calls]
+    assert any("California Courier" in (params or ()) for params in params_list)
+
+
+def test_event_orgs_upsert_empty_skips_insert():
+    cur = RecordingCursor()
+    _upsert_event_orgs(cur, MEETING_UUID, [])
+    insert_calls = [sql for sql, _ in cur.calls if "INSERT" in sql and "event_orgs" in sql]
+    assert len(insert_calls) == 0

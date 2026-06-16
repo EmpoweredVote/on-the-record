@@ -35,6 +35,8 @@ function mapMeeting(m: any): Meeting {
     playback_url: m.videoUrl ?? null,
     duration_seconds: m.durationSeconds ?? null,
     summary_preview: m.summaryPreview ?? null,
+    event_orgs: (m.eventOrgs ?? []) as string[],
+    source_title: m.processingMetadata?.sourceTitle ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     speakers: ((m.speakers ?? []) as any[]).map((sp): MeetingSpeaker => ({
       label: sp.label,
@@ -53,7 +55,7 @@ function mapMeeting(m: any): Meeting {
 function mapSummary(s: any): MeetingSummary {
   return {
     executive_summary: s.executiveSummary ?? "",
-    key_decisions: s.keyDecisions ?? [],
+    highlights: s.highlights ?? s.keyDecisions ?? [],
     model: s.model ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sections: ((s.sections ?? []) as any[]).map((sec) => ({

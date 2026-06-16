@@ -28,15 +28,7 @@ export function formatTime(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
-export function meetingTitle(
-  meeting: Pick<Meeting, "title" | "city" | "meeting_type">
-): string {
-  const explicit = meeting.title?.trim();
-  if (explicit) return explicit;
-  return [meeting.city, meeting.meeting_type]
-    .filter((part): part is string => Boolean(part?.trim()))
-    .join(" ");
-}
+const INTERVIEW_KINDS: EventKind[] = ["news_clip", "press_conference"];
 
 const EVENT_KIND_LABELS: Record<EventKind, string> = {
   council: "Council",
@@ -45,9 +37,26 @@ const EVENT_KIND_LABELS: Record<EventKind, string> = {
   forum: "Forum",
   community_meeting: "Community meeting",
   news_clip: "News clip",
+  press_conference: "Press conference",
   other: "Other",
 };
 
+export function meetingTitle(
+  meeting: Pick<Meeting, "title" | "city" | "meeting_type" | "event_kind" | "event_orgs" | "source_title">
+): string {
+  const explicit = meeting.title?.trim();
+  if (explicit) return explicit;
+  if (meeting.source_title?.trim()) return meeting.source_title.trim();
+  if (INTERVIEW_KINDS.includes(meeting.event_kind)) {
+    const orgs = meeting.event_orgs.join(", ");
+    const kindLabel = EVENT_KIND_LABELS[meeting.event_kind];
+    return orgs ? `${orgs} · ${kindLabel}` : kindLabel;
+  }
+  return [meeting.city, meeting.meeting_type]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(" ");
+}
+
 export function eventKindLabel(kind: EventKind): string {
-  return EVENT_KIND_LABELS[kind];
+  return EVENT_KIND_LABELS[kind] ?? kind;
 }
