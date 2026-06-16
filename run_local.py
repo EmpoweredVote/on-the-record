@@ -1926,6 +1926,48 @@ def _prompt_link_politician(mappings: dict, label: str, query: str) -> None:
         print("  Not understood.")
 
 
+def _prompt_create_local_person(mappings: dict, label: str, name: str) -> None:
+    """Offer to create a local person record for a non-essentials speaker.
+
+    No-op when not attached to a TTY, when the mapping is missing, or when the
+    speaker already has an essentials politician_slug (essentials link wins).
+    Slug is validated against ^[a-z0-9][a-z0-9_-]{0,99}$ before committing.
+    """
+    if not sys.stdin.isatty():
+        return
+    mapping = mappings.get(label)
+    if mapping is None or mapping.politician_slug:
+        return
+
+    print("  Not in essentials. Create as local person?")
+    choice = input("  [L]ocal person / [Enter] leave unlinked: ").strip().lower()
+    if choice != "l":
+        return
+
+    # Auto-generate a kebab-case default slug from the speaker name.
+    if name:
+        default_slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    else:
+        default_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+
+    slug_raw = input(f"  Slug [{default_slug}]: ").strip()
+    slug = slug_raw or default_slug
+
+    # Validate slug against the same pattern used by ev-accounts SLUG_REGEX.
+    if not re.match(r"^[a-z0-9][a-z0-9_-]{0,99}$", slug):
+        print(f"  Invalid slug {slug!r} — must match ^[a-z0-9][a-z0-9_-]{{0,99}}$. Left unlinked.")
+        return
+
+    print("  Role: 1) candidate  2) moderator  3) panelist")
+    role_choice = input("  [1]: ").strip()
+    role_map = {"1": "candidate", "2": "moderator", "3": "panelist", "": "candidate"}
+    role = role_map.get(role_choice, "candidate")
+
+    mapping.local_slug = slug
+    mapping.local_role = role
+    print(f"  Local person: {slug} ({role})")
+
+
 def _interactive_speaker_review(
     segments,
     mappings: dict,
@@ -2069,6 +2111,8 @@ def _interactive_speaker_review(
                     changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
                     print(f"  Confirmed: {label} -> {res.new_name}")
                     _prompt_link_politician(mappings, label, res.new_name)
+                    # Offer local person creation when essentials link was skipped or unavailable.
+                    _prompt_create_local_person(mappings, label, res.new_name)
                     break
                 else:
                     res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
@@ -2080,6 +2124,8 @@ def _interactive_speaker_review(
                             target_label = body_slug or "council_roster.json"
                             print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
                     _prompt_link_politician(mappings, label, res.new_name)
+                    # Offer local person creation when essentials link was skipped or unavailable.
+                    _prompt_create_local_person(mappings, label, res.new_name)
                     break
         finally:
             _stop_player(current_player)

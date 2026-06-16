@@ -73,6 +73,8 @@ class SpeakerMapping:
     needs_review: bool = False
     politician_slug: Optional[str] = None   # essentials identifier
     politician_id: Optional[str] = None     # essentials UUID
+    local_slug: Optional[str] = None        # site-local person slug (non-roster)
+    local_role: Optional[str] = None        # 'candidate' | 'moderator' | 'panelist'
 
     def to_dict(self) -> dict:
         d = {
@@ -86,6 +88,10 @@ class SpeakerMapping:
             d["politician_slug"] = self.politician_slug
         if self.politician_id is not None:
             d["politician_id"] = self.politician_id
+        if self.local_slug is not None:
+            d["local_slug"] = self.local_slug
+        if self.local_role is not None:
+            d["local_role"] = self.local_role
         return d
 
     @classmethod
@@ -98,6 +104,8 @@ class SpeakerMapping:
             needs_review=d.get("needs_review", False),
             politician_slug=d.get("politician_slug"),
             politician_id=d.get("politician_id"),
+            local_slug=d.get("local_slug"),
+            local_role=d.get("local_role"),
         )
 
 

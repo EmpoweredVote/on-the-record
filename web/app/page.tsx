@@ -1,13 +1,6 @@
 import Link from "next/link";
 import { fetchMeetings } from "@/lib/queries";
-import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return "";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
+import MeetingListClient from "./MeetingListClient";
 
 export default async function HomePage() {
   let meetings: Awaited<ReturnType<typeof fetchMeetings>> = [];
@@ -36,26 +29,7 @@ export default async function HomePage() {
       ) : meetings.length === 0 ? (
         <p>No meetings published yet.</p>
       ) : (
-        <ul className="meetingList">
-          {meetings.map((m) => (
-            <li key={m.meeting_id}>
-              <Link href={`/meetings/${m.meeting_id}`}>
-                <span className="meetingTitle">{meetingTitle(m)}</span>
-                <span className="eventKind">{eventKindLabel(m.event_kind)}</span>
-                <span className="meetingDate">{formatMeetingDate(m.meeting_date)}</span>
-                {m.duration_seconds ? (
-                  <span className="meetingDuration">
-                    {formatDuration(m.duration_seconds)}
-                  </span>
-                ) : null}
-                {m.playback_kind ? (
-                  <span className="hasVideo">▶ video</span>
-                ) : null}
-                {m.summary_preview && <span className="meetingPreview">{m.summary_preview}</span>}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <MeetingListClient meetings={meetings} />
       )}
     </main>
   );

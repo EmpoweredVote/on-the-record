@@ -184,6 +184,14 @@ export default function MeetingView({
     (meeting.speakers ?? []).map((sp) => [sp.label, speakerStatus(sp.id_method)] as const)
   );
 
+  // Build a label → local name map for non-roster speakers (local_slug set, no politician_slug).
+  // Used to render local people as plain text (no link) per D-08, D-09.
+  const localNameByLabel = new Map(
+    (meeting.speakers ?? [])
+      .filter(sp => sp.local_slug && !sp.politician_slug)
+      .map(sp => [sp.label, sp.local_name ?? sp.display_name] as const)
+  );
+
   return (
     <div className="meetingLayout">
       <div className="mediaPane">
@@ -284,6 +292,8 @@ export default function MeetingView({
                   >
                     {seg.speaker_name || seg.speaker_label}
                   </Link>
+                ) : localNameByLabel.get(seg.speaker_label) ? (
+                  localNameByLabel.get(seg.speaker_label)
                 ) : (
                   seg.speaker_name || seg.speaker_label
                 )}

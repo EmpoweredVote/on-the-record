@@ -37,6 +37,9 @@ function mapMeeting(m: any): Meeting {
       politician_slug: sp.politicianSlug ?? null,
       id_method: sp.idMethod ?? null,
       confidence: sp.confidence ?? null,
+      local_slug: sp.localSlug ?? null,
+      local_name: sp.localName ?? null,
+      local_role: sp.localRole ?? null,
     })),
   };
 }
