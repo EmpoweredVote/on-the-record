@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { fetchMeetings, fetchPeople, fetchTopics } from "@/lib/queries";
 
+export const dynamic = "force-static";
+
 const SITE = (process.env.SITE_URL ?? "").replace(/\/$/, "");
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
