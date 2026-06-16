@@ -510,6 +510,12 @@ def run_pipeline(args: argparse.Namespace) -> None:
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
+    # Persist event_kind on first run so --resume can recover it without
+    # re-reading transcript_named.json (which may not exist if the crash was early).
+    if state.event_kind != args.event_kind and args.event_kind is not None:
+        state.event_kind = args.event_kind
+        state.save()
+
     # Apply --redo rewind now that meeting_dir is known (works with both
     # --resume and --input; the --resume branch may have already done this,
     # but rewind_to is idempotent so the double-call is harmless).
@@ -2896,6 +2902,11 @@ def main():
             else:
                 print(f"Cannot resume: no audio.wav found in {meeting_dir}")
                 sys.exit(1)
+            # Fall back to event_kind persisted in pipeline_state.json (written on first run).
+            from src.checkpoint import PipelineState as _PS
+            _ps = _PS(meeting_dir)
+            if args.event_kind is None and _ps.event_kind is not None:
+                args.event_kind = _ps.event_kind
 
         args.meeting_id = args.resume
         print(f"Resuming meeting: {args.resume}")
@@ -2911,7 +2922,7 @@ def main():
     # Skip prompting on resume (metadata comes from the existing meeting).
     if args.resume:
         if args.event_kind is None:
-            args.event_kind = "council"
+            args.event_kind = "council"  # last-resort default if no state file preserved it
         else:
             args.event_kind = validate_event_kind(args.event_kind)
         if args.city is None and not named_transcript_loaded:
