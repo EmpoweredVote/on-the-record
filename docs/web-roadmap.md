@@ -74,7 +74,13 @@ For sources that are neither embeddable nor direct-file, when links rot, or if h
 - **Rebuild on publish**: Render deploy hook called at the end of `--publish` so new meetings appear without manual redeploys.
 - `sitemap.xml` + per-meeting OpenGraph metadata for SEO/sharing (clip OG cards arrive in Phase 5).
 - Nightly consistency check: re-publish drift detection between `transcript_named.json` and DB.
-- Word-level karaoke highlighting if ever wanted: word timestamps already live in `transcript.json` on disk; would need a publish path and player support.
+
+## Phase 11 — Word-level karaoke
+
+- Word timestamps already live in `transcript.json` on disk; need a publish path to store them and player support to sync highlighting to playback position.
+- **[pipeline]** Publish word-level timestamps alongside segments.
+- **[ev-accounts]** Serve word timestamps (likely on the transcript endpoint or a new sub-path).
+- **[web]** Karaoke player component: highlight the current word as audio plays, sync on seek.
 
 ## Deferred / not planned
 
