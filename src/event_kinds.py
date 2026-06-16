@@ -5,6 +5,7 @@ EVENT_KINDS = (
     "forum",
     "community_meeting",
     "news_clip",
+    "press_conference",
     "other",
 )
 

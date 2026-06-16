@@ -36,6 +36,9 @@ class PipelineState:
         self.race_id: Optional[str] = None
         self.roster_choice: Optional[str] = None  # None=unchosen, slug, "__legacy__", or "__none__"
         self.event_kind: Optional[str] = None
+        self.city: Optional[str] = None
+        self.date: Optional[str] = None
+        self.meeting_type: Optional[str] = None
         self._load()
 
     def _load(self) -> None:
@@ -49,6 +52,9 @@ class PipelineState:
             self.race_id = data.get("race_id")
             self.roster_choice = data.get("roster_choice")  # None for pre-chooser state files
             self.event_kind = data.get("event_kind")
+            self.city = data.get("city")
+            self.date = data.get("date")
+            self.meeting_type = data.get("meeting_type")
 
     def save(self) -> None:
         """Atomic write: write to temp file then rename."""
@@ -60,6 +66,9 @@ class PipelineState:
             "race_id": self.race_id,
             "roster_choice": self.roster_choice,
             "event_kind": self.event_kind,
+            "city": self.city,
+            "date": self.date,
+            "meeting_type": self.meeting_type,
         }
         fd, tmp_path = tempfile.mkstemp(
             dir=str(self.meeting_dir), suffix=".tmp"

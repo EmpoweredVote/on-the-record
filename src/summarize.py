@@ -12,8 +12,12 @@ import re
 from datetime import datetime
 from typing import Optional
 
+import anthropic as anthropic
+
 from . import config
 from .models import Meeting, MeetingSummary, Segment, SummarySection
+
+_INTERVIEW_KINDS = {"news_clip", "press_conference"}
 
 
 def _format_ts(seconds: float) -> str:
@@ -334,6 +338,33 @@ Respond with ONLY valid JSON:
 }"""
 
 
+# ---------------------------------------------------------------------------
+# Interview/Media prompts (news_clip, press_conference)
+# ---------------------------------------------------------------------------
+
+_INTERVIEW_CLASSIFY_SYSTEM = """You are analyzing a media interview transcript.
+Identify the main topics or question clusters discussed. For each topic, provide:
+- type: always "topic"
+- title: a short descriptive label for what was discussed (e.g. "Tax Policy", "Immigration")
+- start_segment / end_segment: the segment range
+
+Return JSON:
+{"sections": [{"type": "topic", "start_segment": N, "end_segment": M, "title": "..."}]}"""
+
+_INTERVIEW_SUMMARIZE_SYSTEM = """You are summarizing one topic from a media interview for citizens.
+Write 2-4 paragraphs in plain language covering:
+- What the interviewer asked
+- What the subject said (their position, any specific claims or commitments)
+- Any notable quotes (use direct quotes sparingly and accurately)
+Do not editorialize. Attribute all claims to the speaker by name."""
+
+_INTERVIEW_EXECUTIVE_SYSTEM = """You are writing an executive summary of a media interview.
+Open with: "In an interview with [outlet], [subject name] discussed..."
+Then 2-3 sentences covering the main topics.
+Then extract 3-5 key claims or commitments the subject made as bullet points.
+Return JSON: {"executive_summary": "...", "highlights": ["...", "..."]}"""
+
+
 def _generate_executive_summary(
     client,
     sections: list[SummarySection],
@@ -370,7 +401,78 @@ def _generate_executive_summary(
 
     try:
         data = json.loads(json_match.group())
-        return data.get("executive_summary", ""), data.get("key_decisions", [])
+        return data.get("executive_summary", ""), data.get("key_decisions") or data.get("highlights", [])
+    except json.JSONDecodeError:
+        return "Executive summary could not be parsed.", []
+
+
+# ---------------------------------------------------------------------------
+# Interview/Media classification and executive summary helpers
+# ---------------------------------------------------------------------------
+
+def _classify_sections_interview(client, segments: list[Segment]) -> list[dict]:
+    """Classify interview transcript into topic sections using Haiku."""
+    condensed = _condensed_transcript(segments)
+    message = client.messages.create(
+        model=config.SUMMARY_CLASSIFY_MODEL,
+        max_tokens=config.SUMMARY_MAX_TOKENS_CLASSIFY,
+        system=_INTERVIEW_CLASSIFY_SYSTEM,
+        messages=[{
+            "role": "user",
+            "content": f"Classify this interview transcript into topic sections:\n\n{condensed}",
+        }],
+    )
+    text = message.content[0].text
+    json_match = re.search(r"\{[\s\S]*\}", text)
+    if not json_match:
+        return []
+    try:
+        data = json.loads(json_match.group())
+        return data.get("sections", [])
+    except json.JSONDecodeError:
+        return []
+
+
+def _generate_interview_executive_summary(
+    client,
+    sections: list[SummarySection],
+    meeting: Meeting,
+) -> tuple[str, list[str]]:
+    """Generate source-attributed executive summary for interview/media events."""
+    outlet = (
+        meeting.event_orgs[0]
+        if meeting.event_orgs
+        else (meeting.processing_metadata.source_title or "the interviewer")
+    )
+
+    section_text = []
+    for sec in sections:
+        section_text.append(f"### {sec.title}")
+        section_text.append(sec.content)
+        section_text.append("")
+
+    message = client.messages.create(
+        model=config.SUMMARY_SYNTHESIZE_MODEL,
+        max_tokens=2048,
+        system=_INTERVIEW_EXECUTIVE_SYSTEM,
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Outlet: {outlet}\n"
+                f"Date: {meeting.date}\n\n"
+                f"Topic summaries:\n\n{''.join(section_text)}"
+            ),
+        }],
+    )
+
+    text = message.content[0].text
+    json_match = re.search(r"\{[\s\S]*\}", text)
+    if not json_match:
+        return "Executive summary could not be generated.", []
+
+    try:
+        data = json.loads(json_match.group())
+        return data.get("executive_summary", ""), data.get("highlights", [])
     except json.JSONDecodeError:
         return "Executive summary could not be parsed.", []
 
@@ -399,8 +501,6 @@ def generate_summary(
     Returns:
         MeetingSummary with executive summary, key decisions, and section summaries.
     """
-    import anthropic
-
     client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY env var
 
     segments = [s for s in meeting.segments if s.text]
@@ -415,9 +515,14 @@ def generate_summary(
         if progress_callback:
             progress_callback(step, current, total)
 
+    is_interview = meeting.event_kind in _INTERVIEW_KINDS
+
     # --- Pass 1: Classify sections ---
     _progress("classifying sections")
-    raw_sections = classify_sections(client, segments)
+    if is_interview:
+        raw_sections = _classify_sections_interview(client, segments)
+    else:
+        raw_sections = classify_sections(client, segments)
 
     if not raw_sections:
         return MeetingSummary(
@@ -451,7 +556,21 @@ def generate_summary(
 
         _progress(f"summarizing: {title}", i + 1, total_sections)
 
-        if sec_type == "roll_call":
+        if is_interview:
+            if section_transcript.strip():
+                msg = client.messages.create(
+                    model=config.SUMMARY_SYNTHESIZE_MODEL,
+                    max_tokens=config.SUMMARY_MAX_TOKENS_SYNTHESIZE,
+                    system=_INTERVIEW_SUMMARIZE_SYSTEM,
+                    messages=[{
+                        "role": "user",
+                        "content": f"Topic: \"{title}\"\n\nTranscript:\n{section_transcript}",
+                    }],
+                )
+                content = msg.content[0].text.strip()
+            else:
+                content = ""
+        elif sec_type == "roll_call":
             content = _extract_roll_call(client, section_transcript)
         elif sec_type in ("discussion", "public_comment"):
             content = _summarize_discussion(client, section_transcript, title)
@@ -490,11 +609,14 @@ def generate_summary(
 
     # --- Pass 3: Executive summary ---
     _progress("generating executive summary")
-    executive, decisions = _generate_executive_summary(client, summary_sections, meeting)
+    if is_interview:
+        executive, decisions = _generate_interview_executive_summary(client, summary_sections, meeting)
+    else:
+        executive, decisions = _generate_executive_summary(client, summary_sections, meeting)
 
     return MeetingSummary(
         executive_summary=executive,
-        key_decisions=decisions,
+        highlights=decisions,
         sections=summary_sections,
         model=f"{config.SUMMARY_CLASSIFY_MODEL}+{config.SUMMARY_SYNTHESIZE_MODEL}",
         generated_at=datetime.now().isoformat(),

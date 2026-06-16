@@ -248,6 +248,22 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
     return meeting_uuid
 
 
+def _upsert_event_orgs(cur, meeting_slug: str, event_orgs: list) -> None:
+    """Delete then re-insert event_orgs for this meeting. Idempotent."""
+    cur.execute(
+        "DELETE FROM meetings.event_orgs WHERE meeting_id = %s",
+        (meeting_slug,),
+    )
+    for org_name in event_orgs:
+        cur.execute(
+            """
+            INSERT INTO meetings.event_orgs (id, meeting_id, org_name, created_at)
+            VALUES (gen_random_uuid(), %s, %s, NOW())
+            """,
+            (meeting_slug, org_name),
+        )
+
+
 def _upsert_local_people(cur, meeting: Meeting) -> None:
     """Upsert local_people rows for any speaker mapping with local_slug set.
 
@@ -470,6 +486,7 @@ def publish_meeting(
         with conn:
             with conn.cursor() as cur:
                 meeting_uuid = _upsert_meeting(cur, meeting, body_slug)
+                _upsert_event_orgs(cur, meeting.meeting_id, meeting.event_orgs)
                 _upsert_local_people(cur, meeting)
                 label_to_uuid = _upsert_speakers(cur, meeting, meeting_uuid)
                 segment_count = _replace_segments(

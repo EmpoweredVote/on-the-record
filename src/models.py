@@ -169,7 +169,7 @@ class SectionTopic:
 @dataclass
 class MeetingSummary:
     executive_summary: str = ""
-    key_decisions: list[str] = field(default_factory=list)
+    highlights: list[str] = field(default_factory=list)
     sections: list[SummarySection] = field(default_factory=list)
     model: str = ""
     generated_at: str = ""
@@ -177,7 +177,7 @@ class MeetingSummary:
     def to_dict(self) -> dict:
         return {
             "executive_summary": self.executive_summary,
-            "key_decisions": self.key_decisions,
+            "highlights": self.highlights,
             "sections": [s.to_dict() for s in self.sections],
             "model": self.model,
             "generated_at": self.generated_at,
@@ -187,7 +187,7 @@ class MeetingSummary:
     def from_dict(cls, d: dict) -> MeetingSummary:
         return cls(
             executive_summary=d.get("executive_summary", ""),
-            key_decisions=d.get("key_decisions", []),
+            highlights=d.get("highlights") or d.get("key_decisions", []),
             sections=[SummarySection.from_dict(s) for s in d.get("sections", [])],
             model=d.get("model", ""),
             generated_at=d.get("generated_at", ""),
@@ -201,6 +201,7 @@ class ProcessingMetadata:
     transcription_model: str = ""
     gpu_used: bool = False
     processing_time_seconds: Optional[float] = None
+    source_title: Optional[str] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -211,6 +212,8 @@ class ProcessingMetadata:
         }
         if self.processing_time_seconds is not None:
             d["processing_time_seconds"] = self.processing_time_seconds
+        if self.source_title is not None:
+            d["source_title"] = self.source_title
         return d
 
     @classmethod
@@ -221,6 +224,7 @@ class ProcessingMetadata:
             transcription_model=d.get("transcription_model", ""),
             gpu_used=d.get("gpu_used", False),
             processing_time_seconds=d.get("processing_time_seconds"),
+            source_title=d.get("source_title"),
         )
 
 
@@ -240,6 +244,7 @@ class Meeting:
     summary: Optional[MeetingSummary] = None
     section_topics: list[SectionTopic] = field(default_factory=list)
     processing_metadata: ProcessingMetadata = field(default_factory=ProcessingMetadata)
+    event_orgs: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = {
@@ -255,6 +260,7 @@ class Meeting:
             "segments": [s.to_dict() for s in self.segments],
             "speakers": {k: v.to_dict() for k, v in self.speakers.items()},
             "processing_metadata": self.processing_metadata.to_dict(),
+            "event_orgs": self.event_orgs,
         }
         if self.summary is not None:
             d["summary"] = self.summary.to_dict()
@@ -282,4 +288,5 @@ class Meeting:
             processing_metadata=ProcessingMetadata.from_dict(
                 d.get("processing_metadata", {})
             ),
+            event_orgs=d.get("event_orgs", []),
         )

@@ -510,10 +510,21 @@ def run_pipeline(args: argparse.Namespace) -> None:
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
-    # Persist event_kind on first run so --resume can recover it without
-    # re-reading transcript_named.json (which may not exist if the crash was early).
+    # Persist pipeline metadata so --resume can recover without transcript_named.json.
+    _state_dirty = False
     if state.event_kind != args.event_kind and args.event_kind is not None:
         state.event_kind = args.event_kind
+        _state_dirty = True
+    if state.city != args.city and args.city is not None:
+        state.city = args.city
+        _state_dirty = True
+    if state.date != args.date and args.date is not None:
+        state.date = args.date
+        _state_dirty = True
+    if state.meeting_type != args.meeting_type and args.meeting_type is not None:
+        state.meeting_type = args.meeting_type
+        _state_dirty = True
+    if _state_dirty:
         state.save()
 
     # Apply --redo rewind now that meeting_dir is known (works with both
@@ -645,6 +656,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
         )
         elapsed = time.time() - t0
         meeting.duration_seconds = metadata["duration_seconds"]
+        if metadata.get("source_title"):
+            meeting.processing_metadata.source_title = metadata["source_title"]
         state.mark_complete(PipelineStage.INGESTED)
         print(f"  Done in {elapsed:.1f}s")
 
@@ -1248,7 +1261,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
                 print(f"\n  Summary generated in {elapsed:.1f}s")
                 print(f"    Sections: {len(meeting.summary.sections)}")
-                print(f"    Key decisions: {len(meeting.summary.key_decisions)}")
+                print(f"    Highlights: {len(meeting.summary.highlights)}")
                 if meeting.summary.executive_summary:
                     # Show first 200 chars of executive summary
                     preview = meeting.summary.executive_summary[:200]
@@ -1835,6 +1848,9 @@ def _today_iso() -> str:
     return date.today().isoformat()
 
 
+_INTERVIEW_KINDS = {"news_clip", "press_conference"}
+
+
 def _resolve_metadata(args) -> None:
     """Fill args.city/date/meeting_type for a new run.
 
@@ -1868,6 +1884,9 @@ def _resolve_metadata(args) -> None:
     if args.meeting_type is None:
         ans = input(f"  Meeting type [{MEETING_TYPE_DEFAULT}]: ").strip()
         args.meeting_type = ans or MEETING_TYPE_DEFAULT
+    if args.event_kind in _INTERVIEW_KINDS and not args.title:
+        ans = input("  Title (required for interview/media events): ").strip()
+        args.title = ans or None
 
 
 def _prompt_link_politician(mappings: dict, label: str, query: str) -> None:
@@ -2902,11 +2921,17 @@ def main():
             else:
                 print(f"Cannot resume: no audio.wav found in {meeting_dir}")
                 sys.exit(1)
-            # Fall back to event_kind persisted in pipeline_state.json (written on first run).
+            # Load all persisted metadata from pipeline_state.json.
             from src.checkpoint import PipelineState as _PS
             _ps = _PS(meeting_dir)
             if args.event_kind is None and _ps.event_kind is not None:
                 args.event_kind = _ps.event_kind
+            if args.city is None and _ps.city is not None:
+                args.city = _ps.city
+            if not args.date and _ps.date is not None:
+                args.date = _ps.date
+            if args.meeting_type is None and _ps.meeting_type is not None:
+                args.meeting_type = _ps.meeting_type
 
         args.meeting_id = args.resume
         print(f"Resuming meeting: {args.resume}")

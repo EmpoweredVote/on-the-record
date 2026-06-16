@@ -54,6 +54,18 @@ def test_entity_validation_rules():
     )
 
 
+def test_news_clip_allows_both_ids():
+    assert validate_event_entities("news_clip", chamber_id=CHAMBER_ID, race_id=RACE_ID) is None
+
+
+def test_press_conference_allows_both_ids():
+    assert validate_event_entities("press_conference", chamber_id=CHAMBER_ID, race_id=RACE_ID) is None
+
+
+def test_council_still_blocks_both_ids():
+    assert validate_event_entities("council", chamber_id=CHAMBER_ID, race_id=RACE_ID) is not None
+
+
 def test_entity_validation_rejects_bad_uuid():
     with pytest.raises(ValueError, match="race_id must be a UUID"):
         validate_event_entities("debate", None, "not-a-uuid")

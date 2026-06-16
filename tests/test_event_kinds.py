@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 import run_local
-from src.event_kinds import validate_event_kind
+from src.event_kinds import EVENT_KINDS, validate_event_kind
 from src.models import Meeting
 
 
@@ -34,6 +34,14 @@ def test_legacy_meeting_defaults_to_council():
 
     assert restored.title is None
     assert restored.event_kind == "council"
+
+
+def test_press_conference_in_event_kinds():
+    assert "press_conference" in EVENT_KINDS
+
+
+def test_validate_press_conference():
+    assert validate_event_kind("press_conference") == "press_conference"
 
 
 def test_validate_event_kind_lists_allowed_values():
