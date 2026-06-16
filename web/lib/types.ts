@@ -114,6 +114,9 @@ export interface MeetingSpeaker {
   politician_slug: string | null;
   id_method: string | null;   // "human_review" => verified; else predicted
   confidence: number | null;
+  local_slug: string | null;
+  local_name: string | null;
+  local_role: string | null;
 }
 
 export interface TopicListEntry {
