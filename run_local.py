@@ -2106,6 +2106,19 @@ def _interactive_speaker_review(
                     quit_requested = True
                     break
                 elif choice == "":
+                    # Warn if keeping this name would duplicate another speaker's name —
+                    # easy to miss when the LLM guesses the same person for multiple labels.
+                    kept_name = view.current_name
+                    if kept_name:
+                        dupes = [
+                            v for v in views
+                            if v.label != label and v.current_name == kept_name
+                        ]
+                        if dupes:
+                            dupe_labels = ", ".join(v.label for v in dupes)
+                            print(f"  ⚠  '{kept_name}' is also assigned to {dupe_labels}. "
+                                  f"Type a different name or [M]erge if they're the same person.")
+                            continue
                     break  # skip
                 elif choice.lower() == "m" and len(views) > 1:
                     others = [v for v in views if v.label != label]

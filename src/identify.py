@@ -70,12 +70,16 @@ def match_voice_profiles(
                     confidence=round(best_score, 3),
                     id_method=method,
                 )
-                # Wire 1: carry the matched profile's politician identity so a
-                # returning, already-linked speaker arrives pre-linked.
+                # Wire 1: carry the matched profile's identity fields so a
+                # returning, already-linked speaker arrives pre-linked, and use
+                # the stored display_name so segments render human-readable names
+                # (e.g. "Hailey Gomez") rather than the raw profile slug.
                 if profile_db and best_name in profile_db.profiles:
                     prof = profile_db.profiles[best_name]
                     mappings[label].politician_slug = getattr(prof, "politician_slug", None)
                     mappings[label].politician_id = getattr(prof, "politician_id", None)
+                    if prof.display_name:
+                        mappings[label].speaker_name = prof.display_name
 
     return mappings
 
