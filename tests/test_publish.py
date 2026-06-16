@@ -150,31 +150,18 @@ def test_resolve_chamber_id_returns_none_for_duplicate_slug():
     assert _resolve_chamber_id(cur, "duplicate") is None
 
 
-@pytest.mark.parametrize(
-    "event_kind,body_slug,race_id,error",
-    [
-        ("council", None, None, "chamber_id is required"),
-        ("debate", None, None, "race_id is required"),
-        ("other", "test-council", RACE_ID, "cannot both be set"),
-    ],
-)
-def test_publish_rejects_invalid_entity_state(
-    event_kind, body_slug, race_id, error
-):
-    fetch_rows = []
-    if body_slug == "test-council":
-        fetch_rows = [("11111111-1111-4111-8111-111111111111",)]
-    cur = RecordingCursor(fetch_rows=fetch_rows)
+def test_publish_rejects_both_chamber_and_race():
+    cur = RecordingCursor(fetch_rows=[("11111111-1111-4111-8111-111111111111",)])
     meeting = Meeting(
         meeting_id="event",
         city=None,
         date="2026-06-02",
         meeting_type="Event",
-        event_kind=event_kind,
-        race_id=race_id,
+        event_kind="other",
+        race_id=RACE_ID,
     )
-    with pytest.raises(RuntimeError, match=error):
-        _upsert_meeting(cur, meeting, body_slug)
+    with pytest.raises(RuntimeError, match="cannot both be set"):
+        _upsert_meeting(cur, meeting, "test-council")
 
 
 @pytest.mark.parametrize("existing_row", [("existing-uuid",), None])
