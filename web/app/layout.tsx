@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CouncilScribe",
+  title: "On The Record",
   description:
     "Searchable, speaker-attributed transcripts of public meetings, synced to the original video.",
 };
