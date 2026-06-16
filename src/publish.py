@@ -248,6 +248,33 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
     return meeting_uuid
 
 
+def _upsert_local_people(cur, meeting: Meeting) -> None:
+    """Upsert local_people rows for any speaker mapping with local_slug set.
+
+    Must be called BEFORE _upsert_speakers so the FK from meetings.speakers.local_slug
+    to meetings.local_people.slug is satisfied at write time.
+    """
+    for mapping in meeting.speakers.values():
+        if not mapping.local_slug:
+            continue
+        cur.execute(
+            """
+            INSERT INTO meetings.local_people
+              (slug, name, role, created_at, updated_at)
+            VALUES (%s, %s, %s, NOW(), NOW())
+            ON CONFLICT (slug) DO UPDATE SET
+              name = EXCLUDED.name,
+              role = EXCLUDED.role,
+              updated_at = NOW()
+            """,
+            (
+                mapping.local_slug,
+                mapping.speaker_name or mapping.local_slug,
+                mapping.local_role or 'candidate',
+            ),
+        )
+
+
 def _upsert_speakers(
     cur, meeting: Meeting, meeting_uuid: str
 ) -> dict[str, str]:
@@ -270,7 +297,8 @@ def _upsert_speakers(
                   politician_slug = %s,
                   politician_id = %s,
                   confidence = %s,
-                  id_method = %s
+                  id_method = %s,
+                  local_slug = %s
                 WHERE id = %s
                 """,
                 (
@@ -279,6 +307,7 @@ def _upsert_speakers(
                     mapping.politician_id,
                     mapping.confidence,
                     mapping.id_method,
+                    mapping.local_slug,
                     speaker_uuid,
                 ),
             )
@@ -288,11 +317,11 @@ def _upsert_speakers(
                 INSERT INTO meetings.speakers
                   (id, meeting_id, label, display_name,
                    politician_slug, politician_id, confidence, id_method,
-                   created_at)
+                   local_slug, created_at)
                 VALUES
                   (gen_random_uuid(), %s, %s, %s,
                    %s, %s, %s, %s,
-                   NOW())
+                   %s, NOW())
                 RETURNING id
                 """,
                 (
@@ -303,6 +332,7 @@ def _upsert_speakers(
                     mapping.politician_id,
                     mapping.confidence,
                     mapping.id_method,
+                    mapping.local_slug,
                 ),
             )
             speaker_uuid = cur.fetchone()[0]
@@ -440,6 +470,7 @@ def publish_meeting(
         with conn:
             with conn.cursor() as cur:
                 meeting_uuid = _upsert_meeting(cur, meeting, body_slug)
+                _upsert_local_people(cur, meeting)
                 label_to_uuid = _upsert_speakers(cur, meeting, meeting_uuid)
                 segment_count = _replace_segments(
                     cur, meeting, meeting_uuid, label_to_uuid
