@@ -1190,6 +1190,26 @@ def run_pipeline(args: argparse.Namespace) -> None:
     print()
 
     # ======================================================================
+    # Confidence gate (Phase A): score the meeting, route non-passing
+    # non-interactive runs to the review queue BEFORE any paid summary or
+    # voice enrollment (the latter would poison profiles with unreviewed guesses).
+    # ======================================================================
+    gate_report = _apply_gate(meeting, meeting_dir, state)
+    _interactive = sys.stdin.isatty()
+    _publish_anyway = getattr(args, "publish_anyway", False)
+    if gate_report["verdict"] != "pass" and not _interactive and not _publish_anyway:
+        print()
+        print("=" * 60)
+        print(f"QUEUED FOR REVIEW — verdict: {gate_report['verdict']}")
+        print("=" * 60)
+        print(f"  {gate_report['reason']}")
+        print(f"  Review with: python run_local.py --review {meeting_id}")
+        print(f"  Then publish with: python run_local.py --resume {meeting_id}")
+        print("  (Summary, enrollment, and publish were skipped to save cost "
+              "and protect voice profiles.)")
+        return
+
+    # ======================================================================
     # Stage 5: Summary Generation
     # ======================================================================
     print("=" * 60)
@@ -1821,6 +1841,31 @@ def _persist_after_review(meeting_dir: Path, segments, embeddings, changes) -> N
     emb_out = {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in embeddings.items()}
     with open(emb_path, "w") as f:
         json.dump(emb_out, f)
+
+
+def _apply_gate(meeting, meeting_dir: Path, state) -> dict:
+    """Evaluate the confidence gate, write quality.json, mirror headline to state.
+
+    Returns the full quality report dict. Pure-ish: only writes quality.json
+    and the two state fields. Recomputed on every run that reaches Stage 4 so
+    the verdict always reflects current attributions (incl. human review).
+    """
+    from src import quality
+
+    report = quality.evaluate_meeting(meeting)
+    with open(meeting_dir / "quality.json", "w") as f:
+        json.dump(report, f, indent=2)
+
+    state.review_status = report["verdict"]
+    state.trusted_coverage = report["trusted_coverage"]
+    state.save()
+
+    print(
+        f"  Gate: {report['verdict'].upper()} "
+        f"(trusted={report['trusted_coverage']:.0%}, "
+        f"effective={report['effective_coverage']:.0%}) — {report['reason']}"
+    )
+    return report
 
 
 def _meeting_body_slug(meeting_dir: Path) -> str | None:
