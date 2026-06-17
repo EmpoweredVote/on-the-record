@@ -151,7 +151,12 @@ def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def correct_speaker_name(name: str, roster: Roster, threshold: float = 0.80) -> str:
+def correct_speaker_name(
+    name: str,
+    roster: Roster,
+    threshold: float = 0.80,
+    allow_fuzzy: bool = True,
+) -> str:
     """Check if a name matches any roster member and return the canonical name.
 
     Matching strategy (in order of priority):
@@ -164,6 +169,11 @@ def correct_speaker_name(name: str, roster: Roster, threshold: float = 0.80) -> 
         name: The speaker name to check.
         roster: Loaded council roster.
         threshold: Minimum similarity ratio for fuzzy matching.
+        allow_fuzzy: When False, skip strategy 4 (fuzzy surname matching).
+            Fuzzy matching can reassign a name to a *different* member whose
+            surname merely resembles it (e.g. "Smithey" -> "…-Smith" at 0.83),
+            so callers with an already-authoritative identity (a confident voice
+            or human match) disable it to avoid clobbering a correct name.
 
     Returns:
         Canonical name if a match is found, otherwise the original name unchanged.
@@ -198,6 +208,8 @@ def correct_speaker_name(name: str, roster: Roster, threshold: float = 0.80) -> 
                 return member.name
 
     # 4. Fuzzy match: extract surname from input, compare against aliases
+    if not allow_fuzzy:
+        return name_stripped
     surname = extract_surname(name_stripped)
     best_score = 0.0
     best_member = None
@@ -229,7 +241,14 @@ def correct_mappings(
     """
     for label, mapping in mappings.items():
         if mapping.speaker_name:
-            corrected = correct_speaker_name(mapping.speaker_name, roster)
+            # An identity from a confident voice match or a human is authoritative;
+            # only normalize it via exact/alias matches, never fuzzy-reassign it to
+            # a different member whose surname merely resembles it.
+            method = mapping.id_method or ""
+            authoritative = method.startswith("voice_profile") or "human" in method
+            corrected = correct_speaker_name(
+                mapping.speaker_name, roster, allow_fuzzy=not authoritative,
+            )
             if corrected != mapping.speaker_name:
                 mapping.speaker_name = corrected
             # Populate politician identity for any roster-matched speaker

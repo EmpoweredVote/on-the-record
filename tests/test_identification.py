@@ -11,7 +11,13 @@ Covers:
 from __future__ import annotations
 
 from src.models import Segment, SpeakerMapping, Word
-from src.roster import Roster, RosterMember, correct_mappings, roster_names_for_prompt
+from src.roster import (
+    Roster,
+    RosterMember,
+    correct_mappings,
+    correct_speaker_name,
+    roster_names_for_prompt,
+)
 from src.identify import (
     apply_pattern_matching,
     identify_speakers,
@@ -303,6 +309,86 @@ def test_correct_mappings_leaves_slug_none_for_non_match():
     }
     result = correct_mappings(mappings, roster)
     assert result["SPEAKER_01"].politician_slug is None
+
+
+# ---------------------------------------------------------------------------
+# Roster correction must not reassign a confident voice/human identity to a
+# different member via fuzzy surname matching (regression: a 1.000 voice match
+# for "Alexis Smithey" was overwritten with "Piedmont-Smith" because an
+# alias-generated bare "Smith" token fuzzy-matched "Smithey" at 0.83).
+# ---------------------------------------------------------------------------
+
+def _collision_roster():
+    return Roster(
+        city="Bloomington",
+        body="bloomington-common-council",
+        members=[
+            RosterMember(
+                name="Councilmember Piedmont-Smith",
+                aliases=["Piedmont-Smith", "Smith", "Isabel Piedmont-Smith"],
+                politician_slug="isabel-piedmont-smith",
+                politician_id="uuid-ips",
+                district_label="District 1",
+            ),
+        ],
+    )
+
+
+def test_correct_speaker_name_allow_fuzzy_false_skips_fuzzy_reassignment():
+    roster = _collision_roster()
+    assert correct_speaker_name("Alexis Smithey", roster, allow_fuzzy=True) == "Councilmember Piedmont-Smith"
+    assert correct_speaker_name("Alexis Smithey", roster, allow_fuzzy=False) == "Alexis Smithey"
+
+
+def test_correct_mappings_does_not_reassign_voice_match():
+    roster = _collision_roster()
+    mappings = {
+        "S1": SpeakerMapping(
+            speaker_label="S1", speaker_name="Alexis S. Smithey",
+            confidence=0.99, id_method="voice_profile",
+        ),
+    }
+    correct_mappings(mappings, roster)
+    assert mappings["S1"].speaker_name == "Alexis S. Smithey"  # not reassigned
+    assert mappings["S1"].politician_slug is None              # not mislinked
+
+
+def test_correct_mappings_does_not_reassign_human_confirmed():
+    roster = _collision_roster()
+    mappings = {
+        "S1": SpeakerMapping(
+            speaker_label="S1", speaker_name="Alexis S. Smithey",
+            confidence=1.0, id_method="human_confirmed",
+        ),
+    }
+    correct_mappings(mappings, roster)
+    assert mappings["S1"].speaker_name == "Alexis S. Smithey"
+
+
+def test_correct_mappings_still_fuzzy_corrects_pattern_names():
+    # Weak (pattern/LLM) names still get fuzzy correction — typo fixing preserved.
+    roster = _collision_roster()
+    mappings = {
+        "S1": SpeakerMapping(
+            speaker_label="S1", speaker_name="Smithey",
+            confidence=0.80, id_method="llm",
+        ),
+    }
+    correct_mappings(mappings, roster)
+    assert mappings["S1"].speaker_name == "Councilmember Piedmont-Smith"
+
+
+def test_voice_match_exact_roster_name_still_links():
+    # An authoritative voice match whose name IS a roster member still links.
+    roster = _make_roster()
+    mappings = {
+        "S1": SpeakerMapping(
+            speaker_label="S1", speaker_name="Councilmember Piedmont-Smith",
+            confidence=0.99, id_method="voice_profile",
+        ),
+    }
+    correct_mappings(mappings, roster)
+    assert mappings["S1"].politician_slug == "isabel-piedmont-smith"
 
 
 # ---------------------------------------------------------------------------

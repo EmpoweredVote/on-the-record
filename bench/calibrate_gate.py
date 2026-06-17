@@ -41,11 +41,33 @@ def _speech_by_label(segments) -> dict[str, float]:
     return secs
 
 
+def _same_identity(auto: SpeakerMapping | None, truth: SpeakerMapping | None) -> bool:
+    """True if auto and truth refer to the same person.
+
+    Tolerant of link drift: meetings reviewed before identity-linking existed
+    store a bare name with no slug, while a current automated re-run may carry a
+    politician_slug for the same person. So: if BOTH sides are linked, require a
+    slug match (linked to different people = mismatch); otherwise fall back to
+    normalized-name equality. This measures 'did automation pick the right
+    person', not 'did it record the same linkage'.
+    """
+    if auto is None or truth is None:
+        return False
+    if not auto.speaker_name or not truth.speaker_name:
+        return False
+    a_slug = auto.politician_slug or auto.local_slug
+    t_slug = truth.politician_slug or truth.local_slug
+    if a_slug and t_slug:
+        return a_slug == t_slug
+    return quality._normalize_name(auto.speaker_name) == quality._normalize_name(truth.speaker_name)
+
+
 def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
     """Per-label, speech-time-weighted precision of the automated TRUSTED+PROBABLE tiers.
 
     A label is 'claimed' when its automated tier is trusted or probable. It is
-    'correct' when the automated identity_key equals the truth identity_key.
+    'correct' when it refers to the same person as truth (see _same_identity,
+    which tolerates link drift between pre-linking truth and a linked re-run).
     """
     secs = _speech_by_label(truth.segments)
     claimed = 0.0
@@ -60,7 +82,7 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
             trusted_secs += label_secs
         if tier in (quality.TIER_TRUSTED, quality.TIER_PROBABLE):
             claimed += label_secs
-            if quality.identity_key(auto) == quality.identity_key(truth.speakers.get(label)):
+            if _same_identity(auto, truth.speakers.get(label)):
                 correct += label_secs
 
     return {
@@ -71,9 +93,24 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
     }
 
 
+def _decontaminated_centroids(profile_db, meeting_id: str) -> dict[str, np.ndarray]:
+    """Stored centroids EXCLUDING profiles enrolled from `meeting_id`.
+
+    A profile built (partly) from the meeting we're scoring would match its own
+    speakers near-perfectly — memorization, not generalization. Dropping those
+    profiles makes precision/coverage reflect how the pipeline does on a meeting
+    it has NOT already been trained on.
+    """
+    return {
+        pid: p.centroid
+        for pid, p in profile_db.profiles.items()
+        if p.centroid is not None and meeting_id not in p.meetings_seen
+    }
+
+
 def _rederive_auto(meeting_dir: Path, truth: Meeting, with_llm: bool) -> dict[str, SpeakerMapping]:
     """Run identify_speakers() against saved artifacts. Read-only; never enrolls."""
-    from src.enroll import get_stored_centroids, load_profiles
+    from src.enroll import load_profiles
 
     emb_path = meeting_dir / "embeddings.json"
     if emb_path.exists():
@@ -83,7 +120,7 @@ def _rederive_auto(meeting_dir: Path, truth: Meeting, with_llm: bool) -> dict[st
         embeddings = {}
 
     profile_db = load_profiles()
-    centroids = get_stored_centroids(profile_db)
+    centroids = _decontaminated_centroids(profile_db, meeting_dir.name)
 
     body_slug = None
     state_file = meeting_dir / "pipeline_state.json"

@@ -63,3 +63,46 @@ def test_unidentified_auto_not_counted_as_claim():
     # Only S0 was claimed; precision over claims is 100%, coverage is partial.
     assert res["trusted_claimed_seconds"] == 600.0
     assert res["trusted_precision"] == 1.0
+
+
+def test_same_person_matches_despite_link_drift():
+    # Truth was reviewed before identity-linking existed: bare name, no slug.
+    # The current automated re-run links the same person to a slug. Same person.
+    truth = SpeakerMapping("S0", "Steve Hilton", 1.0, "human_confirmed")
+    auto = SpeakerMapping("S0", "Steve Hilton", 0.9, "voice_profile",
+                          politician_slug="hilton-steve")
+    assert calibrate_gate._same_identity(auto, truth) is True
+
+
+def test_different_slugs_do_not_match():
+    truth = SpeakerMapping("S0", "Jane Smith", 1.0, "human_confirmed",
+                           politician_slug="smith-jane")
+    auto = SpeakerMapping("S0", "Steve Hilton", 0.9, "voice_profile",
+                          politician_slug="hilton-steve")
+    assert calibrate_gate._same_identity(auto, truth) is False
+
+
+def test_decontaminated_centroids_excludes_self_enrolled():
+    from src.enroll import ProfileDB, StoredProfile
+
+    db = ProfileDB(profiles={
+        "a": StoredProfile(speaker_id="a", display_name="A",
+                           centroid=np.array([1.0, 0.0]), meetings_seen=["m1"]),
+        "b": StoredProfile(speaker_id="b", display_name="B",
+                           centroid=np.array([0.0, 1.0]), meetings_seen=["m2"]),
+    })
+    cents = calibrate_gate._decontaminated_centroids(db, "m1")
+    assert "a" not in cents     # enrolled from the meeting being scored -> excluded
+    assert "b" in cents
+
+
+def test_link_drift_counts_as_correct_in_compare():
+    # Truth has names only (pre-linking review); auto links to slugs. All correct.
+    segs = [Segment(0, 0, 600, "S0", "x", speaker_name="Steve Hilton")]
+    speakers = {"S0": SpeakerMapping("S0", "Steve Hilton", 1.0, "human_confirmed")}
+    truth = Meeting(meeting_id="m", city="C", date="2026-01-01",
+                    event_kind="council", segments=segs, speakers=speakers)
+    auto = {"S0": SpeakerMapping("S0", "Steve Hilton", 0.9, "voice_profile",
+                                 politician_slug="hilton-steve")}
+    res = calibrate_gate.compare(truth, auto)
+    assert res["trusted_precision"] == 1.0
