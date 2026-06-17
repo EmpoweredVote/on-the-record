@@ -94,18 +94,20 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
 
 
 def _decontaminated_centroids(profile_db, meeting_id: str) -> dict[str, np.ndarray]:
-    """Stored centroids EXCLUDING profiles enrolled from `meeting_id`.
+    """Held-out centroids: each profile's centroid recomputed from only the
+    embeddings NOT sourced from `meeting_id`.
 
-    A profile built (partly) from the meeting we're scoring would match its own
-    speakers near-perfectly — memorization, not generalization. Dropping those
-    profiles makes precision/coverage reflect how the pipeline does on a meeting
-    it has NOT already been trained on.
+    Embeddings carry their source meeting (EmbeddingRecord.meeting_id), so a
+    speaker seen in several meetings keeps a real, uncontaminated centroid when
+    one of their meetings is scored. A speaker enrolled only from `meeting_id`
+    yields no centroid — honest, since there is no held-out signal for them.
     """
-    return {
-        pid: p.centroid
-        for pid, p in profile_db.profiles.items()
-        if p.centroid is not None and meeting_id not in p.meetings_seen
-    }
+    out: dict[str, np.ndarray] = {}
+    for pid, p in profile_db.profiles.items():
+        c = p.centroid_excluding(meeting_id)
+        if c is not None:
+            out[pid] = c
+    return out
 
 
 def _rederive_auto(meeting_dir: Path, truth: Meeting, with_llm: bool) -> dict[str, SpeakerMapping]:

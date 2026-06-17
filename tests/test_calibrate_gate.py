@@ -83,17 +83,35 @@ def test_different_slugs_do_not_match():
 
 
 def test_decontaminated_centroids_excludes_self_enrolled():
-    from src.enroll import ProfileDB, StoredProfile
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
 
     db = ProfileDB(profiles={
         "a": StoredProfile(speaker_id="a", display_name="A",
+                           embeddings=[EmbeddingRecord(np.array([1.0, 0.0]), "m1")],
                            centroid=np.array([1.0, 0.0]), meetings_seen=["m1"]),
         "b": StoredProfile(speaker_id="b", display_name="B",
+                           embeddings=[EmbeddingRecord(np.array([0.0, 1.0]), "m2")],
                            centroid=np.array([0.0, 1.0]), meetings_seen=["m2"]),
     })
     cents = calibrate_gate._decontaminated_centroids(db, "m1")
-    assert "a" not in cents     # enrolled from the meeting being scored -> excluded
+    assert "a" not in cents     # singleton from m1 -> no held-out signal
     assert "b" in cents
+
+
+def test_decontaminated_centroid_recomputed_from_held_out_meetings():
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
+
+    db = ProfileDB(profiles={
+        "a": StoredProfile(
+            speaker_id="a", display_name="A",
+            embeddings=[EmbeddingRecord(np.array([1.0, 0.0]), "m1"),
+                        EmbeddingRecord(np.array([0.0, 1.0]), "m2")],
+            centroid=np.array([0.5, 0.5]), meetings_seen=["m1", "m2"]),
+    })
+    cents = calibrate_gate._decontaminated_centroids(db, "m1")
+    # m1 excluded; only m2's embedding remains -> held-out centroid is m2's.
+    assert "a" in cents
+    np.testing.assert_allclose(cents["a"], np.array([0.0, 1.0]))
 
 
 def test_link_drift_counts_as_correct_in_compare():
