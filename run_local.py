@@ -2487,6 +2487,14 @@ def _review_meeting(meeting_id: str) -> None:
     else:
         print("\nNo changes made.")
 
+    # Recompute the confidence gate so the persisted verdict reflects this
+    # review's corrections. Keeps a direct --publish-meeting honest if the
+    # operator publishes without going back through --resume (which would
+    # otherwise re-enter Stage 4 and recompute). Runs even with no changes so
+    # meetings reviewed before the gate existed get scored on first open.
+    from src.checkpoint import PipelineState
+    _apply_gate(meeting, meeting_dir, PipelineState(meeting_dir))
+
 
 def _identify_speakers_standalone(meeting_id: str) -> None:
     """Standalone pre-identification for an existing meeting.

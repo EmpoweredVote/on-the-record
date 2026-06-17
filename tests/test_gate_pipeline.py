@@ -62,3 +62,30 @@ def test_may_publish_override():
     assert run_local._may_publish("review", True) is True
     assert run_local._may_publish("failed", True) is True
     assert run_local._may_publish(None, True) is True
+
+
+def test_review_meeting_recomputes_gate(tmp_path, monkeypatch):
+    # After --review, the persisted verdict must reflect the meeting's current
+    # attributions so a direct --publish-meeting isn't blocked by a stale status.
+    from src import config
+
+    meetings = tmp_path / "meetings"
+    profiles = tmp_path / "profiles"
+    meetings.mkdir()
+    profiles.mkdir()
+    monkeypatch.setattr(config, "MEETINGS_DIR", meetings)
+    monkeypatch.setattr(config, "PROFILES_DIR", profiles)
+
+    mdir = meetings / "2026-01-01-x"
+    mdir.mkdir()
+    meeting = _meeting("review")
+    meeting.meeting_id = "2026-01-01-x"
+    (mdir / "transcript_named.json").write_text(json.dumps(meeting.to_dict()))
+
+    # Skip the interactive review loop (no TTY in tests); no changes made.
+    monkeypatch.setattr(run_local, "_interactive_speaker_review", lambda *a, **k: [])
+
+    run_local._review_meeting("2026-01-01-x")
+
+    assert (mdir / "quality.json").exists()
+    assert PipelineState(mdir).review_status == "review"
