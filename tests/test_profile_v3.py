@@ -20,7 +20,7 @@ from src.roster import RosterMember, load_roster
 def test_profile_db_schema_version():
     """ProfileDB defaults to schema version 3."""
     db = ProfileDB()
-    assert db.schema_version == 3
+    assert db.schema_version == 4
 
 
 def test_stored_profile_v3_fields():
@@ -50,7 +50,7 @@ def test_v2_auto_discard(tmp_path, monkeypatch):
     monkeypatch.setattr("src.enroll._db_path", lambda: db_path)
 
     result = load_profiles()
-    assert result.schema_version == 3
+    assert result.schema_version == 4
     assert len(result.profiles) == 0
     assert (profiles_dir / "speaker_profiles.v2.pkl.bak").exists()
 

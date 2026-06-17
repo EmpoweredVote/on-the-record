@@ -430,7 +430,7 @@ def test_identify_speakers_phantom_eliminated():
 
 import numpy as np
 from src.identify import match_voice_profiles
-from src.enroll import ProfileDB, StoredProfile
+from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
 
 
 def _profile_db_with(identity: bool):
@@ -438,7 +438,7 @@ def _profile_db_with(identity: bool):
     prof = StoredProfile(
         speaker_id="essentials:john-hamilton" if identity else "hamilton_john",
         display_name="John Hamilton",
-        embeddings=[centroid],
+        embeddings=[EmbeddingRecord(centroid, "m0")],
         centroid=centroid,
         meetings_seen=["m0"],
         politician_slug="john-hamilton" if identity else None,
