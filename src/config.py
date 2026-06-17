@@ -83,3 +83,30 @@ PROFILE_DB_FILENAME = "speaker_profiles.pkl"
 # Bumped to 3 on 2026-04-12: added politician_slug and politician_id identity
 # fields to StoredProfile for essentials-keyed enrollment.
 PROFILE_SCHEMA_VERSION = 3
+
+# --- Meeting confidence gate (Phase A) ---
+# Probable-tier coverage (returning-speaker voice matches at the lowered
+# threshold) counts toward the verdict at this discount vs. trusted coverage.
+GATE_PROBABLE_DISCOUNT = 0.5
+
+# Speakers whose total speech-time is below this are treated as incidental
+# (e.g. public commenters) and excluded from the coverage denominator, UNLESS
+# excluding them would leave no eligible speakers (then all are kept).
+GATE_SPEECH_FLOOR_SECONDS = 60.0
+
+# Per-event-kind verdict thresholds on the (discounted) effective coverage.
+# verdict: effective >= high -> pass; high > effective >= low -> review;
+#          effective < low -> failed.
+# SEED VALUES — provisional and conservative; recalibrate with
+# bench/calibrate_gate.py once one meeting of each kind has been reviewed.
+GATE_THRESHOLDS = {
+    "default":          {"high": 0.90, "low": 0.50},
+    "council":          {"high": 0.90, "low": 0.50},
+    "school_board":     {"high": 0.90, "low": 0.50},
+    "debate":           {"high": 0.95, "low": 0.60},
+    "forum":            {"high": 0.90, "low": 0.55},
+    "community_meeting":{"high": 0.70, "low": 0.40},
+    "news_clip":        {"high": 0.90, "low": 0.50},
+    "press_conference": {"high": 0.90, "low": 0.50},
+    "other":            {"high": 0.90, "low": 0.50},
+}

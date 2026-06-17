@@ -39,6 +39,8 @@ class PipelineState:
         self.city: Optional[str] = None
         self.date: Optional[str] = None
         self.meeting_type: Optional[str] = None
+        self.review_status: Optional[str] = None       # pass | review | failed
+        self.trusted_coverage: Optional[float] = None  # gate headline metric
         self._load()
 
     def _load(self) -> None:
@@ -55,6 +57,8 @@ class PipelineState:
             self.city = data.get("city")
             self.date = data.get("date")
             self.meeting_type = data.get("meeting_type")
+            self.review_status = data.get("review_status")
+            self.trusted_coverage = data.get("trusted_coverage")
 
     def save(self) -> None:
         """Atomic write: write to temp file then rename."""
@@ -69,6 +73,8 @@ class PipelineState:
             "city": self.city,
             "date": self.date,
             "meeting_type": self.meeting_type,
+            "review_status": self.review_status,
+            "trusted_coverage": self.trusted_coverage,
         }
         fd, tmp_path = tempfile.mkstemp(
             dir=str(self.meeting_dir), suffix=".tmp"

@@ -1190,6 +1190,26 @@ def run_pipeline(args: argparse.Namespace) -> None:
     print()
 
     # ======================================================================
+    # Confidence gate (Phase A): score the meeting, route non-passing
+    # non-interactive runs to the review queue BEFORE any paid summary or
+    # voice enrollment (the latter would poison profiles with unreviewed guesses).
+    # ======================================================================
+    gate_report = _apply_gate(meeting, meeting_dir, state)
+    _interactive = sys.stdin.isatty()
+    _publish_anyway = getattr(args, "publish_anyway", False)
+    if gate_report["verdict"] != "pass" and not _interactive and not _publish_anyway:
+        print()
+        print("=" * 60)
+        print(f"QUEUED FOR REVIEW — verdict: {gate_report['verdict']}")
+        print("=" * 60)
+        print(f"  {gate_report['reason']}")
+        print(f"  Review with: python run_local.py --review {meeting_id}")
+        print(f"  Then publish with: python run_local.py --resume {meeting_id}")
+        print("  (Summary, enrollment, and publish were skipped to save cost "
+              "and protect voice profiles.)")
+        return
+
+    # ======================================================================
     # Stage 5: Summary Generation
     # ======================================================================
     print("=" * 60)
@@ -1441,15 +1461,20 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print(f"    {fmt}: {path}")
 
     if getattr(args, "publish", False):
-        try:
-            from src.publish import publish_meeting
+        if not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
+            print(f"  Not publishing — gate verdict is "
+                  f"'{state.review_status}'. Review and re-run, or pass "
+                  f"--publish-anyway to override.")
+        else:
+            try:
+                from src.publish import publish_meeting
 
-            result = publish_meeting(meeting, state.body_slug)
-            print(f"  Published to Supabase: {result.segments} segments, "
-                  f"{result.speakers} speakers")
-        except Exception as e:
-            print(f"  WARNING: Supabase publish failed: {e}")
-            print(f"  Retry later with: python run_local.py --publish-meeting {meeting.meeting_id}")
+                result = publish_meeting(meeting, state.body_slug)
+                print(f"  Published to Supabase: {result.segments} segments, "
+                      f"{result.speakers} speakers")
+            except Exception as e:
+                print(f"  WARNING: Supabase publish failed: {e}")
+                print(f"  Retry later with: python run_local.py --publish-meeting {meeting.meeting_id}")
 
     print()
     print("=" * 60)
@@ -1673,7 +1698,7 @@ def _option_supplied(argv: list[str], *options: str) -> bool:
     )
 
 
-def _publish_meeting_standalone(meeting_id: str) -> None:
+def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
     from src.checkpoint import PipelineState
@@ -1702,6 +1727,13 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
     body_slug = state.body_slug
     if meeting.race_id is None:
         meeting.race_id = state.race_id
+
+    if not _may_publish(state.review_status, publish_anyway):
+        print(f"Refusing to publish {meeting_id} — gate verdict is "
+              f"'{state.review_status}'.")
+        print("  Review it (python run_local.py --review "
+              f"{meeting_id}) and re-run, or pass --publish-anyway to override.")
+        sys.exit(2)
 
     print(f"Publishing {meeting_id} to Supabase...")
     result = publish_meeting(meeting, body_slug)
@@ -1823,6 +1855,36 @@ def _persist_after_review(meeting_dir: Path, segments, embeddings, changes) -> N
         json.dump(emb_out, f)
 
 
+def _apply_gate(meeting, meeting_dir: Path, state) -> dict:
+    """Evaluate the confidence gate, write quality.json, mirror headline to state.
+
+    Returns the full quality report dict. Pure-ish: only writes quality.json
+    and the two state fields. Recomputed on every run that reaches Stage 4 so
+    the verdict always reflects current attributions (incl. human review).
+    """
+    from src import quality
+
+    report = quality.evaluate_meeting(meeting)
+    with open(meeting_dir / "quality.json", "w") as f:
+        json.dump(report, f, indent=2)
+
+    state.review_status = report["verdict"]
+    state.trusted_coverage = report["trusted_coverage"]
+    state.save()
+
+    print(
+        f"  Gate: {report['verdict'].upper()} "
+        f"(trusted={report['trusted_coverage']:.0%}, "
+        f"effective={report['effective_coverage']:.0%}) — {report['reason']}"
+    )
+    return report
+
+
+def _may_publish(review_status: str | None, publish_anyway: bool) -> bool:
+    """Publishing is allowed only on a 'pass' verdict, unless forced by a human."""
+    return publish_anyway or review_status == "pass"
+
+
 def _meeting_body_slug(meeting_dir: Path) -> str | None:
     """Read the persisted body_slug from a meeting's pipeline_state.json, if any."""
     state_file = meeting_dir / "pipeline_state.json"
@@ -1833,6 +1895,54 @@ def _meeting_body_slug(meeting_dir: Path) -> str | None:
             return json.load(f).get("body_slug")
     except Exception:
         return None
+
+
+def _review_queue() -> None:
+    """List meetings awaiting review, grouped by verdict and ranked by coverage."""
+    from src import config
+    from src.checkpoint import PipelineState
+
+    meetings_dir = config.MEETINGS_DIR
+    if not meetings_dir.exists():
+        print("No meetings directory found.")
+        return
+
+    review, failed, passed, unscored = [], [], 0, 0
+    for mdir in sorted(d for d in meetings_dir.iterdir()
+                       if d.is_dir() and not d.name.startswith(".")):
+        if not (mdir / "pipeline_state.json").exists():
+            continue
+        state = PipelineState(mdir)
+        cov = state.trusted_coverage if state.trusted_coverage is not None else 0.0
+        row = (mdir.name, cov)
+        if state.review_status == "review":
+            review.append(row)
+        elif state.review_status == "failed":
+            failed.append(row)
+        elif state.review_status == "pass":
+            passed += 1
+        else:
+            unscored += 1
+
+    review.sort(key=lambda r: r[1], reverse=True)
+    failed.sort(key=lambda r: r[1], reverse=True)
+
+    if not review and not failed:
+        print(f"Review queue empty. ({passed} passing, {unscored} unscored)")
+        return
+
+    if review:
+        print(f"NEEDS REVIEW ({len(review)}):")
+        for name, cov in review:
+            print(f"  {cov:5.0%}  {name}")
+    if failed:
+        print(f"\nLOW YIELD / FAILED ({len(failed)}) "
+              f"— may need a roster or voice profiles before review is productive:")
+        for name, cov in failed:
+            print(f"  {cov:5.0%}  {name}")
+    print(f"\nSummary: {len(review)} review, {len(failed)} failed, "
+          f"{passed} passing, {unscored} unscored.")
+    print("Review one with: python run_local.py --review <MEETING_ID>")
 
 
 # ---------------------------------------------------------------------------
@@ -2377,6 +2487,14 @@ def _review_meeting(meeting_id: str) -> None:
     else:
         print("\nNo changes made.")
 
+    # Recompute the confidence gate so the persisted verdict reflects this
+    # review's corrections. Keeps a direct --publish-meeting honest if the
+    # operator publishes without going back through --resume (which would
+    # otherwise re-enter Stage 4 and recompute). Runs even with no changes so
+    # meetings reviewed before the gate existed get scored on first open.
+    from src.checkpoint import PipelineState
+    _apply_gate(meeting, meeting_dir, PipelineState(meeting_dir))
+
 
 def _identify_speakers_standalone(meeting_id: str) -> None:
     """Standalone pre-identification for an existing meeting.
@@ -2655,6 +2773,9 @@ Environment Variables:
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--no-publish", action="store_true",
                         help="Skip publishing even when resuming (overrides the auto-publish default on --resume)")
+    parser.add_argument("--publish-anyway", action="store_true",
+                        help="Force publishing even when the confidence gate "
+                             "verdict is 'review' or 'failed' (human override)")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
                         help="Publish an already-processed meeting to Supabase and exit")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
@@ -2676,6 +2797,8 @@ Environment Variables:
                         help="Batch mode: text file with one input per line (path or 'URL DATE'), or directory of videos")
     parser.add_argument("--batch-resume", action="store_true",
                         help="Resume an interrupted batch run (skip already-completed meetings)")
+    parser.add_argument("--review-queue", action="store_true",
+                        help="List meetings awaiting review (grouped by gate verdict) and exit")
     parser.add_argument(
         "--body",
         type=str,
@@ -2796,6 +2919,10 @@ def main():
                     print(f"    Aliases: {', '.join(m.aliases)}")
         return
 
+    if args.review_queue:
+        _review_queue()
+        return
+
     if args.list_profiles:
         from src.enroll import load_profiles
         db = load_profiles()
@@ -2863,7 +2990,7 @@ def main():
         return
 
     if args.publish_meeting:
-        _publish_meeting_standalone(args.publish_meeting)
+        _publish_meeting_standalone(args.publish_meeting, getattr(args, "publish_anyway", False))
         return
 
     if args.review:
