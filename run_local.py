@@ -1461,15 +1461,20 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print(f"    {fmt}: {path}")
 
     if getattr(args, "publish", False):
-        try:
-            from src.publish import publish_meeting
+        if not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
+            print(f"  Not publishing — gate verdict is "
+                  f"'{state.review_status}'. Review and re-run, or pass "
+                  f"--publish-anyway to override.")
+        else:
+            try:
+                from src.publish import publish_meeting
 
-            result = publish_meeting(meeting, state.body_slug)
-            print(f"  Published to Supabase: {result.segments} segments, "
-                  f"{result.speakers} speakers")
-        except Exception as e:
-            print(f"  WARNING: Supabase publish failed: {e}")
-            print(f"  Retry later with: python run_local.py --publish-meeting {meeting.meeting_id}")
+                result = publish_meeting(meeting, state.body_slug)
+                print(f"  Published to Supabase: {result.segments} segments, "
+                      f"{result.speakers} speakers")
+            except Exception as e:
+                print(f"  WARNING: Supabase publish failed: {e}")
+                print(f"  Retry later with: python run_local.py --publish-meeting {meeting.meeting_id}")
 
     print()
     print("=" * 60)
@@ -1693,7 +1698,7 @@ def _option_supplied(argv: list[str], *options: str) -> bool:
     )
 
 
-def _publish_meeting_standalone(meeting_id: str) -> None:
+def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
     from src.checkpoint import PipelineState
@@ -1722,6 +1727,13 @@ def _publish_meeting_standalone(meeting_id: str) -> None:
     body_slug = state.body_slug
     if meeting.race_id is None:
         meeting.race_id = state.race_id
+
+    if not _may_publish(state.review_status, publish_anyway):
+        print(f"Refusing to publish {meeting_id} — gate verdict is "
+              f"'{state.review_status}'.")
+        print("  Review it (python run_local.py --review "
+              f"{meeting_id}) and re-run, or pass --publish-anyway to override.")
+        sys.exit(2)
 
     print(f"Publishing {meeting_id} to Supabase...")
     result = publish_meeting(meeting, body_slug)
@@ -1866,6 +1878,11 @@ def _apply_gate(meeting, meeting_dir: Path, state) -> dict:
         f"effective={report['effective_coverage']:.0%}) — {report['reason']}"
     )
     return report
+
+
+def _may_publish(review_status: str | None, publish_anyway: bool) -> bool:
+    """Publishing is allowed only on a 'pass' verdict, unless forced by a human."""
+    return publish_anyway or review_status == "pass"
 
 
 def _meeting_body_slug(meeting_dir: Path) -> str | None:
@@ -2700,6 +2717,9 @@ Environment Variables:
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--no-publish", action="store_true",
                         help="Skip publishing even when resuming (overrides the auto-publish default on --resume)")
+    parser.add_argument("--publish-anyway", action="store_true",
+                        help="Force publishing even when the confidence gate "
+                             "verdict is 'review' or 'failed' (human override)")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
                         help="Publish an already-processed meeting to Supabase and exit")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
@@ -2908,7 +2928,7 @@ def main():
         return
 
     if args.publish_meeting:
-        _publish_meeting_standalone(args.publish_meeting)
+        _publish_meeting_standalone(args.publish_meeting, getattr(args, "publish_anyway", False))
         return
 
     if args.review:

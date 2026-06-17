@@ -49,3 +49,16 @@ def test_apply_gate_records_review_verdict(tmp_path):
     report = run_local._apply_gate(meeting, tmp_path, state)
     assert report["verdict"] == "review"
     assert PipelineState(tmp_path).review_status == "review"
+
+
+def test_may_publish_only_on_pass():
+    assert run_local._may_publish("pass", False) is True
+    assert run_local._may_publish("review", False) is False
+    assert run_local._may_publish("failed", False) is False
+    assert run_local._may_publish(None, False) is False
+
+
+def test_may_publish_override():
+    assert run_local._may_publish("review", True) is True
+    assert run_local._may_publish("failed", True) is True
+    assert run_local._may_publish(None, True) is True
