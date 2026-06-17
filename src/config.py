@@ -29,8 +29,9 @@ CHANNELS = 1  # mono
 DIARIZATION_MODEL = "pyannote/speaker-diarization-3.1"
 # WeSpeaker ResNet34 — higher-quality embeddings than pyannote/embedding (256-dim).
 # NOTE: changing this invalidates stored voice profiles (different dimension).
-# PROFILE_SCHEMA_VERSION is bumped whenever this model changes so load_profiles()
-# can detect and discard stale embeddings instead of silently mis-matching.
+# PROFILE_SCHEMA_VERSION is bumped when the embedding model OR the stored profile
+# structure changes, so load_profiles() can detect and discard stale profiles
+# instead of silently mis-matching or unpickling an incompatible shape.
 EMBEDDING_MODEL = "pyannote/wespeaker-voxceleb-resnet34-LM"
 WHISPER_MODEL_GPU = "large-v3"
 WHISPER_MODEL_CPU = "medium"
@@ -82,7 +83,10 @@ PROFILE_DB_FILENAME = "speaker_profiles.pkl"
 # older schema versions are discarded on load and must be re-enrolled.
 # Bumped to 3 on 2026-04-12: added politician_slug and politician_id identity
 # fields to StoredProfile for essentials-keyed enrollment.
-PROFILE_SCHEMA_VERSION = 3
+# Bumped to 4 on 2026-06-16: embeddings are now EmbeddingRecord (vector +
+# meeting_id + seg_count) instead of bare np.ndarray, enabling embedding-level
+# leave-one-out provenance in calibration.
+PROFILE_SCHEMA_VERSION = 4
 
 # --- Meeting confidence gate (Phase A) ---
 # Probable-tier coverage (returning-speaker voice matches at the lowered

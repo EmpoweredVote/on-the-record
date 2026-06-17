@@ -32,10 +32,22 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class EmbeddingRecord:
+    """One stored voice embedding plus where it came from.
+
+    meeting_id enables embedding-level leave-one-out in calibration; seg_count is
+    banked for later centroid weighting / profile pruning (roadmap item L).
+    """
+    vector: np.ndarray
+    meeting_id: str
+    seg_count: int = 0
+
+
+@dataclass
 class StoredProfile:
     speaker_id: str  # slug, e.g. "adams_jane"
     display_name: str
-    embeddings: list[np.ndarray] = field(default_factory=list)
+    embeddings: list[EmbeddingRecord] = field(default_factory=list)
     centroid: Optional[np.ndarray] = None
     meetings_seen: list[str] = field(default_factory=list)
     total_segments_confirmed: int = 0
@@ -44,7 +56,16 @@ class StoredProfile:
 
     def recompute_centroid(self) -> None:
         if self.embeddings:
-            self.centroid = np.mean(self.embeddings, axis=0)
+            self.centroid = np.mean([r.vector for r in self.embeddings], axis=0)
+
+    def centroid_excluding(self, meeting_id: str) -> Optional[np.ndarray]:
+        """Centroid from embeddings NOT sourced from meeting_id.
+
+        None when every embedding came from that meeting (no held-out signal),
+        which is the honest answer for a speaker enrolled only from that meeting.
+        """
+        held_out = [r.vector for r in self.embeddings if r.meeting_id != meeting_id]
+        return np.mean(held_out, axis=0) if held_out else None
 
 
 @dataclass
@@ -158,7 +179,7 @@ def _enroll_one(
     """Add or update a single speaker profile in the database."""
     if slug in db.profiles:
         profile = db.profiles[slug]
-        profile.embeddings.append(embedding)
+        profile.embeddings.append(EmbeddingRecord(embedding, meeting_id, seg_count))
         if meeting_id not in profile.meetings_seen:
             profile.meetings_seen.append(meeting_id)
         profile.total_segments_confirmed += seg_count
@@ -170,7 +191,7 @@ def _enroll_one(
         profile = StoredProfile(
             speaker_id=slug,
             display_name=display_name,
-            embeddings=[embedding],
+            embeddings=[EmbeddingRecord(embedding, meeting_id, seg_count)],
             meetings_seen=[meeting_id],
             total_segments_confirmed=seg_count,
             politician_slug=politician_slug,
