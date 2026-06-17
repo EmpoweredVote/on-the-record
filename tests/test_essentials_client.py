@@ -25,7 +25,7 @@ def test_fetch_body_roster_success(mock_get, sample_roster_response):
     assert out == sample_roster_response
     called_url = mock_get.call_args[0][0]
     assert called_url == (
-        "https://accounts.empowered.vote"
+        "https://accounts-api.empowered.vote"
         "/api/essentials/bodies/bloomington-common-council/roster"
     )
 
@@ -198,7 +198,7 @@ def test_search_politicians_success(mock_get):
     assert out[1]["is_incumbent"] is False
     called_url = mock_get.call_args[0][0]
     assert called_url == (
-        "https://accounts.empowered.vote"
+        "https://accounts-api.empowered.vote"
         "/api/essentials/candidates/search-by-name"
     )
     assert mock_get.call_args.kwargs["params"] == {"q": "hamilton"}

@@ -12,7 +12,7 @@ import re
 
 import requests
 
-DEFAULT_BASE_URL = "https://accounts.empowered.vote"
+DEFAULT_BASE_URL = "https://accounts-api.empowered.vote"
 _SLUG_RE = re.compile(r"^[a-z0-9-]+$")
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024  # 5 MB cap — T-108-01 mitigation
 _CONNECT_TIMEOUT = 10

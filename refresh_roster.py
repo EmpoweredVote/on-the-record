@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Override API base URL "
-            "(default: $EV_ACCOUNTS_URL or https://accounts.empowered.vote)"
+            "(default: $EV_ACCOUNTS_URL or https://accounts-api.empowered.vote)"
         ),
     )
     parser.add_argument(
