@@ -1897,6 +1897,54 @@ def _meeting_body_slug(meeting_dir: Path) -> str | None:
         return None
 
 
+def _review_queue() -> None:
+    """List meetings awaiting review, grouped by verdict and ranked by coverage."""
+    from src import config
+    from src.checkpoint import PipelineState
+
+    meetings_dir = config.MEETINGS_DIR
+    if not meetings_dir.exists():
+        print("No meetings directory found.")
+        return
+
+    review, failed, passed, unscored = [], [], 0, 0
+    for mdir in sorted(d for d in meetings_dir.iterdir()
+                       if d.is_dir() and not d.name.startswith(".")):
+        if not (mdir / "pipeline_state.json").exists():
+            continue
+        state = PipelineState(mdir)
+        cov = state.trusted_coverage if state.trusted_coverage is not None else 0.0
+        row = (mdir.name, cov)
+        if state.review_status == "review":
+            review.append(row)
+        elif state.review_status == "failed":
+            failed.append(row)
+        elif state.review_status == "pass":
+            passed += 1
+        else:
+            unscored += 1
+
+    review.sort(key=lambda r: r[1], reverse=True)
+    failed.sort(key=lambda r: r[1], reverse=True)
+
+    if not review and not failed:
+        print(f"Review queue empty. ({passed} passing, {unscored} unscored)")
+        return
+
+    if review:
+        print(f"NEEDS REVIEW ({len(review)}):")
+        for name, cov in review:
+            print(f"  {cov:5.0%}  {name}")
+    if failed:
+        print(f"\nLOW YIELD / FAILED ({len(failed)}) "
+              f"— may need a roster or voice profiles before review is productive:")
+        for name, cov in failed:
+            print(f"  {cov:5.0%}  {name}")
+    print(f"\nSummary: {len(review)} review, {len(failed)} failed, "
+          f"{passed} passing, {unscored} unscored.")
+    print("Review one with: python run_local.py --review <MEETING_ID>")
+
+
 # ---------------------------------------------------------------------------
 # Metadata defaults / interactive prompt helpers
 # ---------------------------------------------------------------------------
@@ -2741,6 +2789,8 @@ Environment Variables:
                         help="Batch mode: text file with one input per line (path or 'URL DATE'), or directory of videos")
     parser.add_argument("--batch-resume", action="store_true",
                         help="Resume an interrupted batch run (skip already-completed meetings)")
+    parser.add_argument("--review-queue", action="store_true",
+                        help="List meetings awaiting review (grouped by gate verdict) and exit")
     parser.add_argument(
         "--body",
         type=str,
@@ -2859,6 +2909,10 @@ def main():
                 print(f"  {m.name}")
                 if m.aliases:
                     print(f"    Aliases: {', '.join(m.aliases)}")
+        return
+
+    if args.review_queue:
+        _review_queue()
         return
 
     if args.list_profiles:
