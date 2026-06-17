@@ -93,9 +93,24 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
     }
 
 
+def _decontaminated_centroids(profile_db, meeting_id: str) -> dict[str, np.ndarray]:
+    """Stored centroids EXCLUDING profiles enrolled from `meeting_id`.
+
+    A profile built (partly) from the meeting we're scoring would match its own
+    speakers near-perfectly — memorization, not generalization. Dropping those
+    profiles makes precision/coverage reflect how the pipeline does on a meeting
+    it has NOT already been trained on.
+    """
+    return {
+        pid: p.centroid
+        for pid, p in profile_db.profiles.items()
+        if p.centroid is not None and meeting_id not in p.meetings_seen
+    }
+
+
 def _rederive_auto(meeting_dir: Path, truth: Meeting, with_llm: bool) -> dict[str, SpeakerMapping]:
     """Run identify_speakers() against saved artifacts. Read-only; never enrolls."""
-    from src.enroll import get_stored_centroids, load_profiles
+    from src.enroll import load_profiles
 
     emb_path = meeting_dir / "embeddings.json"
     if emb_path.exists():
@@ -105,7 +120,7 @@ def _rederive_auto(meeting_dir: Path, truth: Meeting, with_llm: bool) -> dict[st
         embeddings = {}
 
     profile_db = load_profiles()
-    centroids = get_stored_centroids(profile_db)
+    centroids = _decontaminated_centroids(profile_db, meeting_dir.name)
 
     body_slug = None
     state_file = meeting_dir / "pipeline_state.json"

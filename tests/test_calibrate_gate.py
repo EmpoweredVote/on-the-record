@@ -82,6 +82,20 @@ def test_different_slugs_do_not_match():
     assert calibrate_gate._same_identity(auto, truth) is False
 
 
+def test_decontaminated_centroids_excludes_self_enrolled():
+    from src.enroll import ProfileDB, StoredProfile
+
+    db = ProfileDB(profiles={
+        "a": StoredProfile(speaker_id="a", display_name="A",
+                           centroid=np.array([1.0, 0.0]), meetings_seen=["m1"]),
+        "b": StoredProfile(speaker_id="b", display_name="B",
+                           centroid=np.array([0.0, 1.0]), meetings_seen=["m2"]),
+    })
+    cents = calibrate_gate._decontaminated_centroids(db, "m1")
+    assert "a" not in cents     # enrolled from the meeting being scored -> excluded
+    assert "b" in cents
+
+
 def test_link_drift_counts_as_correct_in_compare():
     # Truth has names only (pre-linking review); auto links to slugs. All correct.
     segs = [Segment(0, 0, 600, "S0", "x", speaker_name="Steve Hilton")]
