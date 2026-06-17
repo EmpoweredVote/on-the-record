@@ -15,5 +15,5 @@ def test_enroll_after_review_skips_merge_entries(tmp_path, monkeypatch):
     # stdin is not a tty under pytest → _enroll_after_review returns before the
     # loop; that alone proves no crash. Assert it simply returns None.
     changes = [{"label": "SPEAKER_01", "merged_into": "SPEAKER_00"}]
-    result = run_local._enroll_after_review(changes, {}, tmp_path, "m1", [])
+    result = run_local._enroll_after_review(changes, {}, tmp_path, [])
     assert result is None

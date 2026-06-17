@@ -507,6 +507,18 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     # --- Initialize meeting ---
     meeting_id = args.meeting_id or f"{args.date}-{args.meeting_type.lower().replace(' ', '-')}"
+    # The meeting id IS the directory basename (ensure_drive_structure makes
+    # MEETINGS_DIR/<meeting_id>). A separator would create a nested dir whose
+    # name no longer matches meeting_id, drifting the calibration leave-one-out
+    # key away from the stamped enrollment provenance. Reject it up front.
+    if not _is_simple_meeting_id(meeting_id):
+        print(
+            f"ERROR: invalid meeting id {meeting_id!r} — it must be a single path "
+            f"component (no '/' or '\\'). Pass a plain --meeting-id like "
+            f"'2026-02-10-regular-session'.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
@@ -933,8 +945,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
             # Offer enrollment
             _enroll_after_review(
-                changes, temp_mappings, meeting_dir,
-                meeting_id, segments,
+                changes, temp_mappings, meeting_dir, segments,
             )
         print()
 
@@ -1349,9 +1360,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
         before_count = len(profile_db.profiles)
 
         # Auto-enroll high-confidence speakers (>= 0.85)
+        # Stamp the directory basename (not the meeting_id variable) so the
+        # provenance key matches calibrate_gate's leave-one-out key exactly.
         profile_db = enroll_speakers(
             profile_db, speaker_embeddings, meeting.speakers,
-            meeting_id=meeting_id, segments=segments, roster=roster,
+            meeting_id=meeting_dir.name, segments=segments, roster=roster,
         )
 
         auto_count = len(profile_db.profiles) - before_count
@@ -1410,7 +1423,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 if confirmed:
                     profile_db = enroll_confirmed(
                         profile_db, speaker_embeddings, confirmed,
-                        meeting.speakers, meeting_id=meeting_id, segments=segments,
+                        meeting.speakers, meeting_id=meeting_dir.name, segments=segments,
                         roster=roster,
                     )
                     print(f"\n  Enrolled {len(confirmed)} additional speaker(s) via confirmation")
@@ -1640,15 +1653,23 @@ def _run_batch(args: argparse.Namespace) -> None:
         print(f"\nUse --review-meeting MEETING_ID to review speaker identifications.")
 
 
+def _is_simple_meeting_id(meeting_id: str) -> bool:
+    """True if meeting_id is a single path component (its own basename).
+
+    The id IS the meeting directory basename, so it must contain no path
+    separator and not be empty/'.'/'..'. A separator would nest the directory
+    and drift its name away from the id stamped into enrollment provenance —
+    breaking calibration's leave-one-out key.
+    """
+    return bool(meeting_id) and meeting_id not in {".", ".."} \
+        and not Path(meeting_id).is_absolute() \
+        and Path(meeting_id).name == meeting_id
+
+
 def _meeting_dir_for_id(meeting_id: str) -> Path:
     """Resolve a simple meeting ID to a direct child of MEETINGS_DIR."""
     meeting_path = Path(meeting_id)
-    if (
-        not meeting_id
-        or meeting_path.is_absolute()
-        or meeting_id in {".", ".."}
-        or meeting_path.name != meeting_id
-    ):
+    if not _is_simple_meeting_id(meeting_id):
         raise ValueError("invalid meeting ID")
 
     meetings_root = config.MEETINGS_DIR.resolve(strict=False)
@@ -2290,14 +2311,22 @@ def _enroll_after_review(
     changes: list[dict],
     current_mappings: dict,
     meeting_dir: Path,
-    meeting_id: str,
     segments,
 ) -> None:
     """Offer to enroll speakers that were identified or corrected during review.
 
     Only runs if embeddings are available on disk.
+
+    The meeting id stamped into each EmbeddingRecord is ALWAYS the meeting
+    directory basename (``meeting_dir.name``), never a caller-supplied or
+    persisted ``meeting.meeting_id`` value. Calibration's leave-one-out
+    (``calibrate_gate._decontaminated_centroids``) keys on the same
+    ``meeting_dir.name``; if enrollment stamped anything else the scored meeting
+    could fail to exclude its own embeddings and silently grade itself.
     """
     import numpy as np
+
+    meeting_id = meeting_dir.name
 
     from src.enroll import (
         _enroll_mapping,
@@ -2481,8 +2510,7 @@ def _review_meeting(meeting_id: str) -> None:
 
         # Offer enrollment
         _enroll_after_review(
-            changes, meeting.speakers, meeting_dir,
-            meeting.meeting_id, meeting.segments,
+            changes, meeting.speakers, meeting_dir, meeting.segments,
         )
     else:
         print("\nNo changes made.")
@@ -2648,8 +2676,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
 
         # Offer enrollment
         _enroll_after_review(
-            changes, current_mappings, meeting_dir,
-            meeting_id, segments,
+            changes, current_mappings, meeting_dir, segments,
         )
 
         print("\nThese identifications will be used as ground truth in Stage 4")
