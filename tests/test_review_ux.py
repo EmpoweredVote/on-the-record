@@ -86,3 +86,16 @@ def test_restore_removes_mapping_absent_at_snapshot_time():
     mappings["S0"] = SpeakerMapping("S0", "Added")
     restore_mapping(mappings, segs, "S0", snap)
     assert "S0" not in mappings   # reverted to absent
+
+
+def test_restore_does_not_revert_relabeled_segments():
+    # snapshot/restore is name-based, not label-based — it cannot undo a merge's
+    # relabeling. This pins the limitation that justifies refusing merge-undo.
+    from src.review import snapshot_mapping, restore_mapping
+    segs = [Segment(0, 0, 5, "SRC", "hi", speaker_name="Bob")]
+    mappings = {"SRC": SpeakerMapping("SRC", "Bob")}
+    snap = snapshot_mapping(mappings, segs, "SRC")
+    # simulate a merge relabeling SRC -> TGT
+    segs[0].speaker_label = "TGT"
+    restore_mapping(mappings, segs, "SRC", snap)
+    assert segs[0].speaker_label == "TGT"   # label NOT reverted (by design)

@@ -2368,6 +2368,14 @@ def _interactive_speaker_review(
                         print("  (nothing to undo)")
                         continue
                     entry = history.pop()
+                    if entry.get("kind") == "merge":
+                        # Merge undo is intentionally unsupported: snapshot/restore
+                        # is name-based and cannot revert the relabeled segments or
+                        # the combined embeddings, so reverting would leave a
+                        # half-merged state. Refuse cleanly — the popped entry stays
+                        # popped, so a further [B] undoes the action before the merge.
+                        print("  (can't undo a merge — speakers are already combined; re-run review if needed)")
+                        continue
                     undo_label = entry["snap"]["label"]
                     review.restore_mapping(mappings, segments, undo_label, entry["snap"])
                     # Drop the most recent change recorded for that label (the one
@@ -2413,6 +2421,10 @@ def _interactive_speaker_review(
                         print("    Invalid selection.")
                         continue
                     _push_undo()
+                    # Tag this entry as a merge: undo is name-based and cannot
+                    # revert the relabeled segments/embeddings, so [B] refuses it
+                    # rather than half-reverting (see test_review_ux.py).
+                    history[-1]["kind"] = "merge"
                     try:
                         res = review.merge_speakers(segments, embeddings, mappings, label, target.label)
                     except ValueError as e:
