@@ -60,11 +60,11 @@ def test_identify_overview_renders_hint_markers(tmp_path, monkeypatch, capsys):
     fake_views = [
         SpeakerView(label="SPEAKER_00", current_name=None, current_confidence=0.0,
                     current_method=None, seg_count=3, total_speech_seconds=30.0,
-                    clip_start=0.0, sample_text=None, soft_hints=[("Mayor Jones", 0.91)],
+                    clip_start=0.0, sample_text=None, soft_hints=[("Mayor Jones", 0.91, "p:mayor-jones")],
                     needs_review=True),
         SpeakerView(label="SPEAKER_01", current_name=None, current_confidence=0.0,
                     current_method=None, seg_count=1, total_speech_seconds=5.0,
-                    clip_start=30.0, sample_text=None, soft_hints=[("Clerk Smith", 0.62)],
+                    clip_start=30.0, sample_text=None, soft_hints=[("Clerk Smith", 0.62, "p:clerk-smith")],
                     needs_review=True),
     ]
     monkeypatch.setattr("src.review.build_review_state", lambda *a, **k: fake_views)
@@ -88,12 +88,12 @@ def test_review_meeting_tilde_hint_and_suppression(tmp_path, monkeypatch, capsys
         # unidentified → hint shown with "~"
         SpeakerView(label="SPEAKER_00", current_name=None, current_confidence=0.0,
                     current_method=None, seg_count=3, total_speech_seconds=30.0,
-                    clip_start=0.0, sample_text=None, soft_hints=[("Mayor Jones", 0.91)],
+                    clip_start=0.0, sample_text=None, soft_hints=[("Mayor Jones", 0.91, "p:mayor-jones")],
                     needs_review=True),
         # already identified at high confidence → hint SUPPRESSED
         SpeakerView(label="SPEAKER_01", current_name="Clerk Smith", current_confidence=0.95,
                     current_method="voice", seg_count=1, total_speech_seconds=5.0,
-                    clip_start=30.0, sample_text=None, soft_hints=[("Wrong Guess", 0.70)],
+                    clip_start=30.0, sample_text=None, soft_hints=[("Wrong Guess", 0.70, "p:wrong-guess")],
                     needs_review=False),
     ]
     monkeypatch.setattr("src.review.build_review_state", lambda *a, **k: fake_views)

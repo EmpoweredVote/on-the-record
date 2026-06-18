@@ -68,8 +68,22 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
     A label is 'claimed' when its automated tier is trusted or probable. It is
     'correct' when it refers to the same person as truth (see _same_identity,
     which tolerates link drift between pre-linking truth and a linked re-run).
+
+    NOTE: trusted_coverage here is FLOOR-FREE — the denominator is all
+    speech except non_speaker labels, unlike the live gate
+    (quality.evaluate_meeting), which divides by eligible speakers above
+    GATE_SPEECH_FLOOR_SECONDS. So this coverage can read lower than the gate's
+    for meetings with short sub-floor interjections; read it as raw coverage,
+    not gate-equivalent.
     """
     secs = _speech_by_label(truth.segments)
+
+    def _status(speakers_map, label):
+        sm = speakers_map.get(label)
+        return getattr(sm, "speaker_status", None) if sm else None
+
+    # Non-speakers (music/pledge) are not scoreable speech — drop from all totals.
+    secs = {l: v for l, v in secs.items() if _status(truth.speakers, l) != "non_speaker"}
     claimed = 0.0
     correct = 0.0
     trusted_secs = 0.0
@@ -80,7 +94,11 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
         tier = quality.classify_method(auto.id_method) if (auto and auto.speaker_name) else quality.TIER_UNKNOWN
         if tier == quality.TIER_TRUSTED:
             trusted_secs += label_secs
-        if tier in (quality.TIER_TRUSTED, quality.TIER_PROBABLE):
+        # An unidentified handle is a consistent-speaker attribution, not a named
+        # identity: counts toward coverage but is never a precision claim.
+        is_unidentified = (getattr(auto, "speaker_status", None) == "unidentified"
+                           or _status(truth.speakers, label) == "unidentified")
+        if tier in (quality.TIER_TRUSTED, quality.TIER_PROBABLE) and not is_unidentified:
             claimed += label_secs
             if _same_identity(auto, truth.speakers.get(label)):
                 correct += label_secs

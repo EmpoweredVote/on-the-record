@@ -35,7 +35,7 @@ class SpeakerView:
     clip_start: Optional[float]
     clip_candidates: list[float] = field(default_factory=list)
     sample_text: Optional[str] = None
-    soft_hints: list[tuple[str, float]] = field(default_factory=list)
+    soft_hints: list[tuple[str, float, str]] = field(default_factory=list)
     needs_review: bool = False
 
 
@@ -49,7 +49,7 @@ def build_review_state(segments, mappings, embeddings, profile_db, *, show_text:
     for seg in segments:
         by_label.setdefault(seg.speaker_label, []).append(seg)
 
-    hints: dict[str, list[tuple[str, float]]] = {}
+    hints: dict[str, list[tuple[str, float, str]]] = {}
     if embeddings and getattr(profile_db, "profiles", None):
         from src.enroll import get_stored_centroids
         from src.identify import soft_match_voice_profiles
@@ -290,6 +290,31 @@ def mark_non_speaker(mappings, segments, label, display_label=None):
     for seg in segments:
         if seg.speaker_label == label:
             seg.speaker_name = name
+
+
+def link_to_unidentified_handle(mappings, segments, label, handle_key, display_name):
+    """Link a speaker to an EXISTING unidentified handle (a returning unknown).
+
+    handle_key is the stored profile key, e.g. 'local:unidentified-<m>-<lbl>'.
+    Reuses that handle's slug so the recurring speaker enrolls into the same
+    profile. Confirm-only — never called without reviewer action.
+    """
+    from src.models import SpeakerMapping
+    slug = handle_key[len("local:"):] if handle_key.startswith("local:") else handle_key
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    mapping.speaker_name = display_name or "Unidentified Speaker"
+    mapping.local_slug = slug
+    mapping.local_role = None
+    mapping.politician_slug = None
+    mapping.politician_id = None
+    mapping.speaker_status = "unidentified"
+    mapping.id_method = "human_confirmed"
+    mapping.confidence = 1.0
+    mapping.needs_review = False
+    mappings[label] = mapping
+    for seg in segments:
+        if seg.speaker_label == label:
+            seg.speaker_name = mapping.speaker_name
 
 
 def parse_link_selection(token, n_matches):

@@ -9,8 +9,9 @@ helpers below survived the refactor unchanged and remain worth covering.
 
 import pytest
 
-from src.models import Meeting
+from src.models import Meeting, SpeakerMapping
 from src.publish import _resolve_chamber_id, _upsert_event_orgs, _upsert_meeting
+from src.publish import _upsert_local_people, _upsert_speakers
 from src.publish import extract_youtube_id, resolve_playback
 
 
@@ -236,3 +237,45 @@ def test_event_orgs_upsert_empty_skips_insert():
     _upsert_event_orgs(cur, MEETING_UUID, [])
     insert_calls = [sql for sql, _ in cur.calls if "INSERT" in sql and "event_orgs" in sql]
     assert len(insert_calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# unidentified handles must not publish as local_people
+# ---------------------------------------------------------------------------
+
+def test_unidentified_speaker_publishes_no_local_person_and_null_local_slug():
+    """An unidentified handle is a placeholder, not a public entity: no
+    local_people row, and the speakers.local_slug column is written NULL so the
+    FK to local_people.slug holds."""
+    meeting = Meeting(
+        meeting_id="event",
+        city=None,
+        date="2026-06-02",
+        meeting_type="Event",
+        event_kind="debate",
+        race_id=RACE_ID,
+        speakers={
+            "S0": SpeakerMapping(
+                speaker_label="S0",
+                speaker_name="Unidentified Speaker",
+                local_slug="unidentified-m-s0",
+                speaker_status="unidentified",
+            ),
+        },
+    )
+
+    people_cur = RecordingCursor()
+    _upsert_local_people(people_cur, meeting)
+    local_people_inserts = [
+        sql for sql, _ in people_cur.calls
+        if "INSERT INTO meetings.local_people" in sql
+    ]
+    assert local_people_inserts == []   # no public placeholder entity
+
+    speakers_cur = RecordingCursor(select_row=None)
+    _upsert_speakers(speakers_cur, meeting, MEETING_UUID)
+    insert_sql, insert_params = next(
+        (sql, params) for sql, params in speakers_cur.calls
+        if "INSERT INTO meetings.speakers" in sql
+    )
+    assert insert_params[-1] is None   # local_slug column written NULL

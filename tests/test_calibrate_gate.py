@@ -124,3 +124,38 @@ def test_link_drift_counts_as_correct_in_compare():
                                  politician_slug="hilton-steve")}
     res = calibrate_gate.compare(truth, auto)
     assert res["trusted_precision"] == 1.0
+
+
+def test_unidentified_counts_coverage_but_not_precision():
+    segs = [Segment(0, 0, 600, "S0", "x", speaker_name="Unidentified Speaker"),
+            Segment(1, 600, 1200, "S1", "x", speaker_name="Jane")]
+    speakers = {
+        "S0": SpeakerMapping("S0", "Unidentified Speaker", 1.0, "human_review",
+                             local_slug="unidentified-m-s0", speaker_status="unidentified"),
+        "S1": SpeakerMapping("S1", "Jane", 1.0, "human_confirmed", politician_slug="jane"),
+    }
+    truth = Meeting(meeting_id="m", city="C", date="2026-01-01",
+                    event_kind="council", segments=segs, speakers=speakers)
+    auto = {
+        "S0": SpeakerMapping("S0", "Unidentified Speaker", 0.9, "human_review",
+                             local_slug="unidentified-m-s0", speaker_status="unidentified"),
+        "S1": SpeakerMapping("S1", "Jane", 0.95, "voice_profile", politician_slug="jane"),
+    }
+    res = calibrate_gate.compare(truth, auto)
+    assert res["trusted_claimed_seconds"] == 600.0   # only S1 is a precision claim
+    assert res["trusted_precision"] == 1.0
+    assert res["trusted_coverage"] == 1.0            # both speakers' time is trusted-covered
+
+
+def test_non_speaker_excluded_from_calibration_totals():
+    segs = [Segment(0, 0, 600, "S0", "x", speaker_name="Jane"),
+            Segment(1, 600, 1200, "S1", "x", speaker_name="Outro Music")]
+    speakers = {
+        "S0": SpeakerMapping("S0", "Jane", 1.0, "human_confirmed", politician_slug="jane"),
+        "S1": SpeakerMapping("S1", "Outro Music", 1.0, "human_review", speaker_status="non_speaker"),
+    }
+    truth = Meeting(meeting_id="m", city="C", date="2026-01-01",
+                    event_kind="council", segments=segs, speakers=speakers)
+    auto = {"S0": SpeakerMapping("S0", "Jane", 0.95, "voice_profile", politician_slug="jane")}
+    res = calibrate_gate.compare(truth, auto)
+    assert res["trusted_coverage"] == 1.0            # 600/600; non-speaker's 600s excluded from total
