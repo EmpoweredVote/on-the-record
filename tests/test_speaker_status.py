@@ -37,5 +37,17 @@ def test_non_speaker_is_not_enrolled():
     segs = [_seg("S0"), _seg("S1")]
     db = enroll_speakers(ProfileDB(), emb, mappings, "m1", segs, roster=None)
     keys = list(db.profiles.keys())
-    assert any("Real Person".lower().replace(" ", "_") in k or "person_real" == k for k in keys)
+    from src.enroll import _name_to_slug
+    assert _name_to_slug("Real Person") in keys
     assert not any("music" in k.lower() for k in keys)  # non-speaker excluded
+
+
+def test_enroll_mapping_skips_non_speaker_directly():
+    import numpy as np
+    from src.enroll import ProfileDB, _enroll_mapping
+    from src.models import SpeakerMapping
+    db = ProfileDB()
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Pledge", confidence=1.0,
+                       id_method="human_review", speaker_status="non_speaker")
+    _enroll_mapping(db, m, np.array([1.0, 0.0, 0.0]), "m1", 3, roster=None)
+    assert db.profiles == {}

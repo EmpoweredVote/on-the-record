@@ -232,6 +232,9 @@ def _enroll_mapping(
     local-slug profile for the same display name is absorbed into it so there is
     one profile per real person. Otherwise falls back to resolve_enrollment_key.
     """
+    if mapping.speaker_status == "non_speaker":
+        return
+
     key, pol_slug, pol_id = resolve_mapping_enrollment(mapping, roster)
 
     _enroll_one(
@@ -264,8 +267,6 @@ def enroll_speakers(
     for label, mapping in mappings.items():
         if not mapping.speaker_name:
             continue
-        if mapping.speaker_status == "non_speaker":
-            continue
         if mapping.confidence < config.VOICE_MATCH_THRESHOLD:
             continue
         if label not in speaker_embeddings:
@@ -292,6 +293,8 @@ def get_borderline_speakers(
     borderline = []
     for label, mapping in mappings.items():
         if not mapping.speaker_name:
+            continue
+        if mapping.speaker_status == "non_speaker":
             continue
         if label not in speaker_embeddings:
             continue
@@ -448,8 +451,6 @@ def enroll_confirmed(
     for label in confirmed_labels:
         mapping = mappings.get(label)
         if not mapping or not mapping.speaker_name:
-            continue
-        if mapping.speaker_status == "non_speaker":
             continue
         if label not in speaker_embeddings:
             continue
