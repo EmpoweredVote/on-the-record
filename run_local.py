@@ -1187,7 +1187,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 review_video, str(wav_path),
                 roster=roster, body_slug=effective_body_slug, show_text=True,
                 event_kind=meeting.event_kind,
-                meeting_id=meeting.meeting_id,
+                meeting_id=meeting_dir.name,
             )
             _persist_after_review(meeting_dir, segments, speaker_embeddings, review_changes)
         else:
@@ -2302,9 +2302,10 @@ def _interactive_speaker_review(
                     print(f"  Unidentified: {label} -> {mappings[label].speaker_name} (handle {mappings[label].local_slug})")
                     break
                 elif choice.lower() == "x":
-                    review.mark_non_speaker(mappings, label)
-                    changes.append({"label": label, "old_name": name, "new_name": "(non-speaker)"})
-                    print(f"  Marked non-speaker: {label}")
+                    lbl = input("    Optional label (Enter for 'Non-speaker'): ").strip()
+                    review.mark_non_speaker(mappings, segments, label, display_label=lbl or None)
+                    changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
+                    print(f"  Marked non-speaker: {label} -> {mappings[label].speaker_name}")
                     break
                 else:
                     res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
@@ -2507,7 +2508,7 @@ def _review_meeting(meeting_id: str) -> None:
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=True,
         event_kind=meeting.event_kind,
-        meeting_id=meeting.meeting_id,
+        meeting_id=meeting_id,
     )
     _persist_after_review(meeting_dir, meeting.segments, embeddings, changes)
 
@@ -2662,7 +2663,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=has_text,
         event_kind=meeting.event_kind,
-        meeting_id=meeting.meeting_id,
+        meeting_id=meeting_id,
     )
     _persist_after_review(meeting_dir, segments, embeddings, changes)
 

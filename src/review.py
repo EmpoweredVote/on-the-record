@@ -272,10 +272,12 @@ def mark_unidentified(mappings, segments, label, meeting_id, display_label=None)
             seg.speaker_name = name
 
 
-def mark_non_speaker(mappings, label):
+def mark_non_speaker(mappings, segments, label, display_label=None):
     """Mark a label as not-a-person (music/pledge/station ID); never enrolled."""
     from src.models import SpeakerMapping
     mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    name = (display_label or "").strip() or "Non-speaker"
+    mapping.speaker_name = name
     mapping.speaker_status = "non_speaker"
     mapping.politician_slug = None
     mapping.politician_id = None
@@ -285,6 +287,9 @@ def mark_non_speaker(mappings, label):
     mapping.confidence = 1.0
     mapping.needs_review = False
     mappings[label] = mapping
+    for seg in segments:
+        if seg.speaker_label == label:
+            seg.speaker_name = name
 
 
 def parse_link_selection(token, n_matches):

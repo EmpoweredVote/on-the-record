@@ -127,10 +127,19 @@ def test_mark_unidentified_defaults_label():
 
 
 def test_mark_non_speaker_clears_identity_and_sets_status():
-    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="Outro Music",
+    segs = [Segment(0, 0, 5, "S0", "hi", speaker_name="Mayor Smith")]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="Mayor Smith",
                                      politician_slug="stale", local_slug="stale")}
-    mark_non_speaker(mappings, "S0")
+    mark_non_speaker(mappings, segs, "S0", display_label="Outro Music")
     m = mappings["S0"]
     assert m.speaker_status == "non_speaker"
     assert m.politician_slug is None and m.local_slug is None
     assert m.id_method == "human_review"
+    assert m.speaker_name == "Outro Music"
+    assert segs[0].speaker_name == "Outro Music"   # stale wrong name overwritten
+
+
+def test_mark_non_speaker_defaults_label():
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="Bad Guess")}
+    mark_non_speaker(mappings, [], "S0", display_label=None)
+    assert mappings["S0"].speaker_name == "Non-speaker"
