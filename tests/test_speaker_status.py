@@ -1,6 +1,8 @@
 # tests/test_speaker_status.py
 from __future__ import annotations
-from src.models import SpeakerMapping
+import numpy as np
+from src.enroll import ProfileDB, enroll_speakers
+from src.models import Segment, SpeakerMapping
 
 
 def test_speaker_status_defaults_none_and_round_trips():
@@ -17,3 +19,23 @@ def test_speaker_status_defaults_none_and_round_trips():
 def test_from_dict_without_status_is_none():
     m = SpeakerMapping.from_dict({"speaker_label": "S0", "speaker_name": "X"})
     assert m.speaker_status is None
+
+
+def _seg(label):
+    return Segment(segment_id=0, start_time=0.0, end_time=30.0, speaker_label=label, text="hi")
+
+
+def test_non_speaker_is_not_enrolled():
+    emb = {"S0": np.array([1.0, 0.0, 0.0]), "S1": np.array([0.0, 1.0, 0.0])}
+    mappings = {
+        "S0": SpeakerMapping(speaker_label="S0", speaker_name="Real Person",
+                             confidence=1.0, id_method="human_review"),
+        "S1": SpeakerMapping(speaker_label="S1", speaker_name="Outro Music",
+                             confidence=1.0, id_method="human_review",
+                             speaker_status="non_speaker"),
+    }
+    segs = [_seg("S0"), _seg("S1")]
+    db = enroll_speakers(ProfileDB(), emb, mappings, "m1", segs, roster=None)
+    keys = list(db.profiles.keys())
+    assert any("Real Person".lower().replace(" ", "_") in k or "person_real" == k for k in keys)
+    assert not any("music" in k.lower() for k in keys)  # non-speaker excluded
