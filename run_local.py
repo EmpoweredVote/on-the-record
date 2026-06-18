@@ -463,6 +463,99 @@ def _stop_player(proc) -> None:
         pass
 
 
+def _focus_terminal() -> None:
+    """Best-effort: return keyboard focus to the terminal (macOS only).
+
+    ffplay's video window grabs keyboard focus on launch, so review shortcut
+    keys reach the player instead of the prompt. On macOS we re-activate the
+    terminal app via osascript. This is a deliberately thin, best-effort stopgap
+    (the durable fix is a non-terminal review UI): it no-ops off macOS or when
+    the terminal app is unknown, and never raises.
+    """
+    if sys.platform != "darwin":
+        return
+    app = {
+        "Apple_Terminal": "Terminal",
+        "iTerm.app": "iTerm2",
+        "vscode": "Code",
+    }.get(os.environ.get("TERM_PROGRAM", ""))
+    if not app:
+        return
+    try:
+        subprocess.Popen(
+            ["osascript", "-e", f'tell application "{app}" to activate'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
+def _read_one_key() -> str | None:
+    """Read a single keypress from stdin in cbreak mode (no Enter needed).
+
+    Returns the character read, or None when raw mode is unavailable (no
+    termios, or stdin is not a real TTY — e.g. under pytest or a pipe), so the
+    caller can fall back to a line-based input().
+    """
+    try:
+        import termios
+        import tty
+    except ImportError:
+        return None  # non-Unix (e.g. Windows): no cbreak
+    try:
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+    except Exception:
+        return None  # not a real TTY (captured stdin, pipe, etc.)
+    try:
+        tty.setcbreak(fd)
+        return sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _read_review_command(prompt: str = "", *, refocus: bool = False) -> str:
+    """Read one review command, preferring instant single keypresses.
+
+    On a real TTY, command keys fire immediately (no Enter): V/R/Y/M/Q, a digit
+    jumps to that clip (returned as the existing ``v<n>`` token), Enter skips.
+    Any other printable key begins a typed name and we fall back to a line read
+    for the rest; ``/`` starts a name explicitly (for names that begin with a
+    reserved command letter, e.g. "Maria"). When raw mode is unavailable the
+    whole thing degrades to input(), so scripted tests and piped runs are
+    unaffected.
+
+    refocus: when a clip player is up, re-assert terminal focus first so the
+    keypress lands in the terminal and not ffplay's video window.
+    """
+    if refocus:
+        _focus_terminal()
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+
+    key = _read_one_key()
+    if key is None:
+        return input()  # no raw mode — prompt already shown; read a line
+
+    if key in ("\r", "\n", ""):
+        sys.stdout.write("\n")
+        return ""
+    lower = key.lower()
+    if lower in ("v", "r", "y", "m", "q", "u", "x"):
+        sys.stdout.write(key + "\n")
+        return lower
+    if key.isdigit():
+        sys.stdout.write(key + "\n")
+        return "v" + key  # reuse the loop's "v<n>" jump parser
+    # Anything else begins a typed name. "/" is an explicit, char-less start.
+    prefix = "" if key == "/" else key
+    sys.stdout.write(prefix)
+    sys.stdout.flush()
+    rest = input()
+    return prefix + rest
+
+
 def free_gpu_memory():
     """Release GPU memory (CUDA or MPS)."""
     import torch
@@ -2227,8 +2320,13 @@ def _interactive_speaker_review(
                 if len(views) > 1:
                     parts.append("[M]erge")
                 parts.append("[U]nidentified [X]=not a speaker")
-                parts.append("[Enter=skip] [Q=quit] or type name: ")
-                choice = input(" ".join(parts)).strip()
+                parts.append("[Enter=skip] [Q=quit] or type a name (/ first for V/R/Y/M/Q/U/X names): ")
+                # Single keypresses fire instantly (cbreak); when a clip is
+                # playing, re-assert terminal focus first so keys don't land in
+                # ffplay's video window. Falls back to line input off-TTY.
+                choice = _read_review_command(
+                    " ".join(parts), refocus=current_player is not None
+                ).strip()
                 lower = choice.lower()
 
                 if lower in ("v", "view") and has_clip:
