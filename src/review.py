@@ -304,6 +304,7 @@ def link_to_unidentified_handle(mappings, segments, label, handle_key, display_n
     mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
     mapping.speaker_name = display_name or "Unidentified Speaker"
     mapping.local_slug = slug
+    mapping.local_role = None
     mapping.politician_slug = None
     mapping.politician_id = None
     mapping.speaker_status = "unidentified"
