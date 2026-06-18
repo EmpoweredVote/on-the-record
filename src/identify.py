@@ -88,7 +88,7 @@ def soft_match_voice_profiles(
     speaker_embeddings: dict[str, np.ndarray],
     stored_profiles: dict[str, np.ndarray],
     display_names: dict[str, str],
-) -> dict[str, list[tuple[str, float]]]:
+) -> dict[str, list[tuple[str, float, str]]]:
     """Find all profile matches above SOFT_MATCH_THRESHOLD for each speaker.
 
     Unlike match_voice_profiles which only returns the best match above
@@ -101,9 +101,9 @@ def soft_match_voice_profiles(
         display_names: profile_id -> display_name mapping.
 
     Returns:
-        Dict of speaker_label -> [(display_name, similarity_score), ...] sorted by score desc.
+        Dict of speaker_label -> [(display_name, similarity, profile_id), ...] sorted by score desc.
     """
-    hints: dict[str, list[tuple[str, float]]] = {}
+    hints: dict[str, list[tuple[str, float, str]]] = {}
 
     for label, embedding in speaker_embeddings.items():
         matches = []
@@ -113,7 +113,7 @@ def soft_match_voice_profiles(
             similarity = 1.0 - cosine(embedding, centroid)
             if similarity >= config.SOFT_MATCH_THRESHOLD:
                 name = display_names.get(profile_id, profile_id)
-                matches.append((name, round(similarity, 3)))
+                matches.append((name, round(similarity, 3), profile_id))
         if matches:
             matches.sort(key=lambda x: x[1], reverse=True)
             hints[label] = matches

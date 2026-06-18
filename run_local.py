@@ -2277,7 +2277,7 @@ def _interactive_speaker_review(
 
         top_hint = None
         if view.soft_hints and not (view.current_name and view.current_confidence >= 0.85):
-            for hint_name, hint_score in view.soft_hints[:3]:
+            for hint_name, hint_score, _hint_pid in view.soft_hints[:3]:
                 marker = "*" if hint_score >= 0.85 else "?"
                 print(f"  {marker} Voice match: {hint_name} ({hint_score:.2f})")
             top_hint = view.soft_hints[0]
@@ -2316,7 +2316,11 @@ def _interactive_speaker_review(
                     else:
                         parts.append(f"[V]=next clip ({clip_idx % n_clips + 1}/{n_clips}) [R]eplay")
                 if top_hint:
-                    parts.append(f"[Y=accept {top_hint[0]}]")
+                    _top_pid = top_hint[2] if len(top_hint) > 2 else ""
+                    if _top_pid.startswith("local:unidentified-"):
+                        parts.append(f"[Y=returning unidentified: {top_hint[0]}]")
+                    else:
+                        parts.append(f"[Y=accept {top_hint[0]}]")
                 if len(views) > 1:
                     parts.append("[M]erge")
                 parts.append("[U]nidentified [X]=not a speaker")
@@ -2385,6 +2389,18 @@ def _interactive_speaker_review(
                     advance = False
                     break
                 elif choice.lower() in ("y", "yes") and top_hint:
+                    top_pid = top_hint[2] if len(top_hint) > 2 else ""
+                    if top_pid.startswith("local:unidentified-"):
+                        # Returning unknown: confirm-link to the SAME existing
+                        # handle so the recurring speaker enrolls into one profile.
+                        old_name = mappings.get(label).speaker_name if mappings.get(label) else name
+                        review.link_to_unidentified_handle(
+                            mappings, segments, label,
+                            handle_key=top_pid, display_name=top_hint[0],
+                        )
+                        changes.append({"label": label, "old_name": old_name, "new_name": mappings[label].speaker_name})
+                        print(f"  Confirmed returning unidentified speaker: {mappings[label].speaker_name}")
+                        break
                     res = review.rename_speaker(mappings, segments, label, top_hint[0], roster=roster)
                     mappings[label].id_method = "human_confirmed"
                     changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
