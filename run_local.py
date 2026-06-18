@@ -542,7 +542,7 @@ def _read_review_command(prompt: str = "", *, refocus: bool = False) -> str:
         sys.stdout.write("\n")
         return ""
     lower = key.lower()
-    if lower in ("v", "r", "y", "m", "q", "u", "x"):
+    if lower in ("v", "r", "y", "m", "q", "u", "x", "b"):
         sys.stdout.write(key + "\n")
         return lower
     if key.isdigit():
@@ -1041,6 +1041,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             # Offer enrollment
             _enroll_after_review(
                 changes, temp_mappings, meeting_dir, segments,
+                roster=_resolve_roster(effective_body_slug, state.roster_choice),
             )
         print()
 
@@ -2259,6 +2260,11 @@ def _interactive_speaker_review(
         return []
 
     changes: list[dict] = []
+    # Undo stack: each entry is {"index": i, "snap": <snapshot_mapping result>},
+    # pushed BEFORE a speaker's change is committed. [B]ack pops the last one,
+    # restores the mapping + segment names, drops the matching tail change, and
+    # re-presents the restored speaker.
+    history: list[dict] = []
     views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
 
     i = 0
@@ -2268,6 +2274,10 @@ def _interactive_speaker_review(
         label = view.label
         name = view.current_name or "(unidentified)"
         mins = view.total_speech_seconds / 60
+
+        # One snapshot per speaker visit, taken before any branch mutates. Undo
+        # for THIS visit reverts to exactly this state.
+        visit_snapshot = review.snapshot_mapping(mappings, segments, label)
 
         print(f"\n[{i+1}/{len(views)}] {label}: {name}")
         print(f"  Segments: {view.seg_count}, Speech: {mins:.1f}m", end="")
@@ -2289,11 +2299,16 @@ def _interactive_speaker_review(
             print(f"  Clip at [{_format_ts(view.clip_start)}]")
 
         advance = True
+        undo_requested = False
         clip_idx = 0        # index of the clip [V] plays next
         last_clip = None    # index of the most recently played clip
         current_player = None
         has_clip = bool((video_path or audio_path) and view.clip_candidates)
         n_clips = len(view.clip_candidates)
+
+        def _push_undo() -> None:
+            """Record this visit's pre-change state so [B]ack can revert it."""
+            history.append({"index": i, "snap": visit_snapshot})
 
         def _play_clip(n: int) -> None:
             nonlocal current_player, last_clip, clip_idx
@@ -2324,7 +2339,9 @@ def _interactive_speaker_review(
                 if len(views) > 1:
                     parts.append("[M]erge")
                 parts.append("[U]nidentified [X]=not a speaker")
-                parts.append("[Enter=skip] [Q=quit] or type a name (/ first for V/R/Y/M/Q/U/X names): ")
+                if history:
+                    parts.append("[B]ack")
+                parts.append("[Enter=skip] [Q=quit] or type a name (/ first for V/R/Y/M/Q/U/X/B names): ")
                 # Single keypresses fire instantly (cbreak); when a clip is
                 # playing, re-assert terminal focus first so keys don't land in
                 # ffplay's video window. Falls back to line input off-TTY.
@@ -2346,6 +2363,31 @@ def _interactive_speaker_review(
                 elif lower in ("r", "replay") and has_clip:
                     _play_clip(last_clip if last_clip is not None else 0)
                     continue
+                elif choice.lower() == "b":
+                    if not history:
+                        print("  (nothing to undo)")
+                        continue
+                    entry = history.pop()
+                    if entry.get("kind") == "merge":
+                        # Merge undo is intentionally unsupported: snapshot/restore
+                        # is name-based and cannot revert the relabeled segments or
+                        # the combined embeddings, so reverting would leave a
+                        # half-merged state. Refuse cleanly — the popped entry stays
+                        # popped, so a further [B] undoes the action before the merge.
+                        print("  (can't undo a merge — speakers are already combined; re-run review if needed)")
+                        continue
+                    undo_label = entry["snap"]["label"]
+                    review.restore_mapping(mappings, segments, undo_label, entry["snap"])
+                    # Drop the most recent change recorded for that label (the one
+                    # this snapshot was taken before committing).
+                    for j in range(len(changes) - 1, -1, -1):
+                        if changes[j].get("label") == undo_label:
+                            del changes[j]
+                            break
+                    print(f"  Undid last change to {undo_label}.")
+                    undo_requested = True
+                    advance = False
+                    break
                 elif choice.lower() == "q":
                     print("  Quitting review.")
                     quit_requested = True
@@ -2378,10 +2420,16 @@ def _interactive_speaker_review(
                     except (ValueError, IndexError):
                         print("    Invalid selection.")
                         continue
+                    _push_undo()
+                    # Tag this entry as a merge: undo is name-based and cannot
+                    # revert the relabeled segments/embeddings, so [B] refuses it
+                    # rather than half-reverting (see test_review_ux.py).
+                    history[-1]["kind"] = "merge"
                     try:
                         res = review.merge_speakers(segments, embeddings, mappings, label, target.label)
                     except ValueError as e:
                         print(f"    {e}")
+                        history.pop()  # merge failed — discard the undo entry
                         continue
                     changes.append({"label": label, "merged_into": target.label})
                     print(f"  Merged {label} → {target.label} ({res.combined_name or 'unidentified'})")
@@ -2389,6 +2437,7 @@ def _interactive_speaker_review(
                     advance = False
                     break
                 elif choice.lower() in ("y", "yes") and top_hint:
+                    _push_undo()
                     top_pid = top_hint[2] if len(top_hint) > 2 else ""
                     if top_pid.startswith("local:unidentified-"):
                         # Returning unknown: confirm-link to the SAME existing
@@ -2411,17 +2460,20 @@ def _interactive_speaker_review(
                     break
                 elif choice.lower() == "u":
                     lbl = input("    Optional label (Enter for 'Unidentified Speaker'): ").strip()
+                    _push_undo()
                     review.mark_unidentified(mappings, segments, label, meeting_id or "", display_label=lbl or None)
                     changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
                     print(f"  Unidentified: {label} -> {mappings[label].speaker_name} (handle {mappings[label].local_slug})")
                     break
                 elif choice.lower() == "x":
                     lbl = input("    Optional label (Enter for 'Non-speaker'): ").strip()
+                    _push_undo()
                     review.mark_non_speaker(mappings, segments, label, display_label=lbl or None)
                     changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
                     print(f"  Marked non-speaker: {label} -> {mappings[label].speaker_name}")
                     break
                 else:
+                    _push_undo()
                     res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
                     changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
                     print(f"  Updated: {label} -> {res.new_name}")
@@ -2439,6 +2491,16 @@ def _interactive_speaker_review(
 
         if quit_requested:
             break
+        if undo_requested:
+            # Rebuild views (an undone merge may restore a label that had dropped
+            # out of the table) and re-present the restored speaker. Labels are
+            # stable across rebuilds, so locate it by label rather than trusting
+            # the old positional index (sort order can shift).
+            undo_label = entry["snap"]["label"]
+            views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
+            i = next((k for k, v in enumerate(views) if v.label == undo_label), entry["index"])
+            i = min(i, max(len(views) - 1, 0))
+            continue
         if advance:
             i += 1
 
@@ -2450,6 +2512,7 @@ def _enroll_after_review(
     current_mappings: dict,
     meeting_dir: Path,
     segments,
+    roster=None,
 ) -> None:
     """Offer to enroll speakers that were identified or corrected during review.
 
@@ -2466,6 +2529,7 @@ def _enroll_after_review(
 
     meeting_id = meeting_dir.name
 
+    from src import review
     from src.enroll import (
         _enroll_mapping,
         load_profiles,
@@ -2519,6 +2583,14 @@ def _enroll_after_review(
     for e in enrollable:
         tag = "NEW" if e["is_new"] else "UPDATE"
         print(f"  {e['label']}: {e['name']} [{tag}]")
+
+    # Pre-enroll safety check — surface suspicious states (name/slug mismatch,
+    # duplicate names, unlinked roster matches) as non-blocking warnings before
+    # the confirmation. This is the backstop that catches contaminated links
+    # before they are written to a voice profile.
+    warns = review.enrollment_warnings(current_mappings, roster)
+    for w in warns:
+        print(f"  ⚠ [{w['label']}] {w['detail']}")
 
     choice = input("\nEnroll these speakers? [Y/n] ").strip().lower()
     if choice in ("", "y", "yes"):
@@ -2593,17 +2665,20 @@ def _review_meeting(meeting_id: str) -> None:
     print()
 
     # Show overview table
-    print("  #  Label         Current Name                  Segs  Speech  Conf   Method")
-    print("  " + "-" * 90)
+    print("  #  Label         Current Name                  Identity                Segs  Speech  Conf   Method")
+    print("  " + "-" * 98)
     for i, v in enumerate(views):
         name = v.current_name or "(unidentified)"
         method = v.current_method or ""
         mins = v.total_speech_seconds / 60
+        identity = _review.identity_label(meeting.speakers.get(v.label))
+        if len(identity) > 22:
+            identity = identity[:21] + "…"
         hint = ""
         if v.soft_hints and not (v.current_name and v.current_confidence >= 0.85):
             top = v.soft_hints[0]
             hint = f"  ~ {top[0]} ({top[1]:.2f})"
-        print(f"  {i+1:>2}  {v.label:<13} {name:<30} {v.seg_count:>4}  {mins:>5.1f}m  {v.current_confidence:.2f}  {method}{hint}")
+        print(f"  {i+1:>2}  {v.label:<13} {name:<30} {identity:<22}  {v.seg_count:>4}  {mins:>5.1f}m  {v.current_confidence:.2f}  {method}{hint}")
 
     print()
     print("Commands for each speaker:")
@@ -2651,8 +2726,10 @@ def _review_meeting(meeting_id: str) -> None:
         print(f"Exports updated: {export_dir}")
 
         # Offer enrollment
+        from src.roster import load_roster
         _enroll_after_review(
             changes, meeting.speakers, meeting_dir, meeting.segments,
+            roster=load_roster(body_slug=body_slug) if body_slug else None,
         )
     else:
         print("\nNo changes made.")
@@ -2821,8 +2898,10 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
             print(f"Transcript and exports updated.")
 
         # Offer enrollment
+        from src.roster import load_roster
         _enroll_after_review(
             changes, current_mappings, meeting_dir, segments,
+            roster=load_roster(body_slug=body_slug) if body_slug else None,
         )
 
         print("\nThese identifications will be used as ground truth in Stage 4")

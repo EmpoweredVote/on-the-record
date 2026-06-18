@@ -6,11 +6,34 @@ reusable. Persistence and interaction live in the callers (run_local.py).
 """
 from __future__ import annotations
 
+import copy as _copy
 import re as _re
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+
+def snapshot_mapping(mappings, segments, label):
+    """Capture a speaker's mapping + its segments' names, for one-step undo."""
+    m = mappings.get(label)
+    return {
+        "label": label,
+        "mapping": _copy.deepcopy(m) if m is not None else None,
+        "seg_names": {i: s.speaker_name for i, s in enumerate(segments)
+                      if s.speaker_label == label},
+    }
+
+
+def restore_mapping(mappings, segments, label, snap):
+    """Revert to a snapshot taken by snapshot_mapping."""
+    if snap["mapping"] is None:
+        mappings.pop(label, None)
+    else:
+        mappings[label] = _copy.deepcopy(snap["mapping"])
+    for i, s in enumerate(segments):
+        if i in snap["seg_names"]:
+            s.speaker_name = snap["seg_names"][i]
 
 
 def make_unidentified_slug(meeting_id: str, label: str) -> str:
@@ -22,6 +45,21 @@ def make_unidentified_slug(meeting_id: str, label: str) -> str:
     base = _re.sub(r"[^a-z0-9]+", "-", f"{meeting_id}-{label}".lower()).strip("-")
     base = base or _re.sub(r"[^a-z0-9]+", "-", (label or "speaker").lower()).strip("-") or "speaker"
     return f"unidentified-{base}"[:100]
+
+
+def identity_label(mapping) -> str:
+    """One-word resolved identity for the review table."""
+    if mapping is None:
+        return "unlinked"
+    if mapping.speaker_status == "non_speaker":
+        return "non-speaker"
+    if mapping.speaker_status == "unidentified":
+        return "unidentified"
+    if mapping.politician_slug:
+        return f"essentials:{mapping.politician_slug}"
+    if mapping.local_slug:
+        return f"local:{mapping.local_slug}"
+    return "unlinked"
 
 
 @dataclass
@@ -354,3 +392,47 @@ def format_match_line(match, index):
     suffix = f" · {' · '.join(detail)}" if detail else ""
     name = match.get("full_name") or "(unknown)"
     return f"  {index + 1}. {name}{suffix} [{tag}]"
+
+
+def _ew_name_tokens(s):
+    stop = {"councilmember", "council", "president", "vice", "mayor", "clerk",
+            "the", "of", "common", "city", "member", "district", "association",
+            "office", "at", "large"}
+    return set(_re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split()) - stop
+
+
+def _ew_slug_tokens(slug):
+    return set(_re.sub(r"[^a-z0-9]+", " ", (slug or "").lower()).split()) - {"h", "j", "s"}
+
+
+def enrollment_warnings(mappings, roster=None) -> list[dict]:
+    """Flag suspicious states before enrollment. Returns [{kind, label, detail}].
+    kinds: name_slug_mismatch, duplicate_name, unlinked_roster_match."""
+    warns: list[dict] = []
+    # name/slug mismatch (linked slug shares no token with the name)
+    for label, m in mappings.items():
+        if m.politician_slug and m.speaker_name:
+            nt, st = _ew_name_tokens(m.speaker_name), _ew_slug_tokens(m.politician_slug)
+            if nt and st and not (nt & st):
+                warns.append({"kind": "name_slug_mismatch", "label": label,
+                              "detail": f"{m.speaker_name!r} linked to {m.politician_slug!r}"})
+    # duplicate name across labels (excluding non-speakers)
+    by_name: dict[str, list[str]] = {}
+    for label, m in mappings.items():
+        if m.speaker_name and m.speaker_status not in ("non_speaker", "unidentified"):
+            by_name.setdefault(m.speaker_name.strip().lower(), []).append(label)
+    for nm, labels in by_name.items():
+        if len(labels) > 1:
+            warns.append({"kind": "duplicate_name", "label": ",".join(sorted(labels)),
+                          "detail": f"{len(labels)} labels named {nm!r} (merge?)"})
+    # named but unlinked, yet matches a roster member
+    if roster is not None:
+        from src.roster import correct_speaker_name
+        for label, m in mappings.items():
+            if (m.speaker_name and not m.politician_slug and not m.local_slug
+                    and m.speaker_status not in ("non_speaker", "unidentified")):
+                corrected = correct_speaker_name(m.speaker_name, roster)
+                if any(corrected == mem.name and mem.politician_slug for mem in roster.members):
+                    warns.append({"kind": "unlinked_roster_match", "label": label,
+                                  "detail": f"{m.speaker_name!r} matches a roster member but isn't linked"})
+    return warns
