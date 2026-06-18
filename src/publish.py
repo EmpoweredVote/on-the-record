@@ -264,6 +264,15 @@ def _upsert_event_orgs(cur, meeting_slug: str, event_orgs: list) -> None:
         )
 
 
+def _published_local_slug(mapping) -> "str | None":
+    """The local_slug to publish for a speaker, or None to publish no local
+    person. An unidentified handle is a placeholder, not a public entity, so it
+    is suppressed until promoted to a real person."""
+    if getattr(mapping, "speaker_status", None) == "unidentified":
+        return None
+    return mapping.local_slug
+
+
 def _upsert_local_people(cur, meeting: Meeting) -> None:
     """Upsert local_people rows for any speaker mapping with local_slug set.
 
@@ -271,7 +280,8 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
     to meetings.local_people.slug is satisfied at write time.
     """
     for mapping in meeting.speakers.values():
-        if not mapping.local_slug:
+        slug = _published_local_slug(mapping)
+        if not slug:
             continue
         cur.execute(
             """
@@ -284,8 +294,8 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
               updated_at = NOW()
             """,
             (
-                mapping.local_slug,
-                mapping.speaker_name or mapping.local_slug,
+                slug,
+                mapping.speaker_name or slug,
                 mapping.local_role or 'candidate',
             ),
         )
@@ -323,7 +333,7 @@ def _upsert_speakers(
                     mapping.politician_id,
                     mapping.confidence,
                     mapping.id_method,
-                    mapping.local_slug,
+                    _published_local_slug(mapping),
                     speaker_uuid,
                 ),
             )
@@ -348,7 +358,7 @@ def _upsert_speakers(
                     mapping.politician_id,
                     mapping.confidence,
                     mapping.id_method,
-                    mapping.local_slug,
+                    _published_local_slug(mapping),
                 ),
             )
             speaker_uuid = cur.fetchone()[0]

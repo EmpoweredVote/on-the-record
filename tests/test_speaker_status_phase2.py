@@ -76,3 +76,18 @@ def test_promote_returns_false_for_missing_handle():
     from src.enroll import ProfileDB, promote_unidentified_handle
     db = ProfileDB()
     assert promote_unidentified_handle(db, "local:nope", "essentials:x") is False
+
+
+def test_published_local_slug_suppressed_for_unidentified():
+    from src.publish import _published_local_slug
+    from src.models import SpeakerMapping
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Unidentified Speaker",
+                       local_slug="unidentified-m-s0", speaker_status="unidentified")
+    assert _published_local_slug(m) is None   # not published as a local person
+
+
+def test_published_local_slug_kept_for_real_local_person():
+    from src.publish import _published_local_slug
+    from src.models import SpeakerMapping
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Jane Public", local_slug="jane-public")
+    assert _published_local_slug(m) == "jane-public"
