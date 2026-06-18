@@ -1,8 +1,10 @@
 # tests/test_review_ux.py
 from __future__ import annotations
 from src.models import SpeakerMapping
+from src.models import Segment
 from src.review import identity_label
 from src.review import enrollment_warnings
+from src.review import snapshot_mapping, restore_mapping
 from src.roster import Roster, RosterMember
 
 
@@ -60,3 +62,27 @@ def test_no_duplicate_warning_for_multiple_unidentified():
 def test_clean_mappings_have_no_warnings():
     mappings = {"S0": SpeakerMapping("S0", "Jane Adams", politician_slug="jane-adams")}
     assert enrollment_warnings(mappings, roster=None) == []
+
+
+def test_snapshot_restore_round_trips_mapping_and_segments():
+    segs = [Segment(0, 0, 5, "S0", "hi", speaker_name="Old")]
+    mappings = {"S0": SpeakerMapping("S0", "Old", confidence=0.5, id_method="llm")}
+    snap = snapshot_mapping(mappings, segs, "S0")
+
+    # mutate (simulate a rename)
+    mappings["S0"].speaker_name = "New"; mappings["S0"].id_method = "human_review"
+    segs[0].speaker_name = "New"
+
+    restore_mapping(mappings, segs, "S0", snap)
+    assert mappings["S0"].speaker_name == "Old"
+    assert mappings["S0"].id_method == "llm"
+    assert segs[0].speaker_name == "Old"
+
+
+def test_restore_removes_mapping_absent_at_snapshot_time():
+    segs = [Segment(0, 0, 5, "S0", "hi")]
+    mappings = {}
+    snap = snapshot_mapping(mappings, segs, "S0")   # no mapping yet
+    mappings["S0"] = SpeakerMapping("S0", "Added")
+    restore_mapping(mappings, segs, "S0", snap)
+    assert "S0" not in mappings   # reverted to absent

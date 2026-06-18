@@ -6,11 +6,34 @@ reusable. Persistence and interaction live in the callers (run_local.py).
 """
 from __future__ import annotations
 
+import copy as _copy
 import re as _re
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+
+def snapshot_mapping(mappings, segments, label):
+    """Capture a speaker's mapping + its segments' names, for one-step undo."""
+    m = mappings.get(label)
+    return {
+        "label": label,
+        "mapping": _copy.deepcopy(m) if m is not None else None,
+        "seg_names": {i: s.speaker_name for i, s in enumerate(segments)
+                      if s.speaker_label == label},
+    }
+
+
+def restore_mapping(mappings, segments, label, snap):
+    """Revert to a snapshot taken by snapshot_mapping."""
+    if snap["mapping"] is None:
+        mappings.pop(label, None)
+    else:
+        mappings[label] = _copy.deepcopy(snap["mapping"])
+    for i, s in enumerate(segments):
+        if i in snap["seg_names"]:
+            s.speaker_name = snap["seg_names"][i]
 
 
 def make_unidentified_slug(meeting_id: str, label: str) -> str:
