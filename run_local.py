@@ -2450,6 +2450,7 @@ def _enroll_after_review(
     current_mappings: dict,
     meeting_dir: Path,
     segments,
+    roster=None,
 ) -> None:
     """Offer to enroll speakers that were identified or corrected during review.
 
@@ -2466,6 +2467,7 @@ def _enroll_after_review(
 
     meeting_id = meeting_dir.name
 
+    from src import review
     from src.enroll import (
         _enroll_mapping,
         load_profiles,
@@ -2519,6 +2521,14 @@ def _enroll_after_review(
     for e in enrollable:
         tag = "NEW" if e["is_new"] else "UPDATE"
         print(f"  {e['label']}: {e['name']} [{tag}]")
+
+    # Pre-enroll safety check — surface suspicious states (name/slug mismatch,
+    # duplicate names, unlinked roster matches) as non-blocking warnings before
+    # the confirmation. This is the backstop that catches contaminated links
+    # before they are written to a voice profile.
+    warns = review.enrollment_warnings(current_mappings, roster)
+    for w in warns:
+        print(f"  ⚠ [{w['label']}] {w['detail']}")
 
     choice = input("\nEnroll these speakers? [Y/n] ").strip().lower()
     if choice in ("", "y", "yes"):
