@@ -2594,7 +2594,7 @@ def _review_meeting(meeting_id: str) -> None:
 
     # Show overview table
     print("  #  Label         Current Name                  Identity                Segs  Speech  Conf   Method")
-    print("  " + "-" * 113)
+    print("  " + "-" * 98)
     for i, v in enumerate(views):
         name = v.current_name or "(unidentified)"
         method = v.current_method or ""
