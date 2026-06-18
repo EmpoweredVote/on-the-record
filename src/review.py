@@ -24,6 +24,21 @@ def make_unidentified_slug(meeting_id: str, label: str) -> str:
     return f"unidentified-{base}"[:100]
 
 
+def identity_label(mapping) -> str:
+    """One-word resolved identity for the review table."""
+    if mapping is None:
+        return "unlinked"
+    if mapping.speaker_status == "non_speaker":
+        return "non-speaker"
+    if mapping.speaker_status == "unidentified":
+        return "unidentified"
+    if mapping.politician_slug:
+        return f"essentials:{mapping.politician_slug}"
+    if mapping.local_slug:
+        return f"local:{mapping.local_slug}"
+    return "unlinked"
+
+
 @dataclass
 class SpeakerView:
     label: str

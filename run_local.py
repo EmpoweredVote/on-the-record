@@ -2593,17 +2593,20 @@ def _review_meeting(meeting_id: str) -> None:
     print()
 
     # Show overview table
-    print("  #  Label         Current Name                  Segs  Speech  Conf   Method")
-    print("  " + "-" * 90)
+    print("  #  Label         Current Name                  Identity                Segs  Speech  Conf   Method")
+    print("  " + "-" * 113)
     for i, v in enumerate(views):
         name = v.current_name or "(unidentified)"
         method = v.current_method or ""
         mins = v.total_speech_seconds / 60
+        identity = _review.identity_label(meeting.speakers.get(v.label))
+        if len(identity) > 22:
+            identity = identity[:21] + "…"
         hint = ""
         if v.soft_hints and not (v.current_name and v.current_confidence >= 0.85):
             top = v.soft_hints[0]
             hint = f"  ~ {top[0]} ({top[1]:.2f})"
-        print(f"  {i+1:>2}  {v.label:<13} {name:<30} {v.seg_count:>4}  {mins:>5.1f}m  {v.current_confidence:.2f}  {method}{hint}")
+        print(f"  {i+1:>2}  {v.label:<13} {name:<30} {identity:<22}  {v.seg_count:>4}  {mins:>5.1f}m  {v.current_confidence:.2f}  {method}{hint}")
 
     print()
     print("Commands for each speaker:")
