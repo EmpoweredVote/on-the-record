@@ -68,6 +68,13 @@ def compare(truth: Meeting, auto_mappings: dict[str, SpeakerMapping]) -> dict:
     A label is 'claimed' when its automated tier is trusted or probable. It is
     'correct' when it refers to the same person as truth (see _same_identity,
     which tolerates link drift between pre-linking truth and a linked re-run).
+
+    NOTE: trusted_coverage here is FLOOR-FREE — the denominator is all
+    speech except non_speaker labels, unlike the live gate
+    (quality.evaluate_meeting), which divides by eligible speakers above
+    GATE_SPEECH_FLOOR_SECONDS. So this coverage can read lower than the gate's
+    for meetings with short sub-floor interjections; read it as raw coverage,
+    not gate-equivalent.
     """
     secs = _speech_by_label(truth.segments)
 
