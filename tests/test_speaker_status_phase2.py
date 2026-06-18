@@ -45,11 +45,31 @@ def test_promote_creates_target_when_absent():
             speaker_id="local:unidentified-mA-s3", display_name="Unidentified Speaker",
             embeddings=[EmbeddingRecord(np.array([1.0, 0.0]), "mA")], meetings_seen=["mA"]),
     })
-    ok = promote_unidentified_handle(db, "local:unidentified-mA-s3", "essentials:new-person")
+    ok = promote_unidentified_handle(db, "local:unidentified-mA-s3", "essentials:new-person",
+                                     display_name="New Person", politician_id="uuid-np")
     assert ok is True
     assert "local:unidentified-mA-s3" not in db.profiles
-    assert "essentials:new-person" in db.profiles
-    assert {r.meeting_id for r in db.profiles["essentials:new-person"].embeddings} == {"mA"}
+    prof = db.profiles["essentials:new-person"]
+    assert {r.meeting_id for r in prof.embeddings} == {"mA"}
+    assert prof.politician_slug == "new-person"   # derived from essentials:<slug> key
+    assert prof.politician_id == "uuid-np"
+    assert prof.display_name == "New Person"       # real name, not the placeholder
+
+
+def test_promote_explicit_slug_overrides_key_derivation():
+    import numpy as np
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord, promote_unidentified_handle
+    db = ProfileDB(profiles={
+        "local:unidentified-mA-s3": StoredProfile(
+            speaker_id="local:unidentified-mA-s3", display_name="Unidentified Speaker",
+            embeddings=[EmbeddingRecord(np.array([1.0, 0.0]), "mA")], meetings_seen=["mA"]),
+    })
+    ok = promote_unidentified_handle(db, "local:unidentified-mA-s3", "local:custom",
+                                     display_name="Jane Q", politician_slug="jane-q", politician_id="u1")
+    assert ok is True
+    prof = db.profiles["local:custom"]
+    assert prof.politician_slug == "jane-q" and prof.politician_id == "u1"
+    assert prof.display_name == "Jane Q"
 
 
 def test_promote_returns_false_for_missing_handle():

@@ -400,18 +400,36 @@ def merge_profiles(
     return True
 
 
-def promote_unidentified_handle(db: ProfileDB, handle_key: str, target_key: str) -> bool:
+def promote_unidentified_handle(
+    db: ProfileDB,
+    handle_key: str,
+    target_key: str,
+    *,
+    display_name: Optional[str] = None,
+    politician_slug: Optional[str] = None,
+    politician_id: Optional[str] = None,
+) -> bool:
     """Fold an unidentified handle's profile into a now-known identity.
 
-    Merges all of the handle's embeddings/meetings into target_key (creating
-    target as a bare profile if absent) and removes the handle. Returns False if
-    the handle doesn't exist or handle_key == target_key.
+    Merges the handle's embeddings/meetings into target_key and removes the
+    handle. When target_key does not exist yet, it is created carrying the
+    supplied identity: politician_id and display_name as given, and
+    politician_slug from the argument or, for an ``essentials:<slug>`` key,
+    derived from the key. Returns False if the handle is missing or
+    handle_key == target_key.
     """
     if handle_key not in db.profiles or handle_key == target_key:
         return False
     if target_key not in db.profiles:
-        src = db.profiles[handle_key]
-        db.profiles[target_key] = StoredProfile(speaker_id=target_key, display_name=src.display_name)
+        slug = politician_slug
+        if slug is None and target_key.startswith("essentials:"):
+            slug = target_key.split(":", 1)[1]
+        db.profiles[target_key] = StoredProfile(
+            speaker_id=target_key,
+            display_name=display_name or db.profiles[handle_key].display_name,
+            politician_slug=slug,
+            politician_id=politician_id,
+        )
     return merge_profiles(db, handle_key, target_key)
 
 
