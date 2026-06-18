@@ -6,10 +6,22 @@ reusable. Persistence and interaction live in the callers (run_local.py).
 """
 from __future__ import annotations
 
+import re as _re
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+
+def make_unidentified_slug(meeting_id: str, label: str) -> str:
+    """Unique, deterministic handle for an unidentified speaker.
+
+    Keyed by (meeting, diarization label) so two different unknowns never share a
+    slug (no merge), while re-running review on the same meeting is idempotent.
+    """
+    base = _re.sub(r"[^a-z0-9]+", "-", f"{meeting_id}-{label}".lower()).strip("-")
+    base = base or _re.sub(r"[^a-z0-9]+", "-", (label or "speaker").lower()).strip("-") or "speaker"
+    return f"unidentified-{base}"[:100]
 
 
 @dataclass
@@ -118,6 +130,26 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     mapping.confidence = 1.0
     mapping.id_method = "human_review"
     mapping.needs_review = False
+
+    # A human-assigned name is authoritative. Any prior identity link belonged to
+    # the OLD name (e.g. a voice-profile collision that was then corrected by
+    # hand), so it must not survive a name change — otherwise this voice enrolls
+    # under the wrong person, since resolve_mapping_enrollment keys on
+    # politician_slug ahead of the name. Re-derive the link from the new name when
+    # a roster is available; otherwise drop it. A no-op rename leaves the (already
+    # correct, possibly manually-pasted) link untouched.
+    if final_name != old_name:
+        mapping.local_slug = None
+        mapping.local_role = None
+        if roster is not None:
+            from src.enroll import resolve_enrollment_key
+            _key, pol_slug, pol_id = resolve_enrollment_key(final_name, roster)
+            mapping.politician_slug = pol_slug
+            mapping.politician_id = pol_id
+        else:
+            mapping.politician_slug = None
+            mapping.politician_id = None
+
     mappings[label] = mapping
 
     for seg in segments:
@@ -218,6 +250,46 @@ def link_speaker(mappings, label, politician_slug, politician_id):
     mapping.politician_id = politician_id
     mappings[label] = mapping
     return mapping
+
+
+def mark_unidentified(mappings, segments, label, meeting_id, display_label=None):
+    """Mark a speaker as a distinct-but-unnamed person: unique handle, enrolled."""
+    from src.models import SpeakerMapping
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    name = (display_label or "").strip() or "Unidentified Speaker"
+    mapping.speaker_name = name
+    mapping.local_slug = make_unidentified_slug(meeting_id, label)
+    mapping.local_role = None
+    mapping.politician_slug = None
+    mapping.politician_id = None
+    mapping.speaker_status = "unidentified"
+    mapping.id_method = "human_review"
+    mapping.confidence = 1.0
+    mapping.needs_review = False
+    mappings[label] = mapping
+    for seg in segments:
+        if seg.speaker_label == label:
+            seg.speaker_name = name
+
+
+def mark_non_speaker(mappings, segments, label, display_label=None):
+    """Mark a label as not-a-person (music/pledge/station ID); never enrolled."""
+    from src.models import SpeakerMapping
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    name = (display_label or "").strip() or "Non-speaker"
+    mapping.speaker_name = name
+    mapping.speaker_status = "non_speaker"
+    mapping.politician_slug = None
+    mapping.politician_id = None
+    mapping.local_slug = None
+    mapping.local_role = None
+    mapping.id_method = "human_review"
+    mapping.confidence = 1.0
+    mapping.needs_review = False
+    mappings[label] = mapping
+    for seg in segments:
+        if seg.speaker_label == label:
+            seg.speaker_name = name
 
 
 def parse_link_selection(token, n_matches):

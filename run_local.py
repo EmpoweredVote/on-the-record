@@ -922,6 +922,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
             segments, temp_mappings, _pre_embeddings, _pre_profile_db,
             video_path, str(meeting_dir / "audio.wav"),
             body_slug=effective_body_slug, show_text=False,
+            event_kind=args.event_kind,
+            meeting_id=meeting_dir.name,
         )
         _persist_after_review(meeting_dir, segments, _pre_embeddings, changes)
 
@@ -1184,6 +1186,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 segments, mappings, speaker_embeddings, profile_db,
                 review_video, str(wav_path),
                 roster=roster, body_slug=effective_body_slug, show_text=True,
+                event_kind=meeting.event_kind,
+                meeting_id=meeting_dir.name,
             )
             _persist_after_review(meeting_dir, segments, speaker_embeddings, review_changes)
         else:
@@ -2082,7 +2086,9 @@ def _prompt_link_politician(mappings: dict, label: str, query: str) -> None:
         print("  Not understood.")
 
 
-def _prompt_create_local_person(mappings: dict, label: str, name: str) -> None:
+def _prompt_create_local_person(
+    mappings: dict, label: str, name: str, event_kind: str | None = None
+) -> None:
     """Offer to create a local person record for a non-essentials speaker.
 
     No-op when not attached to a TTY, when the mapping is missing, or when the
@@ -2114,10 +2120,13 @@ def _prompt_create_local_person(mappings: dict, label: str, name: str) -> None:
         print(f"  Invalid slug {slug!r} — must match ^[a-z0-9][a-z0-9_-]{{0,99}}$. Left unlinked.")
         return
 
-    print("  Role: 1) candidate  2) moderator  3) panelist")
-    role_choice = input("  [1]: ").strip()
-    role_map = {"1": "candidate", "2": "moderator", "3": "panelist", "": "candidate"}
-    role = role_map.get(role_choice, "candidate")
+    from src.event_kinds import local_roles_for, resolve_local_role
+
+    roles = local_roles_for(event_kind)
+    options = "  ".join(f"{i + 1}) {r}" for i, r in enumerate(roles))
+    print(f"  Role: {options}")
+    print("  (pick a number, or type a custom role)")
+    role = resolve_local_role(input(f"  [1={roles[0]}]: "), event_kind)
 
     mapping.local_slug = slug
     mapping.local_role = role
@@ -2135,6 +2144,8 @@ def _interactive_speaker_review(
     roster=None,
     body_slug: str | None = None,
     show_text: bool = True,
+    event_kind: str | None = None,
+    meeting_id: str | None = None,
 ) -> list[dict]:
     """Interactive review loop built on the pure src/review.py core.
 
@@ -2215,6 +2226,7 @@ def _interactive_speaker_review(
                     parts.append(f"[Y=accept {top_hint[0]}]")
                 if len(views) > 1:
                     parts.append("[M]erge")
+                parts.append("[U]nidentified [X]=not a speaker")
                 parts.append("[Enter=skip] [Q=quit] or type name: ")
                 choice = input(" ".join(parts)).strip()
                 lower = choice.lower()
@@ -2281,7 +2293,19 @@ def _interactive_speaker_review(
                     print(f"  Confirmed: {label} -> {res.new_name}")
                     _prompt_link_politician(mappings, label, res.new_name)
                     # Offer local person creation when essentials link was skipped or unavailable.
-                    _prompt_create_local_person(mappings, label, res.new_name)
+                    _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
+                    break
+                elif choice.lower() == "u":
+                    lbl = input("    Optional label (Enter for 'Unidentified Speaker'): ").strip()
+                    review.mark_unidentified(mappings, segments, label, meeting_id or "", display_label=lbl or None)
+                    changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
+                    print(f"  Unidentified: {label} -> {mappings[label].speaker_name} (handle {mappings[label].local_slug})")
+                    break
+                elif choice.lower() == "x":
+                    lbl = input("    Optional label (Enter for 'Non-speaker'): ").strip()
+                    review.mark_non_speaker(mappings, segments, label, display_label=lbl or None)
+                    changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
+                    print(f"  Marked non-speaker: {label} -> {mappings[label].speaker_name}")
                     break
                 else:
                     res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
@@ -2294,7 +2318,7 @@ def _interactive_speaker_review(
                             print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
                     _prompt_link_politician(mappings, label, res.new_name)
                     # Offer local person creation when essentials link was skipped or unavailable.
-                    _prompt_create_local_person(mappings, label, res.new_name)
+                    _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
                     break
         finally:
             _stop_player(current_player)
@@ -2474,6 +2498,8 @@ def _review_meeting(meeting_id: str) -> None:
     print("  [Y]      Accept suggested voice match (if shown)")
     print("  [M]      Merge this speaker into another")
     print("  [name]   Type a new name to assign")
+    print("  [U]      Mark unidentified (distinct person, unnamed)")
+    print("  [X]      Mark not a speaker (music/pledge/station ID)")
     print("  [Q]      Quit review (save changes so far)")
     print()
 
@@ -2481,6 +2507,8 @@ def _review_meeting(meeting_id: str) -> None:
         meeting.segments, meeting.speakers, embeddings, profile_db,
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=True,
+        event_kind=meeting.event_kind,
+        meeting_id=meeting_id,
     )
     _persist_after_review(meeting_dir, meeting.segments, embeddings, changes)
 
@@ -2625,6 +2653,8 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     print("  [Y]      Accept suggested voice match (if shown)")
     print("  [M]      Merge this speaker into another")
     print("  [name]   Type a name to assign")
+    print("  [U]      Mark unidentified (distinct person, unnamed)")
+    print("  [X]      Mark not a speaker (music/pledge/station ID)")
     print("  [Q]      Quit (save changes so far)")
     print()
 
@@ -2632,6 +2662,8 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         segments, current_mappings, embeddings, profile_db,
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=has_text,
+        event_kind=meeting.event_kind,
+        meeting_id=meeting_id,
     )
     _persist_after_review(meeting_dir, segments, embeddings, changes)
 
