@@ -118,6 +118,26 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     mapping.confidence = 1.0
     mapping.id_method = "human_review"
     mapping.needs_review = False
+
+    # A human-assigned name is authoritative. Any prior identity link belonged to
+    # the OLD name (e.g. a voice-profile collision that was then corrected by
+    # hand), so it must not survive a name change — otherwise this voice enrolls
+    # under the wrong person, since resolve_mapping_enrollment keys on
+    # politician_slug ahead of the name. Re-derive the link from the new name when
+    # a roster is available; otherwise drop it. A no-op rename leaves the (already
+    # correct, possibly manually-pasted) link untouched.
+    if final_name != old_name:
+        mapping.local_slug = None
+        mapping.local_role = None
+        if roster is not None:
+            from src.enroll import resolve_enrollment_key
+            _key, pol_slug, pol_id = resolve_enrollment_key(final_name, roster)
+            mapping.politician_slug = pol_slug
+            mapping.politician_id = pol_id
+        else:
+            mapping.politician_slug = None
+            mapping.politician_id = None
+
     mappings[label] = mapping
 
     for seg in segments:
