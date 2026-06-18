@@ -214,6 +214,10 @@ def resolve_mapping_enrollment(
     """
     if mapping.politician_slug:
         return f"essentials:{mapping.politician_slug}", mapping.politician_slug, mapping.politician_id
+    if mapping.local_slug:
+        # Key local people (incl. unidentified handles) by their stable slug, not
+        # the typed name — so identical labels in different meetings never merge.
+        return f"local:{mapping.local_slug}", None, None
     return resolve_enrollment_key(mapping.speaker_name, roster)
 
 

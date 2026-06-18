@@ -6,10 +6,21 @@ reusable. Persistence and interaction live in the callers (run_local.py).
 """
 from __future__ import annotations
 
+import re as _re
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+
+def make_unidentified_slug(meeting_id: str, label: str) -> str:
+    """Unique, deterministic handle for an unidentified speaker.
+
+    Keyed by (meeting, diarization label) so two different unknowns never share a
+    slug (no merge), while re-running review on the same meeting is idempotent.
+    """
+    base = _re.sub(r"[^a-z0-9]+", "-", f"{meeting_id}-{label}".lower()).strip("-")
+    return f"unidentified-{base}"
 
 
 @dataclass

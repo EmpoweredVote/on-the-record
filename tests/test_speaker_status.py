@@ -4,6 +4,8 @@ import numpy as np
 from src.enroll import ProfileDB, enroll_speakers
 from src.models import Meeting, Segment, SpeakerMapping
 from src import quality
+from src.review import make_unidentified_slug
+from src.enroll import resolve_mapping_enrollment
 
 
 def test_speaker_status_defaults_none_and_round_trips():
@@ -69,3 +71,31 @@ def test_non_speaker_excluded_from_gate_eligibility():
     assert rep["eligible_speech_seconds"] == 120.0
     per = {p["label"]: p for p in rep["per_speaker"]}
     assert per["S1"]["eligible"] is False
+
+
+def test_unidentified_slug_is_unique_per_meeting_and_label():
+    a = make_unidentified_slug("2026-02-04-council", "SPEAKER_07")
+    b = make_unidentified_slug("2026-05-06-debate", "SPEAKER_07")
+    assert a != b
+    assert a == make_unidentified_slug("2026-02-04-council", "SPEAKER_07")  # deterministic
+    assert a.startswith("unidentified-")
+
+
+def test_resolve_keys_unidentified_by_local_slug_not_name():
+    m1 = SpeakerMapping(speaker_label="S0", speaker_name="Interviewee 1",
+                        local_slug="unidentified-mA-S0", speaker_status="unidentified")
+    m2 = SpeakerMapping(speaker_label="S0", speaker_name="Interviewee 1",
+                        local_slug="unidentified-mB-S0", speaker_status="unidentified")
+    k1, s1, _ = resolve_mapping_enrollment(m1, roster=None)
+    k2, s2, _ = resolve_mapping_enrollment(m2, roster=None)
+    assert k1 == "local:unidentified-mA-S0"
+    assert k2 == "local:unidentified-mB-S0"
+    assert k1 != k2          # two "Interviewee 1"s never merge
+    assert s1 is None and s2 is None
+
+
+def test_resolve_prefers_politician_slug_over_local():
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Jane Adams",
+                       politician_slug="jane-adams", politician_id="uuid",
+                       local_slug="should-be-ignored")
+    assert resolve_mapping_enrollment(m, roster=None) == ("essentials:jane-adams", "jane-adams", "uuid")
