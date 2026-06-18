@@ -19,6 +19,7 @@
 - `src/identify.py` — soft hints expose the profile key (so an unidentified handle is linkable, not just displayable).
 - `src/enroll.py` — `promote_unidentified_handle`.
 - `bench/calibrate_gate.py` — `compare()` treats unidentified/non-speaker per spec.
+- `src/publish.py` — `_published_local_slug` suppresses unidentified handles as local_people.
 - `tests/test_speaker_status_phase2.py` — new.
 
 ---
@@ -283,13 +284,89 @@ git commit -m "feat(calibrate): unidentified = coverage-only; exclude non-speake
 
 ---
 
+## Task 4: Don't publish unidentified handles as local_people
+
+**Files:**
+- Modify: `src/publish.py` (`_upsert_local_people`, `_upsert_speakers`)
+- Test: `tests/test_speaker_status_phase2.py`
+
+Until a handle is promoted to a real person, an `"unidentified"` speaker must NOT become a public `meetings.local_people` entity (it would publish as `name="Unidentified Speaker", role="candidate"` — wrong, and a placeholder person record per meeting). It should render as a plain unnamed speaker: no `local_people` row, and `meetings.speakers.local_slug` written NULL so the FK holds. (`non_speaker` is already unaffected — `mark_non_speaker` clears `local_slug`.)
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+from src.publish import _published_local_slug
+from src.models import SpeakerMapping
+
+
+def test_published_local_slug_suppressed_for_unidentified():
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Unidentified Speaker",
+                       local_slug="unidentified-m-s0", speaker_status="unidentified")
+    assert _published_local_slug(m) is None   # not published as a local person
+
+
+def test_published_local_slug_kept_for_real_local_person():
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Jane Public", local_slug="jane-public")
+    assert _published_local_slug(m) == "jane-public"
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `.venv/bin/python -m pytest tests/test_speaker_status_phase2.py -k published_local_slug -v`
+Expected: FAIL — `_published_local_slug` missing.
+
+- [ ] **Step 3: Add the helper and route both writers through it**
+
+In `src/publish.py`, add near the top of the upsert helpers:
+
+```python
+def _published_local_slug(mapping) -> str | None:
+    """The local_slug to publish for a speaker, or None to publish no local
+    person. An unidentified handle is a placeholder, not a public entity, so it
+    is suppressed until promoted to a real person."""
+    if getattr(mapping, "speaker_status", None) == "unidentified":
+        return None
+    return mapping.local_slug
+```
+
+In `_upsert_local_people`, replace `if not mapping.local_slug: continue` with:
+
+```python
+        slug = _published_local_slug(mapping)
+        if not slug:
+            continue
+```
+and use `slug` (not `mapping.local_slug`) as the inserted slug value.
+
+In `_upsert_speakers`, replace every `mapping.local_slug` passed as the `local_slug` column value (both the UPDATE and INSERT param tuples) with `_published_local_slug(mapping)`.
+
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `.venv/bin/python -m pytest tests/test_speaker_status_phase2.py -k published_local_slug -v`
+Expected: PASS.
+
+- [ ] **Step 5: Full suite (publish path unchanged for non-unidentified)**
+
+Run: `.venv/bin/python -m pytest -q`
+Expected: PASS. If `tests/test_publish.py` has a fake-cursor harness, add an assertion there that an unidentified speaker produces no `local_people` INSERT and a NULL `speakers.local_slug`; otherwise the pure-helper tests above suffice.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/publish.py tests/test_speaker_status_phase2.py
+git commit -m "feat(publish): suppress unidentified handles as local_people until promoted"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage (Phase 2 portion):**
 - Returning-unknown recognition, confirm-only → Task 1 (`link_to_unidentified_handle` + soft-hint key + accept wiring). ✓
 - Promote handle → person → Task 2 (`promote_unidentified_handle`). ✓
 - Gate/calibration: unidentified counts coverage, never precision; non-speaker excluded → Task 3. ✓
+- Publish suppresses unidentified handles as local_people (no placeholder entity; NULL FK) → Task 4. ✓
 
 **Placeholder scan:** none — full code + commands per step.
 
-**Type consistency:** `local:<slug>` handle-key form matches Phase 1's `resolve_mapping_enrollment`; `speaker_status` values consistent; `soft_match_voice_profiles` 3-tuple return updated at its one consumer (`build_review_state`) and verified by the full-suite run in Step 5.
+**Type consistency:** `local:<slug>` handle-key form matches Phase 1's `resolve_mapping_enrollment`; `speaker_status` values consistent; `soft_match_voice_profiles` 3-tuple return updated at its one consumer (`build_review_state`) and verified by the full-suite run in Step 5; `_published_local_slug` is the single source of truth shared by both `_upsert_local_people` and `_upsert_speakers`.
