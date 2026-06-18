@@ -49,6 +49,14 @@ def test_warns_on_named_but_unlinked_roster_match():
     assert any(w["kind"] == "unlinked_roster_match" and w["label"] == "S0" for w in warns)
 
 
+def test_no_duplicate_warning_for_multiple_unidentified():
+    mappings = {
+        "S0": SpeakerMapping("S0", "Unidentified Speaker", local_slug="unidentified-m-s0", speaker_status="unidentified"),
+        "S1": SpeakerMapping("S1", "Unidentified Speaker", local_slug="unidentified-m-s1", speaker_status="unidentified"),
+    }
+    assert not any(w["kind"] == "duplicate_name" for w in enrollment_warnings(mappings, roster=None))
+
+
 def test_clean_mappings_have_no_warnings():
     mappings = {"S0": SpeakerMapping("S0", "Jane Adams", politician_slug="jane-adams")}
     assert enrollment_warnings(mappings, roster=None) == []

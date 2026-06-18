@@ -371,18 +371,15 @@ def format_match_line(match, index):
     return f"  {index + 1}. {name}{suffix} [{tag}]"
 
 
-import re as _re2
-
-
 def _ew_name_tokens(s):
     stop = {"councilmember", "council", "president", "vice", "mayor", "clerk",
             "the", "of", "common", "city", "member", "district", "association",
             "office", "at", "large"}
-    return set(_re2.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split()) - stop
+    return set(_re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split()) - stop
 
 
 def _ew_slug_tokens(slug):
-    return set(_re2.sub(r"[^a-z0-9]+", " ", (slug or "").lower()).split()) - {"h", "j", "s"}
+    return set(_re.sub(r"[^a-z0-9]+", " ", (slug or "").lower()).split()) - {"h", "j", "s"}
 
 
 def enrollment_warnings(mappings, roster=None) -> list[dict]:
@@ -399,7 +396,7 @@ def enrollment_warnings(mappings, roster=None) -> list[dict]:
     # duplicate name across labels (excluding non-speakers)
     by_name: dict[str, list[str]] = {}
     for label, m in mappings.items():
-        if m.speaker_name and m.speaker_status != "non_speaker":
+        if m.speaker_name and m.speaker_status not in ("non_speaker", "unidentified"):
             by_name.setdefault(m.speaker_name.strip().lower(), []).append(label)
     for nm, labels in by_name.items():
         if len(labels) > 1:

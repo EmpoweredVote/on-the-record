@@ -1041,6 +1041,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             # Offer enrollment
             _enroll_after_review(
                 changes, temp_mappings, meeting_dir, segments,
+                roster=_resolve_roster(effective_body_slug, state.roster_choice),
             )
         print()
 
@@ -2664,8 +2665,10 @@ def _review_meeting(meeting_id: str) -> None:
         print(f"Exports updated: {export_dir}")
 
         # Offer enrollment
+        from src.roster import load_roster
         _enroll_after_review(
             changes, meeting.speakers, meeting_dir, meeting.segments,
+            roster=load_roster(body_slug=body_slug) if body_slug else None,
         )
     else:
         print("\nNo changes made.")
@@ -2834,8 +2837,10 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
             print(f"Transcript and exports updated.")
 
         # Offer enrollment
+        from src.roster import load_roster
         _enroll_after_review(
             changes, current_mappings, meeting_dir, segments,
+            roster=load_roster(body_slug=body_slug) if body_slug else None,
         )
 
         print("\nThese identifications will be used as ground truth in Stage 4")
