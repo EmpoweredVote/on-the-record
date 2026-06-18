@@ -4,7 +4,7 @@ import numpy as np
 from src.enroll import ProfileDB, enroll_speakers
 from src.models import Meeting, Segment, SpeakerMapping
 from src import quality
-from src.review import make_unidentified_slug
+from src.review import make_unidentified_slug, mark_unidentified, mark_non_speaker
 from src.enroll import resolve_mapping_enrollment
 
 
@@ -99,3 +99,38 @@ def test_resolve_prefers_politician_slug_over_local():
                        politician_slug="jane-adams", politician_id="uuid",
                        local_slug="should-be-ignored")
     assert resolve_mapping_enrollment(m, roster=None) == ("essentials:jane-adams", "jane-adams", "uuid")
+
+
+def test_unidentified_slug_is_bounded_and_nonempty():
+    s = make_unidentified_slug("x" * 200, "SPEAKER_00")
+    assert len(s) <= 100 and s.startswith("unidentified-")
+    assert make_unidentified_slug("!!!", "!!!").startswith("unidentified-")  # no empty tail
+
+
+def test_mark_unidentified_sets_unique_handle_and_status():
+    segs = [Segment(0, 0, 5, "S0", "hi")]
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="City Council District 3")}
+    mark_unidentified(mappings, segs, "S0", "2026-02-04-council", display_label="Unknown Commenter")
+    m = mappings["S0"]
+    assert m.speaker_status == "unidentified"
+    assert m.local_slug == "unidentified-2026-02-04-council-s0"
+    assert m.speaker_name == "Unknown Commenter"
+    assert m.politician_slug is None
+    assert m.id_method == "human_review" and m.confidence == 1.0
+    assert segs[0].speaker_name == "Unknown Commenter"
+
+
+def test_mark_unidentified_defaults_label():
+    mappings = {"S0": SpeakerMapping(speaker_label="S0")}
+    mark_unidentified(mappings, [], "S0", "m1", display_label=None)
+    assert mappings["S0"].speaker_name == "Unidentified Speaker"
+
+
+def test_mark_non_speaker_clears_identity_and_sets_status():
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="Outro Music",
+                                     politician_slug="stale", local_slug="stale")}
+    mark_non_speaker(mappings, "S0")
+    m = mappings["S0"]
+    assert m.speaker_status == "non_speaker"
+    assert m.politician_slug is None and m.local_slug is None
+    assert m.id_method == "human_review"
