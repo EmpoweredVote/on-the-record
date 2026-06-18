@@ -2,7 +2,8 @@
 from __future__ import annotations
 import numpy as np
 from src.enroll import ProfileDB, enroll_speakers
-from src.models import Segment, SpeakerMapping
+from src.models import Meeting, Segment, SpeakerMapping
+from src import quality
 
 
 def test_speaker_status_defaults_none_and_round_trips():
@@ -51,3 +52,20 @@ def test_enroll_mapping_skips_non_speaker_directly():
                        id_method="human_review", speaker_status="non_speaker")
     _enroll_mapping(db, m, np.array([1.0, 0.0, 0.0]), "m1", 3, roster=None)
     assert db.profiles == {}
+
+
+def test_non_speaker_excluded_from_gate_eligibility():
+    segs = [Segment(0, 0, 120, "S0", "x", speaker_name="Real"),
+            Segment(1, 120, 240, "S1", "x", speaker_name="Outro Music")]
+    speakers = {
+        "S0": SpeakerMapping("S0", "Real", 1.0, "human_review"),
+        "S1": SpeakerMapping("S1", "Outro Music", 1.0, "human_review",
+                             speaker_status="non_speaker"),
+    }
+    m = Meeting(meeting_id="m", city="C", date="2026-01-01",
+                event_kind="council", segments=segs, speakers=speakers)
+    rep = quality.evaluate_meeting(m)
+    # S1's 120s must not count toward eligible speech.
+    assert rep["eligible_speech_seconds"] == 120.0
+    per = {p["label"]: p for p in rep["per_speaker"]}
+    assert per["S1"]["eligible"] is False

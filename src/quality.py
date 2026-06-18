@@ -106,11 +106,16 @@ def evaluate_meeting(
     secs_by_label = _speech_by_label(meeting)
     total_speech = sum(secs_by_label.values())
 
-    # Eligible (principal) speakers: above the incidental floor. If excluding
-    # short speakers would leave none, keep all (avoids div-by-zero on short clips).
-    eligible = {l: s for l, s in secs_by_label.items() if s >= floor}
+    # Eligible (principal) speakers: above the incidental floor, excluding any
+    # speaker explicitly marked not-a-speaker (music, pledge, station IDs).
+    def _is_non_speaker(label: str) -> bool:
+        m = meeting.speakers.get(label)
+        return bool(m and m.speaker_status == "non_speaker")
+
+    eligible = {l: s for l, s in secs_by_label.items()
+                if s >= floor and not _is_non_speaker(l)}
     if not eligible:
-        eligible = dict(secs_by_label)
+        eligible = {l: s for l, s in secs_by_label.items() if not _is_non_speaker(l)}
     eligible_total = sum(eligible.values())
 
     secs_by_tier = {TIER_TRUSTED: 0.0, TIER_PROBABLE: 0.0,
