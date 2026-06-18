@@ -542,7 +542,7 @@ def _read_review_command(prompt: str = "", *, refocus: bool = False) -> str:
         sys.stdout.write("\n")
         return ""
     lower = key.lower()
-    if lower in ("v", "r", "y", "m", "q"):
+    if lower in ("v", "r", "y", "m", "q", "u", "x"):
         sys.stdout.write(key + "\n")
         return lower
     if key.isdigit():
@@ -1016,6 +1016,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             video_path, str(meeting_dir / "audio.wav"),
             body_slug=effective_body_slug, show_text=False,
             event_kind=args.event_kind,
+            meeting_id=meeting_dir.name,
         )
         _persist_after_review(meeting_dir, segments, _pre_embeddings, changes)
 
@@ -1279,6 +1280,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 review_video, str(wav_path),
                 roster=roster, body_slug=effective_body_slug, show_text=True,
                 event_kind=meeting.event_kind,
+                meeting_id=meeting_dir.name,
             )
             _persist_after_review(meeting_dir, segments, speaker_embeddings, review_changes)
         else:
@@ -2236,6 +2238,7 @@ def _interactive_speaker_review(
     body_slug: str | None = None,
     show_text: bool = True,
     event_kind: str | None = None,
+    meeting_id: str | None = None,
 ) -> list[dict]:
     """Interactive review loop built on the pure src/review.py core.
 
@@ -2316,7 +2319,8 @@ def _interactive_speaker_review(
                     parts.append(f"[Y=accept {top_hint[0]}]")
                 if len(views) > 1:
                     parts.append("[M]erge")
-                parts.append("[Enter=skip] [Q=quit] or type a name (/ first for V/R/Y/M/Q names): ")
+                parts.append("[U]nidentified [X]=not a speaker")
+                parts.append("[Enter=skip] [Q=quit] or type a name (/ first for V/R/Y/M/Q/U/X names): ")
                 # Single keypresses fire instantly (cbreak); when a clip is
                 # playing, re-assert terminal focus first so keys don't land in
                 # ffplay's video window. Falls back to line input off-TTY.
@@ -2388,6 +2392,18 @@ def _interactive_speaker_review(
                     _prompt_link_politician(mappings, label, res.new_name)
                     # Offer local person creation when essentials link was skipped or unavailable.
                     _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
+                    break
+                elif choice.lower() == "u":
+                    lbl = input("    Optional label (Enter for 'Unidentified Speaker'): ").strip()
+                    review.mark_unidentified(mappings, segments, label, meeting_id or "", display_label=lbl or None)
+                    changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
+                    print(f"  Unidentified: {label} -> {mappings[label].speaker_name} (handle {mappings[label].local_slug})")
+                    break
+                elif choice.lower() == "x":
+                    lbl = input("    Optional label (Enter for 'Non-speaker'): ").strip()
+                    review.mark_non_speaker(mappings, segments, label, display_label=lbl or None)
+                    changes.append({"label": label, "old_name": name, "new_name": mappings[label].speaker_name})
+                    print(f"  Marked non-speaker: {label} -> {mappings[label].speaker_name}")
                     break
                 else:
                     res = review.rename_speaker(mappings, segments, label, choice, roster=roster)
@@ -2580,6 +2596,8 @@ def _review_meeting(meeting_id: str) -> None:
     print("  [Y]      Accept suggested voice match (if shown)")
     print("  [M]      Merge this speaker into another")
     print("  [name]   Type a new name to assign")
+    print("  [U]      Mark unidentified (distinct person, unnamed)")
+    print("  [X]      Mark not a speaker (music/pledge/station ID)")
     print("  [Q]      Quit review (save changes so far)")
     print()
 
@@ -2588,6 +2606,7 @@ def _review_meeting(meeting_id: str) -> None:
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=True,
         event_kind=meeting.event_kind,
+        meeting_id=meeting_id,
     )
     _persist_after_review(meeting_dir, meeting.segments, embeddings, changes)
 
@@ -2732,6 +2751,8 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     print("  [Y]      Accept suggested voice match (if shown)")
     print("  [M]      Merge this speaker into another")
     print("  [name]   Type a name to assign")
+    print("  [U]      Mark unidentified (distinct person, unnamed)")
+    print("  [X]      Mark not a speaker (music/pledge/station ID)")
     print("  [Q]      Quit (save changes so far)")
     print()
 
@@ -2740,6 +2761,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=has_text,
         event_kind=meeting.event_kind,
+        meeting_id=meeting_id,
     )
     _persist_after_review(meeting_dir, segments, embeddings, changes)
 

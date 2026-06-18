@@ -150,6 +150,8 @@ def main() -> int:
             # enrolling it would create a centroid that false-matches any voice.
             if m.speaker_name.strip().lower() in {"unknown", "unidentified", "n/a"}:
                 continue
+            if m.speaker_status == "non_speaker":
+                continue
             if m.id_method not in trusted:
                 continue
             if m.confidence < args.min_conf:

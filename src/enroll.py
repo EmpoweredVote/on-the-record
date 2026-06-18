@@ -214,6 +214,10 @@ def resolve_mapping_enrollment(
     """
     if mapping.politician_slug:
         return f"essentials:{mapping.politician_slug}", mapping.politician_slug, mapping.politician_id
+    if mapping.local_slug:
+        # Key local people (incl. unidentified handles) by their stable slug, not
+        # the typed name — so identical labels in different meetings never merge.
+        return f"local:{mapping.local_slug}", None, None
     return resolve_enrollment_key(mapping.speaker_name, roster)
 
 
@@ -232,6 +236,9 @@ def _enroll_mapping(
     local-slug profile for the same display name is absorbed into it so there is
     one profile per real person. Otherwise falls back to resolve_enrollment_key.
     """
+    if mapping.speaker_status == "non_speaker":
+        return
+
     key, pol_slug, pol_id = resolve_mapping_enrollment(mapping, roster)
 
     _enroll_one(
@@ -290,6 +297,8 @@ def get_borderline_speakers(
     borderline = []
     for label, mapping in mappings.items():
         if not mapping.speaker_name:
+            continue
+        if mapping.speaker_status == "non_speaker":
             continue
         if label not in speaker_embeddings:
             continue
