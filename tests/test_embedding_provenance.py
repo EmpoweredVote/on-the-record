@@ -32,9 +32,9 @@ def _segments(label="SPEAKER_01", n=3):
                     speaker_label=label, text="hi") for i in range(n)]
 
 
-def test_schema_version_is_4():
-    assert config.PROFILE_SCHEMA_VERSION == 4
-    assert ProfileDB().schema_version == 4
+def test_schema_version_is_current():
+    assert config.PROFILE_SCHEMA_VERSION == 5
+    assert ProfileDB().schema_version == 5
 
 
 def test_enroll_stamps_meeting_id_and_seg_count():
@@ -95,7 +95,7 @@ def test_merge_preserves_both_sources_provenance():
     assert seen == ["m1", "m2"]
 
 
-def test_v4_db_round_trips_through_pickle(monkeypatch, tmp_path):
+def test_current_db_round_trips_through_pickle(monkeypatch, tmp_path):
     path = tmp_path / "speaker_profiles.pkl"
     monkeypatch.setattr("src.enroll._db_path", lambda: path)
     db = ProfileDB(profiles={
@@ -105,7 +105,7 @@ def test_v4_db_round_trips_through_pickle(monkeypatch, tmp_path):
     })
     save_profiles(db)
     loaded = load_profiles()
-    assert loaded.schema_version == 4
+    assert loaded.schema_version == 5
     rec = loaded.profiles["x"].embeddings[0]
     assert isinstance(rec, EmbeddingRecord)
     assert rec.meeting_id == "m1"

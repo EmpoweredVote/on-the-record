@@ -18,9 +18,9 @@ from src.roster import RosterMember, load_roster
 
 
 def test_profile_db_schema_version():
-    """ProfileDB defaults to schema version 3."""
+    """ProfileDB defaults to the current schema version."""
     db = ProfileDB()
-    assert db.schema_version == 4
+    assert db.schema_version == 5
 
 
 def test_stored_profile_v3_fields():
@@ -31,7 +31,7 @@ def test_stored_profile_v3_fields():
 
 
 def test_v2_auto_discard(tmp_path, monkeypatch):
-    """Loading a v2 profile DB auto-discards it, creates backup, returns empty v3 DB."""
+    """Loading a v2 profile DB auto-discards it, creates backup, returns empty current-version DB."""
     # Create a fake v2 ProfileDB pickle
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()
@@ -50,7 +50,7 @@ def test_v2_auto_discard(tmp_path, monkeypatch):
     monkeypatch.setattr("src.enroll._db_path", lambda: db_path)
 
     result = load_profiles()
-    assert result.schema_version == 4
+    assert result.schema_version == 5
     assert len(result.profiles) == 0
     assert (profiles_dir / "speaker_profiles.v2.pkl.bak").exists()
 

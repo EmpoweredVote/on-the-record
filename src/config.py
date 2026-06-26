@@ -86,7 +86,12 @@ PROFILE_DB_FILENAME = "speaker_profiles.pkl"
 # Bumped to 4 on 2026-06-16: embeddings are now EmbeddingRecord (vector +
 # meeting_id + seg_count) instead of bare np.ndarray, enabling embedding-level
 # leave-one-out provenance in calibration.
-PROFILE_SCHEMA_VERSION = 4
+# Bumped to 5 on 2026-06-26: essentials-linked profiles are now keyed
+# essentials:<politician_id> instead of essentials:<politician_slug> (slug is
+# NULL for ~99.4% of essentials.politicians). Old slug-keyed profiles are a
+# different key space, so load_profiles() discards (and backs up) the old DB on
+# load; re-enroll via reenroll_profiles.py to rebuild under the id keys.
+PROFILE_SCHEMA_VERSION = 5
 
 # --- Meeting confidence gate (Phase A) ---
 # Probable-tier coverage (returning-speaker voice matches at the lowered
