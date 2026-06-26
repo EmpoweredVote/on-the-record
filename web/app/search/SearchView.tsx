@@ -13,7 +13,7 @@ const PAGE_SIZE = 25; // keep in sync with SEARCH_PAGE_SIZE in ev-accounts
 const MAX_PAGE = 400; // keep in sync with MAX_PAGE in ev-accounts
 
 interface SpeakerOption {
-  slug: string;
+  id: string;
   name: string;
 }
 
@@ -28,7 +28,7 @@ function mapResult(r: any): SearchResult {
     start_time: r.startTime,
     end_time: r.endTime,
     speaker_name: r.speakerName ?? null,
-    politician_slug: r.politicianSlug ?? null,
+    politician_id: r.politicianId ?? null,
     snippet: r.snippet ?? "",
   };
 }
@@ -187,7 +187,7 @@ export default function SearchView({
         >
           <option value="">All speakers</option>
           {speakers.map((s) => (
-            <option key={s.slug} value={s.slug}>
+            <option key={s.id} value={s.id}>
               {s.name}
             </option>
           ))}
@@ -238,9 +238,9 @@ export default function SearchView({
                       {formatTime(hit.start_time)}
                     </Link>{" "}
                     {hit.speaker_name &&
-                      (hit.politician_slug ? (
+                      (hit.politician_id ? (
                         <Link
-                          href={`/people/${hit.politician_slug}`}
+                          href={`/people/${hit.politician_id}`}
                           className="speakerLink searchSpeaker"
                         >
                           {hit.speaker_name}

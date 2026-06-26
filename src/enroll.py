@@ -45,7 +45,7 @@ class EmbeddingRecord:
 
 @dataclass
 class StoredProfile:
-    speaker_id: str  # slug, e.g. "adams_jane"
+    speaker_id: str  # profile key — e.g. "essentials:<uuid>", "local:<slug>", or a name slug
     display_name: str
     embeddings: list[EmbeddingRecord] = field(default_factory=list)
     centroid: Optional[np.ndarray] = None
@@ -147,7 +147,7 @@ def resolve_enrollment_key(
     """Return (profile_key, politician_slug, politician_id).
 
     If display_name matches a roster member (via correct_speaker_name),
-    key = 'essentials:<politician_slug>', identity fields from roster.
+    key = 'essentials:<politician_id>', identity fields from roster.
     Otherwise: key = _name_to_slug(display_name), both identity fields None.
     """
     if roster is not None:
@@ -156,9 +156,9 @@ def resolve_enrollment_key(
         corrected = correct_speaker_name(display_name, roster)
         for member in roster.members:
             if corrected == member.name:
-                if member.politician_slug:
+                if member.politician_id:
                     return (
-                        f"essentials:{member.politician_slug}",
+                        f"essentials:{member.politician_id}",
                         member.politician_slug,
                         member.politician_id,
                     )
@@ -212,8 +212,11 @@ def resolve_mapping_enrollment(
     Single source of truth shared by _enroll_mapping and any display that needs
     to show the key the speaker will land under.
     """
-    if mapping.politician_slug:
-        return f"essentials:{mapping.politician_slug}", mapping.politician_slug, mapping.politician_id
+    if mapping.politician_id:
+        # Key on the stable UUID — politician_slug is NULL for ~99.4% of
+        # essentials.politicians (incl. all candidates). Slug is still carried
+        # for downstream display/publish, just not used as the key.
+        return f"essentials:{mapping.politician_id}", mapping.politician_slug, mapping.politician_id
     if mapping.local_slug:
         # Key local people (incl. unidentified handles) by their stable slug, not
         # the typed name — so identical labels in different meetings never merge.
@@ -232,7 +235,7 @@ def _enroll_mapping(
     """Enroll one mapping, honoring its own identity before any roster lookup.
 
     A mapping that already carries politician_slug (from a manual link or from
-    Wire 1 voice propagation) is keyed under essentials:<slug>; a pre-existing
+    Wire 1 voice propagation) is keyed under essentials:<politician_id>; a pre-existing
     local-slug profile for the same display name is absorbed into it so there is
     one profile per real person. Otherwise falls back to resolve_enrollment_key.
     """

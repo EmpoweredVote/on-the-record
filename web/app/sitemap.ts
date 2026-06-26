@@ -29,7 +29,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const peopleRoutes: MetadataRoute.Sitemap = people.map((p) => ({
-    url: `${SITE}/people/${p.slug}`,
+    url: `${SITE}/people/${p.politician_id}`,
     changeFrequency: "monthly",
     priority: 0.7,
   }));

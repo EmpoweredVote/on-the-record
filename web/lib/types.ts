@@ -40,8 +40,7 @@ export interface Segment {
 }
 
 export interface Person {
-  slug: string;
-  politician_id: string | null;   // essentials.politicians UUID
+  politician_id: string;          // essentials.politicians UUID (the key + URL)
   name: string;
   headshot_url: string | null;
   party: string | null;
@@ -82,7 +81,7 @@ export interface SearchResult {
   start_time: number;
   end_time: number;
   speaker_name: string | null;
-  politician_slug: string | null;
+  politician_id: string | null;
   snippet: string;               // [[[match]]] sentinels, rendered as <mark>
 }
 
@@ -116,6 +115,7 @@ export interface MeetingSpeaker {
   label: string;
   display_name: string | null;
   politician_slug: string | null;
+  politician_id: string | null;
   id_method: string | null;   // "human_review" => verified; else predicted
   confidence: number | null;
   local_slug: string | null;

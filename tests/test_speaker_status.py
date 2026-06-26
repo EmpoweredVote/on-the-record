@@ -98,7 +98,7 @@ def test_resolve_prefers_politician_slug_over_local():
     m = SpeakerMapping(speaker_label="S0", speaker_name="Jane Adams",
                        politician_slug="jane-adams", politician_id="uuid",
                        local_slug="should-be-ignored")
-    assert resolve_mapping_enrollment(m, roster=None) == ("essentials:jane-adams", "jane-adams", "uuid")
+    assert resolve_mapping_enrollment(m, roster=None) == ("essentials:uuid", "jane-adams", "uuid")
 
 
 def test_unidentified_slug_is_bounded_and_nonempty():

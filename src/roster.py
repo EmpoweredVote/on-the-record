@@ -253,7 +253,7 @@ def correct_mappings(
                 mapping.speaker_name = corrected
             # Populate politician identity for any roster-matched speaker
             for member in roster.members:
-                if corrected.lower() == member.name.lower() and member.politician_slug:
+                if corrected.lower() == member.name.lower() and member.politician_id:
                     mapping.politician_slug = member.politician_slug
                     mapping.politician_id = member.politician_id
                     break

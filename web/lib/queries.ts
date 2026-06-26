@@ -42,6 +42,7 @@ function mapMeeting(m: any): Meeting {
       label: sp.label,
       display_name: sp.displayName ?? null,
       politician_slug: sp.politicianSlug ?? null,
+      politician_id: sp.politicianId ?? null,
       id_method: sp.idMethod ?? null,
       confidence: sp.confidence ?? null,
       local_slug: sp.localSlug ?? null,
@@ -98,8 +99,7 @@ function mapSegment(s: any): Segment {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPerson(p: any): Person {
   return {
-    slug: p.slug,
-    politician_id: p.politicianId ?? null,
+    politician_id: p.politicianId,
     name: p.name,
     headshot_url: p.headshotUrl ?? null,
     party: p.party ?? null,
@@ -138,19 +138,19 @@ export async function fetchPeople(): Promise<Person[]> {
   return (data as unknown[]).map(mapPerson);
 }
 
-export async function fetchPerson(slug: string): Promise<PersonDetail | null> {
+export async function fetchPerson(id: string): Promise<PersonDetail | null> {
   if (!BASE) return null;
-  const res = await fetch(`${BASE}/api/people/${encodeURIComponent(slug)}`, BUST);
+  const res = await fetch(`${BASE}/api/people/${encodeURIComponent(id)}`, BUST);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`person fetch failed: ${res.status}`);
   const p = await res.json();
   return { ...mapPerson(p), bio_text: p.bioText ?? null };
 }
 
-export async function fetchAppearances(slug: string): Promise<Appearance[]> {
+export async function fetchAppearances(id: string): Promise<Appearance[]> {
   if (!BASE) return [];
   const res = await fetch(
-    `${BASE}/api/people/${encodeURIComponent(slug)}/appearances`,
+    `${BASE}/api/people/${encodeURIComponent(id)}/appearances`,
     BUST
   );
   if (!res.ok) throw new Error(`appearances fetch failed: ${res.status}`);

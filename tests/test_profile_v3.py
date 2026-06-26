@@ -18,9 +18,9 @@ from src.roster import RosterMember, load_roster
 
 
 def test_profile_db_schema_version():
-    """ProfileDB defaults to schema version 3."""
+    """ProfileDB defaults to the current schema version."""
     db = ProfileDB()
-    assert db.schema_version == 4
+    assert db.schema_version == 5
 
 
 def test_stored_profile_v3_fields():
@@ -31,7 +31,7 @@ def test_stored_profile_v3_fields():
 
 
 def test_v2_auto_discard(tmp_path, monkeypatch):
-    """Loading a v2 profile DB auto-discards it, creates backup, returns empty v3 DB."""
+    """Loading a v2 profile DB auto-discards it, creates backup, returns empty current-version DB."""
     # Create a fake v2 ProfileDB pickle
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()
@@ -50,7 +50,7 @@ def test_v2_auto_discard(tmp_path, monkeypatch):
     monkeypatch.setattr("src.enroll._db_path", lambda: db_path)
 
     result = load_profiles()
-    assert result.schema_version == 4
+    assert result.schema_version == 5
     assert len(result.profiles) == 0
     assert (profiles_dir / "speaker_profiles.v2.pkl.bak").exists()
 
@@ -130,14 +130,14 @@ def _make_segments(label="SPEAKER_01"):
 
 
 def test_enroll_roster_member_uses_essentials_key():
-    """Enrolling a roster-matched speaker uses essentials:<slug> key."""
+    """Enrolling a roster-matched speaker uses the essentials:<politician_id> key."""
     roster = _make_roster()
     embeddings = {"SPEAKER_01": _make_embedding()}
     mappings = _make_mapping("Councilmember Piedmont-Smith")
     segments = _make_segments()
 
     db = enroll_speakers(ProfileDB(), embeddings, mappings, "m1", segments, roster=roster)
-    assert "essentials:isabel-piedmont-smith" in db.profiles
+    assert "essentials:uuid-ips" in db.profiles
 
 
 def test_essentials_profile_identity_fields():
@@ -148,7 +148,7 @@ def test_essentials_profile_identity_fields():
     segments = _make_segments()
 
     db = enroll_speakers(ProfileDB(), embeddings, mappings, "m1", segments, roster=roster)
-    profile = db.profiles["essentials:isabel-piedmont-smith"]
+    profile = db.profiles["essentials:uuid-ips"]
     assert profile.politician_slug == "isabel-piedmont-smith"
     assert profile.politician_id == "uuid-ips"
 
@@ -192,7 +192,7 @@ def test_mixed_profiles_coexist():
     ]
 
     db = enroll_speakers(ProfileDB(), embeddings, mappings, "m1", segments, roster=roster)
-    assert "essentials:isabel-piedmont-smith" in db.profiles
+    assert "essentials:uuid-ips" in db.profiles
     assert "public_john" in db.profiles
     assert len(db.profiles) == 2
 
@@ -209,7 +209,7 @@ def test_essentials_profile_accumulates_across_meetings():
     db = enroll_speakers(ProfileDB(), emb1, mappings, "m1", segments, roster=roster)
     db = enroll_speakers(db, emb2, mappings, "m2", segments, roster=roster)
 
-    profile = db.profiles["essentials:isabel-piedmont-smith"]
+    profile = db.profiles["essentials:uuid-ips"]
     assert len(profile.embeddings) == 2
     assert profile.meetings_seen == ["m1", "m2"]
 
@@ -224,7 +224,7 @@ def test_enroll_confirmed_roster_member():
     db = enroll_confirmed(
         ProfileDB(), embeddings, ["SPEAKER_01"], mappings, "m1", segments, roster=roster
     )
-    assert "essentials:isabel-piedmont-smith" in db.profiles
+    assert "essentials:uuid-ips" in db.profiles
 
 
 # ---------------------------------------------------------------------------
@@ -302,14 +302,14 @@ def test_reenroll_reads_body_slug(
     rc = reenroll_profiles.main()
     assert rc == 0
     assert "db" in saved
-    assert "essentials:isabel-piedmont-smith" in saved["db"].profiles
+    assert "essentials:uuid-ips" in saved["db"].profiles
 
 
 def test_reenroll_promotes_to_essentials_key(
     tagged_meeting_dir, fake_roster_cache, tmp_meetings_dir, monkeypatch
 ):
     """Re-enrollment of a body-tagged meeting promotes roster-matched speakers
-    to essentials:<politician_slug> keys with identity fields populated."""
+    to essentials:<politician_id> keys with identity fields populated."""
     mdir = tagged_meeting_dir("bloomington-common-council", "2026-test-promote", completed_stage=4)
     _write_transcript_named(mdir)
     (mdir / "audio.wav").touch()
@@ -332,7 +332,7 @@ def test_reenroll_promotes_to_essentials_key(
     rc = reenroll_profiles.main()
     assert rc == 0
 
-    profile = saved["db"].profiles["essentials:isabel-piedmont-smith"]
+    profile = saved["db"].profiles["essentials:uuid-ips"]
     assert profile.politician_slug == "isabel-piedmont-smith"
     assert profile.politician_id == "uuid-ips"
     assert profile.display_name == "Councilmember Piedmont-Smith"
@@ -406,8 +406,8 @@ def test_mapping_identity_uses_essentials_key_without_roster():
         )
     }
     db = enroll_speakers(ProfileDB(), emb, mappings, "m1", [_seg("SPEAKER_00")], roster=None)
-    assert "essentials:jane-adams" in db.profiles
-    prof = db.profiles["essentials:jane-adams"]
+    assert "essentials:uuid-ja" in db.profiles
+    prof = db.profiles["essentials:uuid-ja"]
     assert prof.politician_slug == "jane-adams"
     assert prof.politician_id == "uuid-ja"
 
@@ -425,9 +425,9 @@ def test_linking_absorbs_existing_local_profile():
         speaker_label="SPEAKER_00", speaker_name="Jane Adams", confidence=1.0,
         politician_slug="jane-adams", politician_id="uuid-ja")}
     db = enroll_speakers(db, emb, m2, "m2", seg, roster=None)
-    assert "essentials:jane-adams" in db.profiles
+    assert "essentials:uuid-ja" in db.profiles
     assert "adams_jane" not in db.profiles
-    prof = db.profiles["essentials:jane-adams"]
+    prof = db.profiles["essentials:uuid-ja"]
     assert prof.politician_id == "uuid-ja"
     assert len(prof.embeddings) == 2  # m1 + m2 merged
     assert set(prof.meetings_seen) == {"m1", "m2"}
@@ -444,7 +444,7 @@ def test_resolve_mapping_enrollment_linked_uses_essentials_key():
     m = SpeakerMapping(
         speaker_label="SPEAKER_00", speaker_name="Jane Adams",
         politician_slug="jane-adams", politician_id="uuid-ja")
-    assert resolve_mapping_enrollment(m) == ("essentials:jane-adams", "jane-adams", "uuid-ja")
+    assert resolve_mapping_enrollment(m) == ("essentials:uuid-ja", "jane-adams", "uuid-ja")
 
 
 def test_resolve_mapping_enrollment_unlinked_uses_local_slug():

@@ -328,8 +328,8 @@ def _carry_link(prior: Optional[SpeakerMapping], new: SpeakerMapping) -> Speaker
     """
     if (
         prior is not None
-        and prior.politician_slug
-        and not new.politician_slug
+        and prior.politician_id
+        and not new.politician_id
         and new.speaker_name
         and new.speaker_name == prior.speaker_name
     ):
