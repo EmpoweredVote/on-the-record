@@ -73,12 +73,15 @@ describe("buildThumbnailModel", () => {
     expect(m.showPlay).toBe(false);
     expect(m.duration).toBeNull();
     expect(m.transcriptOnly).toBe(true);
+    expect(m.location).toBe("Asheville");
+    expect(m.date).toBe("Feb 25, 2026");
   });
 
-  it("falls back to the info tile when a youtube meeting has no video id", () => {
+  it("treats a youtube meeting with no video id as not playable (info tile)", () => {
     const m = buildThumbnailModel({ ...base, playback_url: null });
     expect(m.imageSrc).toBeNull();
-    expect(m.showPlay).toBe(true);
+    expect(m.showPlay).toBe(false);
+    expect(m.transcriptOnly).toBe(true);
   });
 
   it("falls back to the meeting title for location when city is null", () => {

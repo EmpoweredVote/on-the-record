@@ -21,9 +21,9 @@ export function formatMeetingDate(value: string | null | undefined): string {
 
 // Human-friendly meeting length, e.g. "2h 14m" or "48m". Empty string when unknown.
 export function formatDuration(seconds: number | null): string {
-  if (!seconds) return "";
+  if (!seconds || seconds < 0) return "";
   const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
+  const m = Math.floor((seconds % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 

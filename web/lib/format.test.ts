@@ -17,4 +17,13 @@ describe("formatDuration", () => {
   it("formats hour-plus durations as hours and minutes", () => {
     expect(formatDuration(8040)).toBe("2h 14m");
   });
+
+  it("truncates rather than rounds minutes near an hour boundary", () => {
+    expect(formatDuration(3570)).toBe("59m");
+    expect(formatDuration(7170)).toBe("1h 59m");
+  });
+
+  it("returns empty string for negative input", () => {
+    expect(formatDuration(-60)).toBe("");
+  });
 });
