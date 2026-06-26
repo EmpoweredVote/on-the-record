@@ -172,6 +172,8 @@ a {
 /* Event-kind filter — segmented control */
 .kindTabs {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem;
@@ -209,59 +211,167 @@ a {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
-.meetingList li a {
+.meetingCard {
   display: flex;
+  gap: 1rem;
   align-items: flex-start;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 0.9rem 1rem;
+  padding: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: var(--shadow);
   transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
   cursor: pointer;
 }
 
-.meetingList li a:hover {
+.meetingCard:hover {
   border-color: var(--accent);
   background: var(--accent-soft);
   box-shadow: 0 2px 8px rgba(3, 105, 161, 0.12);
 }
 
+/* Thumbnail / info tile */
+.meetingThumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 200px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.meetingThumbImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Info-tile top band: location (left) + date (right) — kept clear of overlays */
+.meetingThumbBand {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.55rem;
+}
+
+.meetingThumbLoc {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.meetingThumbDate {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+/* Centered play overlay */
+.meetingThumbPlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.meetingThumbPlay::after {
+  content: "";
+  border-left: 13px solid #0f172a;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  margin-left: 3px;
+}
+
+/* Duration badge (bottom-right) */
+.meetingThumbDuration {
+  position: absolute;
+  bottom: 0.35rem;
+  right: 0.35rem;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}
+
+/* "Transcript only" tag (bottom-right; no-video rows) */
+.meetingThumbTranscript {
+  position: absolute;
+  bottom: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+/* Text column */
+.meetingBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .meetingTitle {
   font-weight: 600;
   font-size: 1rem;
-  flex: 1 1 100%;
+  color: var(--foreground);
 }
 
-.meetingDate,
-.meetingDuration {
+.meetingMeta {
   color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.hasVideo {
-  margin-left: auto;
-  color: var(--accent);
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: var(--accent-soft);
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  align-self: flex-start;
+  font-size: 0.8rem;
 }
 
 .meetingPreview {
-  display: block;
   color: var(--muted);
   font-size: 0.85rem;
-  margin-top: 0.15rem;
-  flex: 1 1 100%;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Narrow screens: shrink the thumbnail so the summary keeps room */
+@media (max-width: 640px) {
+  .meetingThumb {
+    width: 132px;
+  }
 }
 
 /* =====================================================
@@ -280,6 +390,11 @@ a {
 
 .meetingHeader {
   padding-bottom: 0.75rem;
+}
+
+.meetingDate {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .meetingHeader h1 {
