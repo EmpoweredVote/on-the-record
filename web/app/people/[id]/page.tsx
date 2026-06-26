@@ -15,10 +15,11 @@ export async function generateStaticParams() {
     // API unavailable at build time — fall through to sentinel below.
   }
   // output:"export" fails the build when a dynamic route has zero params
-  // (e.g., before the first meeting is published). Emit one sentinel slug
-  // that renders 404 so empty-data builds still succeed.
-  if (people.length === 0) return [{ slug: "none" }];
-  return people.map((p) => ({ slug: p.slug }));
+  // (e.g., before the first person is linked). Emit one sentinel id — the nil
+  // UUID — which is a valid UUID (so the API returns 404, not 422) and renders
+  // 404, so empty-data builds still succeed.
+  if (people.length === 0) return [{ id: "00000000-0000-0000-0000-000000000000" }];
+  return people.map((p) => ({ id: p.politician_id }));
 }
 
 // essentials.city politician profiles are /politician/<uuid>
@@ -27,12 +28,12 @@ const ESSENTIALS_BASE = "https://essentials.city";
 export default async function PersonPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { slug } = await params;
-  const person = await fetchPerson(slug);
+  const { id } = await params;
+  const person = await fetchPerson(id);
   if (!person) notFound();
-  const appearances = await fetchAppearances(slug);
+  const appearances = await fetchAppearances(id);
 
   return (
     <main className="indexPage personPage">

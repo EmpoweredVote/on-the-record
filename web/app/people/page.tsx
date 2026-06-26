@@ -31,8 +31,8 @@ export default async function PeoplePage() {
       ) : (
         <ul className="peopleGrid">
           {people.map((p) => (
-            <li key={p.slug}>
-              <Link href={`/people/${p.slug}`} className="personCard">
+            <li key={p.politician_id}>
+              <Link href={`/people/${p.politician_id}`} className="personCard">
                 {p.headshot_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img className="personPhoto" src={p.headshot_url} alt="" />
