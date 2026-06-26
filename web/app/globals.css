@@ -279,7 +279,7 @@ a {
 .meetingThumbDate {
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--foreground);
   white-space: nowrap;
 }
 
