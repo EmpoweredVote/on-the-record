@@ -296,6 +296,34 @@ def test_correct_mappings_populates_politician_slug():
     assert result["SPEAKER_01"].politician_id == "uuid-ips"
 
 
+def test_correct_mappings_populates_id_when_slug_none():
+    """correct_mappings carries politician_id even when the roster member's slug is None."""
+    roster = Roster(
+        city="Bloomington",
+        body="bloomington-common-council",
+        members=[
+            RosterMember(
+                name="Jane Candidate",
+                aliases=["Candidate", "Jane Candidate"],
+                politician_slug=None,
+                politician_id="uuid-cand",
+                district_label="District 3",
+            ),
+        ],
+    )
+    mappings = {
+        "SPEAKER_01": SpeakerMapping(
+            speaker_label="SPEAKER_01",
+            speaker_name="Jane Candidate",
+            confidence=0.90,
+            id_method="pattern",
+        ),
+    }
+    result = correct_mappings(mappings, roster)
+    assert result["SPEAKER_01"].politician_id == "uuid-cand"
+    assert result["SPEAKER_01"].politician_slug is None
+
+
 def test_correct_mappings_leaves_slug_none_for_non_match():
     """correct_mappings leaves politician_slug=None for non-roster speakers."""
     roster = _make_roster()
@@ -481,6 +509,17 @@ def test_carry_link_same_name_preserves_identity():
     out = _carry_link(prior, new)
     assert out.politician_slug == "john-hamilton"
     assert out.politician_id == "uuid-ham"
+
+
+def test_carry_link_same_name_carries_id_when_slug_none():
+    prior = SpeakerMapping(speaker_label="S0", speaker_name="Jane Doe",
+                           confidence=0.9, politician_id="uuid-cand",
+                           politician_slug=None)
+    new = SpeakerMapping(speaker_label="S0", speaker_name="Jane Doe",
+                         confidence=0.95)
+    out = _carry_link(prior, new)
+    assert out.politician_id == "uuid-cand"
+    assert out.politician_slug is None
 
 
 def test_carry_link_different_name_drops_identity():
