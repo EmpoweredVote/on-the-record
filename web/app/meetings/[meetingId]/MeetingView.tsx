@@ -184,12 +184,20 @@ export default function MeetingView({
     (meeting.speakers ?? []).map((sp) => [sp.label, speakerStatus(sp.id_method)] as const)
   );
 
-  // Build a label → local name map for non-roster speakers (local_slug set, no politician_slug).
-  // Used to render local people as plain text (no link) per D-08, D-09.
+  // Build a label → politician_id map from the meeting's speaker list. The
+  // meeting endpoint carries politician_id on speakers; segments do not.
+  const politicianIdByLabel = new Map(
+    (meeting.speakers ?? [])
+      .filter((sp) => sp.politician_id)
+      .map((sp) => [sp.label, sp.politician_id as string] as const)
+  );
+
+  // Build a label → local name map for non-roster speakers (local_slug set, no
+  // politician identity). Rendered as plain text (no link) per D-08, D-09.
   const localNameByLabel = new Map(
     (meeting.speakers ?? [])
-      .filter(sp => sp.local_slug && !sp.politician_slug)
-      .map(sp => [sp.label, sp.local_name ?? sp.display_name] as const)
+      .filter((sp) => sp.local_slug && !sp.politician_id)
+      .map((sp) => [sp.label, sp.local_name ?? sp.display_name] as const)
   );
 
   return (
@@ -284,9 +292,9 @@ export default function MeetingView({
                 {formatTime(seg.start_time)}
               </button>
               <span className="speaker">
-                {seg.politician_slug ? (
+                {politicianIdByLabel.get(seg.speaker_label) ? (
                   <Link
-                    href={`/people/${seg.politician_slug}`}
+                    href={`/people/${politicianIdByLabel.get(seg.speaker_label)}`}
                     className="speakerLink"
                     title="View this person's appearances"
                   >
