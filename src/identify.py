@@ -64,22 +64,24 @@ def match_voice_profiles(
                 if returning_tag and best_score < config.VOICE_MATCH_THRESHOLD:
                     method = f"voice_profile ({returning_tag})"
                     print(f"  Matched {label} -> {best_name} ({best_score:.2f}, {returning_tag})")
+                prof = profile_db.profiles.get(best_name) if profile_db else None
+                # best_name is a profile KEY (a slug like "hilton_steve"). Never
+                # surface it as a human name: use the profile's stored
+                # display_name, and if it has none, leave the speaker unnamed and
+                # flag it for review rather than publishing a raw slug.
+                display = prof.display_name if (prof and prof.display_name) else None
                 mappings[label] = SpeakerMapping(
                     speaker_label=label,
-                    speaker_name=best_name,
+                    speaker_name=display,
                     confidence=round(best_score, 3),
                     id_method=method,
+                    needs_review=(display is None),
                 )
                 # Wire 1: carry the matched profile's identity fields so a
-                # returning, already-linked speaker arrives pre-linked, and use
-                # the stored display_name so segments render human-readable names
-                # (e.g. "Hailey Gomez") rather than the raw profile slug.
-                if profile_db and best_name in profile_db.profiles:
-                    prof = profile_db.profiles[best_name]
+                # returning, already-linked speaker arrives pre-linked.
+                if prof is not None:
                     mappings[label].politician_slug = getattr(prof, "politician_slug", None)
                     mappings[label].politician_id = getattr(prof, "politician_id", None)
-                    if prof.display_name:
-                        mappings[label].speaker_name = prof.display_name
 
     return mappings
 

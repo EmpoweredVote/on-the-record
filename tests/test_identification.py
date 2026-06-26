@@ -501,3 +501,42 @@ def test_carry_link_does_not_overwrite_existing_link():
                          politician_slug="other-slug", politician_id="uuid-other")
     out = _carry_link(prior, new)
     assert out.politician_slug == "other-slug"
+
+
+# ---------------------------------------------------------------------------
+# Voice match must never surface a profile KEY (slug) as a human name
+# ---------------------------------------------------------------------------
+
+def test_voice_match_never_emits_profile_slug_as_name():
+    """A match to a profile with no display_name must NOT use the profile key
+    (a slug like 'hilton_steve') as the speaker name — leave it unnamed +
+    needs_review so a human names it, rather than publishing a slug."""
+    import numpy as np
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
+    c = np.array([1.0, 0.0, 0.0])
+    prof = StoredProfile(speaker_id="hilton_steve", display_name="",
+                         embeddings=[EmbeddingRecord(c, "m0")], centroid=c,
+                         meetings_seen=["m0"])
+    db = ProfileDB(profiles={"hilton_steve": prof})
+    out = match_voice_profiles({"SPEAKER_00": np.array([1.0, 0.0, 0.0])},
+                               {"hilton_steve": c}, profile_db=db)
+    m = out["SPEAKER_00"]
+    assert m.speaker_name is None          # not the slug "hilton_steve"
+    assert m.needs_review is True
+    assert m.id_method.startswith("voice_profile")
+
+
+def test_voice_match_uses_display_name_when_present():
+    import numpy as np
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
+    c = np.array([1.0, 0.0, 0.0])
+    prof = StoredProfile(speaker_id="hilton_steve", display_name="Steve Hilton",
+                         embeddings=[EmbeddingRecord(c, "m0")], centroid=c,
+                         meetings_seen=["m0"], politician_slug="steve-hilton")
+    db = ProfileDB(profiles={"hilton_steve": prof})
+    out = match_voice_profiles({"SPEAKER_00": np.array([1.0, 0.0, 0.0])},
+                               {"hilton_steve": c}, profile_db=db)
+    m = out["SPEAKER_00"]
+    assert m.speaker_name == "Steve Hilton"
+    assert m.politician_slug == "steve-hilton"
+    assert m.needs_review is False
