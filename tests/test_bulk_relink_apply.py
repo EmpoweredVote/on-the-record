@@ -123,8 +123,12 @@ def test_apply_gate_blocks_publish_without_anyway(tmp_path, monkeypatch):
     assert published == []
 
 
-def test_apply_idempotent_when_already_linked(tmp_path, monkeypatch):
-    # Speaker already linked in the transcript => no change => nothing published.
+def test_apply_publishes_already_linked_meeting(tmp_path, monkeypatch):
+    # The "linked-in-transcript-but-not-in-DB" trap: the transcript is already
+    # linked (relink is a no-op), but the meeting may not be published yet. Apply
+    # must STILL publish every meeting containing an approved-link speaker, not
+    # only the ones whose transcript changed this run. (Publishing is an idempotent
+    # upsert, so re-publishing an already-correct meeting is safe.)
     meetings_root = tmp_path / "meetings"
     pre_linked = Meeting(meeting_id="m1", city="X", date="2026-04-01",
                          speakers={"S0": SpeakerMapping(speaker_label="S0",
@@ -147,7 +151,7 @@ def test_apply_idempotent_when_already_linked(tmp_path, monkeypatch):
 
     run_local._bulk_relink_apply(_args(review_file, publish_anyway=True))
 
-    assert published == []  # nothing changed, so nothing republished
+    assert published == ["m1"]  # published despite no transcript change
 
 
 def test_apply_resolves_debate_race_id_before_publish(tmp_path, monkeypatch):

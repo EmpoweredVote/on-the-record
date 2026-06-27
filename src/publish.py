@@ -154,7 +154,7 @@ def resolve_race_id_for_politicians(cur, politician_ids) -> Optional[str]:
         """
         SELECT DISTINCT race_id
         FROM essentials.race_candidates
-        WHERE politician_id = ANY(%s)
+        WHERE politician_id = ANY(%s::uuid[])
         LIMIT 2
         """,
         (ids,),
