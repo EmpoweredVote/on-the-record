@@ -42,11 +42,15 @@ contract a web page can later generate and consume unchanged.
   an interactive terminal TUI (the memory note "review-ui-future-direction"
   warns against over-investing in terminal-only UX). The file is the seam a
   future web UI plugs into.
-- **Enumeration: transcripts primary, enriched.** Walk every meeting's
-  `transcript_named.json` (the authoritative source `publish` derives from, and
-  the only one that includes unpublished + debate meetings). Enrich each
-  speaker with `has_voice_profile` (from the profile DB) and `published` (from
-  the published `meetings.speakers` set) for operator context.
+- **Enumeration: transcripts primary, enriched (fully offline).** Walk every
+  meeting's `transcript_named.json` (the authoritative source `publish` derives
+  from, and the only one that includes unpublished + debate meetings). Enrich
+  each speaker with `has_voice_profile` (from the local profile DB) and a
+  `known_id` — any `politician_id` the *same name* is already linked to in some
+  other transcript mapping (e.g. Steve Hilton linked in his interview but not
+  his debates). No DB query is needed for the scan; the only network call is the
+  essentials name search. Every enumerated row is genuinely unlinked, so there
+  is nothing to "skip as already published."
 - **Suggestion policy: auto-approve only unambiguous matches.** Mirror
   `resolve_link_target`: a name with exactly one `search_politicians` match is
   pre-marked `decision: link` with that id; zero or several matches →
@@ -72,7 +76,6 @@ contract a web page can later generate and consume unchanged.
 ```
 python run_local.py --bulk-relink-scan
     [--out <path>]            # review file path (default: ./bulk_relink_review.yaml)
-    [--include-published]     # also list speakers already in /people (default: skip them)
 
 python run_local.py --bulk-relink-apply <path>
     [--dry-run]               # print the plan; write nothing
@@ -96,25 +99,35 @@ publish are **reused** from the existing engine, not reimplemented.
 - `appearances: list[tuple[str, str]]` — `(meeting_id, speaker_label)` pairs.
 - `meeting_count: int`.
 - `has_voice_profile: bool` — a name-slug profile key exists in the DB.
-- `published: bool` — this name already appears linked in `meetings.speakers`.
+- `known_id: Optional[str]` — a `politician_id` the same name is already linked
+  to elsewhere in the transcripts (the authoritative known id), or `None`. If
+  the name is linked to *several distinct* ids, leave `None` (a conflict the
+  operator must resolve).
 - `decision: str` — suggested decision (`link` or `review`).
 - `candidates: list[dict]` — `search_politicians` results (normalized fields).
 
-`enumerate_unlinked(meetings, profile_db, *, published_ids=None) -> list[UnlinkedSpeaker]`
+`enumerate_unlinked(meetings, profile_db) -> list[UnlinkedSpeaker]`
 - `meetings` is an iterable of loaded `Meeting` objects (the orchestrator does
   the directory walk and file I/O, matching the `_relink_person` pattern).
+- First pass: record, per `normalized_name`, the set of `politician_id`s the
+  name is *already linked* to (mappings where `politician_id` is set) — this
+  yields `known_id` (single distinct id → that id; multiple → `None`).
 - Collect every `SpeakerMapping` where `speaker_name` is set,
   `politician_id is None`, `speaker_status` is normal (not `'unidentified'` /
   `'non_speaker'`), and `local_slug is None` (already routed to a local person).
-- Group by `normalized_name`; aggregate appearances and `meeting_count`.
-- Enrich: `has_voice_profile` from `enroll._name_to_slug(name) in profile_db.profiles`;
-  `published` from the optional published-name set.
-- Pure but for the optional published set; unit-tested with in-memory inputs.
+- Group by `normalized_name`; aggregate appearances and `meeting_count`; attach
+  `known_id`.
+- Enrich: `has_voice_profile` from `enroll._name_to_slug(name) in profile_db.profiles`.
+- Pure; unit-tested with in-memory `Meeting` inputs.
 
-### 2. Match suggestion — `suggest_link(name, *, search=search_politicians) -> tuple[str, list[dict]]`
-- Calls `search` (injectable for tests). Exactly one match → `("link", [match])`.
-  Zero or several → `("review", matches)`. Mirrors `resolve_link_target`'s
-  exactly-one rule; never auto-picks among multiple.
+### 2. Match suggestion — `suggest_link(speaker, *, search=search_politicians) -> tuple[str, list[dict]]`
+- `speaker` is an `UnlinkedSpeaker` (carries `known_id`).
+- **Fast path:** if `speaker.known_id` is set, return `("link", [stub])` where
+  the stub is a candidate dict carrying that id (no network call) — the name is
+  already linked elsewhere, so reuse the authoritative id.
+- Otherwise call `search` (injectable for tests). Exactly one match →
+  `("link", [match])`. Zero or several → `("review", matches)`. Mirrors
+  `resolve_link_target`'s exactly-one rule; never auto-picks among multiple.
 - An `EssentialsClientError` propagates (an outage must not be silently
   rendered as "no matches"); the orchestrator decides whether to abort the scan
   or mark the row `review` with an error note. **Decision: abort the scan** —
@@ -150,14 +163,11 @@ publish are **reused** from the existing engine, not reimplemented.
 2. Walk `config.MEETINGS_DIR` (skip dotfiles), load each
    `transcript_named.json` via `Meeting.from_dict` — the same walk
    `_relink_person` uses.
-3. Optionally fetch the published-name set (only when `--include-published` is
-   *off*, to know which to drop). If unavailable, fall back to listing all and
-   note it.
-4. `enumerate_unlinked` → for each, `suggest_link` to fill `decision` +
+3. `enumerate_unlinked` → for each, `suggest_link` to fill `decision` +
    `candidates`.
-5. `build_review_doc` → write YAML to `--out` (default
+4. `build_review_doc` → write YAML to `--out` (default
    `./bulk_relink_review.yaml`).
-6. Print a summary: total speakers, auto-approved (`link`), needing review,
+5. Print a summary: total speakers, auto-approved (`link`), needing review,
    and the output path.
 
 ### 6. Apply orchestrator — `_bulk_relink_apply(args)` (subcommand handler)
@@ -249,9 +259,11 @@ bulk_relink_review.yaml   (Steve Hilton → link; Katie Porter → review, candi
 - `enumerate_unlinked`: filters out linked / `unidentified` / `non_speaker` /
   `local_slug` mappings; groups by normalized name across meetings; aggregates
   appearances + `meeting_count`; sets `has_voice_profile` from a stub profile
-  DB. In-memory `Meeting` objects.
-- `suggest_link`: one match → `link`; zero/multiple → `review` with candidates;
-  `EssentialsClientError` propagates. Mocked search.
+  DB; sets `known_id` when the same name is linked elsewhere (and `None` on
+  conflicting ids). In-memory `Meeting` objects.
+- `suggest_link`: `known_id` set → `link` via the stub with no search call
+  (assert search not invoked); else one match → `link`; zero/multiple →
+  `review` with candidates; `EssentialsClientError` propagates. Mocked search.
 - `build_review_doc` / `parse_review_doc`: round-trip; rejects bad `decision`,
   rejects `link` row with missing/invalid UUID; accepts `review`/`skip` without
   id.
