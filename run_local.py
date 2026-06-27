@@ -1883,6 +1883,56 @@ def _trigger_render_deploy() -> None:
         print(f"  --deploy failed: {exc}")
 
 
+def _bulk_relink_scan(args) -> None:
+    """Enumerate unlinked named speakers into an editable YAML review file."""
+    import yaml
+
+    from src import config
+    from src.bulk_relink import (
+        DECISION_LINK, build_review_doc, enumerate_unlinked, suggest_link,
+    )
+    from src.enroll import load_profiles
+    from src.essentials_client import EssentialsClientError
+    from src.models import Meeting
+
+    db = load_profiles()
+    meetings = []
+    dirs = sorted(d for d in config.MEETINGS_DIR.iterdir()
+                  if d.is_dir() and not d.name.startswith("."))
+    for mdir in dirs:
+        named = mdir / "transcript_named.json"
+        if not named.exists():
+            continue
+        with open(named, "r", encoding="utf-8") as f:
+            meetings.append(Meeting.from_dict(json.load(f)))
+
+    speakers = enumerate_unlinked(meetings, db)
+    speakers.sort(key=lambda s: (-s.meeting_count, s.normalized_name))
+
+    try:
+        for s in speakers:
+            s.decision, s.candidates = suggest_link(s)
+    except EssentialsClientError as exc:
+        print(f"Essentials search failed ({exc}); aborting scan (no file written).")
+        sys.exit(2)
+
+    doc = build_review_doc(speakers)
+    header = (
+        "# Bulk relink review — edit then apply with:\n"
+        f"#   python run_local.py --bulk-relink-apply {args.out}\n"
+        "# For rows marked `review`: pick a candidate, set politician_id, and\n"
+        "# change decision to `link`. Use `skip` to leave a speaker unlinked\n"
+        "# (e.g. a moderator or a non-essentials local person).\n"
+    )
+    with open(args.out, "w", encoding="utf-8") as f:
+        f.write(header)
+        yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
+
+    linked = sum(1 for s in speakers if s.decision == DECISION_LINK)
+    print(f"Wrote {len(speakers)} unlinked speaker(s) to {args.out}")
+    print(f"  {linked} auto-approved (link), {len(speakers) - linked} need review")
+
+
 def _relink_person(args) -> None:
     """Link a person to an essentials politician across all their meetings."""
     from src import config
@@ -3159,6 +3209,15 @@ Environment Variables:
                         help="Preview --relink-person changes without writing anything")
     parser.add_argument("--deploy", action="store_true",
                         help="After --relink-person publishes, trigger the Render web rebuild")
+    parser.add_argument("--bulk-relink-scan", action="store_true",
+                        help="Enumerate every unlinked named speaker across all meetings into "
+                             "an editable YAML review file with suggested essentials matches")
+    parser.add_argument("--bulk-relink-apply", metavar="REVIEW_FILE",
+                        help="Apply approved links from a bulk-relink review file: relink "
+                             "transcripts, fold voice profiles, re-publish (auto-resolving "
+                             "debate race_id), and optionally redeploy")
+    parser.add_argument("--out", metavar="PATH", default="bulk_relink_review.yaml",
+                        help="Output path for --bulk-relink-scan (default: ./bulk_relink_review.yaml)")
     parser.add_argument("--show-roster", action="store_true",
                         help="Display the current council roster and exit")
     parser.add_argument("--no-review", action="store_true",
@@ -3374,6 +3433,10 @@ def main():
 
     if args.relink_person:
         _relink_person(args)
+        return
+
+    if args.bulk_relink_scan:
+        _bulk_relink_scan(args)
         return
 
     if args.review:
