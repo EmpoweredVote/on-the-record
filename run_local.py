@@ -1861,6 +1861,120 @@ def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -
     print(f"  Speakers: {result.speakers}")
 
 
+def _trigger_render_deploy() -> None:
+    """POST the Render deploy hook (RENDER_DEPLOY_HOOK_URL), loading .env.local if needed."""
+    import urllib.request
+
+    hook = os.environ.get("RENDER_DEPLOY_HOOK_URL")
+    if not hook:
+        env_path = _REPO_DIR / ".env.local"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("RENDER_DEPLOY_HOOK_URL="):
+                    hook = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    if not hook:
+        print("  --deploy: RENDER_DEPLOY_HOOK_URL not set; skipping deploy.")
+        return
+    try:
+        with urllib.request.urlopen(hook, data=b"", timeout=30) as resp:
+            print(f"  Render deploy triggered (HTTP {resp.status}).")
+    except Exception as exc:  # noqa: BLE001 - best-effort deploy ping
+        print(f"  --deploy failed: {exc}")
+
+
+def _relink_person(args) -> None:
+    """Link a person to an essentials politician across all their meetings."""
+    from src import config
+    from src.checkpoint import PipelineState
+    from src.enroll import load_profiles, save_profiles
+    from src.models import Meeting
+    from src.relink import RelinkAmbiguous, relink_in_meeting, rekey_profile_for_link, resolve_link_target
+
+    name = args.relink_person
+
+    # 1. Resolve the target politician (refuse on ambiguity).
+    try:
+        target = resolve_link_target(args.to_name or name, explicit_id=args.to_id)
+    except RelinkAmbiguous as exc:
+        print(f"Could not resolve '{exc.query}' to a single politician.")
+        if exc.candidates:
+            print("Candidates — re-run with --to-id <uuid>:")
+            for c in exc.candidates:
+                line = f"  {c.get('politician_id')}  {c.get('full_name')}"
+                extra = " ".join(x for x in (c.get("office_title"), c.get("district_label")) if x)
+                print(f"{line} — {extra}" if extra else line)
+        else:
+            print("  No essentials matches. Pass --to-id <uuid> explicitly.")
+        sys.exit(2)
+
+    print(f"Target: {target.full_name}  id={target.politician_id}  "
+          f"slug={target.politician_slug or '(none)'}")
+
+    # 2. Find appearances and compute the relink (in memory).
+    changed: list[tuple] = []  # (meeting_dir, Meeting, labels)
+    dirs = sorted(d for d in config.MEETINGS_DIR.iterdir()
+                  if d.is_dir() and not d.name.startswith("."))
+    for mdir in dirs:
+        if args.meeting and mdir.name != args.meeting:
+            continue
+        named = mdir / "transcript_named.json"
+        if not named.exists():
+            continue
+        with open(named, "r", encoding="utf-8") as f:
+            meeting = Meeting.from_dict(json.load(f))
+        labels = relink_in_meeting(meeting, name, target.politician_id, target.politician_slug)
+        if labels:
+            changed.append((mdir, meeting, labels))
+
+    if not changed:
+        print(f"No meetings have an unlinked '{name}' speaker (nothing to do).")
+        return
+
+    print(f"\nWill relink '{name}' in {len(changed)} meeting(s):")
+    for mdir, _meeting, labels in changed:
+        print(f"  {mdir.name}: {', '.join(labels)}")
+
+    if args.dry_run:
+        print("\n(dry run — no transcript, profile, publish, or deploy writes)")
+        print(f"  would fold the '{name}' voice profile into essentials:{target.politician_id}")
+        print(f"  would re-publish: {', '.join(m.name for m, _x, _y in changed)}")
+        print(f"  would deploy: {'yes' if args.deploy else 'no'}")
+        return
+
+    # 3. Persist the edited transcripts.
+    for mdir, meeting, _labels in changed:
+        with open(mdir / "transcript_named.json", "w", encoding="utf-8") as f:
+            json.dump(meeting.to_dict(), f, indent=2)
+    print(f"  Saved {len(changed)} transcript(s).")
+
+    # 4. Re-key the voice profile (cheap fold, no audio).
+    db = load_profiles()
+    key = rekey_profile_for_link(
+        db, name,
+        politician_id=target.politician_id, politician_slug=target.politician_slug,
+        full_name=target.full_name,
+    )
+    if key:
+        save_profiles(db)
+        print(f"  Profile re-keyed -> {key}")
+    else:
+        print(f"  No existing voice profile for '{name}' — skipped (DB link still published).")
+
+    # 5. Re-publish each changed meeting (respect the gate; skip blocked ones).
+    for mdir, _meeting, _labels in changed:
+        state = PipelineState(mdir)
+        if not _may_publish(state.review_status, args.publish_anyway):
+            print(f"  skip publish {mdir.name}: gate verdict '{state.review_status}' "
+                  f"(re-run with --publish-anyway)")
+            continue
+        _publish_meeting_standalone(mdir.name, args.publish_anyway)
+
+    # 6. Optional web redeploy.
+    if args.deploy:
+        _trigger_render_deploy()
+
+
 def _fix_transcripts() -> None:
     """Re-correct speaker names in all existing transcripts using the roster.
 
@@ -3032,6 +3146,19 @@ Environment Variables:
                         help="Publish an already-processed meeting to Supabase and exit")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
+    parser.add_argument("--relink-person", metavar="NAME",
+                        help="Link a speaker (by transcript name) to an essentials politician across "
+                             "every meeting they appear in, re-key their voice profile, and re-publish")
+    parser.add_argument("--to-id", metavar="POLITICIAN_ID",
+                        help="Target essentials politician_id for --relink-person (skips name search)")
+    parser.add_argument("--to-name", metavar="NAME",
+                        help="Search essentials by this name instead of --relink-person's value")
+    parser.add_argument("--meeting", metavar="MEETING_ID",
+                        help="Restrict --relink-person to a single meeting")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Preview --relink-person changes without writing anything")
+    parser.add_argument("--deploy", action="store_true",
+                        help="After --relink-person publishes, trigger the Render web rebuild")
     parser.add_argument("--show-roster", action="store_true",
                         help="Display the current council roster and exit")
     parser.add_argument("--no-review", action="store_true",
@@ -3243,6 +3370,10 @@ def main():
 
     if args.publish_meeting:
         _publish_meeting_standalone(args.publish_meeting, getattr(args, "publish_anyway", False))
+        return
+
+    if args.relink_person:
+        _relink_person(args)
         return
 
     if args.review:
