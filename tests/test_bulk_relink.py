@@ -107,3 +107,60 @@ def test_enumerate_known_id_none_when_conflicting_ids():
     ]
     rows = enumerate_unlinked(meetings, ProfileDB(profiles={}))
     assert rows[0].known_id is None
+
+
+import pytest
+
+from src.bulk_relink import suggest_link
+from src.essentials_client import EssentialsClientError
+
+
+def _cand(pid, name="Cand"):
+    return {"politician_id": pid, "politician_slug": None, "full_name": name,
+            "office_title": "", "district_label": "", "is_incumbent": False,
+            "government_name": ""}
+
+
+def _speaker(name, known_id=None):
+    return UnlinkedSpeaker(display_name=name, normalized_name=name.lower(), known_id=known_id)
+
+
+def test_suggest_known_id_skips_search():
+    calls = []
+
+    def search(q, **kw):
+        calls.append(q)
+        return []
+
+    decision, candidates = suggest_link(_speaker("Steve Hilton", known_id="uuid-h"), search=search)
+    assert decision == DECISION_LINK
+    assert candidates[0]["politician_id"] == "uuid-h"
+    assert calls == []  # fast path: search never called
+
+
+def test_suggest_single_match_links():
+    decision, candidates = suggest_link(
+        _speaker("Steve Hilton"), search=lambda q, **kw: [_cand("uuid-1", "Steve Hilton")])
+    assert decision == DECISION_LINK
+    assert candidates == [_cand("uuid-1", "Steve Hilton")]
+
+
+def test_suggest_zero_matches_reviews():
+    decision, candidates = suggest_link(_speaker("Nobody"), search=lambda q, **kw: [])
+    assert decision == DECISION_REVIEW
+    assert candidates == []
+
+
+def test_suggest_multiple_matches_reviews_with_candidates():
+    cands = [_cand("uuid-1"), _cand("uuid-2")]
+    decision, candidates = suggest_link(_speaker("John Smith"), search=lambda q, **kw: cands)
+    assert decision == DECISION_REVIEW
+    assert candidates == cands
+
+
+def test_suggest_propagates_api_error():
+    def boom(q, **kw):
+        raise EssentialsClientError("down")
+
+    with pytest.raises(EssentialsClientError):
+        suggest_link(_speaker("Steve Hilton"), search=boom)

@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from src.essentials_client import search_politicians as _search_politicians
+
 DECISION_LINK = "link"
 DECISION_REVIEW = "review"
 DECISION_SKIP = "skip"
@@ -78,3 +80,24 @@ def enumerate_unlinked(meetings, profile_db) -> list[UnlinkedSpeaker]:
             row.appearances.append((meeting.meeting_id, mapping.speaker_label))
             row.meeting_count = len({m for m, _ in row.appearances})
     return list(rows.values())
+
+
+def suggest_link(speaker, *, search=_search_politicians) -> tuple[str, list[dict]]:
+    """Suggest a decision + candidates for an UnlinkedSpeaker.
+
+    Fast path: a known_id (the name is already linked elsewhere) auto-resolves to
+    DECISION_LINK with a stub candidate carrying that id, no network call.
+    Otherwise mirror resolve_link_target: exactly one search match -> LINK; zero
+    or several -> REVIEW. EssentialsClientError propagates (an outage must not be
+    silently rendered as 'no matches').
+    """
+    if speaker.known_id:
+        stub = {"politician_id": speaker.known_id, "politician_slug": None,
+                "full_name": speaker.display_name, "office_title": "",
+                "district_label": "", "is_incumbent": False, "government_name": ""}
+        return DECISION_LINK, [stub]
+
+    matches = search(speaker.display_name)
+    if len(matches) == 1:
+        return DECISION_LINK, matches
+    return DECISION_REVIEW, matches
