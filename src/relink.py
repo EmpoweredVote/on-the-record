@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from src.essentials_client import search_politicians
+from src.essentials_client import EssentialsClientError, search_politicians
 
 
 @dataclass
@@ -52,3 +52,31 @@ def relink_in_meeting(meeting, speaker_name, politician_id, politician_slug) -> 
         link_speaker(meeting.speakers, label, politician_slug, politician_id)
         changed.append(label)
     return changed
+
+
+def resolve_link_target(
+    query: str, *, explicit_id: Optional[str] = None, base_url: Optional[str] = None
+) -> ResolvedTarget:
+    """Resolve a name (and/or explicit id) to a single essentials politician.
+
+    With explicit_id: use it; the search is display-only, so a lookup failure is
+    tolerated (slug/name fall back to None/query). Without explicit_id: the search
+    is load-bearing — exactly one match → that politician; zero or several →
+    RelinkAmbiguous. An essentials API error (EssentialsClientError) propagates so
+    an outage is not silently reported as "no matches found".
+    """
+    if explicit_id is not None:
+        try:
+            matches = search_politicians(query, base_url=base_url)
+        except EssentialsClientError:
+            matches = []
+        for m in matches:
+            if m.get("politician_id") == explicit_id:
+                return ResolvedTarget(explicit_id, m.get("politician_slug"), m.get("full_name") or query)
+        return ResolvedTarget(explicit_id, None, query)
+
+    matches = search_politicians(query, base_url=base_url)
+    if len(matches) == 1:
+        m = matches[0]
+        return ResolvedTarget(m["politician_id"], m.get("politician_slug"), m.get("full_name") or query)
+    raise RelinkAmbiguous(query, matches)
