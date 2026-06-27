@@ -156,8 +156,10 @@ def test_resolve_chamber_id_returns_none_for_duplicate_slug():
     "event_kind,body_slug,race_id,error",
     [
         ("council", None, None, "chamber_id is required"),
-        ("debate", None, None, "race_id is required"),
-        ("other", "test-council", RACE_ID, "cannot both be set"),
+        # The "race_id is required" (debate/forum) and "cannot both be set"
+        # rules no longer apply through _upsert_meeting: publish stopped
+        # passing race_id to the validator (races are derived into
+        # meetings.event_races at publish time instead).
     ],
 )
 def test_publish_rejects_invalid_entity_state(
@@ -197,13 +199,16 @@ def test_publish_writes_chamber_id_for_council(existing_row):
 
     write_sql, write_params = cur.calls[-1]
     assert "chamber_id" in write_sql
-    assert "race_id" in write_sql
+    # publish no longer writes the meetings.meetings.race_id column
+    assert "race_id" not in write_sql
     assert "11111111-1111-4111-8111-111111111111" in write_params
-    assert meeting.race_id in write_params
 
 
 @pytest.mark.parametrize("existing_row", [("existing-uuid",), None])
-def test_publish_writes_race_id_for_debate(existing_row):
+def test_publish_does_not_write_race_id_for_debate(existing_row):
+    """Publish stopped writing the meetings.meetings.race_id column; a debate's
+    races now live in meetings.event_races (reconciled separately). The meeting
+    row must carry neither the race_id column nor its value."""
     cur = RecordingCursor(select_row=existing_row)
     meeting = Meeting(
         meeting_id="debate-event",
@@ -218,9 +223,8 @@ def test_publish_writes_race_id_for_debate(existing_row):
 
     write_sql, write_params = cur.calls[-1]
     assert "chamber_id" in write_sql
-    assert "race_id" in write_sql
-    assert None in write_params
-    assert RACE_ID in write_params
+    assert "race_id" not in write_sql
+    assert RACE_ID not in write_params
 
 
 def test_event_orgs_upserted():

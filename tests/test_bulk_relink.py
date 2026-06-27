@@ -264,7 +264,7 @@ def test_build_doc_is_yaml_round_trippable():
     assert yaml.safe_load(text) == doc
 
 
-from src.publish import resolve_race_id_for_politicians
+from src.publish import resolve_races_for_politicians
 
 
 class _FakeCursor:
@@ -281,33 +281,30 @@ class _FakeCursor:
         return self._rows
 
 
-def test_resolve_race_single_distinct_race():
-    cur = _FakeCursor([("race-1",)])
-    assert resolve_race_id_for_politicians(cur, ["pol-a", "pol-b"]) == "race-1"
-
-
-def test_resolve_race_casts_param_to_uuid_array():
-    # Regression: essentials.race_candidates.politician_id is a uuid column, and
-    # psycopg2 sends a Python list as text[], so the query MUST cast the param
-    # (ANY(%s::uuid[])) or Postgres raises "operator does not exist: uuid = text".
-    # A FakeCursor can't surface the type error, so guard the cast's presence.
-    cur = _FakeCursor([("race-1",)])
-    resolve_race_id_for_politicians(cur, ["11111111-1111-1111-1111-111111111111"])
-    assert "::uuid[]" in cur.executed
-
-
-def test_resolve_race_none_when_no_rows():
-    cur = _FakeCursor([])
-    assert resolve_race_id_for_politicians(cur, ["pol-a"]) is None
-
-
-def test_resolve_race_none_when_multiple_distinct_races():
+def test_resolve_races_returns_all_distinct():
     cur = _FakeCursor([("race-1",), ("race-2",)])
-    assert resolve_race_id_for_politicians(cur, ["pol-a", "pol-b"]) is None
+    assert resolve_races_for_politicians(cur, ["pol-a", "pol-b"]) == ["race-1", "race-2"]
 
 
-def test_resolve_race_none_when_empty_politician_list():
+def test_resolve_races_single():
     cur = _FakeCursor([("race-1",)])
-    # No politician ids -> no query, no race.
-    assert resolve_race_id_for_politicians(cur, []) is None
+    assert resolve_races_for_politicians(cur, ["pol-a"]) == ["race-1"]
+
+
+def test_resolve_races_empty_when_no_rows():
+    cur = _FakeCursor([])
+    assert resolve_races_for_politicians(cur, ["pol-a"]) == []
+
+
+def test_resolve_races_empty_politician_list_skips_query():
+    cur = _FakeCursor([("race-1",)])
+    assert resolve_races_for_politicians(cur, []) == []
     assert cur.executed is None
+
+
+def test_resolve_races_casts_param_to_uuid_array():
+    # Regression: essentials.race_candidates.politician_id is uuid; psycopg2 sends
+    # a list as text[], so the query MUST cast (ANY(%s::uuid[])).
+    cur = _FakeCursor([("race-1",)])
+    resolve_races_for_politicians(cur, ["11111111-1111-1111-1111-111111111111"])
+    assert "::uuid[]" in cur.executed

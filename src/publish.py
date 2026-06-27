@@ -137,32 +137,57 @@ def _resolve_chamber_id(cur, body_slug: Optional[str]) -> Optional[str]:
     return str(rows[0][0])
 
 
-def resolve_race_id_for_politicians(cur, politician_ids) -> Optional[str]:
-    """Find the single essentials race a set of linked politicians belong to.
+def resolve_races_for_politicians(cur, politician_ids) -> list[str]:
+    """All distinct essentials races the given linked politicians belong to.
 
-    Used to unblock debate publishing: event_kind='debate' meetings require a
-    race_id, but older imports left it NULL. Given the politician_ids linked in
-    a meeting, look up their race_candidates rows. Returns the race_id only when
-    exactly one distinct race results; zero or several -> None (the caller
-    reports it and skips, as ambiguity must not be auto-picked). Mirrors the
-    _resolve_chamber_id "exactly one or give up" shape.
+    A meeting's races are the union of its linked candidates' races. Returns
+    every distinct race_id (no "exactly one" gate) so multi-race forums are
+    represented; [] when there are no ids or no race_candidates rows. Casts to
+    uuid[] because essentials.race_candidates.politician_id is a uuid column and
+    psycopg2 sends a Python list as text[].
     """
     ids = [pid for pid in (politician_ids or []) if pid]
     if not ids:
-        return None
+        return []
     cur.execute(
         """
         SELECT DISTINCT race_id
         FROM essentials.race_candidates
         WHERE politician_id = ANY(%s::uuid[])
-        LIMIT 2
         """,
         (ids,),
     )
-    rows = cur.fetchall()
-    if len(rows) != 1:
-        return None
-    return str(rows[0][0])
+    return [str(r[0]) for r in cur.fetchall()]
+
+
+def _reconcile_event_races(cur, meeting: Meeting, meeting_uuid: str) -> list[str]:
+    """Derive the meeting's races from its linked candidates and reconcile the
+    meetings.event_races join table (delete this meeting's rows, insert the
+    current set). Returns the race ids written.
+
+    debate/forum require >=1 derived race: an empty set raises (aborting the
+    publish transaction) — recoverable by linking candidates, then re-publishing.
+    council/school_board legitimately have no races; an empty set just clears
+    stale rows.
+    """
+    pol_ids = [m.politician_id for m in meeting.speakers.values() if m.politician_id]
+    races = resolve_races_for_politicians(cur, pol_ids)
+
+    if not races and meeting.event_kind in ("debate", "forum"):
+        raise RuntimeError(
+            f"{meeting.meeting_id}: {meeting.event_kind} resolved to no race — "
+            "no linked candidate maps to an essentials race yet. Link candidates, "
+            "then re-publish."
+        )
+
+    cur.execute("DELETE FROM meetings.event_races WHERE meeting_id = %s", (meeting_uuid,))
+    for race_id in races:
+        cur.execute(
+            "INSERT INTO meetings.event_races (meeting_id, race_id) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (meeting_uuid, race_id),
+        )
+    return races
 
 
 def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
@@ -171,7 +196,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
     entity_error = validate_event_entities(
         meeting.event_kind,
         chamber_id,
-        meeting.race_id,
+        None,
     )
     if entity_error:
         raise RuntimeError(entity_error)
@@ -208,7 +233,6 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
               video_url = %s,
               status = %s,
               chamber_id = %s,
-              race_id = %s,
               source_url = %s,
               playback_kind = %s,
               summary = %s,
@@ -227,7 +251,6 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 playback_url,
                 "published",
                 chamber_id,
-                meeting.race_id,
                 source if is_url else None,
                 kind,
                 psycopg2.extras.Json(summary),
@@ -241,13 +264,13 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
             INSERT INTO meetings.meetings
               (id, city, date, meeting_type, title, event_kind, duration_seconds,
                audio_source, video_url, status,
-               chamber_id, race_id, source_url, playback_kind, slug,
+               chamber_id, source_url, playback_kind, slug,
                summary, processing_metadata,
                created_at, updated_at)
             VALUES
               (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
                %s, %s, %s,
-               %s, %s, %s, %s, %s,
+               %s, %s, %s, %s,
                %s, %s,
                NOW(), NOW())
             RETURNING id
@@ -263,7 +286,6 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 playback_url,
                 "published",
                 chamber_id,
-                meeting.race_id,
                 source if is_url else None,
                 kind,
                 meeting.meeting_id,
@@ -527,6 +549,7 @@ def publish_meeting(
                 _upsert_event_orgs(cur, meeting.meeting_id, meeting.event_orgs)
                 _upsert_local_people(cur, meeting)
                 label_to_uuid = _upsert_speakers(cur, meeting, meeting_uuid)
+                _reconcile_event_races(cur, meeting, meeting_uuid)
                 segment_count = _replace_segments(
                     cur, meeting, meeting_uuid, label_to_uuid
                 )

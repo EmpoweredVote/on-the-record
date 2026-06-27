@@ -28,6 +28,4 @@ def validate_event_entities(
         return "chamber_id and race_id cannot both be set"
     if event_kind in ("council", "school_board") and chamber_id is None:
         return f"chamber_id is required for event_kind {event_kind}"
-    if event_kind in ("debate", "forum") and race_id is None:
-        return f"race_id is required for event_kind {event_kind}"
     return None

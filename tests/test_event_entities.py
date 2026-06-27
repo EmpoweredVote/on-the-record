@@ -43,15 +43,12 @@ def test_pipeline_state_persists_race_id(tmp_path):
 def test_entity_validation_rules():
     assert validate_event_entities("council", CHAMBER_ID, None) is None
     assert validate_event_entities("debate", None, RACE_ID) is None
-    assert "chamber_id is required" in validate_event_entities(
-        "council", None, None
-    )
-    assert "race_id is required" in validate_event_entities(
-        "debate", None, None
-    )
-    assert "cannot both be set" in validate_event_entities(
-        "other", CHAMBER_ID, RACE_ID
-    )
+    # debate/forum no longer require a race_id here — races are derived and
+    # validated at publish time (>=1 derived race).
+    assert validate_event_entities("debate", None, None) is None
+    assert validate_event_entities("forum", None, None) is None
+    assert "chamber_id is required" in validate_event_entities("council", None, None)
+    assert "cannot both be set" in validate_event_entities("other", CHAMBER_ID, RACE_ID)
 
 
 def test_news_clip_allows_both_ids():

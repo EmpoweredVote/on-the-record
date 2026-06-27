@@ -1933,26 +1933,6 @@ def _bulk_relink_scan(args) -> None:
     print(f"  {linked} auto-approved (link), {len(speakers) - linked} need review")
 
 
-def _resolve_debate_race_id(meeting) -> str | None:
-    """Open a DB connection and resolve a race_id from the meeting's linked politicians."""
-    import psycopg2
-
-    from src.publish import _require_db_url, resolve_race_id_for_politicians
-
-    pol_ids = [m.politician_id for m in meeting.speakers.values() if m.politician_id]
-    if not pol_ids:
-        return None
-    try:
-        conn = psycopg2.connect(_require_db_url())
-    except Exception as exc:  # noqa: BLE001 - surface connection failure, don't crash apply
-        print(f"  race_id lookup skipped (DB connect failed: {exc})")
-        return None
-    try:
-        with conn.cursor() as cur:
-            return resolve_race_id_for_politicians(cur, pol_ids)
-    finally:
-        conn.close()
-
 
 def _bulk_relink_apply(args) -> None:
     """Apply approved links from a bulk-relink review file through the engine."""
@@ -2057,25 +2037,10 @@ def _bulk_relink_apply(args) -> None:
     save_profiles(db)
     print(f"  Folded voice profiles for {len(links)} person(s).")
 
-    # Publish each affected meeting; auto-resolve race_id for debates that lack one.
+    # Publish each affected meeting.
     blocked = []
     for mdir in sorted(to_publish, key=lambda p: p.name):
-        meeting = to_publish[mdir]
         state = PipelineState(mdir)
-        if meeting.event_kind == "debate" and not meeting.race_id:
-            race = _resolve_debate_race_id(meeting)
-            if race:
-                meeting.race_id = race
-                with open(mdir / "transcript_named.json", "w", encoding="utf-8") as f:
-                    json.dump(meeting.to_dict(), f, indent=2)
-                state.race_id = race
-                state.save()
-                print(f"  {mdir.name}: resolved debate race_id -> {race}")
-            else:
-                print(f"  skip publish {mdir.name}: debate meeting has no race_id and it "
-                      f"could not be resolved (resolve the race manually).")
-                blocked.append(mdir.name)
-                continue
         if not _may_publish(state.review_status, args.publish_anyway):
             print(f"  skip publish {mdir.name}: gate verdict '{state.review_status}' "
                   f"(re-run with --publish-anyway)")
