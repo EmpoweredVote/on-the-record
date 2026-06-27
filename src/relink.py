@@ -80,3 +80,47 @@ def resolve_link_target(
         m = matches[0]
         return ResolvedTarget(m["politician_id"], m.get("politician_slug"), m.get("full_name") or query)
     raise RelinkAmbiguous(query, matches)
+
+
+def rekey_profile_for_link(db, speaker_name, *, politician_id, politician_slug, full_name) -> Optional[str]:
+    """Fold the person's existing voice profile(s) onto the essentials:<id> key.
+
+    Collects source profiles most-authoritative first: every profile already
+    carrying this politician_id (same id == same person — folded in full), then
+    the name-slug enrollment key, then — only if nothing else matched — a single
+    profile whose display_name equals speaker_name. Folds each via
+    promote_unidentified_handle (carries embeddings/meetings, no audio). Returns
+    the target key, or None when no source profile exists (the DB link still
+    publishes regardless). Display-name matching is a best-effort last resort and
+    folds at most one profile.
+    """
+    from src.enroll import _name_to_slug, promote_unidentified_handle
+
+    target_key = f"essentials:{politician_id}"
+
+    sources: list[str] = []
+    # 1. Authoritative: any profile already carrying this politician_id.
+    for k, p in db.profiles.items():
+        if k != target_key and p.politician_id == politician_id:
+            sources.append(k)
+    # 2. The person's name-slug enrollment key.
+    name_slug = _name_to_slug(speaker_name)
+    if name_slug in db.profiles and name_slug != target_key and name_slug not in sources:
+        sources.append(name_slug)
+    # 3. Last resort: a single profile whose display_name matches the name.
+    if not sources:
+        want = speaker_name.strip().lower()
+        for k, p in db.profiles.items():
+            if k != target_key and (p.display_name or "").strip().lower() == want:
+                sources.append(k)
+                break
+
+    if not sources:
+        return target_key if target_key in db.profiles else None
+
+    for handle_key in sources:
+        promote_unidentified_handle(
+            db, handle_key, target_key,
+            display_name=full_name, politician_slug=politician_slug, politician_id=politician_id,
+        )
+    return target_key

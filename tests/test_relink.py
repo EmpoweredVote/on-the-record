@@ -129,3 +129,67 @@ def test_resolve_explicit_id_tolerates_api_error(monkeypatch):
     monkeypatch.setattr("src.relink.search_politicians", boom)
     t = resolve_link_target("Steve Hilton", explicit_id="uuid-9")
     assert t == ResolvedTarget("uuid-9", None, "Steve Hilton")
+
+
+import numpy as np
+
+from src.enroll import EmbeddingRecord, ProfileDB, StoredProfile
+from src.relink import rekey_profile_for_link
+
+
+def _profile(key, name, pid=None, slug=None):
+    return StoredProfile(
+        speaker_id=key, display_name=name,
+        embeddings=[EmbeddingRecord(np.array([1.0, 2.0]), "m1", 3)],
+        meetings_seen=["m1"], total_segments_confirmed=3,
+        politician_slug=slug, politician_id=pid,
+    )
+
+
+def test_rekey_folds_name_keyed_profile_into_essentials_id():
+    db = ProfileDB(profiles={"hilton_steve": _profile("hilton_steve", "Steve Hilton")})
+    key = rekey_profile_for_link(db, "Steve Hilton",
+                                 politician_id="uuid-hilton", politician_slug="steve-hilton",
+                                 full_name="Steve Hilton")
+    assert key == "essentials:uuid-hilton"
+    assert "hilton_steve" not in db.profiles
+    target = db.profiles["essentials:uuid-hilton"]
+    assert target.politician_id == "uuid-hilton"
+    assert target.politician_slug == "steve-hilton"
+    assert len(target.embeddings) == 1  # embeddings carried over
+
+
+def test_rekey_returns_none_when_no_source_profile():
+    db = ProfileDB(profiles={})
+    key = rekey_profile_for_link(db, "Steve Hilton",
+                                 politician_id="uuid-hilton", politician_slug=None,
+                                 full_name="Steve Hilton")
+    assert key is None
+    assert db.profiles == {}
+
+
+def test_rekey_noop_when_already_essentials_keyed():
+    db = ProfileDB(profiles={
+        "essentials:uuid-hilton": _profile("essentials:uuid-hilton", "Steve Hilton",
+                                           pid="uuid-hilton", slug="steve-hilton"),
+    })
+    key = rekey_profile_for_link(db, "Steve Hilton",
+                                 politician_id="uuid-hilton", politician_slug="steve-hilton",
+                                 full_name="Steve Hilton")
+    assert key == "essentials:uuid-hilton"
+    assert len(db.profiles) == 1
+
+
+def test_rekey_folds_all_profiles_sharing_the_politician_id():
+    db = ProfileDB(profiles={
+        "hilton_steve": _profile("hilton_steve", "Steve Hilton"),
+        "essentials:old-slug": _profile("essentials:old-slug", "Steve Hilton",
+                                        pid="uuid-hilton", slug="old-slug"),
+    })
+    key = rekey_profile_for_link(db, "Steve Hilton",
+                                 politician_id="uuid-hilton", politician_slug="steve-hilton",
+                                 full_name="Steve Hilton")
+    assert key == "essentials:uuid-hilton"
+    assert "hilton_steve" not in db.profiles
+    assert "essentials:old-slug" not in db.profiles
+    assert len(db.profiles["essentials:uuid-hilton"].embeddings) == 2  # both folded
