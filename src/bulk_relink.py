@@ -82,6 +82,37 @@ def enumerate_unlinked(meetings, profile_db) -> list[UnlinkedSpeaker]:
     return list(rows.values())
 
 
+def build_review_doc(speakers) -> dict:
+    """Build a YAML-serializable review document from UnlinkedSpeaker rows.
+
+    link rows carry the chosen politician_id and omit candidates (terse);
+    review rows carry politician_id=None plus a compact candidates hint list.
+    """
+    out = []
+    for s in speakers:
+        entry = {
+            "name": s.display_name,
+            "meeting_count": s.meeting_count,
+            "has_voice_profile": s.has_voice_profile,
+            "decision": s.decision,
+        }
+        if s.decision == DECISION_LINK and s.candidates:
+            entry["politician_id"] = s.candidates[0]["politician_id"]
+        else:
+            entry["politician_id"] = None
+            entry["candidates"] = [
+                {
+                    "id": c.get("politician_id"),
+                    "name": c.get("full_name", ""),
+                    "office": c.get("office_title", ""),
+                    "district": c.get("district_label", ""),
+                }
+                for c in s.candidates
+            ]
+        out.append(entry)
+    return {"speakers": out}
+
+
 def suggest_link(speaker, *, search=_search_politicians) -> tuple[str, list[dict]]:
     """Suggest a decision + candidates for an UnlinkedSpeaker.
 

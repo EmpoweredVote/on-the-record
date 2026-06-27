@@ -164,3 +164,54 @@ def test_suggest_propagates_api_error():
 
     with pytest.raises(EssentialsClientError):
         suggest_link(_speaker("Steve Hilton"), search=boom)
+
+
+from src.bulk_relink import build_review_doc
+
+
+def _row(name, decision, candidates, **kw):
+    s = UnlinkedSpeaker(display_name=name, normalized_name=name.lower(),
+                        decision=decision, candidates=candidates, **kw)
+    return s
+
+
+def test_build_doc_link_row_has_id_and_no_candidates():
+    rows = [_row("Steve Hilton", DECISION_LINK,
+                 [{"politician_id": "uuid-h", "full_name": "Steve Hilton",
+                   "office_title": "Candidate", "district_label": "CA"}],
+                 meeting_count=4, has_voice_profile=True)]
+    doc = build_review_doc(rows)
+    entry = doc["speakers"][0]
+    assert entry["name"] == "Steve Hilton"
+    assert entry["meeting_count"] == 4
+    assert entry["has_voice_profile"] is True
+    assert entry["decision"] == "link"
+    assert entry["politician_id"] == "uuid-h"
+    assert "candidates" not in entry
+
+
+def test_build_doc_review_row_has_null_id_and_candidate_hints():
+    rows = [_row("Katie Porter", DECISION_REVIEW, [
+        {"politician_id": "uuid-1", "full_name": "Katie Porter",
+         "office_title": "U.S. Representative", "district_label": "CA-47"},
+        {"politician_id": "uuid-2", "full_name": "Katie Porter",
+         "office_title": "Senator", "district_label": "CA"},
+    ])]
+    doc = build_review_doc(rows)
+    entry = doc["speakers"][0]
+    assert entry["decision"] == "review"
+    assert entry["politician_id"] is None
+    assert entry["candidates"] == [
+        {"id": "uuid-1", "name": "Katie Porter", "office": "U.S. Representative", "district": "CA-47"},
+        {"id": "uuid-2", "name": "Katie Porter", "office": "Senator", "district": "CA"},
+    ]
+
+
+def test_build_doc_is_yaml_round_trippable():
+    import yaml
+    rows = [_row("Katie Porter", DECISION_REVIEW,
+                 [{"politician_id": "uuid-1", "full_name": "Katie Porter",
+                   "office_title": "Rep", "district_label": "CA-47"}])]
+    doc = build_review_doc(rows)
+    text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
+    assert yaml.safe_load(text) == doc
