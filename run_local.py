@@ -1933,6 +1933,156 @@ def _bulk_relink_scan(args) -> None:
     print(f"  {linked} auto-approved (link), {len(speakers) - linked} need review")
 
 
+def _resolve_debate_race_id(meeting) -> str | None:
+    """Open a DB connection and resolve a race_id from the meeting's linked politicians."""
+    import psycopg2
+
+    from src.publish import _require_db_url, resolve_race_id_for_politicians
+
+    pol_ids = [m.politician_id for m in meeting.speakers.values() if m.politician_id]
+    if not pol_ids:
+        return None
+    try:
+        conn = psycopg2.connect(_require_db_url())
+    except Exception as exc:  # noqa: BLE001 - surface connection failure, don't crash apply
+        print(f"  race_id lookup skipped (DB connect failed: {exc})")
+        return None
+    try:
+        with conn.cursor() as cur:
+            return resolve_race_id_for_politicians(cur, pol_ids)
+    finally:
+        conn.close()
+
+
+def _bulk_relink_apply(args) -> None:
+    """Apply approved links from a bulk-relink review file through the engine."""
+    import yaml
+
+    from src import config
+    from src.bulk_relink import (
+        DECISION_LINK, DECISION_REVIEW, DECISION_SKIP,
+        BulkRelinkParseError, parse_review_doc,
+    )
+    from src.checkpoint import PipelineState
+    from src.enroll import load_profiles, save_profiles
+    from src.models import Meeting
+    from src.relink import relink_in_meeting, rekey_profile_for_link, resolve_link_target
+
+    with open(args.bulk_relink_apply, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    try:
+        decisions = parse_review_doc(data)
+    except BulkRelinkParseError as exc:
+        print(f"Review file invalid: {exc}")
+        sys.exit(2)
+
+    links = [d for d in decisions if d.decision == DECISION_LINK]
+    review = [d for d in decisions if d.decision == DECISION_REVIEW]
+    skipped = [d for d in decisions if d.decision == DECISION_SKIP]
+
+    print(f"Plan: {len(links)} to link, {len(review)} still need review (skipped), "
+          f"{len(skipped)} marked skip.")
+    if not links:
+        print("Nothing approved to link. Edit the file (set decision: link + politician_id) and re-run.")
+        if review:
+            print("Unresolved review rows: " + ", ".join(d.name for d in review))
+        return
+
+    # Resolve each approved name to id/slug/full_name (display-only; id is authoritative).
+    targets = {}
+    for d in links:
+        t = resolve_link_target(d.name, explicit_id=d.politician_id)
+        targets[d.name] = t
+
+    # Load every meeting once; compute relinks in memory.
+    dirs = sorted(p for p in config.MEETINGS_DIR.iterdir()
+                  if p.is_dir() and not p.name.startswith("."))
+    loaded = []  # (mdir, Meeting)
+    for mdir in dirs:
+        named = mdir / "transcript_named.json"
+        if not named.exists():
+            continue
+        with open(named, "r", encoding="utf-8") as f:
+            loaded.append((mdir, Meeting.from_dict(json.load(f))))
+
+    touched = {}  # mdir -> Meeting (meetings whose transcript changed)
+    for d in links:
+        t = targets[d.name]
+        for mdir, meeting in loaded:
+            changed = relink_in_meeting(meeting, d.name, t.politician_id, t.politician_slug)
+            if changed:
+                touched[mdir] = meeting
+
+    if not touched:
+        print("All approved speakers are already linked in transcripts (nothing to write).")
+    print(f"Will relink {len(touched)} meeting(s); will fold {len(links)} voice profile(s).")
+    if review:
+        print("Skipping unresolved review rows: " + ", ".join(d.name for d in review))
+
+    if args.dry_run:
+        print("\n(dry run — no transcript, profile, publish, or deploy writes)")
+        for mdir in sorted(touched, key=lambda p: p.name):
+            print(f"  would relink + publish: {mdir.name}")
+        print(f"  would fold profiles: {', '.join(d.name for d in links)}")
+        print(f"  would deploy: {'yes' if args.deploy else 'no'}")
+        if review:
+            print("  To finish the review rows: edit the file, then re-run "
+                  f"--bulk-relink-apply {args.bulk_relink_apply}")
+        return
+
+    # Persist changed transcripts.
+    for mdir, meeting in touched.items():
+        with open(mdir / "transcript_named.json", "w", encoding="utf-8") as f:
+            json.dump(meeting.to_dict(), f, indent=2)
+
+    # Fold each approved person's voice profile once.
+    db = load_profiles()
+    for d in links:
+        t = targets[d.name]
+        rekey_profile_for_link(db, d.name, politician_id=t.politician_id,
+                               politician_slug=t.politician_slug, full_name=t.full_name)
+    save_profiles(db)
+    print(f"  Folded voice profiles for {len(links)} person(s).")
+
+    # Publish each touched meeting; auto-resolve race_id for debates that lack one.
+    blocked = []
+    for mdir in sorted(touched, key=lambda p: p.name):
+        meeting = touched[mdir]
+        state = PipelineState(mdir)
+        if meeting.event_kind == "debate" and not meeting.race_id:
+            race = _resolve_debate_race_id(meeting)
+            if race:
+                meeting.race_id = race
+                with open(mdir / "transcript_named.json", "w", encoding="utf-8") as f:
+                    json.dump(meeting.to_dict(), f, indent=2)
+                state.race_id = race
+                state.save()
+                print(f"  {mdir.name}: resolved debate race_id -> {race}")
+            else:
+                print(f"  skip publish {mdir.name}: debate meeting has no race_id and it "
+                      f"could not be resolved (resolve the race manually).")
+                blocked.append(mdir.name)
+                continue
+        if not _may_publish(state.review_status, args.publish_anyway):
+            print(f"  skip publish {mdir.name}: gate verdict '{state.review_status}' "
+                  f"(re-run with --publish-anyway)")
+            blocked.append(mdir.name)
+            continue
+        _publish_meeting_standalone(mdir.name, args.publish_anyway)
+
+    if args.deploy:
+        _trigger_render_deploy()
+
+    # Closing summary.
+    print(f"\nDone: linked {len(links)} person(s) across {len(touched)} meeting(s).")
+    if blocked:
+        print(f"  {len(blocked)} meeting(s) not published: {', '.join(blocked)}")
+    if review:
+        print(f"  {len(review)} row(s) still need review: {', '.join(d.name for d in review)}")
+        print(f"  Finish them: edit {args.bulk_relink_apply} (or re-run "
+              f"--bulk-relink-scan for a fresh narrowed list), then --bulk-relink-apply again.")
+
+
 def _relink_person(args) -> None:
     """Link a person to an essentials politician across all their meetings."""
     from src import config
@@ -3437,6 +3587,10 @@ def main():
 
     if args.bulk_relink_scan:
         _bulk_relink_scan(args)
+        return
+
+    if args.bulk_relink_apply:
+        _bulk_relink_apply(args)
         return
 
     if args.review:
