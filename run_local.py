@@ -2077,6 +2077,10 @@ def _bulk_relink_apply(args) -> None:
     print(f"\nDone: linked {len(links)} person(s) across {len(touched)} meeting(s).")
     if blocked:
         print(f"  {len(blocked)} meeting(s) not published: {', '.join(blocked)}")
+        print("    These won't republish on a re-run (already linked in transcript). "
+              "Recover each with:")
+        for mid in blocked:
+            print(f"      python run_local.py --publish-meeting {mid} --publish-anyway")
     if review:
         print(f"  {len(review)} row(s) still need review: {', '.join(d.name for d in review)}")
         print(f"  Finish them: edit {args.bulk_relink_apply} (or re-run "
