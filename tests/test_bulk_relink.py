@@ -166,6 +166,53 @@ def test_suggest_propagates_api_error():
         suggest_link(_speaker("Steve Hilton"), search=boom)
 
 
+from src.bulk_relink import BulkRelinkParseError, ReviewDecision, parse_review_doc
+
+_UUID = "9a60d603-194d-410f-ae01-85bd6293f1a7"
+
+
+def test_parse_extracts_link_review_skip():
+    doc = {"speakers": [
+        {"name": "Steve Hilton", "decision": "link", "politician_id": _UUID},
+        {"name": "Katie Porter", "decision": "review", "politician_id": None},
+        {"name": "Moderator", "decision": "skip"},
+    ]}
+    rows = parse_review_doc(doc)
+    assert rows == [
+        ReviewDecision("Steve Hilton", "link", _UUID),
+        ReviewDecision("Katie Porter", "review", None),
+        ReviewDecision("Moderator", "skip", None),
+    ]
+
+
+def test_parse_empty_or_missing_speakers_returns_empty():
+    assert parse_review_doc({}) == []
+    assert parse_review_doc({"speakers": []}) == []
+
+
+def test_parse_rejects_unknown_decision():
+    with pytest.raises(BulkRelinkParseError) as ei:
+        parse_review_doc({"speakers": [{"name": "X", "decision": "approve"}]})
+    assert "X" in str(ei.value)
+
+
+def test_parse_rejects_link_without_uuid():
+    with pytest.raises(BulkRelinkParseError) as ei:
+        parse_review_doc({"speakers": [{"name": "Steve", "decision": "link", "politician_id": None}]})
+    assert "Steve" in str(ei.value)
+
+
+def test_parse_rejects_link_with_malformed_uuid():
+    with pytest.raises(BulkRelinkParseError) as ei:
+        parse_review_doc({"speakers": [{"name": "Steve", "decision": "link", "politician_id": "not-a-uuid"}]})
+    assert "Steve" in str(ei.value)
+
+
+def test_parse_rejects_row_without_name():
+    with pytest.raises(BulkRelinkParseError):
+        parse_review_doc({"speakers": [{"decision": "skip"}]})
+
+
 from src.bulk_relink import build_review_doc
 
 

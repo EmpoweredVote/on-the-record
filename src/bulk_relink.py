@@ -8,8 +8,9 @@ directory walk, file writes, profile DB, publish, and deploy. Mirrors how
 """
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from src.essentials_client import search_politicians as _search_politicians
 
@@ -132,3 +133,43 @@ def suggest_link(speaker, *, search=_search_politicians) -> tuple[str, list[dict
     if len(matches) == 1:
         return DECISION_LINK, matches
     return DECISION_REVIEW, matches
+
+
+class ReviewDecision(NamedTuple):
+    name: str
+    decision: str
+    politician_id: Optional[str]
+
+
+class BulkRelinkParseError(Exception):
+    """A review file row failed validation; message names the offending row."""
+
+
+def parse_review_doc(data) -> list[ReviewDecision]:
+    """Validate a parsed review doc and return the operator's decisions.
+
+    decision must be one of VALID_DECISIONS; a 'link' row must carry a valid
+    UUID politician_id; 'review'/'skip' rows ignore the id. Raises
+    BulkRelinkParseError (naming the row) on any violation.
+    """
+    rows: list[ReviewDecision] = []
+    for raw in (data or {}).get("speakers", []) or []:
+        name = raw.get("name")
+        if not name:
+            raise BulkRelinkParseError(f"review row missing 'name': {raw!r}")
+        decision = raw.get("decision")
+        if decision not in VALID_DECISIONS:
+            raise BulkRelinkParseError(
+                f"{name}: invalid decision {decision!r} (expected one of {VALID_DECISIONS})")
+        pid = raw.get("politician_id")
+        if decision == DECISION_LINK:
+            if pid is None:
+                raise BulkRelinkParseError(f"{name}: decision 'link' requires a politician_id")
+            try:
+                uuid.UUID(str(pid))
+            except (ValueError, AttributeError, TypeError):
+                raise BulkRelinkParseError(f"{name}: politician_id {pid!r} is not a valid UUID")
+        else:
+            pid = None
+        rows.append(ReviewDecision(name, decision, pid))
+    return rows
