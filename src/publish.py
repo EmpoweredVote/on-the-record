@@ -160,13 +160,43 @@ def resolve_races_for_politicians(cur, politician_ids) -> list[str]:
     return [str(r[0]) for r in cur.fetchall()]
 
 
+def _reconcile_event_races(cur, meeting: Meeting, meeting_uuid: str) -> list[str]:
+    """Derive the meeting's races from its linked candidates and reconcile the
+    meetings.event_races join table (delete this meeting's rows, insert the
+    current set). Returns the race ids written.
+
+    debate/forum require >=1 derived race: an empty set raises (aborting the
+    publish transaction) — recoverable by linking candidates, then re-publishing.
+    council/school_board legitimately have no races; an empty set just clears
+    stale rows.
+    """
+    pol_ids = [m.politician_id for m in meeting.speakers.values() if m.politician_id]
+    races = resolve_races_for_politicians(cur, pol_ids)
+
+    if not races and meeting.event_kind in ("debate", "forum"):
+        raise RuntimeError(
+            f"{meeting.meeting_id}: {meeting.event_kind} resolved to no race — "
+            "no linked candidate maps to an essentials race yet. Link candidates, "
+            "then re-publish."
+        )
+
+    cur.execute("DELETE FROM meetings.event_races WHERE meeting_id = %s", (meeting_uuid,))
+    for race_id in races:
+        cur.execute(
+            "INSERT INTO meetings.event_races (meeting_id, race_id) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (meeting_uuid, race_id),
+        )
+    return races
+
+
 def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
     """Insert or update the meeting row. Returns the meetings.meetings UUID."""
     chamber_id = _resolve_chamber_id(cur, body_slug)
     entity_error = validate_event_entities(
         meeting.event_kind,
         chamber_id,
-        meeting.race_id,
+        None,
     )
     if entity_error:
         raise RuntimeError(entity_error)
@@ -203,7 +233,6 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
               video_url = %s,
               status = %s,
               chamber_id = %s,
-              race_id = %s,
               source_url = %s,
               playback_kind = %s,
               summary = %s,
@@ -222,7 +251,6 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 playback_url,
                 "published",
                 chamber_id,
-                meeting.race_id,
                 source if is_url else None,
                 kind,
                 psycopg2.extras.Json(summary),
@@ -236,13 +264,13 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
             INSERT INTO meetings.meetings
               (id, city, date, meeting_type, title, event_kind, duration_seconds,
                audio_source, video_url, status,
-               chamber_id, race_id, source_url, playback_kind, slug,
+               chamber_id, source_url, playback_kind, slug,
                summary, processing_metadata,
                created_at, updated_at)
             VALUES
               (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
                %s, %s, %s,
-               %s, %s, %s, %s, %s,
+               %s, %s, %s, %s,
                %s, %s,
                NOW(), NOW())
             RETURNING id
@@ -258,7 +286,6 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 playback_url,
                 "published",
                 chamber_id,
-                meeting.race_id,
                 source if is_url else None,
                 kind,
                 meeting.meeting_id,
@@ -522,6 +549,7 @@ def publish_meeting(
                 _upsert_event_orgs(cur, meeting.meeting_id, meeting.event_orgs)
                 _upsert_local_people(cur, meeting)
                 label_to_uuid = _upsert_speakers(cur, meeting, meeting_uuid)
+                _reconcile_event_races(cur, meeting, meeting_uuid)
                 segment_count = _replace_segments(
                     cur, meeting, meeting_uuid, label_to_uuid
                 )
