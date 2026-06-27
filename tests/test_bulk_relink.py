@@ -262,3 +262,42 @@ def test_build_doc_is_yaml_round_trippable():
     doc = build_review_doc(rows)
     text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
     assert yaml.safe_load(text) == doc
+
+
+from src.publish import resolve_race_id_for_politicians
+
+
+class _FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+        self.executed = None
+        self.params = None
+
+    def execute(self, sql, params=None):
+        self.executed = sql
+        self.params = params
+
+    def fetchall(self):
+        return self._rows
+
+
+def test_resolve_race_single_distinct_race():
+    cur = _FakeCursor([("race-1",)])
+    assert resolve_race_id_for_politicians(cur, ["pol-a", "pol-b"]) == "race-1"
+
+
+def test_resolve_race_none_when_no_rows():
+    cur = _FakeCursor([])
+    assert resolve_race_id_for_politicians(cur, ["pol-a"]) is None
+
+
+def test_resolve_race_none_when_multiple_distinct_races():
+    cur = _FakeCursor([("race-1",), ("race-2",)])
+    assert resolve_race_id_for_politicians(cur, ["pol-a", "pol-b"]) is None
+
+
+def test_resolve_race_none_when_empty_politician_list():
+    cur = _FakeCursor([("race-1",)])
+    # No politician ids -> no query, no race.
+    assert resolve_race_id_for_politicians(cur, []) is None
+    assert cur.executed is None
