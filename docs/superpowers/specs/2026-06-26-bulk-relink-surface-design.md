@@ -178,6 +178,29 @@ publish are **reused** from the existing engine, not reimplemented.
    path, honoring `_may_publish` / `--publish-anyway`. Report meetings still
    blocked (unresolved race, or gate without `--publish-anyway`).
 7. `--deploy` → POST `RENDER_DEPLOY_HOOK_URL` once (reuse `_trigger_render_deploy`).
+8. Closing summary: counts (linked, meetings published, meetings still
+   blocked), then — if any rows were skipped as `review` — list those names and
+   print the exact command to finish them
+   (`python run_local.py --bulk-relink-apply <path>` after editing, or
+   `--bulk-relink-scan` for a fresh narrowed list). Apply never rewrites the
+   review file.
+
+### Completing leftover `review` rows
+
+No extra tooling is needed; the file is the mechanism and every path is
+idempotent:
+- **Re-edit the same file** — it persists after apply. Resolve the remaining
+  `review` rows and re-run apply; already-linked rows no-op.
+- **Re-scan** — because apply writes `politician_id` into the transcripts, a
+  fresh `--bulk-relink-scan` no longer enumerates the just-linked people,
+  yielding a narrowed file with only the remaining names, re-suggested. This is
+  the canonical "what's left" view (reflects actual state).
+- **One-offs** — `--relink-person "<name>" --to-id <uuid>` for a single
+  stubborn name, without touching the file.
+
+Deliberately *not* added: auto-rewriting the operator's file (surprising), or
+emitting a redundant `<file>.remaining.yaml` (re-scan already gives the
+canonical narrowed list).
 
 ## Data flow
 
