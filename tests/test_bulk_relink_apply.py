@@ -154,8 +154,9 @@ def test_apply_publishes_already_linked_meeting(tmp_path, monkeypatch):
     assert published == ["m1"]  # published despite no transcript change
 
 
-def test_apply_resolves_debate_race_id_before_publish(tmp_path, monkeypatch):
-    # A debate meeting missing race_id gets it resolved + persisted, then publishes.
+def test_apply_publishes_debate_without_race_special_casing(tmp_path, monkeypatch):
+    # Race derivation now lives in publish (mocked here), so apply treats a
+    # debate like any other meeting: relink -> fold -> publish.
     meetings_root = tmp_path / "meetings"
     debate = Meeting(meeting_id="m1", city="X", date="2026-04-01", event_kind="debate",
                      speakers={"S0": SpeakerMapping(speaker_label="S0", speaker_name="Steve Hilton")})
@@ -166,8 +167,6 @@ def test_apply_resolves_debate_race_id_before_publish(tmp_path, monkeypatch):
                                           "full_name": "Steve Hilton"}])
     monkeypatch.setattr("src.enroll.load_profiles", lambda: ProfileDB(profiles={}))
     monkeypatch.setattr("src.enroll.save_profiles", lambda db: None)
-    # Stub the DB race lookup (module-level function in run_local).
-    monkeypatch.setattr(run_local, "_resolve_debate_race_id", lambda meeting: "race-xyz")
     published = []
     monkeypatch.setattr(run_local, "_publish_meeting_standalone",
                         lambda mid, anyway=False: published.append(mid))
@@ -178,38 +177,12 @@ def test_apply_resolves_debate_race_id_before_publish(tmp_path, monkeypatch):
 
     run_local._bulk_relink_apply(_args(review_file, publish_anyway=True))
 
-    m1 = json.loads((meetings_root / "m1" / "transcript_named.json").read_text())
-    assert m1["race_id"] == "race-xyz"   # resolved race_id persisted to transcript
     assert published == ["m1"]
 
 
-def test_apply_debate_blocked_when_race_id_unresolvable(tmp_path, monkeypatch):
-    # A debate missing race_id that can't be resolved is skipped for publish (blocked).
-    meetings_root = tmp_path / "meetings"
-    debate = Meeting(meeting_id="m1", city="X", date="2026-04-01", event_kind="debate",
-                     speakers={"S0": SpeakerMapping(speaker_label="S0", speaker_name="Steve Hilton")})
-    _write_meeting(meetings_root / "m1", debate)
-    monkeypatch.setattr(run_local.config, "MEETINGS_DIR", meetings_root)
-    monkeypatch.setattr("src.relink.search_politicians",
-                        lambda q, **kw: [{"politician_id": _UUID, "politician_slug": None,
-                                          "full_name": "Steve Hilton"}])
-    monkeypatch.setattr("src.enroll.load_profiles", lambda: ProfileDB(profiles={}))
-    monkeypatch.setattr("src.enroll.save_profiles", lambda db: None)
-    monkeypatch.setattr(run_local, "_resolve_debate_race_id", lambda meeting: None)
-    published = []
-    monkeypatch.setattr(run_local, "_publish_meeting_standalone",
-                        lambda mid, anyway=False: published.append(mid))
-
-    review_file = tmp_path / "review.yaml"
-    review_file.write_text(yaml.safe_dump(
-        {"speakers": [{"name": "Steve Hilton", "decision": "link", "politician_id": _UUID}]}))
-
-    run_local._bulk_relink_apply(_args(review_file, publish_anyway=True))
-
-    # Transcript linked, but publish skipped because race_id unresolved.
-    m1 = json.loads((meetings_root / "m1" / "transcript_named.json").read_text())
-    assert m1["speakers"]["S0"]["politician_id"] == _UUID
-    assert published == []
+def test_resolve_debate_race_id_helper_is_gone():
+    # The debate-only race resolver was removed; publish now owns derivation.
+    assert not hasattr(run_local, "_resolve_debate_race_id")
 
 
 def test_scan_writes_review_file_with_header_and_speakers(tmp_path, monkeypatch):
