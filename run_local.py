@@ -2005,24 +2005,37 @@ def _bulk_relink_apply(args) -> None:
         with open(named, "r", encoding="utf-8") as f:
             loaded.append((mdir, Meeting.from_dict(json.load(f))))
 
-    touched = {}  # mdir -> Meeting (meetings whose transcript changed)
+    touched = {}      # mdir -> Meeting (transcript changed this run; needs a write)
+    to_publish = {}   # mdir -> Meeting (contains an approved person linked to target)
     for d in links:
         t = targets[d.name]
+        want = d.name.strip().lower()
         for mdir, meeting in loaded:
             changed = relink_in_meeting(meeting, d.name, t.politician_id, t.politician_slug)
             if changed:
                 touched[mdir] = meeting
+            # Publish any meeting where this approved person is now linked to the
+            # target — even if nothing changed this run. Covers the
+            # "linked-in-transcript-but-not-in-DB" case (e.g. a prior gated or
+            # race-blocked publish). Publishing is an idempotent upsert, so
+            # re-publishing an already-correct meeting is safe.
+            if any((m.speaker_name or "").strip().lower() == want
+                   and m.politician_id == t.politician_id
+                   for m in meeting.speakers.values()):
+                to_publish[mdir] = meeting
 
-    if not touched:
-        print("All approved speakers are already linked in transcripts (nothing to write).")
-    print(f"Will relink {len(touched)} meeting(s); will fold {len(links)} voice profile(s).")
+    if not to_publish:
+        print("No meetings contain an approved speaker (nothing to publish).")
+    print(f"Will relink {len(touched)} transcript(s); publish {len(to_publish)} meeting(s); "
+          f"fold {len(links)} voice profile(s).")
     if review:
         print("Skipping unresolved review rows: " + ", ".join(d.name for d in review))
 
     if args.dry_run:
         print("\n(dry run — no transcript, profile, publish, or deploy writes)")
-        for mdir in sorted(touched, key=lambda p: p.name):
-            print(f"  would relink + publish: {mdir.name}")
+        for mdir in sorted(to_publish, key=lambda p: p.name):
+            tag = "relink + publish" if mdir in touched else "publish (already linked)"
+            print(f"  would {tag}: {mdir.name}")
         print(f"  would fold profiles: {', '.join(d.name for d in links)}")
         print(f"  would deploy: {'yes' if args.deploy else 'no'}")
         if review:
@@ -2044,10 +2057,10 @@ def _bulk_relink_apply(args) -> None:
     save_profiles(db)
     print(f"  Folded voice profiles for {len(links)} person(s).")
 
-    # Publish each touched meeting; auto-resolve race_id for debates that lack one.
+    # Publish each affected meeting; auto-resolve race_id for debates that lack one.
     blocked = []
-    for mdir in sorted(touched, key=lambda p: p.name):
-        meeting = touched[mdir]
+    for mdir in sorted(to_publish, key=lambda p: p.name):
+        meeting = to_publish[mdir]
         state = PipelineState(mdir)
         if meeting.event_kind == "debate" and not meeting.race_id:
             race = _resolve_debate_race_id(meeting)
@@ -2074,11 +2087,12 @@ def _bulk_relink_apply(args) -> None:
         _trigger_render_deploy()
 
     # Closing summary.
-    print(f"\nDone: linked {len(links)} person(s) across {len(touched)} meeting(s).")
+    print(f"\nDone: linked {len(links)} person(s); published "
+          f"{len(to_publish) - len(blocked)} meeting(s).")
     if blocked:
         print(f"  {len(blocked)} meeting(s) not published: {', '.join(blocked)}")
-        print("    These won't republish on a re-run (already linked in transcript). "
-              "Recover each with:")
+        print("    Resolve the blocker (race_id / chamber / gate), then re-run apply "
+              "(it retries every affected meeting) or publish directly:")
         for mid in blocked:
             print(f"      python run_local.py --publish-meeting {mid} --publish-anyway")
     if review:
