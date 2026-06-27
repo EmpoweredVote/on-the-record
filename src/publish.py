@@ -137,32 +137,27 @@ def _resolve_chamber_id(cur, body_slug: Optional[str]) -> Optional[str]:
     return str(rows[0][0])
 
 
-def resolve_race_id_for_politicians(cur, politician_ids) -> Optional[str]:
-    """Find the single essentials race a set of linked politicians belong to.
+def resolve_races_for_politicians(cur, politician_ids) -> list[str]:
+    """All distinct essentials races the given linked politicians belong to.
 
-    Used to unblock debate publishing: event_kind='debate' meetings require a
-    race_id, but older imports left it NULL. Given the politician_ids linked in
-    a meeting, look up their race_candidates rows. Returns the race_id only when
-    exactly one distinct race results; zero or several -> None (the caller
-    reports it and skips, as ambiguity must not be auto-picked). Mirrors the
-    _resolve_chamber_id "exactly one or give up" shape.
+    A meeting's races are the union of its linked candidates' races. Returns
+    every distinct race_id (no "exactly one" gate) so multi-race forums are
+    represented; [] when there are no ids or no race_candidates rows. Casts to
+    uuid[] because essentials.race_candidates.politician_id is a uuid column and
+    psycopg2 sends a Python list as text[].
     """
     ids = [pid for pid in (politician_ids or []) if pid]
     if not ids:
-        return None
+        return []
     cur.execute(
         """
         SELECT DISTINCT race_id
         FROM essentials.race_candidates
         WHERE politician_id = ANY(%s::uuid[])
-        LIMIT 2
         """,
         (ids,),
     )
-    rows = cur.fetchall()
-    if len(rows) != 1:
-        return None
-    return str(rows[0][0])
+    return [str(r[0]) for r in cur.fetchall()]
 
 
 def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
