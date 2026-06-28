@@ -104,6 +104,43 @@ def ensure_body_roster_cached(body_slug: Optional[str]) -> None:
     # D-09: staleness is checked later inside load_roster() — not our concern here.
 
 
+def _reconcile_clip_window(
+    state: "PipelineState",
+    cli_start: Optional[float],
+    cli_end: Optional[float],
+) -> tuple[Optional[float], Optional[float]]:
+    """Resolve and persist the clip window, mirroring the --body persist pattern.
+
+    - First run with --clip: persist to state.
+    - Resume with no --clip: read from state.
+    - Re-pass with the SAME window: no-op.
+    - Re-pass with a DIFFERENT window: hard error (audio.wav is already cut and
+      cannot be re-clipped in place; the operator must use a fresh --meeting-id).
+    """
+    persisted = (state.clip_start_seconds, state.clip_end_seconds)
+    requested = (cli_start, cli_end)
+
+    if cli_start is None and cli_end is None:
+        return persisted
+
+    if persisted == (None, None):
+        state.clip_start_seconds, state.clip_end_seconds = requested
+        state.save()
+        return requested
+
+    if requested == persisted:
+        return persisted
+
+    s0, e0 = persisted
+    print(
+        f"ERROR: this meeting was already clipped to {s0}-{e0}s. The cut audio "
+        f"cannot be re-clipped in place. To use a different window, process the "
+        f"source into a new --meeting-id.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def _list_cached_rosters() -> list[tuple[str, str]]:
     """Return [(body_slug, label), ...] for each cached per-body roster.
 
@@ -615,6 +652,24 @@ def run_pipeline(args: argparse.Namespace) -> None:
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
+    # Resolve the clip window (parse the flag, reconcile against persisted state).
+    from src.clip import parse_clip_time
+    _cli_clip_start = _cli_clip_end = None
+    if getattr(args, "clip", None):
+        try:
+            _cli_clip_start = parse_clip_time(args.clip[0])
+            _cli_clip_end = parse_clip_time(args.clip[1])
+        except ValueError as exc:
+            print(f"ERROR: invalid --clip value: {exc}", file=sys.stderr)
+            sys.exit(2)
+        if _cli_clip_end <= _cli_clip_start:
+            print("ERROR: --clip END must be greater than START", file=sys.stderr)
+            sys.exit(2)
+    clip_start, clip_end = _reconcile_clip_window(state, _cli_clip_start, _cli_clip_end)
+    if clip_start is not None:
+        print(f"Clip window: {clip_start}-{clip_end}s (transcribing this slice only)",
+              file=sys.stderr)
+
     # Persist pipeline metadata so --resume can recover without transcript_named.json.
     _state_dirty = False
     if state.event_kind != args.event_kind and args.event_kind is not None:
@@ -722,6 +777,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
         event_kind=args.event_kind,
         race_id=effective_race_id,
         audio_source=str(audio_path),
+        clip_start_seconds=clip_start,
+        clip_end_seconds=clip_end,
     )
 
     display_title = meeting.title or " ".join(
@@ -758,6 +815,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
             audio_path, wav_path,
             noise_reduce=args.noise_reduce,
             cookies_file=getattr(args, "cookies", None),
+            clip_start=clip_start,
+            clip_end=clip_end,
         )
         elapsed = time.time() - t0
         meeting.duration_seconds = metadata["duration_seconds"]
@@ -1192,6 +1251,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
         with open(named_transcript_path, "r") as f:
             meeting_data = json.load(f)
         meeting = Meeting.from_dict(meeting_data)
+        meeting.clip_start_seconds = state.clip_start_seconds
+        meeting.clip_end_seconds = state.clip_end_seconds
         segments = meeting.segments
     else:
         # Load embeddings
@@ -3354,6 +3415,15 @@ Environment Variables:
     # Processing options
     parser.add_argument("--num-speakers", type=int, default=0,
                         help="Expected number of speakers (0 = auto-detect)")
+    parser.add_argument(
+        "--clip",
+        nargs=2,
+        metavar=("START", "END"),
+        default=None,
+        help="Transcribe only the contiguous window START..END of the source "
+             "(seconds, MM:SS, or HH:MM:SS). The site still plays/links the full "
+             "source. Example: --clip 23:00 48:00",
+    )
     parser.add_argument("--noise-reduce", action="store_true",
                         help="Apply spectral noise reduction to audio")
     parser.add_argument("--cookies", metavar="FILE",
