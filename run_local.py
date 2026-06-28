@@ -114,9 +114,14 @@ def _reconcile_clip_window(
     - First run with --clip: persist to state.
     - Resume with no --clip: read from state.
     - Re-pass with the SAME window: no-op.
-    - Re-pass with a DIFFERENT window: hard error (audio.wav is already cut and
-      cannot be re-clipped in place; the operator must use a fresh --meeting-id).
+    - Re-pass with a DIFFERENT window BEFORE ingest: overwrite (no audio is cut
+      yet, so a corrected window is harmless).
+    - Re-pass with a DIFFERENT window AFTER ingest: hard error (audio.wav is
+      already cut and cannot be re-clipped in place; the operator must use a
+      fresh --meeting-id).
     """
+    from src.checkpoint import PipelineStage
+
     persisted = (state.clip_start_seconds, state.clip_end_seconds)
     requested = (cli_start, cli_end)
 
@@ -130,6 +135,12 @@ def _reconcile_clip_window(
 
     if requested == persisted:
         return persisted
+
+    # Different window: harmless to overwrite until the audio has been cut.
+    if state.completed_stage < PipelineStage.INGESTED:
+        state.clip_start_seconds, state.clip_end_seconds = requested
+        state.save()
+        return requested
 
     s0, e0 = persisted
     print(
@@ -1251,8 +1262,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
         with open(named_transcript_path, "r") as f:
             meeting_data = json.load(f)
         meeting = Meeting.from_dict(meeting_data)
-        meeting.clip_start_seconds = state.clip_start_seconds
-        meeting.clip_end_seconds = state.clip_end_seconds
+        if meeting.clip_start_seconds is None:
+            meeting.clip_start_seconds = state.clip_start_seconds
+        if meeting.clip_end_seconds is None:
+            meeting.clip_end_seconds = state.clip_end_seconds
         segments = meeting.segments
     else:
         # Load embeddings

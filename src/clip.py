@@ -61,9 +61,11 @@ def absolutize_meeting_times(meeting: Meeting) -> Meeting:
     fields themselves are left untouched. A meeting with no clip window
     (`clip_start_seconds` falsy) is returned as an unchanged copy.
     """
-    offset = meeting.clip_start_seconds or 0.0
     out = copy.deepcopy(meeting)
-    if not offset:
+    if meeting.clip_start_seconds is None:
+        return out
+    offset = meeting.clip_start_seconds
+    if offset == 0:
         return out
 
     for seg in out.segments:

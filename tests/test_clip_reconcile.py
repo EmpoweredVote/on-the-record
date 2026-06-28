@@ -38,6 +38,15 @@ def test_conflicting_window_after_ingest_errors(tmp_path):
         _reconcile_clip_window(state, 1500.0, 3000.0)
 
 
+def test_conflicting_window_before_ingest_overwrites(tmp_path):
+    state = PipelineState(tmp_path)
+    state.clip_start_seconds, state.clip_end_seconds = 1380.0, 2880.0
+    state.save()  # completed_stage left at the NOT_STARTED default
+    start, end = _reconcile_clip_window(state, 1500.0, 3000.0)
+    assert (start, end) == (1500.0, 3000.0)
+    assert PipelineState(tmp_path).clip_start_seconds == 1500.0
+
+
 def test_no_clip_anywhere_returns_none(tmp_path):
     state = PipelineState(tmp_path)
     assert _reconcile_clip_window(state, None, None) == (None, None)
