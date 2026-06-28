@@ -5,7 +5,7 @@ import copy
 import pytest
 
 from src.clip import absolutize_meeting_times, parse_clip_time
-from src.models import Meeting, MeetingSummary, Segment, SummarySection
+from src.models import Meeting, MeetingSummary, Segment, SummarySection, Word
 
 
 @pytest.mark.parametrize(
@@ -24,7 +24,7 @@ def test_parse_clip_time_valid(text, expected):
     assert parse_clip_time(text) == expected
 
 
-@pytest.mark.parametrize("text", ["", "abc", "1:2:3:4", "12:60", "-5", "1:-1", "  "])
+@pytest.mark.parametrize("text", ["", "abc", "1:2:3:4", "12:60", "-5", "1:-1", "  ", "nan", "inf", "-inf"])
 def test_parse_clip_time_invalid(text):
     with pytest.raises(ValueError):
         parse_clip_time(text)
@@ -75,3 +75,13 @@ def test_absolutize_returns_copy_does_not_mutate_input():
     absolutize_meeting_times(m)
     assert m.segments[0].start_time == 0.0
     assert m.summary.sections[0].start_time == 0.0
+
+
+def test_absolutize_shifts_word_timestamps():
+    seg = Segment(segment_id=0, start_time=0.0, end_time=5.0, speaker_label="S0", text="hi there",
+                  words=[Word(word="hi", start=0.0, end=1.0), Word(word="there", start=1.0, end=2.0)])
+    m = Meeting(meeting_id="m1", city="X", date="2026-06-28", clip_start_seconds=1380.0, segments=[seg])
+    out = absolutize_meeting_times(m)
+    assert [(w.start, w.end) for w in out.segments[0].words] == [(1380.0, 1381.0), (1381.0, 1382.0)]
+    # original untouched
+    assert m.segments[0].words[0].start == 0.0

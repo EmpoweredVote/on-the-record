@@ -9,6 +9,7 @@ back into the full source's timeline. See docs/adr/0001-clip-window-ingest-time-
 from __future__ import annotations
 
 import copy
+import math
 
 from .models import Meeting
 
@@ -26,6 +27,8 @@ def parse_clip_time(text: str) -> float:
 
     if ":" not in s:
         value = float(s)
+        if not math.isfinite(value):
+            raise ValueError(f"clip time must be a finite number: {text!r}")
         if value < 0:
             raise ValueError(f"clip time cannot be negative: {text!r}")
         return value
@@ -35,6 +38,8 @@ def parse_clip_time(text: str) -> float:
         raise ValueError(f"invalid clip time {text!r} — use SS, MM:SS, or HH:MM:SS")
 
     nums = [float(p) for p in parts]
+    if any(not math.isfinite(n) for n in nums):
+        raise ValueError(f"clip time must be a finite number: {text!r}")
     if any(n < 0 for n in nums):
         raise ValueError(f"clip time cannot be negative: {text!r}")
     if any(n >= 60 for n in nums[1:]):
@@ -64,6 +69,9 @@ def absolutize_meeting_times(meeting: Meeting) -> Meeting:
     for seg in out.segments:
         seg.start_time += offset
         seg.end_time += offset
+        for word in seg.words:
+            word.start += offset
+            word.end += offset
     if out.summary:
         for sec in out.summary.sections:
             sec.start_time += offset
