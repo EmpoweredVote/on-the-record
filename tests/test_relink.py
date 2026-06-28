@@ -239,3 +239,34 @@ def test_confident_target_api_error_is_none():
     def boom(q, **kw):
         raise EssentialsClientError("down")
     assert confident_target("Steve Hilton", search=boom) is None
+
+
+from src.relink import auto_link_confident
+
+
+def _strong_search(q, **kw):
+    return [_cand("uuid-h", "steve-hilton", "Steve Hilton")] if q.strip().lower() == "steve hilton" else []
+
+
+def test_auto_link_confident_links_named_unlinked():
+    m = _meeting({
+        "S0": SpeakerMapping(speaker_label="S0", speaker_name="Steve Hilton"),
+        "S1": SpeakerMapping(speaker_label="S1", speaker_name="Nobody Here"),
+    })
+    linked = auto_link_confident(m.speakers, search=_strong_search)
+    assert linked == ["S0"]
+    assert m.speakers["S0"].politician_id == "uuid-h"
+    assert m.speakers["S0"].id_method == "auto_linked"
+    assert m.speakers["S1"].politician_id is None
+
+
+def test_auto_link_confident_skips_already_linked_and_special():
+    m = _meeting({
+        "S0": SpeakerMapping(speaker_label="S0", speaker_name="Steve Hilton", politician_id="x"),
+        "S1": SpeakerMapping(speaker_label="S1", speaker_name="Steve Hilton", speaker_status="unidentified"),
+        "S2": SpeakerMapping(speaker_label="S2", speaker_name="Steve Hilton", local_slug="local-steve"),
+        "S3": SpeakerMapping(speaker_label="S3", speaker_name=None),
+    })
+    linked = auto_link_confident(m.speakers, search=_strong_search)
+    assert linked == []
+    assert m.speakers["S0"].id_method != "auto_linked"

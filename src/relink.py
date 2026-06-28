@@ -123,6 +123,35 @@ def confident_target(
     return None
 
 
+def auto_link_confident(mappings, *, search=search_politicians) -> list[str]:
+    """Auto-link every named-but-unlinked speaker with a confident match.
+
+    Considers a mapping only when speaker_name is set, politician_id is None,
+    speaker_status is normal (not 'unidentified'/'non_speaker'), and local_slug
+    is None. On a confident_target hit, links it and marks id_method='auto_linked'
+    (distinct, auditable, reversible). Returns the labels auto-linked.
+    """
+    from src.review import link_speaker
+
+    linked: list[str] = []
+    for label, mapping in list(mappings.items()):
+        if not mapping.speaker_name:
+            continue
+        if mapping.politician_id is not None:
+            continue
+        if mapping.speaker_status in ("unidentified", "non_speaker"):
+            continue
+        if mapping.local_slug is not None:
+            continue
+        target = confident_target(mapping.speaker_name, search=search)
+        if target is None:
+            continue
+        link_speaker(mappings, label, target.politician_slug, target.politician_id)
+        mapping.id_method = "auto_linked"
+        linked.append(label)
+    return linked
+
+
 def rekey_profile_for_link(db, speaker_name, *, politician_id, politician_slug, full_name) -> Optional[str]:
     """Fold the person's existing voice profile(s) onto the essentials:<id> key.
 
