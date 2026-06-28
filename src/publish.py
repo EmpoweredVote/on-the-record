@@ -544,7 +544,12 @@ def _trigger_deploy_hook() -> None:
 def publish_meeting(
     meeting: Meeting, body_slug: Optional[str] = None, trigger_deploy: bool = True
 ) -> PublishResult:
-    """Push one meeting into the meetings.* schema. Idempotent by slug."""
+    """Push one meeting into the meetings.* schema. Idempotent by slug.
+
+    ``trigger_deploy`` is retained for backward compatibility but is now
+    ignored. The site reads data live from the API; deploys happen via git push,
+    not per-publish rebuild hooks.
+    """
     from .clip import absolutize_meeting_times
     meeting = absolutize_meeting_times(meeting)
     db_url = _require_db_url()

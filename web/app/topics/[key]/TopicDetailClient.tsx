@@ -20,7 +20,7 @@ export default function TopicDetailClient() {
   const params = useParams<{ key: string }>();
   const { key } = params;
 
-  const topicQ = useApi(() => fetchTopic(key).catch(() => null), [key]);
+  const topicQ = useApi(() => fetchTopic(key), [key]);
 
   if (topicQ.loading) return <main className="indexPage"><Loading label="Loading topic…" /></main>;
   if (topicQ.error) return <main className="indexPage"><ErrorState /></main>;
