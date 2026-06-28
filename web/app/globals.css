@@ -1128,3 +1128,23 @@ a {
   text-transform: uppercase;
   opacity: 0.72;
 }
+
+.clipNote {
+  font-size: 0.85rem;
+  color: var(--muted, #555);
+  margin: 0.5rem 0;
+  line-height: 1.4;
+}
+.clipNoteInfo {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: help;
+  border-bottom: 1px dotted currentColor;
+}
+.clipNoteInfo:focus-visible {
+  outline: 2px solid var(--muted, #555);
+  outline-offset: 2px;
+}

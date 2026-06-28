@@ -235,6 +235,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
               chamber_id = %s,
               source_url = %s,
               playback_kind = %s,
+              clip_start_seconds = %s,
+              clip_end_seconds = %s,
               summary = %s,
               processing_metadata = %s,
               updated_at = NOW()
@@ -253,6 +255,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 chamber_id,
                 source if is_url else None,
                 kind,
+                meeting.clip_start_seconds,
+                meeting.clip_end_seconds,
                 psycopg2.extras.Json(summary),
                 psycopg2.extras.Json(proc_meta),
                 meeting_uuid,
@@ -264,13 +268,13 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
             INSERT INTO meetings.meetings
               (id, city, date, meeting_type, title, event_kind, duration_seconds,
                audio_source, video_url, status,
-               chamber_id, source_url, playback_kind, slug,
+               chamber_id, source_url, playback_kind, clip_start_seconds, clip_end_seconds, slug,
                summary, processing_metadata,
                created_at, updated_at)
             VALUES
               (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
                %s, %s, %s,
-               %s, %s, %s, %s,
+               %s, %s, %s, %s, %s, %s,
                %s, %s,
                NOW(), NOW())
             RETURNING id
@@ -288,6 +292,8 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 chamber_id,
                 source if is_url else None,
                 kind,
+                meeting.clip_start_seconds,
+                meeting.clip_end_seconds,
                 meeting.meeting_id,
                 psycopg2.extras.Json(summary),
                 psycopg2.extras.Json(proc_meta),
@@ -539,6 +545,8 @@ def publish_meeting(
     meeting: Meeting, body_slug: Optional[str] = None, trigger_deploy: bool = True
 ) -> PublishResult:
     """Push one meeting into the meetings.* schema. Idempotent by slug."""
+    from .clip import absolutize_meeting_times
+    meeting = absolutize_meeting_times(meeting)
     db_url = _require_db_url()
 
     conn = psycopg2.connect(db_url)

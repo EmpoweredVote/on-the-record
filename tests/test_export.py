@@ -99,3 +99,21 @@ def test_summary_markdown_includes_metadata_block(tmp_path):
     )
     assert "- **Duration:** 02:14:36" in content
     assert "A productive meeting." in content
+
+
+from src.export import export_all
+from src.models import Meeting, Segment
+
+
+def test_export_all_shifts_timestamps_into_source_timeline(tmp_path):
+    m = Meeting(
+        meeting_id="m1", city="X", date="2026-06-28",
+        duration_seconds=20.0,
+        clip_start_seconds=1380.0, clip_end_seconds=1400.0,
+        segments=[Segment(0, 0.0, 10.0, "S0", text="hello world")],
+    )
+    export_all(m, tmp_path)
+    srt = (tmp_path / "subtitles.srt").read_text()
+    # 1380s == 00:23:00 — the subtitle must align to the full episode, not 0:00.
+    assert "00:23:00" in srt
+    assert "00:00:00,000 -->" not in srt

@@ -22,6 +22,8 @@ export interface Meeting {
   playback_kind: "youtube" | "file" | "hls" | null;
   playback_url: string | null;  // video_url from ev-accounts (resolved: YT id, file URL, etc.)
   duration_seconds: number | null;
+  clip_start_seconds: number | null;
+  clip_end_seconds: number | null;
   summary_preview: string | null;
   speakers: MeetingSpeaker[];
   event_orgs: string[];         // hosting/producing organizations; may be empty

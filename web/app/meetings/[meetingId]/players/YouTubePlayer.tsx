@@ -50,9 +50,11 @@ function loadIframeApi(): Promise<void> {
 
 export default function YouTubePlayer({
   videoId,
+  start,
   onAdapter,
 }: {
   videoId: string;
+  start?: number;
   onAdapter: (adapter: PlayerAdapter) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -66,7 +68,7 @@ export default function YouTubePlayer({
       const yt = window.YT;
       player = new yt.Player(hostRef.current, {
         videoId,
-        playerVars: { playsinline: 1, rel: 0 },
+        playerVars: { playsinline: 1, rel: 0, ...(start ? { start: Math.floor(start) } : {}) },
         events: {
           onReady: () => {
             onAdapter({
@@ -84,7 +86,7 @@ export default function YouTubePlayer({
       cancelled = true;
       player?.destroy();
     };
-  }, [videoId, onAdapter]);
+  }, [videoId, start, onAdapter]);
 
   return (
     <div className="playerBox">

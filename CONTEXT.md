@@ -56,6 +56,9 @@ An organization associated with producing or hosting an event, stored in `meetin
 **Highlights**
 The canonical field (formerly `key_decisions`) on `MeetingSummary` for the 3-5 most notable items from an event. For deliberative events: votes and directed actions. For interview/media events: key claims or commitments made by the subject. Neutral enough to cover all event categories.
 
+**Clip window**
+A single contiguous time range of a source recording that was transcribed and summarized, used when only part of the source is relevant (e.g. a politician interview inside a longer podcast). The Event still references and plays the *full* source recording — the clip window is provenance describing which slice was processed, not a separate artifact. Published segment and section timestamps stay in the full source's timeline (offset-corrected), never clip-relative. An absent window means the entire recording was processed (the default). Distinct from an *excerpt*: no clipped media file is ever created or hosted.
+
 **Body Slug**
 *(deprecated)* A loose text reference to `essentials.chambers.slug` formerly stored on `meetings.meetings.body_slug`. Replaced by `chamber_id` UUID FK after backfill. Do not use in new code.
 

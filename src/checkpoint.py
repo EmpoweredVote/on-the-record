@@ -41,6 +41,8 @@ class PipelineState:
         self.meeting_type: Optional[str] = None
         self.review_status: Optional[str] = None       # pass | review | failed
         self.trusted_coverage: Optional[float] = None  # gate headline metric
+        self.clip_start_seconds: Optional[float] = None
+        self.clip_end_seconds: Optional[float] = None
         self._load()
 
     def _load(self) -> None:
@@ -59,6 +61,8 @@ class PipelineState:
             self.meeting_type = data.get("meeting_type")
             self.review_status = data.get("review_status")
             self.trusted_coverage = data.get("trusted_coverage")
+            self.clip_start_seconds = data.get("clip_start_seconds")
+            self.clip_end_seconds = data.get("clip_end_seconds")
 
     def save(self) -> None:
         """Atomic write: write to temp file then rename."""
@@ -75,6 +79,8 @@ class PipelineState:
             "meeting_type": self.meeting_type,
             "review_status": self.review_status,
             "trusted_coverage": self.trusted_coverage,
+            "clip_start_seconds": self.clip_start_seconds,
+            "clip_end_seconds": self.clip_end_seconds,
         }
         fd, tmp_path = tempfile.mkstemp(
             dir=str(self.meeting_dir), suffix=".tmp"
