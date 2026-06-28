@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { formatMeetingDate, formatTime } from "@/lib/format";
+import { fetchMeetings, fetchPeople } from "@/lib/queries";
+import { useApi } from "@/lib/useApi";
 import type { SearchResult } from "@/lib/types";
 
 // Runtime requests from the browser — needs the NEXT_PUBLIC_ env var,
@@ -54,14 +56,19 @@ interface MeetingGroup {
 
 type Status = "idle" | "loading" | "done" | "error";
 
-export default function SearchView({
-  cities,
-  speakers,
-}: {
-  cities: string[];
-  speakers: SpeakerOption[];
-}) {
+export default function SearchView() {
   const router = useRouter();
+
+  // Fetch filter options at runtime so no build-time data fetch is needed.
+  const { data: meetingsData } = useApi(fetchMeetings);
+  const { data: peopleData } = useApi(fetchPeople);
+
+  const cities: string[] = meetingsData
+    ? [...new Set(meetingsData.map((m) => m.city).filter((c): c is string => c !== null))].sort()
+    : [];
+  const speakers: SpeakerOption[] = peopleData
+    ? peopleData.map((p) => ({ id: p.politician_id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name))
+    : [];
   const searchParams = useSearchParams();
 
   const urlQ = searchParams.get("q") ?? "";
