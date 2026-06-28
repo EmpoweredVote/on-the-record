@@ -1,15 +1,16 @@
-"use client";
-
 import Link from "next/link";
 import { fetchMeetings } from "@/lib/queries";
-import { useApi } from "@/lib/useApi";
 import MeetingListClient from "./MeetingListClient";
-import Loading from "@/components/Loading";
-import ErrorState from "@/components/ErrorState";
-import EmptyState from "@/components/EmptyState";
 
-export default function HomePage() {
-  const { data: meetings, loading, error } = useApi(fetchMeetings);
+export default async function HomePage() {
+  let meetings: Awaited<ReturnType<typeof fetchMeetings>> = [];
+  let loadError = false;
+  try {
+    meetings = await fetchMeetings();
+  } catch {
+    // Don't take the whole site down (or fail CI builds) on a DB hiccup.
+    loadError = true;
+  }
 
   return (
     <main className="indexPage">
@@ -23,12 +24,10 @@ export default function HomePage() {
         <Link href="/search">Search →</Link>
         <Link href="/topics">Topics →</Link>
       </nav>
-      {loading ? (
-        <Loading label="Loading meetings…" />
-      ) : error ? (
-        <ErrorState message="Meetings are temporarily unavailable. Please try again shortly." />
-      ) : !meetings || meetings.length === 0 ? (
-        <EmptyState message="No meetings published yet." />
+      {loadError ? (
+        <p>Meetings are temporarily unavailable. Please try again shortly.</p>
+      ) : meetings.length === 0 ? (
+        <p>No meetings published yet.</p>
       ) : (
         <MeetingListClient meetings={meetings} />
       )}

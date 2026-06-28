@@ -264,9 +264,7 @@ def test_unidentified_speaker_publishes_no_local_person_and_null_local_slug():
     assert insert_params[-1] is None   # local_slug column written NULL
 
 
-def test_publish_meeting_never_calls_deploy_hook(monkeypatch):
-    """publish_meeting never fires _trigger_deploy_hook — the web app reads data
-    live from the API so per-publish site rebuilds are no longer needed."""
+def test_publish_meeting_suppresses_deploy_when_trigger_deploy_false(monkeypatch):
     import src.publish as publish
 
     calls = {"deploy": 0}
@@ -298,5 +296,5 @@ def test_publish_meeting_never_calls_deploy_hook(monkeypatch):
 
     publish.publish_meeting(m, None, trigger_deploy=False)
     assert calls["deploy"] == 0
-    publish.publish_meeting(m, None)  # trigger_deploy=True (default) — hook still not called
-    assert calls["deploy"] == 0
+    publish.publish_meeting(m, None)  # default True
+    assert calls["deploy"] == 1

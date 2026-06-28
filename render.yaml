@@ -11,13 +11,3 @@ services:
         sync: false
       - key: NEXT_PUBLIC_EV_ACCOUNTS_URL
         sync: false
-    routes:
-      - type: rewrite
-        source: /meetings/*
-        destination: /meetings/view/index.html
-      - type: rewrite
-        source: /people/*
-        destination: /people/view/index.html
-      - type: rewrite
-        source: /topics/*
-        destination: /topics/view/index.html
