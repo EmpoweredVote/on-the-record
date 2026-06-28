@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { fetchMeeting, fetchSegments, fetchSummary } from "@/lib/queries";
 import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
+import { usePathParam } from "@/lib/usePathParam";
 import MeetingView from "./MeetingView";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
@@ -13,14 +13,14 @@ import NotFound from "@/components/NotFound";
 const SUBSTANTIVE = new Set(["discussion", "public_comment", "consent_agenda", "vote"]);
 
 export default function MeetingDetailClient() {
-  const params = useParams<{ meetingId: string }>();
-  const id = params.meetingId;
+  const id = usePathParam(1); // /meetings/<id> — real URL id, not the build sentinel
+  const ready = id != null;
 
-  const meetingQ = useApi(() => fetchMeeting(id), [id]);
-  const segmentsQ = useApi(() => fetchSegments(id), [id]);
-  const summaryQ = useApi(() => fetchSummary(id).catch(() => null), [id]);
+  const meetingQ = useApi(() => (ready ? fetchMeeting(id) : Promise.resolve(null)), [id]);
+  const segmentsQ = useApi(() => (ready ? fetchSegments(id) : Promise.resolve([])), [id]);
+  const summaryQ = useApi(() => (ready ? fetchSummary(id).catch(() => null) : Promise.resolve(null)), [id]);
 
-  if (meetingQ.loading) return <main className="meetingPage"><Loading label="Loading meeting…" /></main>;
+  if (!ready || meetingQ.loading) return <main className="meetingPage"><Loading label="Loading meeting…" /></main>;
   if (meetingQ.error) return <main className="meetingPage"><ErrorState /></main>;
   if (!meetingQ.data) return <NotFound message="Meeting not found." />;
 

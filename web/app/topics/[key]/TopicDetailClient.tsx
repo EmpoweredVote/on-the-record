@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { fetchTopic } from "@/lib/queries";
 import { formatMeetingDate } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
+import { usePathParam } from "@/lib/usePathParam";
 import ProvenanceBadge from "@/components/ProvenanceBadge";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
@@ -17,12 +17,12 @@ function fmt(seconds: number | null): string {
 }
 
 export default function TopicDetailClient() {
-  const params = useParams<{ key: string }>();
-  const { key } = params;
+  const key = usePathParam(1); // /topics/<key> — real URL key, not the build sentinel
+  const ready = key != null;
 
-  const topicQ = useApi(() => fetchTopic(key), [key]);
+  const topicQ = useApi(() => (ready ? fetchTopic(key) : Promise.resolve(null)), [key]);
 
-  if (topicQ.loading) return <main className="indexPage"><Loading label="Loading topic…" /></main>;
+  if (!ready || topicQ.loading) return <main className="indexPage"><Loading label="Loading topic…" /></main>;
   if (topicQ.error) return <main className="indexPage"><ErrorState /></main>;
   if (!topicQ.data) return <NotFound message="Topic not found." />;
 
