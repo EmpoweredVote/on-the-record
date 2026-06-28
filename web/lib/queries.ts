@@ -34,6 +34,8 @@ function mapMeeting(m: any): Meeting {
     playback_kind: m.playbackKind ?? null,
     playback_url: m.videoUrl ?? null,
     duration_seconds: m.durationSeconds ?? null,
+    clip_start_seconds: m.clipStartSeconds ?? null,
+    clip_end_seconds: m.clipEndSeconds ?? null,
     summary_preview: m.summaryPreview ?? null,
     event_orgs: (m.eventOrgs ?? []) as string[],
     source_title: m.processingMetadata?.sourceTitle ?? null,

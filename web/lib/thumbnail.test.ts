@@ -16,6 +16,8 @@ const base: Meeting = {
   playback_kind: "youtube",
   playback_url: "abc123",
   duration_seconds: 8040,
+  clip_start_seconds: null,
+  clip_end_seconds: null,
   summary_preview: "A summary.",
   speakers: [],
   event_orgs: [],
