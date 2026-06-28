@@ -1,23 +1,26 @@
+"use client";
+
 import Link from "next/link";
 import { fetchTopics } from "@/lib/queries";
-import type { TopicListEntry } from "@/lib/types";
+import { useApi } from "@/lib/useApi";
+import Loading from "@/components/Loading";
+import ErrorState from "@/components/ErrorState";
+import EmptyState from "@/components/EmptyState";
 
-export const metadata = { title: "Topics — On the Record" };
-
-export default async function TopicsPage() {
-  let topics: TopicListEntry[] = [];
-  let loadError = false;
-  try { topics = await fetchTopics(); } catch { loadError = true; }
+export default function TopicsPage() {
+  const { data: topics, loading, error } = useApi(fetchTopics);
 
   return (
     <main className="indexPage">
       <Link href="/" className="backLink">← All meetings</Link>
       <h1>Topics</h1>
       <p className="tagline">Issues discussed across meetings, from the Compass topic set.</p>
-      {loadError ? (
-        <p>Topics are temporarily unavailable.</p>
-      ) : topics.length === 0 ? (
-        <p>No topics tagged yet.</p>
+      {loading ? (
+        <Loading label="Loading topics…" />
+      ) : error ? (
+        <ErrorState message="Topics are temporarily unavailable." />
+      ) : !topics || topics.length === 0 ? (
+        <EmptyState message="No topics yet." />
       ) : (
         <ul className="topicList">
           {topics.map((t) => (

@@ -6,6 +6,7 @@ import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
 import MeetingView from "./MeetingView";
 
 export const dynamicParams = false;
+export const dynamic = "force-static";
 
 export async function generateStaticParams() {
   // Wrap in try/catch so builds succeed when EV_ACCOUNTS_URL is unset or the

@@ -5,6 +5,7 @@ import ProvenanceBadge from "@/components/ProvenanceBadge";
 import { formatMeetingDate } from "@/lib/format";
 
 export const dynamicParams = false;
+export const dynamic = "force-static";
 
 export async function generateStaticParams() {
   let topics: Awaited<ReturnType<typeof fetchTopics>> = [];

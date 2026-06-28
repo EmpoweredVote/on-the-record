@@ -4,6 +4,7 @@ import { fetchAppearances, fetchPeople, fetchPerson } from "@/lib/queries";
 import { formatMeetingDate, formatTime } from "@/lib/format";
 
 export const dynamicParams = false;
+export const dynamic = "force-static";
 
 export async function generateStaticParams() {
   // Wrap in try/catch so builds succeed when EV_ACCOUNTS_URL is unset or the
