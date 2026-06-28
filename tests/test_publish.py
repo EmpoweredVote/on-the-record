@@ -152,33 +152,12 @@ def test_resolve_chamber_id_returns_none_for_duplicate_slug():
     assert _resolve_chamber_id(cur, "duplicate") is None
 
 
-@pytest.mark.parametrize(
-    "event_kind,body_slug,race_id,error",
-    [
-        ("council", None, None, "chamber_id is required"),
-        # The "race_id is required" (debate/forum) and "cannot both be set"
-        # rules no longer apply through _upsert_meeting: publish stopped
-        # passing race_id to the validator (races are derived into
-        # meetings.event_races at publish time instead).
-    ],
-)
-def test_publish_rejects_invalid_entity_state(
-    event_kind, body_slug, race_id, error
-):
-    fetch_rows = []
-    if body_slug == "test-council":
-        fetch_rows = [("11111111-1111-4111-8111-111111111111",)]
-    cur = RecordingCursor(fetch_rows=fetch_rows)
-    meeting = Meeting(
-        meeting_id="event",
-        city=None,
-        date="2026-06-02",
-        meeting_type="Event",
-        event_kind=event_kind,
-        race_id=race_id,
-    )
-    with pytest.raises(RuntimeError, match=error):
-        _upsert_meeting(cur, meeting, body_slug)
+# NOTE: there is no longer any entity-state rejection reachable through
+# _upsert_meeting — chamber_id is optional for council/school_board (multi-seat
+# bodies), race_id is no longer passed to the validator (races are derived into
+# meetings.event_races), so the only remaining rule (chamber+race mutual
+# exclusion) can't trigger here. The validator rules are unit-tested directly in
+# tests/test_event_entities.py.
 
 
 @pytest.mark.parametrize("existing_row", [("existing-uuid",), None])

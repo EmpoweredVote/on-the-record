@@ -47,7 +47,13 @@ def test_entity_validation_rules():
     # validated at publish time (>=1 derived race).
     assert validate_event_entities("debate", None, None) is None
     assert validate_event_entities("forum", None, None) is None
-    assert "chamber_id is required" in validate_event_entities("council", None, None)
+    # chamber_id is now OPTIONAL for council/school_board: multi-seat bodies
+    # (e.g. Bloomington Common Council = 7 per-seat chambers under one slug)
+    # have no single chamber to pin, so a missing chamber no longer blocks.
+    assert validate_event_entities("council", None, None) is None
+    assert validate_event_entities("school_board", None, None) is None
+    # chamber is still set + accepted when a body resolves to one chamber:
+    assert validate_event_entities("council", CHAMBER_ID, None) is None
     assert "cannot both be set" in validate_event_entities("other", CHAMBER_ID, RACE_ID)
 
 
