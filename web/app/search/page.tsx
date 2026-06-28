@@ -1,10 +1,32 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { fetchMeetings, fetchPeople } from "@/lib/queries";
 import SearchView from "./SearchView";
 
 export const metadata = { title: "Search — On the Record" };
 
-export default function SearchPage() {
+export default async function SearchPage() {
+  let cities: string[] = [];
+  let speakers: { id: string; name: string }[] = [];
+  try {
+    const [meetings, people] = await Promise.all([
+      fetchMeetings(),
+      fetchPeople(),
+    ]);
+    cities = [
+      ...new Set(
+        meetings
+          .map((meeting) => meeting.city)
+          .filter((city): city is string => city !== null)
+      ),
+    ].sort();
+    speakers = people
+      .map((p) => ({ id: p.politician_id, name: p.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    // Dropdowns degrade to empty lists; search itself is a runtime request.
+  }
+
   return (
     <main className="indexPage searchPage">
       <Link href="/" className="backLink">
@@ -16,7 +38,7 @@ export default function SearchPage() {
       </p>
       {/* useSearchParams requires a Suspense boundary under static export */}
       <Suspense fallback={null}>
-        <SearchView />
+        <SearchView cities={cities} speakers={speakers} />
       </Suspense>
     </main>
   );
