@@ -262,3 +262,39 @@ def test_unidentified_speaker_publishes_no_local_person_and_null_local_slug():
         if "INSERT INTO meetings.speakers" in sql
     )
     assert insert_params[-1] is None   # local_slug column written NULL
+
+
+def test_publish_meeting_suppresses_deploy_when_trigger_deploy_false(monkeypatch):
+    import src.publish as publish
+
+    calls = {"deploy": 0}
+    monkeypatch.setattr(publish, "_trigger_deploy_hook", lambda: calls.__setitem__("deploy", calls["deploy"] + 1))
+    # Stub the whole DB transaction so we only exercise the deploy decision.
+    monkeypatch.setattr(publish, "_require_db_url", lambda: "postgresql://x")
+
+    class _Cur:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, *a, **k): pass
+        def fetchone(self): return ("muid",)
+        def fetchall(self): return []
+    class _Conn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def cursor(self): return _Cur()
+        def close(self): pass
+    monkeypatch.setattr(publish.psycopg2, "connect", lambda *a, **k: _Conn())
+    # Stub the per-step helpers so publish_meeting reaches the deploy decision.
+    for fn in ("_upsert_meeting", "_upsert_event_orgs", "_upsert_local_people",
+               "_reconcile_event_races", "_replace_topics"):
+        monkeypatch.setattr(publish, fn, lambda *a, **k: "muid")
+    monkeypatch.setattr(publish, "_upsert_speakers", lambda *a, **k: {})
+    monkeypatch.setattr(publish, "_replace_segments", lambda *a, **k: 0)
+
+    from src.models import Meeting
+    m = Meeting(meeting_id="m1", city="X", date="2026-04-01")
+
+    publish.publish_meeting(m, None, trigger_deploy=False)
+    assert calls["deploy"] == 0
+    publish.publish_meeting(m, None)  # default True
+    assert calls["deploy"] == 1
