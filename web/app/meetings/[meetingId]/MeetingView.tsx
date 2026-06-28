@@ -226,13 +226,14 @@ export default function MeetingView({
                 : ""}
               {meeting.source_title ? ` of "${meeting.source_title}"` : " of a longer recording"}.
             </span>{" "}
-            <span
+            <button
+              type="button"
               className="clipNoteInfo"
               title="We transcribe and summarize only the relevant interview; the player plays the full original recording so you can see the surrounding context."
               aria-label="Why only part is transcribed"
             >
               ⓘ
-            </span>
+            </button>
             {meeting.source_url && (
               <>
                 {" "}
