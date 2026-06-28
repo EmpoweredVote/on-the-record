@@ -68,6 +68,50 @@ cp .env.local.example .env.local
 npm install && npm run dev   # http://localhost:3000
 ```
 
+## Linking speakers to politicians
+
+Once a speaker is *named*, they're linked to their [essentials](https://github.com/EmpoweredVote/essentials) politician (`politician_id`) so they show up on `/people/<id>`. High-confidence matches link **automatically** during a run; everything else is handled with the commands below. Most accept `--dry-run` (preview, writes nothing); add `--publish-anyway` because re-publishing already-vetted meetings shouldn't be re-blocked by the review gate (most meetings have no `review_status`).
+
+**Auto-linking (automatic).** During processing, any named speaker with a single, unambiguous essentials match is linked automatically and tagged `id_method="auto_linked"` — no action needed. Audit or revert later by looking for that tag.
+
+**Link one person everywhere they appear:**
+
+```bash
+# Link "Steve Hilton" across every meeting he's in, fold his voice profile, re-publish
+python run_local.py --relink-person "Steve Hilton" --publish-anyway
+
+# Ambiguous name (several essentials matches)? pass the explicit id:
+python run_local.py --relink-person "Katie Porter" --to-id <politician_uuid> --publish-anyway
+
+# Preview first, or also rebuild the static site afterward:
+python run_local.py --relink-person "Steve Hilton" --dry-run
+python run_local.py --relink-person "Steve Hilton" --publish-anyway --deploy
+```
+
+**Bulk-link the backlog (scan → edit → apply):**
+
+```bash
+# 1. Enumerate every unlinked named speaker into an editable review file (with suggested matches)
+python run_local.py --bulk-relink-scan --out review.yaml
+
+# 2. Open review.yaml. Rows with one clear match are pre-set decision: link.
+#    For rows marked `review`, pick a candidate id from the listed `candidates`
+#    and change decision to `link` (or `skip` for moderators / non-politicians).
+
+# 3. Apply your approved links — relinks, folds voice profiles, re-publishes,
+#    auto-resolves debate/forum race associations. Preview, then run for real:
+python run_local.py --bulk-relink-apply review.yaml --publish-anyway --dry-run
+python run_local.py --bulk-relink-apply review.yaml --publish-anyway
+```
+
+**Re-sync everything (e.g. after a schema or derivation change):**
+
+```bash
+python run_local.py --republish-all --dry-run   # preview: which published meetings would resync
+python run_local.py --republish-all              # re-publish all published meetings, one web deploy
+python run_local.py --republish-all --reenroll   # also rebuild the voice-profile DB
+```
+
 ## Repository layout
 
 ```
