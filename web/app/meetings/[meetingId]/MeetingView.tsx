@@ -171,7 +171,11 @@ export default function MeetingView({
 
   const player =
     meeting.playback_kind === "youtube" && meeting.playback_url ? (
-      <YouTubePlayer videoId={meeting.playback_url} onAdapter={onAdapter} />
+      <YouTubePlayer
+        videoId={meeting.playback_url}
+        start={meeting.clip_start_seconds ?? undefined}
+        onAdapter={onAdapter}
+      />
     ) : (meeting.playback_kind === "file" || meeting.playback_kind === "hls") &&
       meeting.playback_url ? (
       <FilePlayer
