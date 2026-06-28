@@ -24,11 +24,39 @@ def _is_url(path: str) -> bool:
         return False
 
 
+def _normalize_cmd(
+    ffmpeg_input: str,
+    output_path: str,
+    clip_start: float | None = None,
+    clip_end: float | None = None,
+) -> list[str]:
+    """Build the ffmpeg arg list for normalizing (and optionally clipping) audio.
+
+    `-ss`/`-to` are placed AFTER `-i` (output-side, decode-accurate seek) so the
+    cut is frame-exact and the persisted clip_start is authoritative — never a
+    keyframe-rounded approximation.
+    """
+    cmd = ["ffmpeg", "-y", "-i", ffmpeg_input]
+    if clip_start is not None:
+        cmd += ["-ss", str(clip_start)]
+    if clip_end is not None:
+        cmd += ["-to", str(clip_end)]
+    cmd += [
+        "-ac", str(config.CHANNELS),
+        "-ar", str(config.SAMPLE_RATE),
+        "-vn",
+        str(output_path),
+    ]
+    return cmd
+
+
 def normalize_audio(
     input_path: str | Path,
     output_path: str | Path,
     noise_reduce: bool = False,
     cookies_file: str | None = None,
+    clip_start: float | None = None,
+    clip_end: float | None = None,
 ) -> dict:
     """Normalize audio to 16kHz mono WAV via ffmpeg.
 
@@ -42,6 +70,8 @@ def normalize_audio(
         noise_reduce: If True, apply spectral-gating noise reduction after conversion.
         cookies_file: Path to a Netscape-format cookies file for authenticated
             yt-dlp downloads (e.g. private Facebook videos).
+        clip_start: Optional start time in seconds for output-side accurate seek.
+        clip_end: Optional end time in seconds for output-side accurate seek.
 
     Returns:
         Metadata dict with source, output path, duration, and whether noise reduction was applied.
@@ -76,15 +106,7 @@ def normalize_audio(
         ffmpeg_input = str(Path(input_path))
 
     subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i", ffmpeg_input,
-            "-ac", str(config.CHANNELS),
-            "-ar", str(config.SAMPLE_RATE),
-            "-vn",
-            str(output_path),
-        ],
+        _normalize_cmd(ffmpeg_input, str(output_path), clip_start, clip_end),
         check=True,
         capture_output=True,
     )
@@ -105,5 +127,7 @@ def normalize_audio(
         "sample_rate": config.SAMPLE_RATE,
         "channels": config.CHANNELS,
         "noise_reduced": noise_reduce,
+        "clip_start_seconds": clip_start,
+        "clip_end_seconds": clip_end,
         "source_title": source_title,
     }
