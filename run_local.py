@@ -1149,7 +1149,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
         t0 = time.time()
         print(f"  Aligning VTT captions from {vtt_path.name}...")
-        segments = align_vtt_to_segments(vtt_path, segments)
+        # Captions are downloaded for the full source; rebase to clip-local time
+        # so a clipped meeting's diarized segments get the right text.
+        segments = align_vtt_to_segments(vtt_path, segments, clip_offset=clip_start or 0.0)
         elapsed = time.time() - t0
 
         meeting.processing_metadata.transcription_model = "vtt_alignment"

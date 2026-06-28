@@ -147,6 +147,7 @@ def _deduplicated_words(cues: list[dict]) -> list[Word]:
 def align_vtt_to_segments(
     vtt_path: str | Path,
     diarized_segments: list[Segment],
+    clip_offset: float = 0.0,
 ) -> list[Segment]:
     """Align VTT cues to diarized segments by timestamp overlap.
 
@@ -156,6 +157,11 @@ def align_vtt_to_segments(
     Args:
         vtt_path: Path to the VTT subtitle file.
         diarized_segments: Segments from diarization (no text yet).
+        clip_offset: Seconds to subtract from every cue time. Captions are
+            downloaded for the FULL source, but a clipped meeting's diarized
+            segments are clip-local (0-based). Pass clip_start_seconds so cue
+            times rebase to the clip's timeline; cues outside the window fall
+            out of every segment's range and are dropped.
 
     Returns:
         The same segments list, now with text populated from VTT.
@@ -171,7 +177,13 @@ def align_vtt_to_segments(
         seg.text = ""
         seg.words = []
 
-    for word in _deduplicated_words(cues):
+    words = _deduplicated_words(cues)
+    if clip_offset:
+        for word in words:
+            word.start -= clip_offset
+            word.end -= clip_offset
+
+    for word in words:
         midpoint = (word.start + word.end) / 2
         target = next(
             (

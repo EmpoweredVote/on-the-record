@@ -2,6 +2,49 @@ from src.models import Segment
 from src.vtt_align import align_vtt_to_segments, parse_vtt
 
 
+def test_align_vtt_rebases_full_episode_cues_to_clip_local(tmp_path):
+    """When the meeting is a clip, captions.vtt still spans the FULL source.
+    align_vtt_to_segments must rebase cue times by clip_offset (episode->clip-local)
+    so clip-local diarized segments get the right text, and drop cues outside the
+    window."""
+    vtt = tmp_path / "captions.vtt"
+    vtt.write_text(
+        """WEBVTT
+
+00:00:10.000 --> 00:00:14.000
+before the window noise
+
+00:01:45.000 --> 00:01:50.000
+inside the interview window
+""",
+        encoding="utf-8",
+    )
+    # Clip starts at episode second 100. The single diarized segment is
+    # clip-local [0, 20]. Cue at episode 105-110 -> clip-local 5-10 (inside).
+    # Cue at episode 10-14 -> clip-local -90..-86 (before the window, dropped).
+    segments = [Segment(0, 0.0, 20.0, "SPEAKER_00")]
+    align_vtt_to_segments(vtt, segments, clip_offset=100.0)
+
+    assert "inside the interview window" in segments[0].text
+    assert "before the window noise" not in segments[0].text
+
+
+def test_align_vtt_no_offset_unchanged(tmp_path):
+    """clip_offset defaults to 0 - non-clipped behavior is identical."""
+    vtt = tmp_path / "captions.vtt"
+    vtt.write_text(
+        """WEBVTT
+
+00:00:05.000 --> 00:00:09.000
+hello there world
+""",
+        encoding="utf-8",
+    )
+    segments = [Segment(0, 0.0, 20.0, "SPEAKER_00")]
+    align_vtt_to_segments(vtt, segments)
+    assert "hello there world" in segments[0].text
+
+
 def test_parse_vtt_collapses_expanding_lines_within_a_cue(tmp_path):
     vtt = tmp_path / "captions.vtt"
     vtt.write_text(
