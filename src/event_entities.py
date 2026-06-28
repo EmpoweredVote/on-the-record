@@ -26,6 +26,9 @@ def validate_event_entities(
 
     if chamber_id is not None and race_id is not None and event_kind not in _INTERVIEW_KINDS:
         return "chamber_id and race_id cannot both be set"
-    if event_kind in ("council", "school_board") and chamber_id is None:
-        return f"chamber_id is required for event_kind {event_kind}"
+    # chamber_id is optional, not required, for council/school_board: a multi-seat
+    # body (e.g. Bloomington Common Council = 7 per-seat chambers sharing one slug)
+    # has no single chamber to pin — _resolve_chamber_id returns None for it by
+    # design — so a missing chamber must not block publishing. It is still set
+    # when a body resolves to exactly one chamber.
     return None
