@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { fetchAppearances, fetchPerson } from "@/lib/queries";
 import { formatMeetingDate, formatTime } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
+import { usePathParam } from "@/lib/usePathParam";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
@@ -13,13 +13,13 @@ import NotFound from "@/components/NotFound";
 const ESSENTIALS_BASE = "https://essentials.city";
 
 export default function PersonDetailClient() {
-  const params = useParams<{ id: string }>();
-  const { id } = params;
+  const id = usePathParam(1); // /people/<id> — real URL id, not the build sentinel
+  const ready = id != null;
 
-  const personQ = useApi(() => fetchPerson(id), [id]);
-  const appearancesQ = useApi(() => fetchAppearances(id), [id]);
+  const personQ = useApi(() => (ready ? fetchPerson(id) : Promise.resolve(null)), [id]);
+  const appearancesQ = useApi(() => (ready ? fetchAppearances(id) : Promise.resolve([])), [id]);
 
-  if (personQ.loading) return <main className="indexPage personPage"><Loading label="Loading person…" /></main>;
+  if (!ready || personQ.loading) return <main className="indexPage personPage"><Loading label="Loading person…" /></main>;
   if (personQ.error) return <main className="indexPage personPage"><ErrorState /></main>;
   if (!personQ.data) return <NotFound message="Person not found." />;
 
