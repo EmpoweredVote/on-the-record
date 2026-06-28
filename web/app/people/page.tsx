@@ -1,18 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { fetchPeople } from "@/lib/queries";
-import type { Person } from "@/lib/types";
+import { useApi } from "@/lib/useApi";
+import Loading from "@/components/Loading";
+import ErrorState from "@/components/ErrorState";
+import EmptyState from "@/components/EmptyState";
 
-export const metadata = { title: "People — On the Record" };
-
-export default async function PeoplePage() {
-  let people: Person[] = [];
-  let loadError = false;
-  try {
-    people = await fetchPeople();
-  } catch {
-    // Don't take the whole site down (or fail CI builds) on an API hiccup.
-    loadError = true;
-  }
+export default function PeoplePage() {
+  const { data: people, loading, error } = useApi(fetchPeople);
 
   return (
     <main className="indexPage">
@@ -24,10 +20,12 @@ export default async function PeoplePage() {
       <nav className="siteNav">
         <Link href="/search">Search →</Link>
       </nav>
-      {loadError ? (
-        <p>People are temporarily unavailable. Please try again shortly.</p>
-      ) : people.length === 0 ? (
-        <p>No identified speakers yet.</p>
+      {loading ? (
+        <Loading label="Loading people…" />
+      ) : error ? (
+        <ErrorState message="People are temporarily unavailable. Please try again shortly." />
+      ) : !people || people.length === 0 ? (
+        <EmptyState message="No people yet." />
       ) : (
         <ul className="peopleGrid">
           {people.map((p) => (

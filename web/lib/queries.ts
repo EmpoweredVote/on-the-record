@@ -11,12 +11,13 @@ import type {
   TopicListEntry,
 } from "./types";
 
-const BASE = (process.env.EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
+// Read at call time (not import time) so it's testable and still inlined by Next.
+function base(): string {
+  return (process.env.NEXT_PUBLIC_EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
+}
 
-// Busts the Next.js fetch-cache on each new Render deploy so stale API
-// responses are never served from a cached build artifact.
-const BUILD_ID = process.env.RENDER_GIT_COMMIT?.slice(0, 8) ?? "";
-const BUST: RequestInit = BUILD_ID ? { headers: { "X-Build-ID": BUILD_ID } } : {};
+// Always fetch current data in the browser; no build-time cache.
+const FETCH_INIT: RequestInit = { cache: "no-store" };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapMeeting(m: any): Meeting {
@@ -133,16 +134,16 @@ function mapAppearance(a: any): Appearance {
 }
 
 export async function fetchPeople(): Promise<Person[]> {
-  if (!BASE) return [];
-  const res = await fetch(`${BASE}/api/people`, BUST);
+  if (!base()) return [];
+  const res = await fetch(`${base()}/api/people`, FETCH_INIT);
   if (!res.ok) throw new Error(`people fetch failed: ${res.status}`);
   const data = await res.json();
   return (data as unknown[]).map(mapPerson);
 }
 
 export async function fetchPerson(id: string): Promise<PersonDetail | null> {
-  if (!BASE) return null;
-  const res = await fetch(`${BASE}/api/people/${encodeURIComponent(id)}`, BUST);
+  if (!base()) return null;
+  const res = await fetch(`${base()}/api/people/${encodeURIComponent(id)}`, FETCH_INIT);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`person fetch failed: ${res.status}`);
   const p = await res.json();
@@ -150,10 +151,10 @@ export async function fetchPerson(id: string): Promise<PersonDetail | null> {
 }
 
 export async function fetchAppearances(id: string): Promise<Appearance[]> {
-  if (!BASE) return [];
+  if (!base()) return [];
   const res = await fetch(
-    `${BASE}/api/people/${encodeURIComponent(id)}/appearances`,
-    BUST
+    `${base()}/api/people/${encodeURIComponent(id)}/appearances`,
+    FETCH_INIT
   );
   if (!res.ok) throw new Error(`appearances fetch failed: ${res.status}`);
   const { appearances } = (await res.json()) as { appearances: unknown[] };
@@ -161,16 +162,16 @@ export async function fetchAppearances(id: string): Promise<Appearance[]> {
 }
 
 export async function fetchMeetings(): Promise<Meeting[]> {
-  if (!BASE) return [];
-  const res = await fetch(`${BASE}/api/meetings`, BUST);
+  if (!base()) return [];
+  const res = await fetch(`${base()}/api/meetings`, FETCH_INIT);
   if (!res.ok) throw new Error(`meetings fetch failed: ${res.status}`);
   const data = await res.json();
   return (data as unknown[]).map(mapMeeting);
 }
 
 export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
-  if (!BASE) return null;
-  const res = await fetch(`${BASE}/api/meetings/${meetingId}`, BUST);
+  if (!base()) return null;
+  const res = await fetch(`${base()}/api/meetings/${meetingId}`, FETCH_INIT);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`meeting fetch failed: ${res.status}`);
   return mapMeeting(await res.json());
@@ -178,12 +179,12 @@ export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
 
 // ev-accounts paginates the transcript at 200 segments/page
 export async function fetchSegments(meetingId: string): Promise<Segment[]> {
-  if (!BASE) return [];
+  if (!base()) return [];
   const all: Segment[] = [];
   for (let page = 1; ; page++) {
     const res = await fetch(
-      `${BASE}/api/meetings/${meetingId}/transcript?page=${page}`,
-      BUST
+      `${base()}/api/meetings/${meetingId}/transcript?page=${page}`,
+      FETCH_INIT
     );
     if (!res.ok) throw new Error(`transcript fetch failed: ${res.status}`);
     const { segments, totalCount } = (await res.json()) as {
@@ -198,24 +199,24 @@ export async function fetchSegments(meetingId: string): Promise<Segment[]> {
 }
 
 export async function fetchSummary(meetingId: string): Promise<MeetingSummary | null> {
-  if (!BASE) return null;
-  const res = await fetch(`${BASE}/api/meetings/${encodeURIComponent(meetingId)}/summary`, BUST);
+  if (!base()) return null;
+  const res = await fetch(`${base()}/api/meetings/${encodeURIComponent(meetingId)}/summary`, FETCH_INIT);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`summary fetch failed: ${res.status}`);
   return mapSummary(await res.json());
 }
 
 export async function fetchTopics(): Promise<TopicListEntry[]> {
-  if (!BASE) return [];
-  const res = await fetch(`${BASE}/api/topics`, BUST);
+  if (!base()) return [];
+  const res = await fetch(`${base()}/api/topics`, FETCH_INIT);
   if (!res.ok) throw new Error(`topics fetch failed: ${res.status}`);
   const data = await res.json();
   return ((data.topics ?? []) as unknown[]).map(mapTopicEntry);
 }
 
 export async function fetchTopic(key: string): Promise<TopicDetail | null> {
-  if (!BASE) return null;
-  const res = await fetch(`${BASE}/api/topics/${encodeURIComponent(key)}`, BUST);
+  if (!base()) return null;
+  const res = await fetch(`${base()}/api/topics/${encodeURIComponent(key)}`, FETCH_INIT);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`topic fetch failed: ${res.status}`);
   const t = await res.json();
