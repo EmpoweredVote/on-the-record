@@ -2506,7 +2506,7 @@ def _prompt_link_politician(mappings: dict, label: str, query: str) -> None:
     from src.essentials_client import EssentialsClientError, search_politicians
 
     mapping = mappings.get(label)
-    if mapping is None or mapping.politician_slug:
+    if mapping is None or mapping.politician_slug or mapping.politician_id:
         return
     if not sys.stdin.isatty():
         return
@@ -2569,7 +2569,7 @@ def _prompt_create_local_person(
     if not sys.stdin.isatty():
         return
     mapping = mappings.get(label)
-    if mapping is None or mapping.politician_slug:
+    if mapping is None or mapping.politician_slug or mapping.politician_id:
         return
 
     print("  Not in essentials. Create as local person?")
