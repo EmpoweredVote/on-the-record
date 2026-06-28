@@ -186,9 +186,13 @@ def repair_transcript(
 
     try:
         raw_segments = remove_segment_overlaps(diarized_segments)
+        # Clip meetings store full-source captions but clip-local diarization;
+        # rebase cue times by the clip start, mirroring the live pipeline so
+        # in-window text aligns and out-of-window cues drop.
         raw_segments = align_vtt_to_segments(
             meeting_dir / "captions.vtt",
             raw_segments,
+            clip_offset=meeting.clip_start_seconds or 0.0,
         )
     except Exception as exc:
         raise RepairError(f"Could not align captions: {exc}") from exc

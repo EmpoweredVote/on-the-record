@@ -138,6 +138,38 @@ No
     assert result[0].text == "No No"
 
 
+def test_align_vtt_retains_trailing_word_in_inter_segment_gap(tmp_path):
+    """A diarized turn truncated before its last word leaves that word timed in
+    the pause (inter-segment gap) before the next speaker. It must snap back to
+    the preceding turn rather than being dropped (regression for trailing-word
+    loss, e.g. '...the same style that Trump' losing 'had 10 years ago?')."""
+    vtt = tmp_path / "captions.vtt"
+    vtt.write_text(
+        """WEBVTT
+
+00:00:00.000 --> 00:00:06.000
+alpha beta gamma
+
+00:00:06.000 --> 00:00:09.000
+delta echo
+""",
+        encoding="utf-8",
+    )
+    # Cue 1 words are 2s each: alpha[0,2], beta[2,4], gamma[4,6]. The diarized
+    # turn ends at 4.0 and the next speaker starts at 6.0, so gamma's midpoint
+    # (5.0) lands in the [4,6] gap -- inside no segment and with zero overlap on
+    # either side. Before the fix it was dropped.
+    segments = [
+        Segment(0, 0.0, 4.0, "SPEAKER_00"),
+        Segment(1, 6.0, 10.0, "SPEAKER_01"),
+    ]
+
+    result = align_vtt_to_segments(vtt, segments)
+
+    assert result[0].text == "alpha beta gamma"
+    assert result[1].text == "delta echo"
+
+
 def test_youtube_rolling_captions_with_snapshot_cues_are_deduplicated(tmp_path):
     vtt = tmp_path / "captions.vtt"
     vtt.write_text(

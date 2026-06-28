@@ -455,6 +455,66 @@ Do you have a permit No
         ) == content
 
 
+def test_repair_rebases_full_source_captions_for_clip_meetings(tmp_path):
+    """A clip meeting stores full-source captions.vtt but clip-local diarization.
+    repair_transcript must rebase cue times by clip_start_seconds (the same
+    clip_offset the live pipeline applies); otherwise in-window text aligns to
+    no segment and the repair drops every word."""
+    meeting_dir = tmp_path / "2026-04-14-clip"
+    (meeting_dir / "exports").mkdir(parents=True)
+    (meeting_dir / "pipeline_state.json").write_text(
+        '{"completed_stage": 7}', encoding="utf-8"
+    )
+    # Clip starts at source second 100. Diarization is clip-local [0, 20].
+    (meeting_dir / "diarization.json").write_text(
+        json.dumps([Segment(0, 0.0, 20.0, "SPEAKER_00").to_dict()]),
+        encoding="utf-8",
+    )
+    # Full-source captions: cue at 105s -> clip-local 5s (inside the window);
+    # cue at 10s -> clip-local -90s (before the window, must drop).
+    (meeting_dir / "captions.vtt").write_text(
+        """WEBVTT
+
+00:00:10.000 --> 00:00:14.000
+before the window noise
+
+00:01:45.000 --> 00:01:50.000
+inside the interview window
+""",
+        encoding="utf-8",
+    )
+    meeting = Meeting(
+        meeting_id="2026-04-14-clip",
+        city=None,
+        date="2026-04-14",
+        segments=[Segment(0, 0.0, 20.0, "SPEAKER_00", text="OLD", speaker_name="Nithya Raman")],
+        speakers={
+            "SPEAKER_00": SpeakerMapping(
+                speaker_label="SPEAKER_00",
+                speaker_name="Nithya Raman",
+                confidence=0.98,
+                id_method="voice_profile",
+            )
+        },
+        clip_start_seconds=100.0,
+        clip_end_seconds=2194.0,
+    )
+    (meeting_dir / "transcript_named.json").write_text(
+        json.dumps(meeting.to_dict()), encoding="utf-8"
+    )
+
+    repair_transcript(meeting_dir, now=datetime(2026, 4, 14, 12, 0, 0))
+
+    repaired = json.loads(
+        (meeting_dir / "transcript_named.json").read_text(encoding="utf-8")
+    )
+    texts = " ".join(seg["text"] for seg in repaired["segments"])
+    assert "inside the interview window" in texts
+    assert "before the window noise" not in texts
+    # Curated speaker identity is preserved across the repair.
+    assert repaired["segments"][0]["speaker_name"] == "Nithya Raman"
+
+
 def test_install_failure_rolls_back_every_changed_live_artifact(
     tmp_path, monkeypatch
 ):
