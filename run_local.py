@@ -1881,6 +1881,66 @@ def _published_meeting_slugs() -> set[str]:
         conn.close()
 
 
+def _republish_all(args) -> None:
+    """Re-publish every already-published meeting (resync), optionally reenroll,
+    one deploy at the end. Continue-on-error; non-zero exit if any failed."""
+    from src import config
+    from src.publish import publish_meeting
+
+    dirs = sorted(
+        d for d in config.MEETINGS_DIR.iterdir()
+        if d.is_dir() and not d.name.startswith(".")
+        and (d / "transcript_named.json").exists()
+    )
+    published = _published_meeting_slugs()
+    to_publish = [d for d in dirs if d.name in published]
+    skipped = [d for d in dirs if d.name not in published]
+    local_names = {d.name for d in dirs}
+    missing = sorted(s for s in published if s not in local_names)
+
+    print(f"republish-all: {len(to_publish)} published meeting(s) to resync, "
+          f"{len(skipped)} unpublished (skip), "
+          f"{len(missing)} published with no local transcript.")
+
+    if args.dry_run:
+        print("\n(dry run — nothing published, reenrolled, or deployed)")
+        for d in to_publish:
+            print(f"  would re-publish: {d.name}")
+        if skipped:
+            print("  would skip (not published): " + ", ".join(d.name for d in skipped))
+        print(f"  would reenroll: {'yes' if args.reenroll else 'no'}")
+        print(f"  would deploy: {'no' if args.no_deploy else 'yes'}")
+        return
+
+    failed = []
+    for d in to_publish:
+        try:
+            meeting, body_slug = _load_meeting_and_body(d)
+            publish_meeting(meeting, body_slug, trigger_deploy=False)
+            print(f"  ✅ {d.name}")
+        except Exception as exc:  # noqa: BLE001 - continue-on-error; report + collect
+            print(f"  ❌ {d.name}: {exc}")
+            failed.append(d.name)
+
+    if args.reenroll:
+        print("Reenrolling voice profiles...")
+        result = subprocess.run([sys.executable, "reenroll_profiles.py"], cwd=_REPO_DIR)
+        if result.returncode != 0:
+            print("  reenroll failed (see output above) — publishes are unaffected.")
+
+    if not args.no_deploy:
+        _trigger_render_deploy()
+
+    print(f"\nDone: {len(to_publish) - len(failed)} published, {len(failed)} failed.")
+    if skipped:
+        print("  skipped (not published): " + ", ".join(d.name for d in skipped))
+    if missing:
+        print("  published but no local transcript (not re-published): " + ", ".join(missing))
+    if failed:
+        print("  FAILED: " + ", ".join(failed))
+        sys.exit(1)
+
+
 def _trigger_render_deploy() -> None:
     """POST the Render deploy hook (RENDER_DEPLOY_HOOK_URL), loading .env.local if needed."""
     import urllib.request
