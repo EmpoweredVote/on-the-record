@@ -218,6 +218,8 @@ def export_summary_markdown(summary: MeetingSummary, meeting: Meeting, output_pa
 
 def export_all(meeting: Meeting, export_dir: str | Path) -> dict[str, Path]:
     """Run all exporters. Returns dict of format -> filepath."""
+    from .clip import absolutize_meeting_times
+    meeting = absolutize_meeting_times(meeting)
     export_dir = Path(export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
 
