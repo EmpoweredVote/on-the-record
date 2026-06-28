@@ -1916,6 +1916,12 @@ def _load_meeting_and_body(meeting_dir):
     state = PipelineState(meeting_dir)
     if meeting.race_id is None:
         meeting.race_id = state.race_id
+    # transcript_named.json is authoritative for the clip window; fall back to
+    # state only for transcripts written before the clip feature existed.
+    if meeting.clip_start_seconds is None:
+        meeting.clip_start_seconds = state.clip_start_seconds
+    if meeting.clip_end_seconds is None:
+        meeting.clip_end_seconds = state.clip_end_seconds
     return meeting, state.body_slug
 
 
