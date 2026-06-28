@@ -1866,6 +1866,21 @@ def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -
     print(f"  Speakers: {result.speakers}")
 
 
+def _published_meeting_slugs() -> set[str]:
+    """Slugs already present in meetings.meetings (the resync target set)."""
+    import psycopg2
+
+    from src.publish import _require_db_url
+
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT slug FROM meetings.meetings WHERE slug IS NOT NULL")
+            return {r[0] for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
 def _trigger_render_deploy() -> None:
     """POST the Render deploy hook (RENDER_DEPLOY_HOOK_URL), loading .env.local if needed."""
     import urllib.request
