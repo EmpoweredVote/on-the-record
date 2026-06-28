@@ -3431,6 +3431,15 @@ Environment Variables:
                              "debate race_id), and optionally redeploy")
     parser.add_argument("--out", metavar="PATH", default="bulk_relink_review.yaml",
                         help="Output path for --bulk-relink-scan (default: ./bulk_relink_review.yaml)")
+    parser.add_argument("--republish-all", action="store_true",
+                        help="Re-publish every already-published meeting (resync live data), "
+                             "then trigger one web deploy. Add --reenroll to also rebuild the "
+                             "voice-profile DB; --no-deploy to skip the rebuild.")
+    parser.add_argument("--reenroll", action="store_true",
+                        help="With --republish-all: also rebuild the voice-profile DB "
+                             "(runs reenroll_profiles.py before the deploy)")
+    parser.add_argument("--no-deploy", action="store_true",
+                        help="With --republish-all: skip the single Render rebuild at the end")
     parser.add_argument("--show-roster", action="store_true",
                         help="Display the current council roster and exit")
     parser.add_argument("--no-review", action="store_true",
@@ -3654,6 +3663,10 @@ def main():
 
     if args.bulk_relink_apply:
         _bulk_relink_apply(args)
+        return
+
+    if args.republish_all:
+        _republish_all(args)
         return
 
     if args.review:
