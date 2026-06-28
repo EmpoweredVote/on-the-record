@@ -193,3 +193,80 @@ def test_rekey_folds_all_profiles_sharing_the_politician_id():
     assert "hilton_steve" not in db.profiles
     assert "essentials:old-slug" not in db.profiles
     assert len(db.profiles["essentials:uuid-hilton"].embeddings) == 2  # both folded
+
+
+from src.essentials_client import EssentialsClientError
+from src.relink import _is_strong_name_match, confident_target
+
+
+def test_is_strong_name_match():
+    assert _is_strong_name_match("Steve Hilton", "Steve Hilton") is True
+    assert _is_strong_name_match("steyer", "Tom Steyer") is True
+    assert _is_strong_name_match("Katie Porter", "Katie Porter") is True
+    assert _is_strong_name_match("Host", "Matthew Hostettler") is False
+    assert _is_strong_name_match("Councilmember Rollo", "David R Rollo") is False
+    assert _is_strong_name_match("Steve A Hilton", "Steve Hilton") is False
+    assert _is_strong_name_match("", "Whoever") is False
+
+
+def test_confident_target_single_strong_match():
+    cands = [_cand("uuid-1", "steve-hilton", "Steve Hilton")]
+    t = confident_target("Steve Hilton", search=lambda q, **kw: cands)
+    assert t == ResolvedTarget("uuid-1", "steve-hilton", "Steve Hilton")
+
+
+def test_confident_target_substring_only_is_none():
+    cands = [_cand("uuid-h", None, "Matthew Hostettler")]
+    assert confident_target("Host", search=lambda q, **kw: cands) is None
+
+
+def test_confident_target_multiple_is_none():
+    cands = [_cand("u1", None, "John Smith"), _cand("u2", None, "John Smith")]
+    assert confident_target("John Smith", search=lambda q, **kw: cands) is None
+
+
+def test_confident_target_zero_is_none():
+    assert confident_target("Nobody", search=lambda q, **kw: []) is None
+
+
+def test_confident_target_known_id_wins():
+    cands = [_cand("uuid-h", "hilton", "Steve Hilton")]
+    t = confident_target("Steve Hilton", search=lambda q, **kw: cands, known_id="uuid-h")
+    assert t.politician_id == "uuid-h"
+
+
+def test_confident_target_api_error_is_none():
+    def boom(q, **kw):
+        raise EssentialsClientError("down")
+    assert confident_target("Steve Hilton", search=boom) is None
+
+
+from src.relink import auto_link_confident
+
+
+def _strong_search(q, **kw):
+    return [_cand("uuid-h", "steve-hilton", "Steve Hilton")] if q.strip().lower() == "steve hilton" else []
+
+
+def test_auto_link_confident_links_named_unlinked():
+    m = _meeting({
+        "S0": SpeakerMapping(speaker_label="S0", speaker_name="Steve Hilton"),
+        "S1": SpeakerMapping(speaker_label="S1", speaker_name="Nobody Here"),
+    })
+    linked = auto_link_confident(m.speakers, search=_strong_search)
+    assert linked == ["S0"]
+    assert m.speakers["S0"].politician_id == "uuid-h"
+    assert m.speakers["S0"].id_method == "auto_linked"
+    assert m.speakers["S1"].politician_id is None
+
+
+def test_auto_link_confident_skips_already_linked_and_special():
+    m = _meeting({
+        "S0": SpeakerMapping(speaker_label="S0", speaker_name="Steve Hilton", politician_id="x"),
+        "S1": SpeakerMapping(speaker_label="S1", speaker_name="Steve Hilton", speaker_status="unidentified"),
+        "S2": SpeakerMapping(speaker_label="S2", speaker_name="Steve Hilton", local_slug="local-steve"),
+        "S3": SpeakerMapping(speaker_label="S3", speaker_name=None),
+    })
+    linked = auto_link_confident(m.speakers, search=_strong_search)
+    assert linked == []
+    assert m.speakers["S0"].id_method != "auto_linked"

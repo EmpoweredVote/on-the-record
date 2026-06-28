@@ -1274,7 +1274,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
         # Human review — rich interactive review on a terminal (clips, hints,
         # merge); fall back to the text-only quick review otherwise or when
         # --no-review is set.
+        from src.relink import auto_link_confident
+
         if sys.stdin.isatty() and not getattr(args, "no_review", False):
+            auto = auto_link_confident(mappings)
+            if auto:
+                print(f"  Auto-linked {len(auto)} confident speaker(s) before review: "
+                      f"{', '.join(auto)}")
             review_video = find_video_file(meeting_dir, meeting.audio_source)
             review_changes = _interactive_speaker_review(
                 segments, mappings, speaker_embeddings, profile_db,
@@ -1286,6 +1292,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
             _persist_after_review(meeting_dir, segments, speaker_embeddings, review_changes)
         else:
             mappings = human_review(mappings)
+            auto = auto_link_confident(mappings)
+            if auto:
+                print(f"  Auto-linked {len(auto)} confident speaker(s): {', '.join(auto)}")
 
         # Apply to segments
         segments = apply_mappings_to_segments(segments, mappings)
@@ -2506,7 +2515,7 @@ def _prompt_link_politician(mappings: dict, label: str, query: str) -> None:
     from src.essentials_client import EssentialsClientError, search_politicians
 
     mapping = mappings.get(label)
-    if mapping is None or mapping.politician_slug:
+    if mapping is None or mapping.politician_slug or mapping.politician_id:
         return
     if not sys.stdin.isatty():
         return
@@ -2569,7 +2578,7 @@ def _prompt_create_local_person(
     if not sys.stdin.isatty():
         return
     mapping = mappings.get(label)
-    if mapping is None or mapping.politician_slug:
+    if mapping is None or mapping.politician_slug or mapping.politician_id:
         return
 
     print("  Not in essentials. Create as local person?")

@@ -82,6 +82,76 @@ def resolve_link_target(
     raise RelinkAmbiguous(query, matches)
 
 
+def _is_strong_name_match(name: str, full_name: str) -> bool:
+    """True when every whitespace token of `name` is a whole-word token of
+    `full_name` (case-insensitive). Rejects substring fuzz ("Host" vs
+    "Hostettler") and title prefixes ("Councilmember Rollo" vs "David R Rollo")."""
+    name_tokens = set((name or "").lower().split())
+    cand_tokens = set((full_name or "").lower().split())
+    return bool(name_tokens) and name_tokens.issubset(cand_tokens)
+
+
+def confident_target(
+    name, *, search=search_politicians, known_id: Optional[str] = None
+) -> Optional[ResolvedTarget]:
+    """Resolve a name to a politician ONLY when confident enough to auto-link.
+
+    known_id set -> that target (already linked elsewhere; highest confidence;
+    slug/name filled best-effort from a search hit). Otherwise: exactly one
+    search match AND a strong name match -> that target; zero/multiple/weak ->
+    None. EssentialsClientError -> None (best-effort; never blocks a run).
+    """
+    if known_id:
+        slug, full = None, name
+        try:
+            for m in search(name):
+                if m.get("politician_id") == known_id:
+                    slug = m.get("politician_slug")
+                    full = m.get("full_name") or name
+                    break
+        except EssentialsClientError:
+            pass
+        return ResolvedTarget(known_id, slug, full)
+
+    try:
+        matches = search(name)
+    except EssentialsClientError:
+        return None
+    if len(matches) == 1 and _is_strong_name_match(name, matches[0].get("full_name") or ""):
+        m = matches[0]
+        return ResolvedTarget(m["politician_id"], m.get("politician_slug"), m.get("full_name") or name)
+    return None
+
+
+def auto_link_confident(mappings, *, search=search_politicians) -> list[str]:
+    """Auto-link every named-but-unlinked speaker with a confident match.
+
+    Considers a mapping only when speaker_name is set, politician_id is None,
+    speaker_status is normal (not 'unidentified'/'non_speaker'), and local_slug
+    is None. On a confident_target hit, links it and marks id_method='auto_linked'
+    (distinct, auditable, reversible). Returns the labels auto-linked.
+    """
+    from src.review import link_speaker
+
+    linked: list[str] = []
+    for label, mapping in list(mappings.items()):
+        if not mapping.speaker_name:
+            continue
+        if mapping.politician_id is not None:
+            continue
+        if mapping.speaker_status in ("unidentified", "non_speaker"):
+            continue
+        if mapping.local_slug is not None:
+            continue
+        target = confident_target(mapping.speaker_name, search=search)
+        if target is None:
+            continue
+        link_speaker(mappings, label, target.politician_slug, target.politician_id)
+        mapping.id_method = "auto_linked"
+        linked.append(label)
+    return linked
+
+
 def rekey_profile_for_link(db, speaker_name, *, politician_id, politician_slug, full_name) -> Optional[str]:
     """Fold the person's existing voice profile(s) onto the essentials:<id> key.
 
