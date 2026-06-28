@@ -1817,11 +1817,29 @@ def _option_supplied(argv: list[str], *options: str) -> bool:
     )
 
 
+def _load_meeting_and_body(meeting_dir):
+    """Load a meeting + its body_slug for (re)publishing. Assumes the
+    transcript_named.json exists (caller checks). Carries topic tags and the
+    pipeline-state body_slug, mirroring the standalone publish loader."""
+    from src.checkpoint import PipelineState
+    from src.models import Meeting, SectionTopic
+
+    with open(meeting_dir / "transcript_named.json", "r", encoding="utf-8") as f:
+        meeting = Meeting.from_dict(json.load(f))
+    topics_path = meeting_dir / "topics.json"
+    if topics_path.exists():
+        with open(topics_path, "r", encoding="utf-8") as f:
+            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
+    state = PipelineState(meeting_dir)
+    if meeting.race_id is None:
+        meeting.race_id = state.race_id
+    return meeting, state.body_slug
+
+
 def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
     from src.checkpoint import PipelineState
-    from src.models import Meeting, SectionTopic
     from src.publish import publish_meeting
 
     meeting_dir = config.MEETINGS_DIR / meeting_id
@@ -1831,22 +1849,9 @@ def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -
         print(f"  Expected at: {named_path}")
         sys.exit(1)
 
-    with open(named_path, "r", encoding="utf-8") as f:
-        meeting = Meeting.from_dict(json.load(f))
-
-    # section_topics isn't serialized into transcript_named.json (kept off the
-    # summary JSONB); load it from its own checkpoint so a standalone re-publish
-    # carries topic tags instead of wiping them.
-    topics_path = meeting_dir / "topics.json"
-    if topics_path.exists():
-        with open(topics_path, "r", encoding="utf-8") as f:
-            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
+    meeting, body_slug = _load_meeting_and_body(meeting_dir)
 
     state = PipelineState(meeting_dir)
-    body_slug = state.body_slug
-    if meeting.race_id is None:
-        meeting.race_id = state.race_id
-
     if not _may_publish(state.review_status, publish_anyway):
         print(f"Refusing to publish {meeting_id} — gate verdict is "
               f"'{state.review_status}'.")
@@ -1859,6 +1864,81 @@ def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -
     print(f"  Meeting:  {result.meeting_id}")
     print(f"  Segments: {result.segments}")
     print(f"  Speakers: {result.speakers}")
+
+
+def _published_meeting_slugs() -> set[str]:
+    """Slugs already present in meetings.meetings (the resync target set)."""
+    import psycopg2
+
+    from src.publish import _require_db_url
+
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT slug FROM meetings.meetings WHERE slug IS NOT NULL")
+            return {r[0] for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+def _republish_all(args) -> None:
+    """Re-publish every already-published meeting (resync), optionally reenroll,
+    one deploy at the end. Continue-on-error; non-zero exit if any failed."""
+    from src import config
+    from src.publish import publish_meeting
+
+    dirs = sorted(
+        d for d in config.MEETINGS_DIR.iterdir()
+        if d.is_dir() and not d.name.startswith(".")
+        and (d / "transcript_named.json").exists()
+    )
+    published = _published_meeting_slugs()
+    to_publish = [d for d in dirs if d.name in published]
+    skipped = [d for d in dirs if d.name not in published]
+    local_names = {d.name for d in dirs}
+    missing = sorted(s for s in published if s not in local_names)
+
+    print(f"republish-all: {len(to_publish)} published meeting(s) to resync, "
+          f"{len(skipped)} unpublished (skip), "
+          f"{len(missing)} published with no local transcript.")
+
+    if args.dry_run:
+        print("\n(dry run — nothing published, reenrolled, or deployed)")
+        for d in to_publish:
+            print(f"  would re-publish: {d.name}")
+        if skipped:
+            print("  would skip (not published): " + ", ".join(d.name for d in skipped))
+        print(f"  would reenroll: {'yes' if args.reenroll else 'no'}")
+        print(f"  would deploy: {'no' if args.no_deploy else 'yes'}")
+        return
+
+    failed = []
+    for d in to_publish:
+        try:
+            meeting, body_slug = _load_meeting_and_body(d)
+            publish_meeting(meeting, body_slug, trigger_deploy=False)
+            print(f"  ✅ {d.name}")
+        except Exception as exc:  # noqa: BLE001 - continue-on-error; report + collect
+            print(f"  ❌ {d.name}: {exc}")
+            failed.append(d.name)
+
+    if args.reenroll:
+        print("Reenrolling voice profiles...")
+        result = subprocess.run([sys.executable, "reenroll_profiles.py"], cwd=_REPO_DIR)
+        if result.returncode != 0:
+            print("  reenroll failed (see output above) — publishes are unaffected.")
+
+    if not args.no_deploy:
+        _trigger_render_deploy()
+
+    print(f"\nDone: {len(to_publish) - len(failed)} published, {len(failed)} failed.")
+    if skipped:
+        print("  skipped (not published): " + ", ".join(d.name for d in skipped))
+    if missing:
+        print("  published but no local transcript (not re-published): " + ", ".join(missing))
+    if failed:
+        print("  FAILED: " + ", ".join(failed))
+        sys.exit(1)
 
 
 def _trigger_render_deploy() -> None:
@@ -3351,6 +3431,15 @@ Environment Variables:
                              "debate race_id), and optionally redeploy")
     parser.add_argument("--out", metavar="PATH", default="bulk_relink_review.yaml",
                         help="Output path for --bulk-relink-scan (default: ./bulk_relink_review.yaml)")
+    parser.add_argument("--republish-all", action="store_true",
+                        help="Re-publish every already-published meeting (resync live data), "
+                             "then trigger one web deploy. Add --reenroll to also rebuild the "
+                             "voice-profile DB; --no-deploy to skip the rebuild.")
+    parser.add_argument("--reenroll", action="store_true",
+                        help="With --republish-all: also rebuild the voice-profile DB "
+                             "(runs reenroll_profiles.py before the deploy)")
+    parser.add_argument("--no-deploy", action="store_true",
+                        help="With --republish-all: skip the single Render rebuild at the end")
     parser.add_argument("--show-roster", action="store_true",
                         help="Display the current council roster and exit")
     parser.add_argument("--no-review", action="store_true",
@@ -3574,6 +3663,10 @@ def main():
 
     if args.bulk_relink_apply:
         _bulk_relink_apply(args)
+        return
+
+    if args.republish_all:
+        _republish_all(args)
         return
 
     if args.review:
