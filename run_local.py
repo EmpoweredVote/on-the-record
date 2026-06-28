@@ -427,17 +427,35 @@ def find_video_file(meeting_dir: Path, original_input: str) -> str | None:
     return None
 
 
-def play_video_clip(video_path: str, start_time: float, duration: float = 15.0, title: str = "") -> None:
+def _review_seek(start_time: float, video_offset: float = 0.0) -> float:
+    """Seek position for a review clip: 3s of lead-in, plus the clip offset.
+
+    A clipped meeting's segment times are clip-local, but the local video file is
+    the FULL source — so seeking the video must add clip_start (passed as
+    video_offset). The clip audio (audio.wav) is already clip-local and passes 0.
+    """
+    return max(0.0, start_time - 3.0) + video_offset
+
+
+def play_video_clip(
+    video_path: str,
+    start_time: float,
+    duration: float = 15.0,
+    title: str = "",
+    video_offset: float = 0.0,
+) -> None:
     """Play a video clip using ffplay starting at the given timestamp.
 
     Args:
         video_path: Path to the video file.
-        start_time: Start time in seconds.
+        start_time: Clip-local start time in seconds.
         duration: Duration to play in seconds.
         title: Window title.
+        video_offset: Added to the seek for a clipped meeting whose video file is
+            the full source (so clip-local times map to the right footage).
     """
     # Start a few seconds early to give visual context
-    seek = max(0, start_time - 3.0)
+    seek = _review_seek(start_time, video_offset)
 
     cmd = [
         "ffplay",
@@ -463,6 +481,7 @@ def play_speaker_clip(
     start_time: float,
     duration: float = 40.0,
     title: str = "",
+    video_offset: float = 0.0,
 ):
     """Play a looping clip of a speaker WITHOUT blocking, returning the player handle.
 
@@ -470,13 +489,16 @@ def play_speaker_clip(
     so the clip stays up while the operator types the name; the caller stops it via
     _stop_player. Returns the subprocess.Popen handle, or None if there's no media
     or ffplay isn't installed.
+
+    video_offset (clip_start for a clipped meeting) is added ONLY when playing the
+    full-source video; the clip-local audio path ignores it.
     """
     media = video_path or audio_path
     if not media:
         print("    No media to play (no video or audio found).")
         return None
 
-    seek = max(0, start_time - 3.0)
+    seek = _review_seek(start_time, video_offset if video_path else 0.0)
     cmd = ["ffplay", "-ss", str(seek), "-t", str(duration), "-loop", "0", "-loglevel", "quiet"]
     if not video_path:
         cmd.append("-nodisp")
@@ -1087,6 +1109,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             body_slug=effective_body_slug, show_text=False,
             event_kind=args.event_kind,
             meeting_id=meeting_dir.name,
+            clip_offset=clip_start or 0.0,
         )
         _persist_after_review(meeting_dir, segments, _pre_embeddings, changes)
 
@@ -1364,6 +1387,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 roster=roster, body_slug=effective_body_slug, show_text=True,
                 event_kind=meeting.event_kind,
                 meeting_id=meeting_dir.name,
+                clip_offset=clip_start or 0.0,
             )
             _persist_after_review(meeting_dir, segments, speaker_embeddings, review_changes)
         else:
@@ -1593,6 +1617,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                                 start_time=info["sample_segment"].start_time,
                                 duration=20.0,
                                 title=f"{m.speaker_label} → {m.speaker_name or 'Unknown'}",
+                                video_offset=clip_start or 0.0,
                             )
                             continue  # re-prompt after viewing
                         elif choice in ("e", "enroll", "y", "yes"):
@@ -2708,6 +2733,7 @@ def _interactive_speaker_review(
     show_text: bool = True,
     event_kind: str | None = None,
     meeting_id: str | None = None,
+    clip_offset: float = 0.0,
 ) -> list[dict]:
     """Interactive review loop built on the pure src/review.py core.
 
@@ -2786,6 +2812,7 @@ def _interactive_speaker_review(
             current_player = play_speaker_clip(
                 video_path, audio_path, start,
                 title=f"{label} → {name} (clip {n + 1}/{n_clips})",
+                video_offset=clip_offset,
             )
             last_clip = n
             clip_idx = n + 1
@@ -3166,6 +3193,7 @@ def _review_meeting(meeting_id: str) -> None:
         body_slug=body_slug, show_text=True,
         event_kind=meeting.event_kind,
         meeting_id=meeting_id,
+        clip_offset=meeting.clip_start_seconds or 0.0,
     )
     _persist_after_review(meeting_dir, meeting.segments, embeddings, changes)
 
@@ -3323,6 +3351,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         body_slug=body_slug, show_text=has_text,
         event_kind=meeting.event_kind,
         meeting_id=meeting_id,
+        clip_offset=meeting.clip_start_seconds or 0.0,
     )
     _persist_after_review(meeting_dir, segments, embeddings, changes)
 

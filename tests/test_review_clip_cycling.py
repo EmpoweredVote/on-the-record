@@ -26,7 +26,7 @@ def _drive(monkeypatch, inputs, segments, mappings):
     monkeypatch.setattr("src.essentials_client.search_politicians", lambda *a, **k: [])
     monkeypatch.setattr(
         run_local, "play_speaker_clip",
-        lambda video, audio, start, duration=40.0, title="": played.append(start),
+        lambda video, audio, start, duration=40.0, title="", video_offset=0.0: played.append(start),
     )
     script = iter(inputs)
     monkeypatch.setattr("builtins.input", lambda prompt="": next(script))
