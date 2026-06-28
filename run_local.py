@@ -3270,6 +3270,13 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     named_path = meeting_dir / "transcript_named.json"
     has_text = False
 
+    # event_kind / clip window come from the named transcript when present, else
+    # from pipeline state — this command runs before naming is complete, so
+    # `meeting` may be None (diarization- or transcript-only paths below).
+    from src.checkpoint import PipelineState
+    _state = PipelineState(meeting_dir)
+    meeting = None
+
     if named_path.exists():
         with open(named_path, "r") as f:
             meeting = Meeting.from_dict(json.load(f))
@@ -3349,9 +3356,9 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
         segments, current_mappings, embeddings, profile_db,
         video_path, str(meeting_dir / "audio.wav"),
         body_slug=body_slug, show_text=has_text,
-        event_kind=meeting.event_kind,
+        event_kind=meeting.event_kind if meeting else _state.event_kind,
         meeting_id=meeting_id,
-        clip_offset=meeting.clip_start_seconds or 0.0,
+        clip_offset=(meeting.clip_start_seconds if meeting else _state.clip_start_seconds) or 0.0,
     )
     _persist_after_review(meeting_dir, segments, embeddings, changes)
 
