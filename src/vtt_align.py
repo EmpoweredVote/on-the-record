@@ -144,6 +144,33 @@ def _deduplicated_words(cues: list[dict]) -> list[Word]:
     return timed_words
 
 
+def _segment_for_gap_word(word: Word, segments: list[Segment]) -> Segment | None:
+    """Return the turn a zero-overlap word belongs to, or None to drop it.
+
+    VTT word times are synthesized proportionally from a cue's duration and
+    token count, so the last words of a turn can spill past the diarized
+    ``end_time`` into the pause before the next speaker. Such a word overlaps no
+    segment. If it falls strictly inside an inter-segment gap (a preceding turn
+    ends before it and a following turn starts after it), it is a trailing word
+    of the preceding turn and that segment is returned, keeping the whole tail
+    together on one speaker. A word that sits before the first turn or after the
+    last turn lies outside the diarized timeline (e.g. a cue outside a clip
+    window) and returns None so the caller drops it.
+    """
+    preceding = None
+    following = None
+    for seg in segments:
+        if seg.end_time <= word.start:
+            if preceding is None or seg.end_time > preceding.end_time:
+                preceding = seg
+        if seg.start_time >= word.end:
+            if following is None or seg.start_time < following.start_time:
+                following = seg
+    if preceding is not None and following is not None:
+        return preceding
+    return None
+
+
 def align_vtt_to_segments(
     vtt_path: str | Path,
     diarized_segments: list[Segment],
@@ -208,7 +235,13 @@ def align_vtt_to_segments(
             ]
             overlap_dur, target = max(candidates, key=lambda item: item[0])
             if overlap_dur <= 0:
-                continue
+                # No segment overlaps this word. If it landed in a pause between
+                # two turns, it is a trailing word whose proportional VTT timing
+                # spilled past its turn's end; snap it back to the turn that
+                # just ended. Words outside the diarized timeline are dropped.
+                target = _segment_for_gap_word(word, diarized_segments)
+                if target is None:
+                    continue
 
         target.words.append(word)
 
