@@ -1817,11 +1817,29 @@ def _option_supplied(argv: list[str], *options: str) -> bool:
     )
 
 
+def _load_meeting_and_body(meeting_dir):
+    """Load a meeting + its body_slug for (re)publishing. Assumes the
+    transcript_named.json exists (caller checks). Carries topic tags and the
+    pipeline-state body_slug, mirroring the standalone publish loader."""
+    from src.checkpoint import PipelineState
+    from src.models import Meeting, SectionTopic
+
+    with open(meeting_dir / "transcript_named.json", "r", encoding="utf-8") as f:
+        meeting = Meeting.from_dict(json.load(f))
+    topics_path = meeting_dir / "topics.json"
+    if topics_path.exists():
+        with open(topics_path, "r", encoding="utf-8") as f:
+            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
+    state = PipelineState(meeting_dir)
+    if meeting.race_id is None:
+        meeting.race_id = state.race_id
+    return meeting, state.body_slug
+
+
 def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -> None:
     """Publish an already-processed meeting to Supabase (backfill workhorse)."""
     from src import config
     from src.checkpoint import PipelineState
-    from src.models import Meeting, SectionTopic
     from src.publish import publish_meeting
 
     meeting_dir = config.MEETINGS_DIR / meeting_id
@@ -1831,22 +1849,9 @@ def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -
         print(f"  Expected at: {named_path}")
         sys.exit(1)
 
-    with open(named_path, "r", encoding="utf-8") as f:
-        meeting = Meeting.from_dict(json.load(f))
-
-    # section_topics isn't serialized into transcript_named.json (kept off the
-    # summary JSONB); load it from its own checkpoint so a standalone re-publish
-    # carries topic tags instead of wiping them.
-    topics_path = meeting_dir / "topics.json"
-    if topics_path.exists():
-        with open(topics_path, "r", encoding="utf-8") as f:
-            meeting.section_topics = [SectionTopic.from_dict(d) for d in json.load(f)]
+    meeting, body_slug = _load_meeting_and_body(meeting_dir)
 
     state = PipelineState(meeting_dir)
-    body_slug = state.body_slug
-    if meeting.race_id is None:
-        meeting.race_id = state.race_id
-
     if not _may_publish(state.review_status, publish_anyway):
         print(f"Refusing to publish {meeting_id} — gate verdict is "
               f"'{state.review_status}'.")
