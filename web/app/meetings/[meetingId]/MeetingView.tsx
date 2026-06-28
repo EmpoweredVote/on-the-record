@@ -85,14 +85,16 @@ export default function MeetingView({
   }, []);
 
   // Deep links: ?t=SECONDS seeks the player; #seg-N scrolls without a player.
+  // With no ?t=, a clipped meeting auto-starts at the interview (clip_start).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = Number(params.get("t"));
-    if (Number.isFinite(t) && t > 0) {
-      if (adapterRef.current) adapterRef.current.seekTo(t);
-      else pendingSeek.current = t;
-      // Scroll the target segment into view; highlight catches up on play.
-      const idx = segmentIndexAt(starts, t);
+    const explicit = Number.isFinite(t) && t > 0;
+    const initial = explicit ? t : (meeting.clip_start_seconds ?? 0);
+    if (initial > 0) {
+      if (adapterRef.current) adapterRef.current.seekTo(initial);
+      else pendingSeek.current = initial;
+      const idx = segmentIndexAt(starts, initial);
       document
         .getElementById(`seg-${segments[idx]?.segment_id}`)
         ?.scrollIntoView({ block: "center" });
@@ -214,6 +216,32 @@ export default function MeetingView({
               </p>
             )}
           </div>
+        )}
+        {meeting.clip_start_seconds != null && (
+          <p className="clipNote">
+            <span>
+              Transcript covers the interview
+              {meeting.clip_end_seconds != null
+                ? ` — ${formatTime(meeting.clip_start_seconds)}–${formatTime(meeting.clip_end_seconds)}`
+                : ""}
+              {meeting.source_title ? ` of "${meeting.source_title}"` : " of a longer recording"}.
+            </span>{" "}
+            <span
+              className="clipNoteInfo"
+              title="We transcribe and summarize only the relevant interview; the player plays the full original recording so you can see the surrounding context."
+              aria-label="Why only part is transcribed"
+            >
+              ⓘ
+            </span>
+            {meeting.source_url && (
+              <>
+                {" "}
+                <a href={meeting.source_url} target="_blank" rel="noreferrer">
+                  Watch the full recording ↗
+                </a>
+              </>
+            )}
+          </p>
         )}
         <div className="searchBar">
           <input

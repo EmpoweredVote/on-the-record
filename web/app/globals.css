@@ -1128,3 +1128,14 @@ a {
   text-transform: uppercase;
   opacity: 0.72;
 }
+
+.clipNote {
+  font-size: 0.85rem;
+  color: var(--muted, #555);
+  margin: 0.5rem 0;
+  line-height: 1.4;
+}
+.clipNoteInfo {
+  cursor: help;
+  border-bottom: 1px dotted currentColor;
+}
