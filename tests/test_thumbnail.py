@@ -47,3 +47,9 @@ def test_extract_thumbnail_missing_video_returns_none(tmp_path: Path):
     result = extract_thumbnail(str(tmp_path / "nope.mp4"), None, 10.0, out)
     assert result is None
     assert not out.exists()
+
+
+def test_extract_thumbnail_no_ffmpeg_returns_none(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("src.thumbnail.shutil.which", lambda _: None)
+    out = tmp_path / "thumbnail.jpg"
+    assert extract_thumbnail("whatever.mp4", None, 10.0, out) is None

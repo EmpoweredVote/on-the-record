@@ -13,6 +13,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+EXTRACT_TIMEOUT_SECONDS = 120
+
 
 def thumbnail_seek_start(
     clip_start: Optional[float], clip_duration: Optional[float]
@@ -53,10 +55,13 @@ def extract_thumbnail(
         str(out_path),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode("utf-8", "ignore")[:500] if exc.stderr else ""
-        logger.warning("thumbnail extraction failed: %s", stderr)
+        subprocess.run(
+            cmd, check=True, capture_output=True, timeout=EXTRACT_TIMEOUT_SECONDS
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as exc:
+        stderr = getattr(exc, "stderr", None)
+        detail = stderr.decode("utf-8", "ignore")[:500] if stderr else str(exc)
+        logger.warning("thumbnail extraction failed: %s", detail)
         return None
 
     if out_path.exists() and out_path.stat().st_size > 0:
