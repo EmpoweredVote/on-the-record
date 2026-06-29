@@ -427,6 +427,28 @@ def find_video_file(meeting_dir: Path, original_input: str) -> str | None:
     return None
 
 
+def _attach_thumbnail(meeting, meeting_dir) -> None:
+    """Best-effort: extract a frame from the kept section, upload it, and set
+    meeting.thumbnail_url. Never raises — a thumbnail must not break publishing."""
+    try:
+        from src.thumbnail import extract_thumbnail
+        from src.storage import upload_thumbnail
+
+        video_path = find_video_file(meeting_dir, meeting.audio_source)
+        if not video_path:
+            return
+        out = meeting_dir / "thumbnail.jpg"
+        if extract_thumbnail(
+            video_path, meeting.clip_start_seconds, meeting.duration_seconds, out
+        ):
+            url = upload_thumbnail(out, meeting.meeting_id)
+            if url:
+                meeting.thumbnail_url = url
+                print(f"  Thumbnail: {url}")
+    except Exception as exc:  # absolutely non-fatal
+        print(f"  WARNING: thumbnail step failed — {exc}")
+
+
 def _review_seek(start_time: float, video_offset: float = 0.0) -> float:
     """Seek position for a review clip: 3s of lead-in, plus the clip offset.
 
@@ -1690,6 +1712,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             try:
                 from src.publish import publish_meeting
 
+                _attach_thumbnail(meeting, meeting_dir)
                 result = publish_meeting(meeting, state.body_slug)
                 print(f"  Published to Supabase: {result.segments} segments, "
                       f"{result.speakers} speakers")
@@ -1976,6 +1999,7 @@ def _publish_meeting_standalone(meeting_id: str, publish_anyway: bool = False) -
         sys.exit(2)
 
     print(f"Publishing {meeting_id} to Supabase...")
+    _attach_thumbnail(meeting, meeting_dir)
     result = publish_meeting(meeting, body_slug)
     print(f"  Meeting:  {result.meeting_id}")
     print(f"  Segments: {result.segments}")
