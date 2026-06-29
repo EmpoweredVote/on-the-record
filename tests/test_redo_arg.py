@@ -45,7 +45,7 @@ def test_redo_calls_rewind_to_identify(monkeypatch, tmp_path):
     mdir.mkdir(parents=True)
     (mdir / "pipeline_state.json").write_text('{"completed_stage": 7}', encoding="utf-8")
     (mdir / "transcript_named.json").write_text(
-        '{"audio_source": "src.mp4", "city": "B", "date": "2026-02-10", "meeting_type": "Regular", "segments": [], "speakers": {}}',
+        '{"audio_source": "src.mp4", "city": "B", "date": "2026-02-10", "meeting_type": "Regular", "event_kind": "council", "segments": [], "speakers": {}}',
         encoding="utf-8",
     )
 

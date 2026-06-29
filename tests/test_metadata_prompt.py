@@ -114,3 +114,40 @@ def test_batch_mode_does_not_prompt_even_on_tty(monkeypatch):
     args = _args(batch_mode=True)  # unset + non-interactive-by-batch
     with pytest.raises(ValueError):
         run_local._resolve_metadata(args)
+
+
+# --- allow_prompt=False (resume path): same contract, never prompts ---
+
+def test_allow_prompt_false_never_prompts_and_hard_fails_on_tty(monkeypatch):
+    # Resume re-runs are non-interactive even on a TTY: a field the saved state
+    # could not restore must hard-fail, not prompt or silently guess.
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("resume must not prompt")))
+    args = _args()  # all unset, as if state preserved nothing
+    with pytest.raises(ValueError) as exc:
+        run_local._resolve_metadata(args, allow_prompt=False)
+    msg = str(exc.value)
+    assert "--event-kind" in msg and "--meeting-type" in msg and "--date" in msg
+
+
+def test_allow_prompt_false_with_default_fills_civic(monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("no prompt with --default")))
+    args = _args(default=True, date="2026-06-09")
+    run_local._resolve_metadata(args, allow_prompt=False)
+    assert args.city == "Bloomington"
+    assert args.meeting_type == "Regular Session"
+    assert args.event_kind == "council"
+
+
+def test_allow_prompt_false_keeps_restored_values(monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("nothing to prompt")))
+    args = _args(city="Carmel", date="2026-02-10",
+                 meeting_type="Special", event_kind="council")
+    run_local._resolve_metadata(args, allow_prompt=False)
+    assert (args.city, args.date, args.meeting_type, args.event_kind) == (
+        "Carmel", "2026-02-10", "Special", "council")

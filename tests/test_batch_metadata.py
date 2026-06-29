@@ -43,3 +43,31 @@ def test_batch_underspecified_entry_resolution_raises(monkeypatch):
     )
     with pytest.raises(ValueError):
         run_local._resolve_metadata(args)
+
+
+def test_batch_resume_skip_uses_resolved_meeting_type(monkeypatch, tmp_path):
+    # --batch-resume should short-circuit an already-complete meeting even when
+    # the batch entry omits meeting_type and relies on --default to fill it.
+    # The skip precheck must read the RESOLVED meeting_type, not the raw entry.
+    monkeypatch.setattr("src.config.MEETINGS_DIR", tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr(run_local, "run_pipeline",
+                        lambda args: pytest.fail("complete meeting must be skipped"))
+
+    batchfile = tmp_path / "list.txt"
+    batchfile.write_text("/videos/a.mp4 2026-05-01\n")  # path + date only
+
+    # Pre-create the already-complete meeting under its resolved id.
+    mid = "2026-05-01-regular-session"
+    mdir = tmp_path / mid
+    mdir.mkdir(parents=True)
+    (mdir / "pipeline_state.json").write_text(
+        '{"completed_stage": 4}', encoding="utf-8")  # IDENTIFIED
+
+    args = argparse.Namespace(
+        batch=str(batchfile), batch_resume=True, default=True,
+        skip_llm=False, merge=False, use_vtt=False, diarizer="oss",
+        compute="local", body=None, race_id=None, force_retag=False,
+        event_kind=None, title=None,
+    )
+    run_local._run_batch(args)  # must not raise (would if run_pipeline ran)
