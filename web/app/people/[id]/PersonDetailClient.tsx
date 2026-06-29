@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { fetchAppearances, fetchPerson } from "@/lib/queries";
-import { formatMeetingDate, formatTime } from "@/lib/format";
+import { formatMeetingDate, formatTime, meetingTitle } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 import { usePathParam } from "@/lib/usePathParam";
 import Loading from "@/components/Loading";
@@ -70,7 +70,7 @@ export default function PersonDetailClient() {
           <section key={a.meeting_id} className="appearance">
             <h3>
               <Link href={`/meetings/${a.meeting_id}`}>
-                {a.city} {a.meeting_type} — {formatMeetingDate(a.meeting_date)}
+                {meetingTitle(a)} — {formatMeetingDate(a.meeting_date)}
               </Link>
               <span className="personMeta">
                 {" "}

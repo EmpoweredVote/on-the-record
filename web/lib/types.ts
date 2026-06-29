@@ -71,6 +71,10 @@ export interface Appearance {
   meeting_type: string;
   meeting_date: string;           // YYYY-MM-DD
   playback_kind: string | null;
+  title: string | null;
+  event_kind: EventKind;
+  event_orgs: string[];
+  source_title: string | null;
   segments: AppearanceSegment[];
 }
 
@@ -85,6 +89,10 @@ export interface SearchResult {
   speaker_name: string | null;
   politician_id: string | null;
   snippet: string;               // [[[match]]] sentinels, rendered as <mark>
+  title: string | null;
+  event_kind: EventKind;
+  event_orgs: string[];
+  source_title: string | null;
 }
 
 export type ProvenanceStatus = "predicted" | "verified";

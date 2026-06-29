@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { formatMeetingDate, formatTime } from "@/lib/format";
+import { formatMeetingDate, formatTime, meetingTitle } from "@/lib/format";
 import { fetchMeetings, fetchPeople } from "@/lib/queries";
 import { useApi } from "@/lib/useApi";
-import type { SearchResult } from "@/lib/types";
+import type { EventKind, SearchResult } from "@/lib/types";
 
 // Runtime requests from the browser — needs the NEXT_PUBLIC_ env var,
 // baked in at build time. The build-time EV_ACCOUNTS_URL is not visible here.
@@ -32,6 +32,10 @@ function mapResult(r: any): SearchResult {
     speaker_name: r.speakerName ?? null,
     politician_id: r.politicianId ?? null,
     snippet: r.snippet ?? "",
+    title: r.title ?? null,
+    event_kind: (r.eventKind ?? "council") as SearchResult["event_kind"],
+    event_orgs: (r.eventOrgs ?? []) as string[],
+    source_title: r.sourceTitle ?? null,
   };
 }
 
@@ -51,6 +55,10 @@ interface MeetingGroup {
   city: string;
   meeting_type: string;
   meeting_date: string;
+  title: string | null;
+  event_kind: EventKind;
+  event_orgs: string[];
+  source_title: string | null;
   hits: SearchResult[];
 }
 
@@ -157,6 +165,10 @@ export default function SearchView() {
         city: r.city,
         meeting_type: r.meeting_type,
         meeting_date: r.meeting_date,
+        title: r.title,
+        event_kind: r.event_kind,
+        event_orgs: r.event_orgs,
+        source_title: r.source_title,
         hits: [r],
       });
     }
@@ -232,7 +244,7 @@ export default function SearchView() {
             <section key={g.meeting_id} className="searchGroup">
               <h2>
                 <Link href={`/meetings/${g.meeting_id}`}>
-                  {g.city} {g.meeting_type} — {formatMeetingDate(g.meeting_date)}
+                  {meetingTitle(g)} — {formatMeetingDate(g.meeting_date)}
                 </Link>
               </h2>
               <ul className="searchHits">
