@@ -68,3 +68,20 @@ def test_short_turn_does_not_steal_boundary_word_from_dominant():
     assert [w.word for w in segs[1].words] == []        # Hailey gets nothing
     assert "saying" in [w.word for w in segs[0].words] or \
            "saying" in [w.word for w in segs[2].words]  # stays with Steve
+
+
+def test_short_turn_keeps_word_that_mostly_fits_inside_it():
+    # Roll-call shape: clerk calls a name, member answers "Here." in a brief
+    # turn, clerk continues. The member's word mostly fills their short turn, so
+    # it must stay with the member (protects council vote/roll-call records).
+    segs = [
+        _seg(0, 0.0, 5.0, "CLERK"),       # long
+        _seg(1, 5.0, 5.5, "MEMBER"),      # 0.5s short turn
+        _seg(2, 5.6, 10.0, "CLERK"),      # long
+    ]
+    words = [Word("Here.", 5.05, 5.45)]   # 0.4s word, ~100% inside MEMBER turn
+
+    assign_words_to_segments(words, segs)
+
+    assert [w.word for w in segs[1].words] == ["Here."]  # member keeps it
+    assert segs[0].words == [] and segs[2].words == []

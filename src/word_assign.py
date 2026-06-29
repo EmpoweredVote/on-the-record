@@ -53,15 +53,23 @@ def assign_words_to_segments(
 
     for word in words:
         midpoint = (word.start + word.end) / 2
-        target = next(
-            (
-                s
-                for s in segments
-                if s.start_time <= midpoint < s.end_time
-                and _duration(s) >= SHORT_TURN_SECONDS
-            ),
-            None,
-        )
+        word_dur = max(word.end - word.start, 1e-9)
+        target = None
+        for s in segments:
+            if not (s.start_time <= midpoint < s.end_time):
+                continue
+            # A short turn only owns a midpoint-contained word if most of the
+            # word actually fits inside it. A long word overflowing a brief
+            # backchannel turn belongs to the surrounding continuous speech
+            # (e.g. Steve's "where" spilling across a 0.4s listener turn), but a
+            # genuine one-word response ("Here." in a roll call) mostly fills
+            # its own turn and must stay with that speaker.
+            if _duration(s) < SHORT_TURN_SECONDS:
+                inside = _overlap(s.start_time, s.end_time, word.start, word.end)
+                if inside / word_dur < 0.5:
+                    continue
+            target = s
+            break
         if target is None:
             # Only turns long enough to be a real utterance may claim a word
             # whose midpoint lies outside every turn. This stops a brief
