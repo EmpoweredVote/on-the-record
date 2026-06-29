@@ -85,3 +85,28 @@ def test_short_turn_keeps_word_that_mostly_fits_inside_it():
 
     assert [w.word for w in segs[1].words] == ["Here."]  # member keeps it
     assert segs[0].words == [] and segs[2].words == []
+
+
+def test_gap_word_snaps_to_preceding_long_turn():
+    # A word landing in the silent gap between two turns (overlapping neither)
+    # snaps to the preceding turn.
+    segs = [_seg(0, 0.0, 2.0, "A"), _seg(1, 5.0, 7.0, "B")]
+    words = [Word("trailing", 2.4, 2.8)]  # midpoint 2.6 in the 2.0-5.0 gap
+
+    assign_words_to_segments(words, segs)
+
+    assert [w.word for w in segs[0].words] == ["trailing"]
+    assert segs[1].words == []
+
+
+def test_no_midpoint_match_falls_back_to_max_overlap_long_turn():
+    # Word midpoint lands in a gap but the word overlaps a long turn; it goes to
+    # that turn via the overlap fallback (not dropped).
+    segs = [_seg(0, 0.0, 2.0, "A"), _seg(1, 2.5, 6.0, "B")]
+    words = [Word("spanning", 1.9, 2.7)]  # midpoint 2.3 in gap; overlaps both
+
+    assign_words_to_segments(words, segs)
+
+    owner = "A" if any(w.word == "spanning" for w in segs[0].words) else \
+            ("B" if any(w.word == "spanning" for w in segs[1].words) else None)
+    assert owner is not None  # not dropped

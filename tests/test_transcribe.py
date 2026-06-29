@@ -132,3 +132,17 @@ def test_transcribe_full_audio_returns_flat_chronological_words(monkeypatch, tmp
     assert words[0].start == 1028.18 and words[0].end == 1028.64
     # whole-audio call uses word_timestamps and is NOT sliced per segment
     assert model.calls[0]["word_timestamps"] is True
+
+
+def test_recover_orphan_turns_skips_sub_min_seconds_turn(monkeypatch, tmp_path):
+    import src.transcribe as t
+    monkeypatch.setattr(t, "load_wav", lambda p: (np.zeros(16000 * 10), 16000))
+    monkeypatch.setattr(t, "slice_audio", lambda samples, sr, a, b: np.zeros(int((b - a) * sr)))
+    model = _FakeModel([_FakeSeg([_FakeWord(" x", 0.0, 0.05)])])
+    seg = Segment(1, 5.00, 5.05, "M")  # 0.05s < min_seconds default 0.1
+    seg.words = []
+
+    recover_orphan_turns(model, tmp_path / "a.wav", [seg], [], min_seconds=0.1)
+
+    assert seg.words == []
+    assert model.calls == []  # too short to transcribe
