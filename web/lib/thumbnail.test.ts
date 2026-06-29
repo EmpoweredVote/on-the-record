@@ -22,6 +22,7 @@ const base: Meeting = {
   speakers: [],
   event_orgs: [],
   source_title: null,
+  thumbnail_url: null,
 };
 
 describe("youtubeThumbnailUrl", () => {
@@ -93,5 +94,38 @@ describe("buildThumbnailModel", () => {
       title: "Special Joint Session",
     });
     expect(m.location).toBe("Special Joint Session");
+  });
+});
+
+describe("buildThumbnailModel — thumbnail_url precedence", () => {
+  it("prefers an explicit thumbnail_url over the YouTube frame", () => {
+    const m = buildThumbnailModel({
+      ...base,
+      playback_kind: "youtube",
+      playback_url: "abc123",
+      thumbnail_url: "https://x.supabase.co/storage/v1/object/public/meeting-thumbnails/m.jpg",
+    });
+    expect(m.imageSrc).toBe(
+      "https://x.supabase.co/storage/v1/object/public/meeting-thumbnails/m.jpg"
+    );
+    expect(m.showPlay).toBe(true);
+  });
+
+  it("shows an extracted thumbnail for a file video (not the info tile)", () => {
+    const m = buildThumbnailModel({
+      ...base,
+      playback_kind: "file",
+      playback_url: "https://cdn.example.com/v.mp4",
+      thumbnail_url: "https://x.supabase.co/storage/v1/object/public/meeting-thumbnails/m.jpg",
+    });
+    expect(m.imageSrc).toBe(
+      "https://x.supabase.co/storage/v1/object/public/meeting-thumbnails/m.jpg"
+    );
+    expect(m.showPlay).toBe(true);
+  });
+
+  it("falls back to the YouTube frame when thumbnail_url is null", () => {
+    const m = buildThumbnailModel({ ...base, thumbnail_url: null });
+    expect(m.imageSrc).toBe("https://img.youtube.com/vi/abc123/hqdefault.jpg");
   });
 });

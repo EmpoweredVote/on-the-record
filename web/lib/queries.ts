@@ -40,6 +40,7 @@ function mapMeeting(m: any): Meeting {
     summary_preview: m.summaryPreview ?? null,
     event_orgs: (m.eventOrgs ?? []) as string[],
     source_title: m.processingMetadata?.sourceTitle ?? null,
+    thumbnail_url: m.thumbnailUrl ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     speakers: ((m.speakers ?? []) as any[]).map((sp): MeetingSpeaker => ({
       label: sp.label,

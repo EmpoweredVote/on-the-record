@@ -28,6 +28,7 @@ export interface Meeting {
   speakers: MeetingSpeaker[];
   event_orgs: string[];         // hosting/producing organizations; may be empty
   source_title: string | null;  // title from yt-dlp metadata; used as title fallback
+  thumbnail_url: string | null;  // extracted-frame thumbnail (Supabase Storage)
 }
 
 export interface Segment {
