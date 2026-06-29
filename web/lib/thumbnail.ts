@@ -24,11 +24,11 @@ export function youtubeThumbnailUrl(videoId: string): string {
 export function buildThumbnailModel(meeting: Meeting): ThumbnailModel {
   const hasVideo = meeting.playback_kind !== null && meeting.playback_url !== null;
 
-  // Source precedence: explicit thumbnail (future) > YouTube-derived frame > none.
-  // SEAM: when the API later exposes an extracted-frame URL for file/HLS videos,
-  // prefer it here, e.g. `if (meeting.thumbnail_url) imageSrc = meeting.thumbnail_url;`
+  // Source precedence: explicit extracted thumbnail > YouTube-derived frame > none.
   let imageSrc: string | null = null;
-  if (meeting.playback_kind === "youtube" && meeting.playback_url) {
+  if (meeting.thumbnail_url) {
+    imageSrc = meeting.thumbnail_url;
+  } else if (meeting.playback_kind === "youtube" && meeting.playback_url) {
     imageSrc = youtubeThumbnailUrl(meeting.playback_url);
   }
 

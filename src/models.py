@@ -251,6 +251,7 @@ class Meeting:
     event_orgs: list[str] = field(default_factory=list)
     clip_start_seconds: Optional[float] = None
     clip_end_seconds: Optional[float] = None
+    thumbnail_url: Optional[str] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -272,6 +273,8 @@ class Meeting:
             d["clip_start_seconds"] = self.clip_start_seconds
         if self.clip_end_seconds is not None:
             d["clip_end_seconds"] = self.clip_end_seconds
+        if self.thumbnail_url is not None:
+            d["thumbnail_url"] = self.thumbnail_url
         if self.summary is not None:
             d["summary"] = self.summary.to_dict()
         return d
@@ -301,4 +304,5 @@ class Meeting:
             event_orgs=d.get("event_orgs", []),
             clip_start_seconds=d.get("clip_start_seconds"),
             clip_end_seconds=d.get("clip_end_seconds"),
+            thumbnail_url=d.get("thumbnail_url"),
         )

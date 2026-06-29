@@ -237,6 +237,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
               playback_kind = %s,
               clip_start_seconds = %s,
               clip_end_seconds = %s,
+              thumbnail_url = %s,
               summary = %s,
               processing_metadata = %s,
               updated_at = NOW()
@@ -257,6 +258,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 kind,
                 meeting.clip_start_seconds,
                 meeting.clip_end_seconds,
+                meeting.thumbnail_url,
                 psycopg2.extras.Json(summary),
                 psycopg2.extras.Json(proc_meta),
                 meeting_uuid,
@@ -268,13 +270,13 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
             INSERT INTO meetings.meetings
               (id, city, date, meeting_type, title, event_kind, duration_seconds,
                audio_source, video_url, status,
-               chamber_id, source_url, playback_kind, clip_start_seconds, clip_end_seconds, slug,
+               chamber_id, source_url, playback_kind, clip_start_seconds, clip_end_seconds, thumbnail_url, slug,
                summary, processing_metadata,
                created_at, updated_at)
             VALUES
               (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
                %s, %s, %s,
-               %s, %s, %s, %s, %s, %s,
+               %s, %s, %s, %s, %s, %s, %s,
                %s, %s,
                NOW(), NOW())
             RETURNING id
@@ -294,6 +296,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 kind,
                 meeting.clip_start_seconds,
                 meeting.clip_end_seconds,
+                meeting.thumbnail_url,
                 meeting.meeting_id,
                 psycopg2.extras.Json(summary),
                 psycopg2.extras.Json(proc_meta),
