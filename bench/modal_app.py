@@ -1498,7 +1498,7 @@ def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
     # Make cs_src (the bundled ./src directory) importable.
     sys.path.insert(0, "/root")
     from cs_src.models import Segment, Word
-    from cs_src.transcribe import remove_segment_overlaps
+    from cs_src.transcribe import remove_segment_overlaps, recover_orphan_turns
     from cs_src.word_assign import assign_words_to_segments
 
     wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
@@ -1538,6 +1538,10 @@ def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
 
     # Step 4 — assign words to diarized turns using the shared logic.
     assign_words_to_segments(words, segments)
+
+    # Step 5 — recover faint short turns the whole-audio pass left wordless
+    # (e.g. roll-call "Here.", quiet "Second."). Mirrors the local path.
+    recover_orphan_turns(model, wav_path, segments, words)
 
     # Serialise back to the same dict structure the caller expects.
     return _json.dumps([seg.to_dict() for seg in segments])
