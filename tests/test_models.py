@@ -44,3 +44,26 @@ def test_meeting_clip_window_defaults_none():
     assert m.clip_end_seconds is None
     back = Meeting.from_dict({"meeting_id": "m1", "city": "X", "date": "2026-06-28"})
     assert back.clip_start_seconds is None
+
+
+def test_meeting_no_silent_classification_defaults():
+    # Constructing without metadata must NOT invent council / Regular Session.
+    m = Meeting(meeting_id="m1", city=None, date="2026-06-28")
+    assert m.event_kind is None
+    assert m.meeting_type is None
+
+
+def test_meeting_from_dict_absent_fields_stay_none():
+    back = Meeting.from_dict({"meeting_id": "m1", "city": None, "date": "2026-06-28"})
+    assert back.event_kind is None
+    assert back.meeting_type is None
+
+
+def test_meeting_from_dict_preserves_real_values():
+    d = {
+        "meeting_id": "m1", "city": "Bloomington", "date": "2026-06-28",
+        "meeting_type": "Regular Session", "event_kind": "council",
+    }
+    back = Meeting.from_dict(d)
+    assert back.meeting_type == "Regular Session"
+    assert back.event_kind == "council"

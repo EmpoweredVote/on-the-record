@@ -24,7 +24,8 @@ def test_meeting_round_trip_preserves_title_event_kind_and_null_city():
     assert restored.city is None
 
 
-def test_legacy_meeting_defaults_to_council():
+def test_legacy_meeting_has_no_event_kind():
+    # legacy meetings without event_kind load as None, not a fabricated council
     restored = Meeting.from_dict({
         "meeting_id": "legacy",
         "city": "Bloomington",
@@ -33,7 +34,7 @@ def test_legacy_meeting_defaults_to_council():
     })
 
     assert restored.title is None
-    assert restored.event_kind == "council"
+    assert restored.event_kind is None
 
 
 def test_press_conference_in_event_kinds():
@@ -57,7 +58,7 @@ def test_resolve_metadata_defaults_event_kind_without_prompt(monkeypatch):
         meeting_type="Regular Session",
         title=None,
         event_kind=None,
-        default=False,
+        default=True,  # council default is now opt-in via --default
     )
 
     run_local._resolve_metadata(args)

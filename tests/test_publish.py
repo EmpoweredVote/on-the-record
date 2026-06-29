@@ -130,6 +130,58 @@ def test_upsert_meeting_writes_title_and_event_kind(existing_row):
     assert "debate" in write_params
 
 
+def test_upsert_rejects_missing_event_kind():
+    cur = RecordingCursor()
+    meeting = Meeting(
+        meeting_id="mystery", city="Bloomington", date="2026-02-18",
+        meeting_type="Regular Session", event_kind=None,
+    )
+    with pytest.raises(ValueError):
+        _upsert_meeting(cur, meeting, None)
+    assert cur.calls == []  # rejected before any DB work
+
+
+def test_upsert_rejects_invalid_event_kind():
+    cur = RecordingCursor()
+    meeting = Meeting(
+        meeting_id="mystery", city="Bloomington", date="2026-02-18",
+        meeting_type="Regular Session", event_kind="townhall",
+    )
+    with pytest.raises(ValueError):
+        _upsert_meeting(cur, meeting, None)
+
+
+def test_upsert_rejects_missing_meeting_type():
+    cur = RecordingCursor()
+    meeting = Meeting(
+        meeting_id="mystery", city="Bloomington", date="2026-02-18",
+        meeting_type=None, event_kind="council",
+    )
+    with pytest.raises(ValueError):
+        _upsert_meeting(cur, meeting, None)
+
+
+def test_upsert_rejects_council_without_city():
+    cur = RecordingCursor()
+    meeting = Meeting(
+        meeting_id="mystery", city=None, date="2026-02-18",
+        meeting_type="Regular Session", event_kind="council",
+    )
+    with pytest.raises(ValueError):
+        _upsert_meeting(cur, meeting, None)
+
+
+def test_upsert_allows_cityless_forum():
+    # Non-civic kinds legitimately have no city; guard must not block them.
+    cur = RecordingCursor(select_row=("existing-uuid",))
+    meeting = Meeting(
+        meeting_id="forum-1", city=None, date="2026-02-18",
+        meeting_type="Candidate Forum", event_kind="forum",
+    )
+    _upsert_meeting(cur, meeting, None)  # must not raise
+    assert cur.calls  # proceeded to DB work
+
+
 def test_resolve_chamber_id_returns_unique_match():
     cur = RecordingCursor(fetch_rows=[
         ("11111111-1111-4111-8111-111111111111",),

@@ -355,6 +355,7 @@ def test_batch_propagates_body(tmp_path, tmp_config_dir, fake_roster_cache):
         use_vtt=False,
         body=slug,
         force_retag=True,
+        event_kind="council",
     )
 
     with patch.object(run_local, "run_pipeline", fake_run_pipeline):

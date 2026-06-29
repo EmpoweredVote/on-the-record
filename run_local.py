@@ -1753,8 +1753,8 @@ def _parse_batch_inputs(batch_path: str) -> list[dict]:
                 entries.append({
                     "input": str(f),
                     "date": date,
-                    "city": "Bloomington",
-                    "meeting_type": "Regular Session",
+                    "city": None,
+                    "meeting_type": None,
                 })
         return entries
 
@@ -1772,8 +1772,8 @@ def _parse_batch_inputs(batch_path: str) -> list[dict]:
                 entry = {
                     "input": parts[0],
                     "date": parts[1] if len(parts) > 1 else "",
-                    "city": parts[2] if len(parts) > 2 else "Bloomington",
-                    "meeting_type": parts[3] if len(parts) > 3 else "Regular Session",
+                    "city": parts[2] if len(parts) > 2 else None,
+                    "meeting_type": parts[3] if len(parts) > 3 else None,
                 }
                 entries.append(entry)
         return entries
@@ -1804,7 +1804,7 @@ def _run_batch(args: argparse.Namespace) -> None:
         print(f"{'=' * 60}")
 
         # Check if already processed (for --batch-resume)
-        if args.batch_resume and entry["date"]:
+        if args.batch_resume and entry["date"] and entry.get("meeting_type"):
             from src import config
             from src.checkpoint import PipelineStage, PipelineState
             mid = f"{entry['date']}-{entry['meeting_type'].lower().replace(' ', '-')}"
@@ -1839,13 +1839,20 @@ def _run_batch(args: argparse.Namespace) -> None:
             race_id=getattr(args, "race_id", None),
             force_retag=getattr(args, "force_retag", False),
             batch_mode=True,  # suppress the interactive roster chooser (D3: batch uses no roster unless --body)
+            event_kind=getattr(args, "event_kind", None),
+            default=getattr(args, "default", False),
+            title=getattr(args, "title", None),
         )
 
-        # Auto-generate date if missing
-        if not batch_args.date:
-            from datetime import date
-            batch_args.date = date.today().isoformat()
-            print(f"  No date provided, using today: {batch_args.date}")
+        # Resolve metadata up front (batch is non-interactive): an
+        # under-specified entry fails here and is recorded, not silently stamped.
+        try:
+            _resolve_metadata(batch_args)
+        except ValueError as e:
+            print(f"\n  ERROR: {e}")
+            results.append({"input": entry["input"], "status": f"failed: {e}", "meeting_id": entry["input"]})
+            print()
+            continue
 
         mid = f"{batch_args.date}-{batch_args.meeting_type.lower().replace(' ', '-')}"
 
@@ -2587,6 +2594,7 @@ def _review_queue() -> None:
 
 CITY_DEFAULT = "Bloomington"
 MEETING_TYPE_DEFAULT = "Regular Session"
+EVENT_KIND_DEFAULT = "council"
 
 
 def _today_iso() -> str:
@@ -2598,39 +2606,78 @@ _INTERVIEW_KINDS = {"news_clip", "press_conference"}
 
 
 def _resolve_metadata(args) -> None:
-    """Fill args.city/date/meeting_type for a new run.
+    """Fill args.city/date/meeting_type/event_kind for a new run.
 
-    Interactive + no --default → prompt for each UNSET field (Enter accepts the
-    shown default). --default or non-interactive → use defaults silently. Fields
-    already provided on the CLI are left as-is. meeting_id is not touched.
+    Per field, three modes:
+      * supplied on the CLI            -> kept (event_kind validated vs the enum)
+      * --default                      -> civic defaults applied silently for
+                                          city/meeting_type/event_kind; date is
+                                          NEVER defaulted and is always required
+      * interactive TTY (no --default) -> prompt for each unset field
+    Non-interactive (no TTY, --default, or batch_mode) with neither a CLI value
+    nor an applicable default raises ValueError naming every missing field, so a
+    run never silently guesses metadata. Prompt order: event_kind, city,
+    meeting_type, date, title.
     """
-    interactive = sys.stdin.isatty() and not getattr(args, "default", False)
-    today = _today_iso()
-    if args.event_kind is None:
-        args.event_kind = "council"
-    else:
+    use_defaults = bool(getattr(args, "default", False))
+    interactive = (
+        sys.stdin.isatty()
+        and not use_defaults
+        and not getattr(args, "batch_mode", False)
+    )
+
+    # event_kind first: it decides whether a city is required.
+    if args.event_kind is not None:
         args.event_kind = validate_event_kind(args.event_kind)
-    requires_city_default = args.event_kind in ("council", "school_board")
+    elif interactive:
+        ans = input(
+            f"  Event kind [{EVENT_KIND_DEFAULT}] ({'/'.join(EVENT_KINDS)}): "
+        ).strip()
+        args.event_kind = validate_event_kind(ans or EVENT_KIND_DEFAULT)
+    elif use_defaults:
+        args.event_kind = EVENT_KIND_DEFAULT
 
-    if not interactive:
-        if args.city is None and requires_city_default:
+    requires_city = args.event_kind in ("council", "school_board")
+
+    if args.city is None and requires_city:
+        if interactive:
+            ans = input(f"  City [{CITY_DEFAULT}]: ").strip()
+            args.city = ans or CITY_DEFAULT
+        elif use_defaults:
             args.city = CITY_DEFAULT
-        if args.meeting_type is None:
-            args.meeting_type = MEETING_TYPE_DEFAULT
-        if not args.date:
-            args.date = today
-        return
 
-    if args.city is None and requires_city_default:
-        ans = input(f"  City [{CITY_DEFAULT}]: ").strip()
-        args.city = ans or CITY_DEFAULT
-    if not args.date:
-        ans = input(f"  Date YYYY-MM-DD [{today}]: ").strip()
-        args.date = ans or today
     if args.meeting_type is None:
-        ans = input(f"  Meeting type [{MEETING_TYPE_DEFAULT}]: ").strip()
-        args.meeting_type = ans or MEETING_TYPE_DEFAULT
-    if args.event_kind in _INTERVIEW_KINDS and not args.title:
+        if interactive:
+            ans = input(f"  Meeting type [{MEETING_TYPE_DEFAULT}]: ").strip()
+            args.meeting_type = ans or MEETING_TYPE_DEFAULT
+        elif use_defaults:
+            args.meeting_type = MEETING_TYPE_DEFAULT
+
+    if not args.date and interactive:
+        while not args.date:
+            args.date = input("  Date YYYY-MM-DD (required): ").strip()
+
+    # Anything still unset means we could neither get it explicitly nor were
+    # told to default it (or it has no default, like date). Fail loudly.
+    missing = []
+    if args.event_kind is None:
+        missing.append("--event-kind")
+    if requires_city and args.city is None:
+        missing.append("--city")
+    if args.meeting_type is None:
+        missing.append("--meeting-type")
+    if not args.date:
+        missing.append("--date")
+    if missing:
+        raise ValueError(
+            "Refusing to guess meeting metadata: missing "
+            + ", ".join(missing)
+            + f". Pass them explicitly, or pass --default for {CITY_DEFAULT} / "
+            f"{MEETING_TYPE_DEFAULT} / {EVENT_KIND_DEFAULT} "
+            "(--date is always required)."
+        )
+
+    if args.event_kind in _INTERVIEW_KINDS and not args.title and interactive:
         ans = input("  Title (required for interview/media events): ").strip()
         args.title = ans or None
 
@@ -3542,8 +3589,9 @@ Environment Variables:
                              "Has no effect when --diarizer api is used (pyannote.ai "
                              "is always remote).")
     parser.add_argument("--default", action="store_true",
-                        help="Skip metadata prompts and use defaults "
-                             f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / today)")
+                        help="Skip metadata prompts and use civic defaults "
+                             f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / "
+                             f"{EVENT_KIND_DEFAULT}); --date is still required")
 
     # Utilities
     parser.add_argument("--list-profiles", action="store_true",
@@ -3938,7 +3986,11 @@ def main():
         if not args.date:
             args.date = _today_iso()
     else:
-        _resolve_metadata(args)
+        try:
+            _resolve_metadata(args)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(2)
 
     # --- Run ---
     run_pipeline(args)
