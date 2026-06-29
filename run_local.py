@@ -3589,8 +3589,9 @@ Environment Variables:
                              "Has no effect when --diarizer api is used (pyannote.ai "
                              "is always remote).")
     parser.add_argument("--default", action="store_true",
-                        help="Skip metadata prompts and use defaults "
-                             f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / today)")
+                        help="Skip metadata prompts and use civic defaults "
+                             f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / "
+                             f"{EVENT_KIND_DEFAULT}); --date is still required")
 
     # Utilities
     parser.add_argument("--list-profiles", action="store_true",
