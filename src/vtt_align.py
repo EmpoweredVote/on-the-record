@@ -89,13 +89,6 @@ def _parse_timestamp_line(line: str) -> tuple[float | None, float | None]:
     return start, end
 
 
-def _overlap(seg_start: float, seg_end: float, cue_start: float, cue_end: float) -> float:
-    """Compute overlap duration between a segment and a cue."""
-    overlap_start = max(seg_start, cue_start)
-    overlap_end = min(seg_end, cue_end)
-    return max(0.0, overlap_end - overlap_start)
-
-
 def _deduplicated_words(cues: list[dict]) -> list[Word]:
     """Convert rolling VTT cues into one chronological, non-repeating stream."""
     emitted_keys: list[str] = []
@@ -144,33 +137,6 @@ def _deduplicated_words(cues: list[dict]) -> list[Word]:
     return timed_words
 
 
-def _segment_for_gap_word(word: Word, segments: list[Segment]) -> Segment | None:
-    """Return the turn a zero-overlap word belongs to, or None to drop it.
-
-    VTT word times are synthesized proportionally from a cue's duration and
-    token count, so the last words of a turn can spill past the diarized
-    ``end_time`` into the pause before the next speaker. Such a word overlaps no
-    segment. If it falls strictly inside an inter-segment gap (a preceding turn
-    ends before it and a following turn starts after it), it is a trailing word
-    of the preceding turn and that segment is returned, keeping the whole tail
-    together on one speaker. A word that sits before the first turn or after the
-    last turn lies outside the diarized timeline (e.g. a cue outside a clip
-    window) and returns None so the caller drops it.
-    """
-    preceding = None
-    following = None
-    for seg in segments:
-        if seg.end_time <= word.start:
-            if preceding is None or seg.end_time > preceding.end_time:
-                preceding = seg
-        if seg.start_time >= word.end:
-            if following is None or seg.start_time < following.start_time:
-                following = seg
-    if preceding is not None and following is not None:
-        return preceding
-    return None
-
-
 def align_vtt_to_segments(
     vtt_path: str | Path,
     diarized_segments: list[Segment],
@@ -200,53 +166,14 @@ def align_vtt_to_segments(
     if not diarized_segments:
         return diarized_segments
 
-    for seg in diarized_segments:
-        seg.text = ""
-        seg.words = []
-
     words = _deduplicated_words(cues)
     if clip_offset:
         for word in words:
             word.start -= clip_offset
             word.end -= clip_offset
 
-    for word in words:
-        midpoint = (word.start + word.end) / 2
-        target = next(
-            (
-                seg
-                for seg in diarized_segments
-                if seg.start_time <= midpoint < seg.end_time
-            ),
-            None,
-        )
-        if target is None:
-            candidates = [
-                (
-                    _overlap(
-                        seg.start_time,
-                        seg.end_time,
-                        word.start,
-                        word.end,
-                    ),
-                    seg,
-                )
-                for seg in diarized_segments
-            ]
-            overlap_dur, target = max(candidates, key=lambda item: item[0])
-            if overlap_dur <= 0:
-                # No segment overlaps this word. If it landed in a pause between
-                # two turns, it is a trailing word whose proportional VTT timing
-                # spilled past its turn's end; snap it back to the turn that
-                # just ended. Words outside the diarized timeline are dropped.
-                target = _segment_for_gap_word(word, diarized_segments)
-                if target is None:
-                    continue
-
-        target.words.append(word)
-
-    for seg in diarized_segments:
-        seg.text = " ".join(word.word for word in seg.words)
+    from .word_assign import assign_words_to_segments
+    assign_words_to_segments(words, diarized_segments)
 
     aligned_count = sum(1 for s in diarized_segments if s.text)
     total = len(diarized_segments)
