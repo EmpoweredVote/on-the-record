@@ -22,6 +22,7 @@ import psycopg2
 import psycopg2.extras
 
 from .event_entities import validate_event_entities
+from .event_kinds import validate_event_kind
 from .models import Meeting
 
 SEGMENT_BATCH_SIZE = 500
@@ -192,6 +193,14 @@ def _reconcile_event_races(cur, meeting: Meeting, meeting_uuid: str) -> list[str
 
 def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
     """Insert or update the meeting row. Returns the meetings.meetings UUID."""
+    # Backstop: never let a guessed/missing classification reach the DB.
+    validate_event_kind(meeting.event_kind or "")  # raises ValueError if None/empty/invalid
+    if not (meeting.meeting_type or "").strip():
+        raise ValueError(f"{meeting.meeting_id}: meeting_type is required to publish")
+    if meeting.event_kind in ("council", "school_board") and not (meeting.city or "").strip():
+        raise ValueError(
+            f"{meeting.meeting_id}: city is required to publish a {meeting.event_kind} meeting"
+        )
     chamber_id = _resolve_chamber_id(cur, body_slug)
     entity_error = validate_event_entities(
         meeting.event_kind,
