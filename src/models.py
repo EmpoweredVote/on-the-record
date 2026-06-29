@@ -237,9 +237,9 @@ class Meeting:
     meeting_id: str
     city: Optional[str]
     date: str
-    meeting_type: str = "Regular Session"
+    meeting_type: Optional[str] = None
     title: Optional[str] = None
-    event_kind: str = "council"
+    event_kind: Optional[str] = None
     race_id: Optional[str] = None
     audio_source: str = ""
     duration_seconds: float = 0.0
@@ -286,9 +286,9 @@ class Meeting:
             meeting_id=d["meeting_id"],
             city=d.get("city"),
             date=d["date"],
-            meeting_type=d.get("meeting_type", "Regular Session"),
+            meeting_type=d.get("meeting_type"),
             title=d.get("title"),
-            event_kind=d.get("event_kind", "council"),
+            event_kind=d.get("event_kind"),
             race_id=d.get("race_id"),
             audio_source=d.get("audio_source", ""),
             duration_seconds=d.get("duration_seconds", 0.0),
