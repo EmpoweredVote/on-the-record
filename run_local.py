@@ -1803,21 +1803,6 @@ def _run_batch(args: argparse.Namespace) -> None:
         print(f"BATCH [{i+1}/{len(entries)}]: {entry['input']}")
         print(f"{'=' * 60}")
 
-        # Check if already processed (for --batch-resume)
-        if args.batch_resume and entry["date"] and entry.get("meeting_type"):
-            from src import config
-            from src.checkpoint import PipelineStage, PipelineState
-            mid = f"{entry['date']}-{entry['meeting_type'].lower().replace(' ', '-')}"
-            mdir = config.MEETINGS_DIR / mid
-            state_file = mdir / "pipeline_state.json"
-            if state_file.exists():
-                state = PipelineState(mdir)
-                if state.is_complete(PipelineStage.IDENTIFIED):
-                    print(f"  Already complete (stage {state.completed_stage.name}). Skipping.")
-                    results.append({"input": entry["input"], "status": "skipped (complete)", "meeting_id": mid})
-                    print()
-                    continue
-
         # Build args for run_pipeline
         batch_args = argparse.Namespace(
             input=entry["input"],
@@ -1855,6 +1840,21 @@ def _run_batch(args: argparse.Namespace) -> None:
             continue
 
         mid = f"{batch_args.date}-{batch_args.meeting_type.lower().replace(' ', '-')}"
+
+        # Check if already processed (for --batch-resume). Uses the RESOLVED
+        # meeting_type/date so an entry that relies on --default to fill those
+        # still short-circuits when the meeting is already complete.
+        if args.batch_resume:
+            from src import config
+            from src.checkpoint import PipelineStage, PipelineState
+            mdir = config.MEETINGS_DIR / mid
+            if (mdir / "pipeline_state.json").exists():
+                state = PipelineState(mdir)
+                if state.is_complete(PipelineStage.IDENTIFIED):
+                    print(f"  Already complete (stage {state.completed_stage.name}). Skipping.")
+                    results.append({"input": entry["input"], "status": "skipped (complete)", "meeting_id": mid})
+                    print()
+                    continue
 
         try:
             run_pipeline(batch_args)
@@ -2597,15 +2597,10 @@ MEETING_TYPE_DEFAULT = "Regular Session"
 EVENT_KIND_DEFAULT = "council"
 
 
-def _today_iso() -> str:
-    from datetime import date
-    return date.today().isoformat()
-
-
 _INTERVIEW_KINDS = {"news_clip", "press_conference"}
 
 
-def _resolve_metadata(args) -> None:
+def _resolve_metadata(args, *, allow_prompt: bool = True) -> None:
     """Fill args.city/date/meeting_type/event_kind for a new run.
 
     Per field, three modes:
@@ -2618,10 +2613,15 @@ def _resolve_metadata(args) -> None:
     nor an applicable default raises ValueError naming every missing field, so a
     run never silently guesses metadata. Prompt order: event_kind, city,
     meeting_type, date, title.
+
+    Pass allow_prompt=False (resume) to suppress prompting entirely: metadata is
+    expected to have been restored from saved state, so a still-unset field is a
+    genuine gap that hard-fails (or is filled by --default) rather than guessed.
     """
     use_defaults = bool(getattr(args, "default", False))
     interactive = (
-        sys.stdin.isatty()
+        allow_prompt
+        and sys.stdin.isatty()
         and not use_defaults
         and not getattr(args, "batch_mode", False)
     )
@@ -3973,24 +3973,15 @@ def main():
         sys.exit(1)
 
     # Resolve city/date/meeting-type (prompt unless --default / non-interactive).
-    # Skip prompting on resume (metadata comes from the existing meeting).
-    if args.resume:
-        if args.event_kind is None:
-            args.event_kind = "council"  # last-resort default if no state file preserved it
-        else:
-            args.event_kind = validate_event_kind(args.event_kind)
-        if args.city is None and not named_transcript_loaded:
-            args.city = CITY_DEFAULT
-        if args.meeting_type is None:
-            args.meeting_type = MEETING_TYPE_DEFAULT
-        if not args.date:
-            args.date = _today_iso()
-    else:
-        try:
-            _resolve_metadata(args)
-        except ValueError as e:
-            print(f"Error: {e}")
-            sys.exit(2)
+    # Resume never prompts (metadata is restored from the existing meeting's
+    # transcript_named.json / pipeline_state.json above); a field that state
+    # could not restore hard-fails rather than being silently stamped with a
+    # civic default, unless --default was passed.
+    try:
+        _resolve_metadata(args, allow_prompt=not args.resume)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(2)
 
     # --- Run ---
     run_pipeline(args)
