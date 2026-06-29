@@ -54,7 +54,12 @@ def assign_words_to_segments(
     for word in words:
         midpoint = (word.start + word.end) / 2
         target = next(
-            (s for s in segments if s.start_time <= midpoint < s.end_time),
+            (
+                s
+                for s in segments
+                if s.start_time <= midpoint < s.end_time
+                and _duration(s) >= SHORT_TURN_SECONDS
+            ),
             None,
         )
         if target is None:

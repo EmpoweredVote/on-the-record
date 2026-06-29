@@ -74,6 +74,24 @@ def transcribe_full_audio(model, wav_path: str | Path) -> list[Word]:
     return words
 
 
+def transcribe_and_assign(
+    model,
+    wav_path: str | Path,
+    segments: list[Segment],
+) -> list[Segment]:
+    """Whole-audio transcription, then assign each word to its diarized turn.
+
+    Replaces per-segment slicing (`transcribe_segments`). Segments are modified
+    in place: seg.words and seg.text are populated from the global word stream.
+    """
+    from .word_assign import assign_words_to_segments
+
+    remove_segment_overlaps(segments)
+    words = transcribe_full_audio(model, wav_path)
+    assign_words_to_segments(words, segments)
+    return segments
+
+
 def transcribe_segments(
     model,
     wav_path: str | Path,

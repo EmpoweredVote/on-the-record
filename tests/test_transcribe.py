@@ -51,6 +51,31 @@ class _FakeModel:
         return iter(self._segs), {}
 
 
+from src.transcribe import transcribe_and_assign
+
+
+def test_transcribe_and_assign_attributes_words_to_diarized_turns(monkeypatch, tmp_path):
+    import src.transcribe as t
+    monkeypatch.setattr(t, "load_wav", lambda p: (b"", 16000))
+    model = _FakeModel([
+        _FakeSeg([_FakeWord(" abortion", 1028.18, 1028.64),
+                  _FakeWord(" tourism", 1028.64, 1029.20),
+                  _FakeWord(" where", 1029.20, 1030.20)]),
+    ])
+    segments = [
+        Segment(0, 1026.655, 1029.254, "SPEAKER_00"),
+        Segment(1, 1029.322, 1029.777, "SPEAKER_01"),  # short Hailey turn
+        Segment(2, 1029.777, 1030.570, "SPEAKER_00"),
+    ]
+
+    result = transcribe_and_assign(model, tmp_path / "audio.wav", segments)
+
+    steve_words = [w.word for s in result if s.speaker_label == "SPEAKER_00" for w in s.words]
+    hailey_words = [w.word for s in result if s.speaker_label == "SPEAKER_01" for w in s.words]
+    assert "abortion" in steve_words and "tourism" in steve_words
+    assert hailey_words == []  # short turn captured no genuine word
+
+
 def test_transcribe_full_audio_returns_flat_chronological_words(monkeypatch, tmp_path):
     import src.transcribe as t
     # Stub audio loading so no real WAV is needed.
