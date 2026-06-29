@@ -85,6 +85,10 @@ pyannote_image = (
 pyannote_merged_image = pyannote_image.add_local_dir("./src", remote_path="/root/cs_src")
 
 # Image for Whisper transcription (production pipeline functions).
+# src/ is bundled so the shared word-assignment logic (cs_src.word_assign) and
+# overlap-removal (cs_src.transcribe) are importable inside the function, exactly
+# mirroring pyannote_merged_image.  Use sys.path.insert(0, "/root") then
+# `from cs_src.word_assign import assign_words_to_segments`.
 whisper_image = (
     modal.Image.from_registry(
         "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04",
@@ -96,6 +100,7 @@ whisper_image = (
         "soundfile==0.12.1",
         "numpy>=1.26,<3",
     )
+    .add_local_dir("./src", remote_path="/root/cs_src")
 )
 
 # pyannote.ai Precision-2 (REST API; no GPU needed).
@@ -1474,12 +1479,27 @@ def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
     Accepts the segments list serialised as a JSON string (same format as
     Segment.to_dict()) and returns the same structure with ``text`` and
     ``words`` populated.
+
+    Implementation mirrors the local path (src/transcribe.py + src/word_assign.py):
+      1. Load the full audio once.
+      2. Run model.transcribe() a single time over the whole audio.
+      3. Build a flat chronological word list with global timestamps (no per-segment
+         rebasing — that was the source of ~1 s drift).
+      4. Assign words to segments via the shared cs_src.word_assign logic which
+         uses midpoint containment, a short-turn guard, and a gap-snap fallback.
     """
     import json as _json
+    import sys
 
     import numpy as np
     import soundfile as sf
     from faster_whisper import WhisperModel
+
+    # Make cs_src (the bundled ./src directory) importable.
+    sys.path.insert(0, "/root")
+    from cs_src.models import Segment, Word
+    from cs_src.transcribe import remove_segment_overlaps, recover_orphan_turns
+    from cs_src.word_assign import assign_words_to_segments
 
     wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
     if not wav_path.exists():
@@ -1487,48 +1507,44 @@ def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
 
     segments_data: list[dict] = _json.loads(segments_json)
 
+    # Reconstruct Segment objects so the shared assignment logic can operate on
+    # them; we convert back to dicts at the end to preserve the output contract.
+    segments = [Segment.from_dict(d) for d in segments_data]
+
     model = WhisperModel("large-v3", device="cuda", compute_type="float16")
 
     samples, sr = sf.read(str(wav_path))
     if samples.ndim > 1:
         samples = samples.mean(axis=1)
+    samples = samples.astype(np.float32)
 
-    total = len(segments_data)
     t0 = time.time()
 
-    for i, seg in enumerate(segments_data):
-        i0 = int(seg["start_time"] * sr)
-        i1 = int(seg["end_time"] * sr)
-        clip = samples[i0:i1].astype(np.float32)
+    # Step 1 — remove overlaps so each audio instant belongs to one turn.
+    remove_segment_overlaps(segments)
 
-        if len(clip) < sr * 0.1:
-            seg["text"] = ""
-            seg["words"] = []
-            continue
+    # Step 2 — single whole-audio transcription pass.
+    print(f"  Transcribing full audio ({len(samples)/sr:.0f}s) …", flush=True)
+    result_segs, _ = model.transcribe(samples, word_timestamps=True, language="en")
 
-        result_segs, _ = model.transcribe(clip, word_timestamps=True, language="en")
+    # Step 3 — build flat chronological word list (global timestamps, no rebasing).
+    words: list[Word] = []
+    for rs in result_segs:
+        for w in (rs.words or []):
+            words.append(Word(word=w.word.strip(), start=round(w.start, 3), end=round(w.end, 3)))
 
-        words = []
-        text_parts = []
-        for rs in result_segs:
-            if rs.words:
-                for w in rs.words:
-                    words.append({
-                        "word": w.word.strip(),
-                        "start": round(seg["start_time"] + w.start, 3),
-                        "end": round(seg["start_time"] + w.end, 3),
-                    })
-            text_parts.append(rs.text.strip())
+    elapsed = time.time() - t0
+    print(f"  Transcription done: {len(words)} words in {elapsed:.0f}s", flush=True)
 
-        seg["text"] = " ".join(text_parts).strip()
-        seg["words"] = words
+    # Step 4 — assign words to diarized turns using the shared logic.
+    assign_words_to_segments(words, segments)
 
-        if (i + 1) % 50 == 0:
-            pct = (i + 1) / total * 100
-            elapsed = time.time() - t0
-            print(f"  [{i + 1}/{total}] ({pct:.0f}%) {elapsed:.0f}s elapsed", flush=True)
+    # Step 5 — recover faint short turns the whole-audio pass left wordless
+    # (e.g. roll-call "Here.", quiet "Second."). Mirrors the local path.
+    recover_orphan_turns(model, wav_path, segments, words)
 
-    return _json.dumps(segments_data)
+    # Serialise back to the same dict structure the caller expects.
+    return _json.dumps([seg.to_dict() for seg in segments])
 
 
 # ---------------------------------------------------------------------------
