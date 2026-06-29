@@ -3978,7 +3978,11 @@ def main():
         if not args.date:
             args.date = _today_iso()
     else:
-        _resolve_metadata(args)
+        try:
+            _resolve_metadata(args)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(2)
 
     # --- Run ---
     run_pipeline(args)
