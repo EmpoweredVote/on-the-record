@@ -52,6 +52,28 @@ def load_whisper_model():
     return model
 
 
+def transcribe_full_audio(model, wav_path: str | Path) -> list[Word]:
+    """Transcribe the entire audio in one pass with word-level timestamps.
+
+    Returns a flat, chronological list of Words whose start/end are already on
+    the meeting's global timeline (the WAV is the meeting). No per-segment
+    rebasing — that is the source of the drift this replaces.
+    """
+    samples, sr = load_wav(wav_path)
+    result_segments, _ = model.transcribe(
+        samples,
+        word_timestamps=True,
+        language="en",
+    )
+    words: list[Word] = []
+    for rs in result_segments:
+        for w in (rs.words or []):
+            words.append(
+                Word(word=w.word.strip(), start=round(w.start, 3), end=round(w.end, 3))
+            )
+    return words
+
+
 def transcribe_segments(
     model,
     wav_path: str | Path,
