@@ -26,6 +26,7 @@ export interface Meeting {
   clip_end_seconds: number | null;
   summary_preview: string | null;
   speakers: MeetingSpeaker[];
+  speaker_count: number | null;  // count from the list API (speakers[] is detail-only)
   event_orgs: string[];         // hosting/producing organizations; may be empty
   source_title: string | null;  // title from yt-dlp metadata; used as title fallback
   thumbnail_url: string | null;  // extracted-frame thumbnail (Supabase Storage)

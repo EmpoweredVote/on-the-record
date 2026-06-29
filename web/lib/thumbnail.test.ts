@@ -20,6 +20,7 @@ const base: Meeting = {
   clip_end_seconds: null,
   summary_preview: "A summary.",
   speakers: [],
+  speaker_count: null,
   event_orgs: [],
   source_title: null,
   thumbnail_url: null,
