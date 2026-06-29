@@ -50,3 +50,21 @@ def test_hilton_clip_assigns_continuous_words_to_correct_speakers():
     assert owner("abortion") == "SPEAKER_00"  # Steve's "abortion tourism"
     assert owner("tourism") == "SPEAKER_00"
     assert owner("other") == "SPEAKER_00"      # Steve's "ads in other states"
+
+
+def test_short_turn_does_not_steal_boundary_word_from_dominant():
+    # Steve speaks continuously; a 0.37s Hailey turn sits at a word boundary.
+    segs = [
+        _seg(0, 1030.570, 1034.148, "SPEAKER_00"),  # Steve (long)
+        _seg(1, 1034.148, 1034.519, "SPEAKER_01"),  # Hailey (0.371s, short)
+        _seg(2, 1034.603, 1036.949, "SPEAKER_00"),  # Steve (long)
+    ]
+    # "saying" spans the boundary; midpoint 1034.56 lies in the gap, not inside
+    # the short Hailey turn. It must NOT be handed to Hailey.
+    words = [Word("saying", 1034.20, 1034.92)]
+
+    assign_words_to_segments(words, segs)
+
+    assert [w.word for w in segs[1].words] == []        # Hailey gets nothing
+    assert "saying" in [w.word for w in segs[0].words] or \
+           "saying" in [w.word for w in segs[2].words]  # stays with Steve
