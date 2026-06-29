@@ -1177,7 +1177,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         load_whisper_model,
         remove_segment_overlaps,
         save_raw_transcript,
-        transcribe_segments,
+        transcribe_and_assign,
     )
 
     transcript_path = meeting_dir / "transcript_raw.json"
@@ -1226,31 +1226,18 @@ def run_pipeline(args: argparse.Namespace) -> None:
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s (Modal)")
     elif not state.is_complete(PipelineStage.TRANSCRIBED):
-        resume_from = state.transcription_progress
-        if resume_from > 0:
-            print(f"  Resuming from segment {resume_from}/{len(segments)}")
-            if transcript_path.exists():
-                segments = load_raw_transcript(transcript_path)
-
         t0 = time.time()
         whisper_model = load_whisper_model()
 
         model_name = config.WHISPER_MODEL_GPU if torch.cuda.is_available() else config.WHISPER_MODEL_CPU
         meeting.processing_metadata.transcription_model = model_name
         meeting.processing_metadata.gpu_used = torch.cuda.is_available()
-        print(f"  Using model: {model_name}")
+        print(f"  Using model: {model_name} (whole-audio pass)")
 
-        def checkpoint_fn(current, total):
-            save_raw_transcript(segments, transcript_path)
-            state.update_transcription_progress(current, total)
-            pct = (current / total) * 100
-            print(f"  Checkpoint: {current}/{total} segments ({pct:.0f}%)")
-
-        segments = transcribe_segments(
-            whisper_model, wav_path, segments,
-            checkpoint_callback=checkpoint_fn,
-            resume_from=resume_from,
-        )
+        # Whole-audio transcription + timestamp-based word->turn assignment.
+        # One pass over the full file yields drift-free word timestamps; per-turn
+        # slicing is gone, so there is no per-segment checkpoint to resume from.
+        segments = transcribe_and_assign(whisper_model, wav_path, segments)
         elapsed = time.time() - t0
 
         save_raw_transcript(segments, transcript_path)
