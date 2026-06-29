@@ -2587,6 +2587,7 @@ def _review_queue() -> None:
 
 CITY_DEFAULT = "Bloomington"
 MEETING_TYPE_DEFAULT = "Regular Session"
+EVENT_KIND_DEFAULT = "council"
 
 
 def _today_iso() -> str:
@@ -2598,39 +2599,78 @@ _INTERVIEW_KINDS = {"news_clip", "press_conference"}
 
 
 def _resolve_metadata(args) -> None:
-    """Fill args.city/date/meeting_type for a new run.
+    """Fill args.city/date/meeting_type/event_kind for a new run.
 
-    Interactive + no --default → prompt for each UNSET field (Enter accepts the
-    shown default). --default or non-interactive → use defaults silently. Fields
-    already provided on the CLI are left as-is. meeting_id is not touched.
+    Per field, three modes:
+      * supplied on the CLI            -> kept (event_kind validated vs the enum)
+      * --default                      -> civic defaults applied silently for
+                                          city/meeting_type/event_kind; date is
+                                          NEVER defaulted and is always required
+      * interactive TTY (no --default) -> prompt for each unset field
+    Non-interactive (no TTY, --default, or batch_mode) with neither a CLI value
+    nor an applicable default raises ValueError naming every missing field, so a
+    run never silently guesses metadata. Prompt order: event_kind, city,
+    meeting_type, date, title.
     """
-    interactive = sys.stdin.isatty() and not getattr(args, "default", False)
-    today = _today_iso()
-    if args.event_kind is None:
-        args.event_kind = "council"
-    else:
+    use_defaults = bool(getattr(args, "default", False))
+    interactive = (
+        sys.stdin.isatty()
+        and not use_defaults
+        and not getattr(args, "batch_mode", False)
+    )
+
+    # event_kind first: it decides whether a city is required.
+    if args.event_kind is not None:
         args.event_kind = validate_event_kind(args.event_kind)
-    requires_city_default = args.event_kind in ("council", "school_board")
+    elif interactive:
+        ans = input(
+            f"  Event kind [{EVENT_KIND_DEFAULT}] ({'/'.join(EVENT_KINDS)}): "
+        ).strip()
+        args.event_kind = validate_event_kind(ans or EVENT_KIND_DEFAULT)
+    elif use_defaults:
+        args.event_kind = EVENT_KIND_DEFAULT
 
-    if not interactive:
-        if args.city is None and requires_city_default:
+    requires_city = args.event_kind in ("council", "school_board")
+
+    if args.city is None and requires_city:
+        if interactive:
+            ans = input(f"  City [{CITY_DEFAULT}]: ").strip()
+            args.city = ans or CITY_DEFAULT
+        elif use_defaults:
             args.city = CITY_DEFAULT
-        if args.meeting_type is None:
-            args.meeting_type = MEETING_TYPE_DEFAULT
-        if not args.date:
-            args.date = today
-        return
 
-    if args.city is None and requires_city_default:
-        ans = input(f"  City [{CITY_DEFAULT}]: ").strip()
-        args.city = ans or CITY_DEFAULT
-    if not args.date:
-        ans = input(f"  Date YYYY-MM-DD [{today}]: ").strip()
-        args.date = ans or today
     if args.meeting_type is None:
-        ans = input(f"  Meeting type [{MEETING_TYPE_DEFAULT}]: ").strip()
-        args.meeting_type = ans or MEETING_TYPE_DEFAULT
-    if args.event_kind in _INTERVIEW_KINDS and not args.title:
+        if interactive:
+            ans = input(f"  Meeting type [{MEETING_TYPE_DEFAULT}]: ").strip()
+            args.meeting_type = ans or MEETING_TYPE_DEFAULT
+        elif use_defaults:
+            args.meeting_type = MEETING_TYPE_DEFAULT
+
+    if not args.date and interactive:
+        while not args.date:
+            args.date = input("  Date YYYY-MM-DD (required): ").strip()
+
+    # Anything still unset means we could neither get it explicitly nor were
+    # told to default it (or it has no default, like date). Fail loudly.
+    missing = []
+    if args.event_kind is None:
+        missing.append("--event-kind")
+    if requires_city and args.city is None:
+        missing.append("--city")
+    if args.meeting_type is None:
+        missing.append("--meeting-type")
+    if not args.date:
+        missing.append("--date")
+    if missing:
+        raise ValueError(
+            "Refusing to guess meeting metadata: missing "
+            + ", ".join(missing)
+            + f". Pass them explicitly, or pass --default for {CITY_DEFAULT} / "
+            f"{MEETING_TYPE_DEFAULT} / {EVENT_KIND_DEFAULT} "
+            "(--date is always required)."
+        )
+
+    if args.event_kind in _INTERVIEW_KINDS and not args.title and interactive:
         ans = input("  Title (required for interview/media events): ").strip()
         args.title = ans or None
 
