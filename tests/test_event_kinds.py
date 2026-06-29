@@ -57,7 +57,7 @@ def test_resolve_metadata_defaults_event_kind_without_prompt(monkeypatch):
         meeting_type="Regular Session",
         title=None,
         event_kind=None,
-        default=False,
+        default=True,  # council default is now opt-in via --default
     )
 
     run_local._resolve_metadata(args)

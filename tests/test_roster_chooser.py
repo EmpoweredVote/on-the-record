@@ -271,6 +271,7 @@ def test_batch_mode_suppresses_roster_prompt(tmp_path, monkeypatch):
         diarizer="oss",
         body=None,
         force_retag=False,
+        event_kind="council",
     )
     run_local._run_batch(args)
 

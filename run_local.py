@@ -1850,7 +1850,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             _resolve_metadata(batch_args)
         except ValueError as e:
             print(f"\n  ERROR: {e}")
-            results.append({"input": entry["input"], "status": f"failed: {e}", "meeting_id": ""})
+            results.append({"input": entry["input"], "status": f"failed: {e}", "meeting_id": entry["input"]})
             print()
             continue
 
