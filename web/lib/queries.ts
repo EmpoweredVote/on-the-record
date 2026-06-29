@@ -123,6 +123,10 @@ function mapAppearance(a: any): Appearance {
     meeting_type: a.meetingType,
     meeting_date: a.date,
     playback_kind: a.playbackKind ?? null,
+    title: a.title ?? null,
+    event_kind: (a.eventKind ?? "council") as EventKind,
+    event_orgs: (a.eventOrgs ?? []) as string[],
+    source_title: a.sourceTitle ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     segments: ((a.segments ?? []) as any[]).map((s) => ({
       segment_id: s.segmentIndex,
