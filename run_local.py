@@ -1753,8 +1753,8 @@ def _parse_batch_inputs(batch_path: str) -> list[dict]:
                 entries.append({
                     "input": str(f),
                     "date": date,
-                    "city": "Bloomington",
-                    "meeting_type": "Regular Session",
+                    "city": None,
+                    "meeting_type": None,
                 })
         return entries
 
@@ -1772,8 +1772,8 @@ def _parse_batch_inputs(batch_path: str) -> list[dict]:
                 entry = {
                     "input": parts[0],
                     "date": parts[1] if len(parts) > 1 else "",
-                    "city": parts[2] if len(parts) > 2 else "Bloomington",
-                    "meeting_type": parts[3] if len(parts) > 3 else "Regular Session",
+                    "city": parts[2] if len(parts) > 2 else None,
+                    "meeting_type": parts[3] if len(parts) > 3 else None,
                 }
                 entries.append(entry)
         return entries
@@ -1804,7 +1804,7 @@ def _run_batch(args: argparse.Namespace) -> None:
         print(f"{'=' * 60}")
 
         # Check if already processed (for --batch-resume)
-        if args.batch_resume and entry["date"]:
+        if args.batch_resume and entry["date"] and entry.get("meeting_type"):
             from src import config
             from src.checkpoint import PipelineStage, PipelineState
             mid = f"{entry['date']}-{entry['meeting_type'].lower().replace(' ', '-')}"
@@ -1839,13 +1839,20 @@ def _run_batch(args: argparse.Namespace) -> None:
             race_id=getattr(args, "race_id", None),
             force_retag=getattr(args, "force_retag", False),
             batch_mode=True,  # suppress the interactive roster chooser (D3: batch uses no roster unless --body)
+            event_kind=getattr(args, "event_kind", None),
+            default=getattr(args, "default", False),
+            title=getattr(args, "title", None),
         )
 
-        # Auto-generate date if missing
-        if not batch_args.date:
-            from datetime import date
-            batch_args.date = date.today().isoformat()
-            print(f"  No date provided, using today: {batch_args.date}")
+        # Resolve metadata up front (batch is non-interactive): an
+        # under-specified entry fails here and is recorded, not silently stamped.
+        try:
+            _resolve_metadata(batch_args)
+        except ValueError as e:
+            print(f"\n  ERROR: {e}")
+            results.append({"input": entry["input"], "status": f"failed: {e}", "meeting_id": ""})
+            print()
+            continue
 
         mid = f"{batch_args.date}-{batch_args.meeting_type.lower().replace(' ', '-')}"
 
