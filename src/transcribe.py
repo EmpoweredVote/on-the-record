@@ -74,21 +74,76 @@ def transcribe_full_audio(model, wav_path: str | Path) -> list[Word]:
     return words
 
 
+def recover_orphan_turns(
+    model,
+    wav_path: str | Path,
+    segments: list[Segment],
+    continuous_words: list[Word],
+    *,
+    min_seconds: float = 0.1,
+    overlap_skip_frac: float = 0.5,
+) -> list[Segment]:
+    """Recover faint short utterances dropped by whole-audio transcription.
+
+    Whole-audio Whisper locks onto the dominant voice and drops faint short
+    turns (a roll-call "Here.", a quiet "Second."), leaving them wordless. For
+    each empty turn long enough to embed, transcribe just its slice and attach
+    the result, rebasing word times to the turn's start.
+
+    GUARD: only recover a turn the continuous pass left genuinely silent. If any
+    continuous word overlaps the turn by >= overlap_skip_frac of the turn's
+    duration, that turn sits over another speaker's speech (an overlap/bleed
+    region, e.g. a listener's backchannel during the interviewee's sentence) and
+    slice-transcribing it would steal the dominant speaker's word. Skip those.
+    """
+    from .word_assign import _overlap
+
+    samples, sr = load_wav(wav_path)
+    for seg in segments:
+        if seg.words:
+            continue
+        turn_dur = seg.end_time - seg.start_time
+        if turn_dur < min_seconds:
+            continue
+        # Skip turns that overlap continuous-pass speech (overlap/bleed regions).
+        max_cov = 0.0
+        for w in continuous_words:
+            cov = _overlap(seg.start_time, seg.end_time, w.start, w.end)
+            if cov > max_cov:
+                max_cov = cov
+        if turn_dur > 0 and max_cov / turn_dur >= overlap_skip_frac:
+            continue
+
+        audio_slice = slice_audio(samples, sr, seg.start_time, seg.end_time)
+        result_segments, _ = model.transcribe(
+            audio_slice, word_timestamps=True, language="en"
+        )
+        words: list[Word] = []
+        for rs in result_segments:
+            for w in (rs.words or []):
+                words.append(
+                    Word(word=w.word.strip(),
+                         start=round(seg.start_time + w.start, 3),
+                         end=round(seg.start_time + w.end, 3))
+                )
+        seg.words = words
+        seg.text = " ".join(w.word for w in words)
+    return segments
+
+
 def transcribe_and_assign(
     model,
     wav_path: str | Path,
     segments: list[Segment],
 ) -> list[Segment]:
-    """Whole-audio transcription, then assign each word to its diarized turn.
-
-    Replaces per-segment slicing (`transcribe_segments`). Segments are modified
-    in place: seg.words and seg.text are populated from the global word stream.
-    """
+    """Whole-audio transcription, then assign each word to its diarized turn,
+    then recover faint short turns the continuous pass left silent."""
     from .word_assign import assign_words_to_segments
 
     remove_segment_overlaps(segments)
     words = transcribe_full_audio(model, wav_path)
     assign_words_to_segments(words, segments)
+    recover_orphan_turns(model, wav_path, segments, words)
     return segments
 
 
