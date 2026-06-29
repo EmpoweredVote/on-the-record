@@ -27,7 +27,7 @@ def test_redo_with_input_is_allowed(monkeypatch, tmp_path):
     monkeypatch.setattr(run_local, "run_pipeline", lambda args: None)
     monkeypatch.setattr(
         sys, "argv",
-        ["run_local.py", "--input", str(tmp_path / "x.mp4"), "--redo", "identify", "--default"],
+        ["run_local.py", "--input", str(tmp_path / "x.mp4"), "--redo", "identify", "--default", "--date", "2026-02-18"],
     )
     run_local.main()  # must not raise SystemExit
 
