@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from . import config
 from .audio_utils import load_wav, slice_audio
@@ -34,6 +33,7 @@ def remove_segment_overlaps(segments: list[Segment]) -> list[Segment]:
 
 def load_whisper_model():
     """Load faster-whisper model. GPU: large-v3 float16, CPU: medium int8."""
+    import torch  # lazy: keeps this module importable on torch-free images (Modal whisper)
     from faster_whisper import WhisperModel
 
     if torch.cuda.is_available():
