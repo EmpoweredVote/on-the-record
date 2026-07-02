@@ -33,7 +33,13 @@ def source_key(raw: str) -> str:
     s = (raw or "").strip()
     if not s:
         return ""
-    parsed = urlparse(s)
+    try:
+        parsed = urlparse(s)
+    except ValueError:
+        # urlparse raises on malformed URLs (e.g. bad IPv6 brackets). source_key
+        # runs at ingest in the pipeline, so it must never raise — degrade junk
+        # input to the file: fallback (unique-ish; it just won't dedup).
+        return f"file:{os.path.abspath(s)}"
     if parsed.scheme in ("http", "https"):
         yid = _youtube_id(parsed)
         if yid:

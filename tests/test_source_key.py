@@ -31,3 +31,11 @@ def test_local_file_absolute():
 def test_empty_is_empty():
     assert source_key("") == ""
     assert source_key("   ") == ""
+
+
+def test_source_key_is_total_on_malformed_url():
+    # urlparse raises ValueError on malformed IPv6 brackets; must not propagate.
+    assert source_key("https://[bad") == "file:" + __import__("os").path.abspath("https://[bad")
+    # a few more junk inputs must not raise:
+    for junk in ("http://[::1", "https://exa mple.com/x", "://nope", "ht!tp://x"):
+        assert isinstance(source_key(junk), str)
