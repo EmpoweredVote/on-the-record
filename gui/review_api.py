@@ -230,6 +230,26 @@ def apply_unlink(meeting_id: str, label: str) -> bool:
     return True
 
 
+def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
+    """Merge source speaker into target and persist (incl. diarization+embeddings).
+    False on unsafe/unknown meeting, unknown/equal labels, or merge failure."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if source_label not in known or target_label not in known or source_label == target_label:
+        return False
+    embeddings = _load_embeddings(meeting_dir)
+    from src import review
+    try:
+        review.merge_speakers(meeting.segments, embeddings, meeting.speakers, source_label, target_label)
+    except ValueError:
+        return False
+    persist_review(meeting, meeting_dir, embeddings=embeddings)
+    return True
+
+
 def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if not is_safe_meeting_id(meeting_id):
         return None

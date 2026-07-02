@@ -508,3 +508,31 @@ def test_persist_review_without_embeddings_leaves_emb_untouched(tagged_meeting_d
     import json as _json
     emb = _json.loads((meeting_dir / "embeddings.json").read_text())
     assert set(emb) == {"SPEAKER_00", "SPEAKER_01"}  # untouched
+
+
+from gui.review_api import apply_merge
+
+
+def test_apply_merge_folds_source_into_target(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)
+
+    assert apply_merge("2026-02-04-council", "SPEAKER_01", "SPEAKER_00") is True
+
+    import json as _json
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    # SPEAKER_01 is gone from speakers; its segments now belong to SPEAKER_00.
+    assert "SPEAKER_01" not in data["speakers"]
+    assert all(s["speaker_label"] != "SPEAKER_01" for s in data["segments"])
+    emb = _json.loads((mdir / "embeddings.json").read_text())
+    assert "SPEAKER_01" not in emb  # dropped from embeddings too
+
+
+def test_apply_merge_guards(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_merge("2026-02-04-council", "SPEAKER_00", "SPEAKER_00") is False  # self-merge
+    assert apply_merge("2026-02-04-council", "SPEAKER_99", "SPEAKER_00") is False  # unknown source
+    assert apply_merge("2026-02-04-council", "SPEAKER_00", "SPEAKER_99") is False  # unknown target
+    assert apply_merge("ghost", "SPEAKER_00", "SPEAKER_01") is False               # unknown meeting
