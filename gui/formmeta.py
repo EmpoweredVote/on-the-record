@@ -28,9 +28,11 @@ DIARIZER_HELP = {
     "vibevoice": "VibeVoice — requires Compute = modal.",
 }
 
-# Sensible default event labels per kind. The field is required (pipeline +
-# publish), but it's really "a short label shown on the site", so we pre-fill a
-# natural default the user can edit. Keys must equal EVENT_KINDS (test-enforced).
+# Sensible default event labels per kind. The field lives under "Advanced" and
+# feeds the URL slug + the compact site label; it auto-fills from the kind so the
+# operator rarely touches it. Every value must be NON-EMPTY (a blank label under a
+# collapsed section would be an invisible, un-fixable required-field trap). Keys
+# must equal EVENT_KINDS (test-enforced).
 MEETING_TYPE_DEFAULTS = {
     "council": "Regular Session",
     "school_board": "Board Meeting",
@@ -39,5 +41,5 @@ MEETING_TYPE_DEFAULTS = {
     "community_meeting": "Community Meeting",
     "news_clip": "Interview",
     "press_conference": "Press Conference",
-    "other": "",
+    "other": "Recording",
 }

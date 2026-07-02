@@ -13,10 +13,6 @@
       <label>Date (YYYY-MM-DD)
         <input type="text" name="date" id="f-date" placeholder="2026-02-10" required>
       </label>
-      <label>Event label — shown on the site (e.g. Regular Session, Candidate Forum, Debate)
-        <input type="text" name="meeting_type" id="f-mtype" placeholder="Regular Session" required>
-        <small class="help">A short label for this specific event. The <em>category</em> is "Event kind" above.</small>
-      </label>
       <label>Event kind
         <select name="event_kind" id="f-kind">
           {% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
@@ -26,8 +22,9 @@
       <label id="city-label">City <span class="req" id="city-req" hidden>(required)</span>
         <input type="text" name="city" id="f-city" placeholder="Bloomington">
       </label>
-      <label>Title (optional — overrides the "city + type" line)
-        <input type="text" name="title" id="f-title">
+      <label>Title — the headline shown on the site
+        <input type="text" name="title" id="f-title" placeholder="e.g. Xavier Becerra — The Race for Governor">
+        <small class="help">Optional. If blank, the site uses the video's own title, then falls back to "city + label".</small>
       </label>
       <label>Compute
         <select name="compute" id="f-compute">
@@ -48,6 +45,9 @@
         </span>
       </label>
       <details class="advanced"><summary>Advanced</summary>
+        <label>Event label / URL slug (auto-filled from the kind — edit only if you need a specific label)
+          <input type="text" name="meeting_type" id="f-mtype" placeholder="Regular Session">
+        </label>
         <p class="mid">Meeting ID (auto-derived): <span id="derived-id">—</span></p>
       </details>
       <button type="submit" class="enroll">Start processing</button>

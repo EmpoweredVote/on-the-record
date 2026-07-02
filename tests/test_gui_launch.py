@@ -183,6 +183,22 @@ def test_meeting_type_defaults_cover_all_kinds():
     assert MEETING_TYPE_DEFAULTS["forum"] == "Candidate Forum"
     assert MEETING_TYPE_DEFAULTS["council"] == "Regular Session"
     assert MEETING_TYPE_DEFAULTS["debate"] == "Debate"
+    # EVERY default must be non-empty — the field is auto-filled under a collapsed
+    # "Advanced" section, and a blank value there would be an invisible trap.
+    assert all(v.strip() for v in MEETING_TYPE_DEFAULTS.values())
+    assert MEETING_TYPE_DEFAULTS["other"] == "Recording"
+
+
+def test_meeting_type_field_demoted_to_advanced(tmp_meetings_dir):
+    body = TestClient(create_app()).get("/new").text
+    # the label field now lives inside the Advanced <details>, after it in the DOM
+    assert body.index("<details") < body.index('name="meeting_type"')
+    # Title is now the prominent headline field
+    assert "headline shown on the site" in body
+    # the demoted field must NOT be `required` (it's in a collapsed section +
+    # auto-filled; a required control there can't be focused to report an error)
+    mtype_tag = body[body.index('name="meeting_type"'):body.index('name="meeting_type"') + 120]
+    assert "required" not in mtype_tag
 
 
 def test_new_form_relabels_event_label_field(tmp_meetings_dir):
