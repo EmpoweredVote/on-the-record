@@ -779,3 +779,10 @@ def test_review_page_links_to_run(tagged_meeting_dir, tmp_meetings_dir):
     _write_meeting(mdir)
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     assert 'href="/meetings/2026-02-04-council/run"' in body
+
+
+def test_review_page_links_to_publish(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert 'href="/meetings/2026-02-04-council/publish"' in body
