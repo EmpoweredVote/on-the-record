@@ -315,3 +315,21 @@ def test_thumbnail_route_404_on_unsafe_id(tmp_meetings_dir):
     client = TestClient(create_app())
     # A dot-segment id must never resolve outside MEETINGS_DIR.
     assert client.get("/meetings/../thumbnail").status_code in (404, 400)
+
+
+def test_library_route_renders_enrichment_columns(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    (mdir / "transcript_named.json").write_text(json.dumps({
+        "title": "Council", "duration_seconds": 10325.26,
+        "speakers": [{"speaker_label": "A"}, {"speaker_label": "B"}, {"speaker_label": "C"}],
+    }))
+    (mdir / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff\xe0j")
+    state = mdir / "pipeline_state.json"
+    data = json.loads(state.read_text()); data.update({"review_status": "pass", "trusted_coverage": 0.972})
+    state.write_text(json.dumps(data))
+
+    body = TestClient(create_app()).get("/").text
+    assert "97% trusted" in body            # gate badge
+    assert "2h 52m" in body                 # duration
+    assert ">3<" in body or "3 speakers" in body  # speaker count (see template choice below)
+    assert "/meetings/2026-02-04-council/thumbnail" in body  # thumbnail img src

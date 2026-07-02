@@ -8,3 +8,10 @@ table.library th, table.library td { text-align: left; padding: 0.5rem 0.75rem; 
 td.mid { font-family: ui-monospace, monospace; font-size: 0.8rem; color: #666; }
 .stage { font-size: 0.85rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; background: #eef; }
 .empty { color: #888; }
+td.name { display: flex; gap: 0.6rem; align-items: center; }
+img.thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 0.25rem; flex: none; }
+.gate { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; }
+.gate-pass { background: #e6f5ea; color: #1b7a3d; }
+.gate-review { background: #fdf3e0; color: #9a6a00; }
+.gate-failed { background: #fdeaea; color: #b32020; }
+.gate-none { color: #999; }

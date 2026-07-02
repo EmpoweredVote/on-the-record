@@ -12,16 +12,29 @@
     {% if meetings %}
     <table class="library">
       <thead>
-        <tr><th>Meeting</th><th>Date</th><th>Kind</th><th>Status</th><th>ID</th></tr>
+        <tr><th>Meeting</th><th>Date</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th></tr>
       </thead>
       <tbody>
         {% for m in meetings %}
         <tr>
-          <td>{{ m.display_name }}</td>
+          <td class="name">
+            {% if m.has_thumbnail %}
+            <img class="thumb" src="/meetings/{{ m.meeting_id }}/thumbnail" alt="" loading="lazy">
+            {% endif %}
+            <div>
+              <div>{{ m.display_name }}</div>
+              <div class="mid">{{ m.meeting_id }}</div>
+            </div>
+          </td>
           <td>{{ m.date or "—" }}</td>
           <td>{{ m.event_kind or "—" }}</td>
+          <td>{{ m.speakers_label }}</td>
+          <td>{{ m.duration_label }}</td>
+          <td>
+            {% set level, text = m.gate_badge %}
+            <span class="gate gate-{{ level }}">{{ text }}</span>
+          </td>
           <td><span class="stage stage-{{ m.completed_stage }}">{{ m.stage_label }}</span></td>
-          <td class="mid">{{ m.meeting_id }}</td>
         </tr>
         {% endfor %}
       </tbody>
