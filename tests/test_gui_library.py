@@ -123,3 +123,12 @@ def test_library_route_empty_state(tmp_meetings_dir):
     resp = client.get("/")
     assert resp.status_code == 200
     assert "No meetings processed yet" in resp.text
+
+
+def test_main_module_exposes_app_factory():
+    import gui.__main__ as entry
+    assert hasattr(entry, "main")
+    # create_app is importable and returns a FastAPI instance
+    from gui.app import create_app
+    from fastapi import FastAPI
+    assert isinstance(create_app(), FastAPI)
