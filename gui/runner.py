@@ -142,6 +142,30 @@ def launch_redo(meeting_id: str, stage: str, *, python_exe: str, script: str,
     return _spawn(meeting_id, meeting_dir, cmd, popen)
 
 
+def build_resume_command(python_exe: str, script: str, meeting_id: str, *,
+                         override_gate: bool = False) -> list[str]:
+    """`run_local.py --resume <id>` — pick up the pipeline from the last completed
+    stage. override_gate adds --publish-anyway, the only non-interactive way past a
+    failing confidence gate (it does NOT publish — that needs a separate --publish)."""
+    cmd = [python_exe, script, "--resume", meeting_id]
+    if override_gate:
+        cmd.append("--publish-anyway")
+    return cmd
+
+
+def launch_resume(meeting_id: str, *, override_gate: bool = False,
+                  python_exe: str, script: str, popen=subprocess.Popen) -> Optional[str]:
+    """Resume an existing meeting forward to completion. Returns meeting_id, or None
+    on unsafe id / unknown meeting."""
+    if not is_safe_meeting_id(meeting_id):
+        return None
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    if not (meeting_dir / "pipeline_state.json").exists():
+        return None
+    cmd = build_resume_command(python_exe, script, meeting_id, override_gate=override_gate)
+    return _spawn(meeting_id, meeting_dir, cmd, popen)
+
+
 def _collapse_progress(text: str) -> str:
     """Render carriage-return progress the way a terminal would: for each line,
     keep only the content after its final '\\r' overwrite. Turns yt-dlp's

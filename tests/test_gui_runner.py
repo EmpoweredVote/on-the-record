@@ -276,3 +276,43 @@ def test_existing_launch_run_still_works(tmp_meetings_dir):
     p = runner.RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
     mid = runner.launch_run(p, python_exe="py", script="s", popen=_FakePopen)
     assert mid == "2026-02-10-regular" and mid in runner._RUNS
+
+
+def test_build_resume_command():
+    from gui.runner import build_resume_command
+    assert build_resume_command("py", "s", "m") == ["py", "s", "--resume", "m"]
+    assert build_resume_command("py", "s", "m", override_gate=True) == \
+        ["py", "s", "--resume", "m", "--publish-anyway"]
+
+
+def test_launch_resume_spawns(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    captured = {}
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return _FakePopen(cmd, **kw)
+
+    mid = runner.launch_resume("2026-02-04-council", python_exe="py", script="s", popen=fake_popen)
+    assert mid == "2026-02-04-council"
+    assert captured["cmd"] == ["py", "s", "--resume", "2026-02-04-council"]
+    assert mid in runner._RUNS
+
+
+def test_launch_resume_override_adds_flag(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    captured = {}
+    runner.launch_resume("2026-02-04-council", override_gate=True,
+                         python_exe="py", script="s",
+                         popen=lambda cmd, **kw: captured.setdefault("cmd", cmd) or _FakePopen(cmd, **kw))
+    assert "--publish-anyway" in captured["cmd"]
+
+
+def test_launch_resume_guards(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    assert runner.launch_resume("ghost", python_exe="p", script="s") is None       # no meeting
+    assert runner.launch_resume("../x", python_exe="p", script="s") is None         # unsafe id
