@@ -44,7 +44,8 @@ class MeetingSummary:
     @property
     def display_name(self) -> str:
         """Title if set, else 'City MeetingType', else the meeting_id."""
-        if self.title and self.title.strip():
-            return self.title.strip()
+        title = (self.title or "").strip()
+        if title:
+            return title
         parts = [p for p in (self.city, self.meeting_type) if p and p.strip()]
         return " ".join(parts) if parts else self.meeting_id

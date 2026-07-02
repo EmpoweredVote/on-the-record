@@ -30,7 +30,10 @@ def _title_from_named_transcript(meeting_dir: Path) -> Optional[str]:
 def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
     if not (meeting_dir / "pipeline_state.json").exists():
         return None
-    state = PipelineState(meeting_dir)
+    try:
+        state = PipelineState(meeting_dir)
+    except Exception:
+        return None  # malformed/incompatible state file — skip, don't 500
     return MeetingSummary(
         meeting_id=meeting_dir.name,
         title=_title_from_named_transcript(meeting_dir),

@@ -101,6 +101,28 @@ def test_scan_meetings_skips_dirs_without_state(tmp_meetings_dir):
     assert scan_meetings(tmp_meetings_dir) == []
 
 
+def test_scan_meetings_skips_dir_with_invalid_json(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-regular-session", completed_stage=4)
+    bad = tmp_meetings_dir / "2026-05-01-broken-session"
+    bad.mkdir()
+    (bad / "pipeline_state.json").write_text("{ not json")
+
+    summaries = scan_meetings(tmp_meetings_dir)
+
+    # Bad dir skipped, no exception; only the valid meeting is returned.
+    assert [s.meeting_id for s in summaries] == ["2026-02-04-regular-session"]
+
+
+def test_scan_meetings_skips_dir_with_out_of_range_stage(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-regular-session", completed_stage=4)
+    # completed_stage 99 is out of range for PipelineStage and raises in _load().
+    tagged_meeting_dir("x", meeting_id="2026-05-01-broken-session", completed_stage=99)
+
+    summaries = scan_meetings(tmp_meetings_dir)
+
+    assert [s.meeting_id for s in summaries] == ["2026-02-04-regular-session"]
+
+
 from fastapi.testclient import TestClient
 
 from gui.app import create_app
@@ -123,6 +145,32 @@ def test_library_route_empty_state(tmp_meetings_dir):
     resp = client.get("/")
     assert resp.status_code == 200
     assert "No meetings processed yet" in resp.text
+
+
+def test_library_route_survives_invalid_json_dir(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-regular-session", completed_stage=4)
+    bad = tmp_meetings_dir / "2026-05-01-broken-session"
+    bad.mkdir()
+    (bad / "pipeline_state.json").write_text("{ not json")
+    client = TestClient(create_app())
+
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "2026-02-04-regular-session" in resp.text
+    assert "2026-05-01-broken-session" not in resp.text
+
+
+def test_library_route_survives_out_of_range_stage_dir(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-regular-session", completed_stage=4)
+    tagged_meeting_dir("x", meeting_id="2026-05-01-broken-session", completed_stage=99)
+    client = TestClient(create_app())
+
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "2026-02-04-regular-session" in resp.text
+    assert "2026-05-01-broken-session" not in resp.text
 
 
 def test_main_module_exposes_app_factory():
