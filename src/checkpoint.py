@@ -43,6 +43,7 @@ class PipelineState:
         self.trusted_coverage: Optional[float] = None  # gate headline metric
         self.clip_start_seconds: Optional[float] = None
         self.clip_end_seconds: Optional[float] = None
+        self.source_key: Optional[str] = None          # normalized source identity (GUI dedup)
         self._load()
 
     def _load(self) -> None:
@@ -63,6 +64,7 @@ class PipelineState:
             self.trusted_coverage = data.get("trusted_coverage")
             self.clip_start_seconds = data.get("clip_start_seconds")
             self.clip_end_seconds = data.get("clip_end_seconds")
+            self.source_key = data.get("source_key")
 
     def save(self) -> None:
         """Atomic write: write to temp file then rename."""
@@ -81,6 +83,7 @@ class PipelineState:
             "trusted_coverage": self.trusted_coverage,
             "clip_start_seconds": self.clip_start_seconds,
             "clip_end_seconds": self.clip_end_seconds,
+            "source_key": self.source_key,
         }
         fd, tmp_path = tempfile.mkstemp(
             dir=str(self.meeting_dir), suffix=".tmp"
