@@ -1,7 +1,7 @@
 """GUI-facing view models. No HTTP, no I/O — pure data + display helpers."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 # Friendly labels for src.checkpoint.PipelineStage values (0..7). Kept here (not
@@ -89,3 +89,50 @@ class MeetingSummary:
             return title
         parts = [p for p in (self.city, self.meeting_type) if p and p.strip()]
         return " ".join(parts) if parts else self.meeting_id
+
+
+# Confidence at/above which an identified speaker is auto-accepted (green) and
+# not surfaced for attention. Mirrors the pipeline's gate threshold.
+CONFIDENT_THRESHOLD = 0.85
+
+_UNIDENTIFIED = "(unidentified)"
+
+
+@dataclass
+class SpeakerCard:
+    """One speaker in the review page."""
+
+    label: str
+    name: Optional[str]
+    confidence: float
+    method: Optional[str]
+    minutes: float
+    seg_count: int
+    sample_text: Optional[str] = None
+    hints: list[tuple[str, float]] = field(default_factory=list)
+    clip_seeks: list[float] = field(default_factory=list)
+
+    @property
+    def display_name(self) -> str:
+        return self.name if self.name and self.name.strip() else _UNIDENTIFIED
+
+    @property
+    def is_confirmed(self) -> bool:
+        return (
+            bool(self.name)
+            and self.name.strip() not in ("", _UNIDENTIFIED)
+            and self.confidence >= CONFIDENT_THRESHOLD
+        )
+
+
+@dataclass
+class ReviewPageData:
+    meeting_id: str
+    display_name: str
+    media_kind: Optional[str]  # "video" | "audio" | None
+    needs_attention: list[SpeakerCard] = field(default_factory=list)
+    confirmed: list[SpeakerCard] = field(default_factory=list)
+
+    @property
+    def speaker_count(self) -> int:
+        return len(self.needs_attention) + len(self.confirmed)
