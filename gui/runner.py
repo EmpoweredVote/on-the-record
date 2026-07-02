@@ -166,3 +166,42 @@ def run_status(meeting_id: str) -> Optional[dict]:
         "exit_code": exit_code,
         "log_tail": _log_tail(meeting_dir),
     }
+
+
+def _meeting_source_key(meeting_dir) -> Optional[str]:
+    """A meeting's source key: the recorded state field, else derived from the
+    saved audio_source (covers meetings processed before the field existed)."""
+    from src.source_key import source_key
+    state_file = meeting_dir / "pipeline_state.json"
+    if state_file.exists():
+        try:
+            sk = json.loads(state_file.read_text()).get("source_key")
+            if sk:
+                return sk
+        except (ValueError, OSError, AttributeError):
+            pass
+    named = meeting_dir / "transcript_named.json"
+    if named.exists():
+        try:
+            audio_source = json.loads(named.read_text()).get("audio_source")
+            if audio_source:
+                return source_key(audio_source)
+        except (ValueError, OSError, AttributeError):
+            pass
+    return None
+
+
+def find_meeting_by_source(raw_input: str) -> Optional[str]:
+    """meeting_id of an existing meeting sharing this input's source key, or None."""
+    from src.source_key import source_key
+    key = source_key(raw_input)
+    if not key:
+        return None
+    if not config.MEETINGS_DIR.exists():
+        return None
+    for child in sorted(config.MEETINGS_DIR.iterdir()):
+        if not child.is_dir():
+            continue
+        if _meeting_source_key(child) == key:
+            return child.name
+    return None

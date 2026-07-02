@@ -154,3 +154,31 @@ def test_run_status_liveness_fallback_via_sidecar_pid(tmp_meetings_dir, monkeypa
     monkeypatch.setattr(runner.os, "kill", _dead)
     st2 = runner.run_status(mid)
     assert st2["running"] is False
+
+
+def test_find_meeting_by_source_matches_state_key(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import find_meeting_by_source
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-10-regular", completed_stage=4)
+    # record a source_key on the meeting's state
+    from src.checkpoint import PipelineState
+    st = PipelineState(mdir)
+    st.source_key = "youtube:abc123"
+    st.save()
+
+    assert find_meeting_by_source("https://youtu.be/abc123") == "2026-02-10-regular"
+    assert find_meeting_by_source("https://youtu.be/different") is None
+
+
+def test_find_meeting_by_source_fallback_to_audio_source(tagged_meeting_dir, tmp_meetings_dir):
+    import json
+    from gui.runner import find_meeting_by_source
+    mdir = tagged_meeting_dir("x", meeting_id="2026-03-01-regular", completed_stage=4)
+    # NO source_key in state; only a transcript_named.json with audio_source
+    (mdir / "transcript_named.json").write_text(json.dumps(
+        {"audio_source": "https://www.youtube.com/watch?v=zzz999"}))
+    assert find_meeting_by_source("https://youtu.be/zzz999") == "2026-03-01-regular"
+
+
+def test_find_meeting_by_source_blank_returns_none(tmp_meetings_dir):
+    from gui.runner import find_meeting_by_source
+    assert find_meeting_by_source("") is None
