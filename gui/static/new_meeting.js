@@ -10,6 +10,19 @@
   const input = { kind: $("f-kind"), city: $("f-city"), mtype: $("f-mtype"),
                   date: $("f-date"), title: $("f-title") };
 
+  const DEFAULTS = window.__MEETING_TYPE_DEFAULTS || {};
+  const DEFAULT_VALUES = new Set(Object.values(DEFAULTS).filter(Boolean));
+
+  function applyKindDefault() {
+    const cur = input.mtype.value.trim();
+    // Only auto-fill when the field is empty or still holds an auto-applied
+    // default — never clobber a label the user typed.
+    if (cur === "" || DEFAULT_VALUES.has(cur)) {
+      const def = DEFAULTS[input.kind.value] || "";
+      input.mtype.value = def;
+    }
+  }
+
   const slug = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
   function refresh() {
@@ -44,5 +57,7 @@
     el.addEventListener("input", refresh);
     el.addEventListener("change", refresh);
   });
+  input.kind.addEventListener("change", () => { applyKindDefault(); refresh(); });
+  applyKindDefault();
   refresh();
 })();

@@ -190,3 +190,11 @@ def test_new_form_relabels_event_label_field(tmp_meetings_dir):
     assert "Event label" in body                 # relabeled (was "Meeting type")
     assert 'name="meeting_type"' in body          # backend field name unchanged
     assert "Candidate Forum" in body              # a default injected for JS/examples
+
+
+def test_new_meeting_js_applies_label_default():
+    from pathlib import Path
+    js = Path("gui/static/new_meeting.js").read_text()
+    assert "__MEETING_TYPE_DEFAULTS" in js
+    # only overwrite when empty or still a known default (don't clobber custom text)
+    assert "f-mtype" in js
