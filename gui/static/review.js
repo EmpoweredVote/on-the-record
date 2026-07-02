@@ -37,16 +37,16 @@ const LINK_ROUTE_SUFFIX = "/link";
         results.innerHTML = '<div class="link-msg">search unavailable</div>';
         return;
       }
-      // Only slug-bearing politicians are linkable (the link route requires a
-      // slug); drop slug-less records so a click can't silently no-op.
-      const linkable = (data.results || []).filter((r) => r.politician_slug);
-      if (data.error || !linkable.length) {
+      // Show all results — candidates have a politician_id but no slug, and the
+      // link route now accepts id-or-slug (the result form sends both).
+      const results_list = data.results || [];
+      if (data.error || !results_list.length) {
         results.innerHTML = '<div class="link-msg">' + (data.error ? "search unavailable" : "no matches") + "</div>";
         return;
       }
       let action = widget.getAttribute("data-link-action") || "";
       if (!action.endsWith(LINK_ROUTE_SUFFIX)) action += LINK_ROUTE_SUFFIX;
-      results.innerHTML = linkable.map((r) => {
+      results.innerHTML = results_list.map((r) => {
         const label = [r.full_name, r.office_title, r.government_name].filter(Boolean).join(" · ");
         const esc = (s) => String(s == null ? "" : s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
         return (

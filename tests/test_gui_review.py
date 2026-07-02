@@ -750,3 +750,25 @@ def test_review_page_shows_saved_state_after_enroll(tagged_meeting_dir, tmp_meet
     apply_enroll("2026-02-04-council", "SPEAKER_00")
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     assert "✓ voice saved" in body
+
+
+def test_speaker_card_is_linked_by_id_only():
+    from gui.models import SpeakerCard
+    c = SpeakerCard(label="S", name="Xavier Becerra", confidence=1.0, method="human_review",
+                    minutes=2, seg_count=3, politician_slug=None, politician_id="uuid-b")
+    assert c.is_linked is True
+    assert SpeakerCard(label="S", name=None, confidence=0, method=None,
+                       minutes=0, seg_count=0).is_linked is False
+
+
+def test_review_page_shows_link_for_id_only_speaker(tagged_meeting_dir, tmp_meetings_dir):
+    import json as _json
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    data["speakers"]["SPEAKER_00"]["politician_id"] = "uuid-b"
+    data["speakers"]["SPEAKER_00"]["politician_slug"] = None
+    (mdir / "transcript_named.json").write_text(_json.dumps(data))
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    # linked state shows (unlink form present) even though there's no slug
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_00/unlink"' in body

@@ -43,7 +43,7 @@
       </div>
       {% endif %}
       {% if c.is_linked %}
-      <div class="linked">🔗 linked: <span class="pslug">{{ c.politician_slug }}</span></div>
+      <div class="linked">🔗 linked: <span class="pslug">{{ c.politician_slug or c.politician_id }}</span></div>
       {% endif %}
       <div class="actions">
         {% if not c.is_confirmed and c.accept_name %}
