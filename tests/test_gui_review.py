@@ -625,3 +625,32 @@ def test_status_badge_renders(tagged_meeting_dir, tmp_meetings_dir):
     apply_mark_non_speaker("2026-02-04-council", "SPEAKER_01", "Pledge")
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     assert "not-a-speaker" in body or "non-speaker" in body  # a visible status badge
+
+
+from gui.models import ENROLL_MIN_SPEECH_SECONDS
+
+
+def test_enroll_min_speech_threshold():
+    assert ENROLL_MIN_SPEECH_SECONDS == 30.0
+
+
+def test_load_review_page_marks_enrollable_and_thin(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)  # gives SPEAKER_00 + SPEAKER_01 embeddings
+    page = load_review_page("2026-02-04-council")
+    cards = {c.label: c for c in (page.confirmed + page.needs_attention)}
+    # SPEAKER_00: named, has embedding, 60s of speech (from _write_meeting) -> enrollable, not thin, not yet enrolled
+    assert cards["SPEAKER_00"].is_enrollable is True
+    assert cards["SPEAKER_00"].is_enrolled is False
+    # SPEAKER_01 in _write_meeting speaks 80..95 = 15s -> thin; but unnamed -> not enrollable
+    assert cards["SPEAKER_01"].is_enrollable is False
+    assert cards["SPEAKER_01"].thin_sample is True
+
+
+def test_load_review_page_enrollable_false_without_embedding(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)  # no embeddings.json
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in page.confirmed if c.label == "SPEAKER_00"][0]
+    assert card.is_enrollable is False  # no embedding to enroll

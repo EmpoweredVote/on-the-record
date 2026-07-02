@@ -19,7 +19,7 @@ import numpy as np
 from src import config
 from src.models import Meeting
 
-from gui.models import CONFIDENT_THRESHOLD, ReviewPageData, SpeakerCard
+from gui.models import CONFIDENT_THRESHOLD, ENROLL_MIN_SPEECH_SECONDS, ReviewPageData, SpeakerCard
 from gui.paths import is_safe_meeting_id
 
 # Video container preference order (same set run_local.find_video_file checks).
@@ -298,7 +298,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         return None
 
     import numpy as np
-    from src.enroll import load_profiles
+    from src.enroll import load_profiles, resolve_mapping_enrollment
     from src import review
 
     emb_path = meeting_dir / "embeddings.json"
@@ -309,6 +309,9 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         except (ValueError, OSError, TypeError, AttributeError):
             embeddings = {}
     profile_db = load_profiles()
+    # Load roster so enrollment keys resolve identically to apply_enroll — the
+    # is_enrolled display must match what apply_enroll wrote for remapped names.
+    roster = _load_roster_for(meeting_dir)
 
     views = review.build_review_state(
         meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True
@@ -323,6 +326,15 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     needs: list[SpeakerCard] = []
     for v in views:
         mapping = meeting.speakers.get(v.label)
+        has_emb = v.label in embeddings
+        named = bool(mapping and mapping.speaker_name and mapping.speaker_name.strip())
+        not_nonspeaker = not (mapping and getattr(mapping, "speaker_status", None) == "non_speaker")
+        is_enrollable = named and not_nonspeaker and has_emb
+        is_enrolled = False
+        if is_enrollable:
+            key, _slug, _id = resolve_mapping_enrollment(mapping, roster)
+            prof = profile_db.profiles.get(key)
+            is_enrolled = prof is not None and meeting_dir.name in getattr(prof, "meetings_seen", [])
         card = SpeakerCard(
             label=v.label,
             name=v.current_name,
@@ -337,6 +349,9 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
             politician_id=getattr(mapping, "politician_id", None) if mapping else None,
             speaker_status=getattr(mapping, "speaker_status", None) if mapping else None,
+            is_enrollable=is_enrollable,
+            is_enrolled=is_enrolled,
+            thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
         )
         (confirmed if card.is_confirmed else needs).append(card)
 

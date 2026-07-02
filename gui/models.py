@@ -95,6 +95,10 @@ class MeetingSummary:
 # not surfaced for attention. Mirrors the pipeline's gate threshold.
 CONFIDENT_THRESHOLD = 0.85
 
+# Below this much confirmed speech, a voice sample is too thin to enroll cleanly
+# (guards against the profile pollution calibration found). Still allowed, but flagged.
+ENROLL_MIN_SPEECH_SECONDS = 30.0
+
 _UNIDENTIFIED = "(unidentified)"
 
 
@@ -114,6 +118,9 @@ class SpeakerCard:
     politician_slug: Optional[str] = None
     politician_id: Optional[str] = None
     speaker_status: Optional[str] = None  # None | "unidentified" | "non_speaker"
+    is_enrollable: bool = False   # named, not a non-speaker, has an embedding
+    is_enrolled: bool = False     # this meeting already contributed to the voice profile
+    thin_sample: bool = False     # < ENROLL_MIN_SPEECH_SECONDS of speech
 
     @property
     def display_name(self) -> str:
