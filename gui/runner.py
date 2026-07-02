@@ -82,21 +82,19 @@ _LOG_NAME = "gui_run.log"
 _SIDE_NAME = "gui_run.json"
 
 
-def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.Popen) -> str:
-    """Spawn run_local.py for these params in the background. Returns the meeting_id.
-    stdout+stderr are captured to gui_run.log; stdin is /dev/null so the pipeline
-    runs non-interactively (terminal review is skipped — review happens in the GUI)."""
-    meeting_id = derive_meeting_id(p)
-    meeting_dir = ensure_drive_structure(meeting_id)
-    cmd = build_run_command(python_exe, script, p, meeting_id)
+REDO_STAGES = ("diarize", "transcribe", "identify", "summary")
 
-    # Open in a with-block so the PARENT closes its handle after Popen dups it
-    # into the child (one leaked fd per launch otherwise). The child keeps its
-    # own dup, so its writes to the log are unaffected.
-    # PYTHONUNBUFFERED so run_local's print() output flushes line-by-line to the
-    # log instead of sitting in a block buffer (stdout is a file, not a TTY, so
-    # Python would otherwise buffer ~8KB — making stage 2+ output invisible until
-    # the buffer fills or the process exits).
+
+def _spawn(meeting_id: str, meeting_dir: Path, cmd: list[str], popen) -> str:
+    """Spawn cmd as the background pipeline process for meeting_id: capture
+    stdout+stderr to gui_run.log, run unbuffered + non-interactive, register the
+    handle, write the sidecar. Shared by launch_run and launch_redo.
+
+    Open in a with-block so the PARENT closes its handle after Popen dups it into
+    the child (one leaked fd per launch otherwise). PYTHONUNBUFFERED so run_local's
+    print() output flushes line-by-line to the log instead of sitting in a block
+    buffer (stdout is a file, not a TTY, so Python would otherwise buffer ~8KB —
+    making stage 2+ output invisible until the buffer fills or the process exits)."""
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     with open(meeting_dir / _LOG_NAME, "wb") as log_f:
         proc = popen(
@@ -113,6 +111,35 @@ def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.P
         encoding="utf-8",
     )
     return meeting_id
+
+
+def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.Popen) -> str:
+    """Spawn run_local.py for a NEW meeting in the background. Returns the meeting_id.
+    stdout+stderr are captured to gui_run.log; stdin is /dev/null so the pipeline
+    runs non-interactively (terminal review is skipped — review happens in the GUI)."""
+    meeting_id = derive_meeting_id(p)
+    meeting_dir = ensure_drive_structure(meeting_id)
+    cmd = build_run_command(python_exe, script, p, meeting_id)
+    return _spawn(meeting_id, meeting_dir, cmd, popen)
+
+
+def build_redo_command(python_exe: str, script: str, meeting_id: str, stage: str) -> list[str]:
+    """`run_local.py --resume <id> --redo <stage>` — re-run a stage on an existing
+    meeting (audio already on disk, so no --input needed)."""
+    return [python_exe, script, "--resume", meeting_id, "--redo", stage]
+
+
+def launch_redo(meeting_id: str, stage: str, *, python_exe: str, script: str,
+                popen=subprocess.Popen) -> Optional[str]:
+    """Re-run a stage for an existing meeting. Returns the meeting_id, or None on
+    unsafe id / invalid stage / unknown meeting."""
+    if not is_safe_meeting_id(meeting_id) or stage not in REDO_STAGES:
+        return None
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    if not (meeting_dir / "pipeline_state.json").exists():
+        return None
+    cmd = build_redo_command(python_exe, script, meeting_id, stage)
+    return _spawn(meeting_id, meeting_dir, cmd, popen)
 
 
 def _collapse_progress(text: str) -> str:

@@ -230,3 +230,49 @@ def test_run_status_works_without_sidecar(tagged_meeting_dir, tmp_meetings_dir):
     assert st["running"] is False
     # truly-unknown meeting is still None
     assert runner.run_status("no-such-meeting") is None
+
+
+def test_build_redo_command():
+    from gui.runner import build_redo_command
+    cmd = build_redo_command("py", "run_local.py", "2026-02-04-council", "diarize")
+    assert cmd == ["py", "run_local.py", "--resume", "2026-02-04-council", "--redo", "diarize"]
+
+
+def test_launch_redo_spawns_resume_redo(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    captured = {}
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        captured["env_unbuffered"] = kw.get("env", {}).get("PYTHONUNBUFFERED")
+        return _FakePopen(cmd, **kw)
+
+    mid = runner.launch_redo("2026-02-04-council", "transcribe",
+                             python_exe="py", script="run_local.py", popen=fake_popen)
+    assert mid == "2026-02-04-council"
+    assert captured["cmd"] == ["py", "run_local.py", "--resume", "2026-02-04-council",
+                               "--redo", "transcribe"]
+    assert captured["env_unbuffered"] == "1"           # reuses the unbuffered launch
+    assert mid in runner._RUNS
+    mdir = tmp_meetings_dir / mid
+    assert (mdir / "gui_run.log").exists() and (mdir / "gui_run.json").exists()
+
+
+def test_launch_redo_guards(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    assert runner.launch_redo("2026-02-04-council", "bogus", python_exe="p", script="s") is None  # bad stage
+    assert runner.launch_redo("ghost", "diarize", python_exe="p", script="s") is None            # no meeting
+    assert runner.launch_redo("../x", "diarize", python_exe="p", script="s") is None              # unsafe id
+
+
+def test_existing_launch_run_still_works(tmp_meetings_dir):
+    # the _spawn refactor must not change launch_run behavior
+    from gui import runner
+    runner._RUNS.clear()
+    p = runner.RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
+    mid = runner.launch_run(p, python_exe="py", script="s", popen=_FakePopen)
+    assert mid == "2026-02-10-regular" and mid in runner._RUNS
