@@ -198,9 +198,12 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
 
 
 def apply_link(meeting_id: str, label: str, politician_slug: str, politician_id: str) -> bool:
-    """Link a speaker to an essentials politician and persist. False on unsafe/unknown/empty slug."""
+    """Link a speaker to an essentials politician/candidate and persist. Accepts a
+    slug OR an id (candidates have an id but no slug). False on unsafe/unknown
+    meeting or label, or when BOTH slug and id are empty."""
     slug = (politician_slug or "").strip()
-    if not slug:
+    pid = (politician_id or "").strip()
+    if not slug and not pid:
         return False
     ctx = _load_meeting_ctx(meeting_id)
     if ctx is None:
@@ -210,7 +213,7 @@ def apply_link(meeting_id: str, label: str, politician_slug: str, politician_id:
     if label not in known:
         return False
     from src import review
-    review.link_speaker(meeting.speakers, label, slug, (politician_id or "").strip() or None)
+    review.link_speaker(meeting.speakers, label, slug or None, pid or None)
     persist_review(meeting, meeting_dir)
     return True
 

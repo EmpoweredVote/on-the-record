@@ -128,7 +128,7 @@ class SpeakerCard:
 
     @property
     def is_linked(self) -> bool:
-        return bool(self.politician_slug)
+        return bool(self.politician_slug or self.politician_id)
 
     @property
     def is_confirmed(self) -> bool:

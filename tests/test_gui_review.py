@@ -402,8 +402,26 @@ def test_apply_link_guards(tagged_meeting_dir, tmp_meetings_dir):
     _write_meeting(mdir)
     assert apply_link("ghost", "SPEAKER_00", "s", "i") is False           # unknown meeting
     assert apply_link("2026-02-04-council", "SPEAKER_99", "s", "i") is False  # unknown label
-    assert apply_link("2026-02-04-council", "SPEAKER_00", "", "i") is False   # empty slug
     assert apply_link("../x", "SPEAKER_00", "s", "i") is False            # unsafe id
+
+
+def test_apply_link_by_id_only(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    # candidate: no slug, only an essentials id
+    assert apply_link("2026-02-04-council", "SPEAKER_01", "", "uuid-becerra") is True
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in (page.confirmed + page.needs_attention) if c.label == "SPEAKER_01"][0]
+    assert card.politician_id == "uuid-becerra"
+    assert card.is_linked is True          # linked by id, even without a slug
+
+
+def test_apply_link_requires_slug_or_id(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_link("2026-02-04-council", "SPEAKER_00", "", "") is False   # neither → no-op
+    assert apply_link("2026-02-04-council", "SPEAKER_99", "s", "i") is False  # unknown label
+    assert apply_link("ghost", "SPEAKER_00", "s", "i") is False              # unknown meeting
 
 
 def test_search_route_returns_json(monkeypatch, tmp_meetings_dir):

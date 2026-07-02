@@ -86,8 +86,8 @@ def create_app() -> FastAPI:
     def link_speaker_route(meeting_id: str, label: str,
                            politician_slug: str = Form(""), politician_id: str = Form("")):
         redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
-        if not politician_slug.strip():
-            return redirect
+        if not politician_slug.strip() and not politician_id.strip():
+            return redirect  # nothing to link
         if not review_api.apply_link(meeting_id, label, politician_slug, politician_id):
             raise HTTPException(status_code=404)
         return redirect
