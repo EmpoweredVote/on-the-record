@@ -147,6 +147,12 @@ def create_app() -> FastAPI:
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
             raise HTTPException(status_code=400, detail="input, date, and meeting_type are required")
+        from gui.formmeta import CITY_REQUIRED_KINDS
+        if event_kind in CITY_REQUIRED_KINDS and not city.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"A city is required for event kind '{event_kind}'.",
+            )
         p = RunParams(
             input=input.strip(), date=date.strip(), meeting_type=meeting_type.strip(),
             event_kind=event_kind, city=city.strip() or None, title=title.strip() or None,

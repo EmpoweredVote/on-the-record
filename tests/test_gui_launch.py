@@ -75,3 +75,35 @@ def test_formmeta_compute_and_diarizer_help():
     assert set(COMPUTE_HELP) == {"local", "modal"}
     assert set(DIARIZER_HELP) == {"oss", "api", "vibevoice"}
     assert all(v.strip() for v in {**COMPUTE_HELP, **DIARIZER_HELP}.values())
+
+
+def test_post_new_council_requires_city(tmp_meetings_dir):
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-02-10", "meeting_type": "Regular",
+        "event_kind": "council", "city": "",  # no city
+    }, follow_redirects=False)
+    assert resp.status_code == 400
+    assert "city" in resp.text.lower()
+
+
+def test_post_new_council_with_city_launches(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-02-10-regular")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-02-10", "meeting_type": "Regular",
+        "event_kind": "council", "city": "Bloomington",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+
+
+def test_post_new_other_kind_needs_no_city(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-02-10-clip")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-02-10", "meeting_type": "Clip",
+        "event_kind": "news_clip", "city": "",
+    }, follow_redirects=False)
+    assert resp.status_code == 303  # news_clip doesn't require a city
