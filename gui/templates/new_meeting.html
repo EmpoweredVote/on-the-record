@@ -4,25 +4,67 @@
 <title>New meeting</title><link rel="stylesheet" href="/static/style.css"></head>
 <body>
   <header><a class="back" href="/">← Library</a><h1>Process a new meeting</h1></header>
-  <main class="review">
-    <form method="post" action="/new" class="newform">
-      <label>Source URL or file path<input type="text" name="input" required></label>
-      <label>Date (YYYY-MM-DD)<input type="text" name="date" placeholder="2026-02-10" required></label>
-      <label>Meeting type<input type="text" name="meeting_type" placeholder="Regular Session" required></label>
-      <label>City<input type="text" name="city" placeholder="Bloomington"></label>
-      <label>Title (optional)<input type="text" name="title"></label>
+  <main class="review newpage"
+        data-city-required="{{ city_required_kinds|join(',') }}">
+    <form method="post" action="/new" class="newform" id="newform">
+      <label>Source URL or file path
+        <input type="text" name="input" id="f-input" required placeholder="https://… or /path/to/video.mp4">
+      </label>
+      <label>Date (YYYY-MM-DD)
+        <input type="text" name="date" id="f-date" placeholder="2026-02-10" required>
+      </label>
+      <label>Meeting type (shown on the site, e.g. "Regular Session")
+        <input type="text" name="meeting_type" id="f-mtype" placeholder="Regular Session" required>
+      </label>
       <label>Event kind
-        <select name="event_kind">{% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+        <select name="event_kind" id="f-kind">
+          {% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+        </select>
+        <small class="help" id="kind-help"></small>
+      </label>
+      <label id="city-label">City <span class="req" id="city-req" hidden>(required)</span>
+        <input type="text" name="city" id="f-city" placeholder="Bloomington">
+      </label>
+      <label>Title (optional — overrides the "city + type" line)
+        <input type="text" name="title" id="f-title">
       </label>
       <label>Compute
-        <select name="compute">{% for c in computes %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+        <select name="compute" id="f-compute">
+          {% for c, h in compute_help.items() %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+        <small class="help" id="compute-help"></small>
       </label>
       <label>Diarizer
-        <select name="diarizer">{% for d in diarizers %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
+        <select name="diarizer" id="f-diarizer">
+          {% for d, h in diarizer_help.items() %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+        <small class="help" id="diarizer-help"></small>
       </label>
-      <label>Clip start (optional)<input type="text" name="clip_start" placeholder="10:00"></label>
-      <label>Clip end (optional)<input type="text" name="clip_end" placeholder="20:00"></label>
+      <label>Clip (optional — process only part of the source)
+        <span class="cliprow">
+          <input type="text" name="clip_start" id="f-clipstart" placeholder="start 10:00">
+          <input type="text" name="clip_end" id="f-clipend" placeholder="end 20:00">
+        </span>
+      </label>
+      <details class="advanced"><summary>Advanced</summary>
+        <p class="mid">Meeting ID (auto-derived): <span id="derived-id">—</span></p>
+      </details>
       <button type="submit" class="enroll">Start processing</button>
     </form>
+
+    <aside class="previewcard">
+      <div class="previewlabel">How this will look on ontherecord.com</div>
+      <div id="preview" class="preview">
+        <div class="pv-title" id="pv-title">—</div>
+        <div class="pv-meta"><span id="pv-kind" class="pv-badge"></span> <span id="pv-sub"></span></div>
+      </div>
+    </aside>
   </main>
+
+  <script>
+    window.__EVENT_KIND_HELP = {{ event_kind_help|tojson }};
+    window.__COMPUTE_HELP = {{ compute_help|tojson }};
+    window.__DIARIZER_HELP = {{ diarizer_help|tojson }};
+  </script>
+  <script src="/static/new_meeting.js"></script>
 </body></html>

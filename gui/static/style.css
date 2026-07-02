@@ -68,3 +68,14 @@ ol.stepper li.current { background: #fdf3e0; color: #9a6a00; font-weight: 600; }
 pre.runlog { background: #0e0e12; color: #d8d8e0; padding: 0.75rem; border-radius: 0.5rem; max-height: 45vh; overflow: auto; font-size: 0.8rem; white-space: pre-wrap; }
 .error-banner { background: #fdeaea; color: #b32020; border: 1px solid #e0a0a0; border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.6rem; }
 a.newlink { display: inline-block; margin-top: 0.4rem; color: #24507f; text-decoration: none; font-size: 0.9rem; }
+main.newpage { display: grid; grid-template-columns: minmax(0, 32rem) 1fr; gap: 1.5rem; align-items: start; }
+.newform .help { color: #777; font-size: 0.78rem; }
+.newform .req { color: #b32020; font-size: 0.78rem; }
+.newform .cliprow { display: flex; gap: 0.4rem; }
+.advanced { font-size: 0.85rem; color: #555; }
+.previewcard { border: 1px solid #e2e2e2; border-radius: 0.6rem; padding: 1rem; background: #fafafc; position: sticky; top: 0.5rem; }
+.previewlabel { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #999; margin-bottom: 0.5rem; }
+.pv-title { font-weight: 600; font-size: 1.05rem; }
+.pv-meta { margin-top: 0.3rem; color: #555; font-size: 0.9rem; }
+.pv-badge { background: #eef; color: #445; border-radius: 0.4rem; padding: 0.05rem 0.45rem; font-size: 0.78rem; }
+@media (max-width: 720px) { main.newpage { grid-template-columns: 1fr; } }

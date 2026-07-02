@@ -125,10 +125,16 @@ def create_app() -> FastAPI:
     @app.get("/new", response_class=HTMLResponse)
     def new_meeting_form(request: Request) -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
+        from gui.formmeta import EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP, CITY_REQUIRED_KINDS
         return _templates.TemplateResponse(
             request, "new_meeting.html",
-            {"event_kinds": list(EVENT_KINDS), "computes": ["local", "modal"],
-             "diarizers": ["oss", "api", "vibevoice"]},
+            {
+                "event_kinds": list(EVENT_KINDS),
+                "event_kind_help": EVENT_KIND_HELP,
+                "compute_help": COMPUTE_HELP,
+                "diarizer_help": DIARIZER_HELP,
+                "city_required_kinds": sorted(CITY_REQUIRED_KINDS),
+            },
         )
 
     @app.post("/new")

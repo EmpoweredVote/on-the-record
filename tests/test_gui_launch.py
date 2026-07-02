@@ -107,3 +107,16 @@ def test_post_new_other_kind_needs_no_city(tmp_meetings_dir, monkeypatch):
         "event_kind": "news_clip", "city": "",
     }, follow_redirects=False)
     assert resp.status_code == 303  # news_clip doesn't require a city
+
+
+def test_new_form_shows_help_and_preview(tmp_meetings_dir):
+    body = TestClient(create_app()).get("/new").text
+    # event-kind help text is rendered (from formmeta)
+    assert "deliberative, links to a Chamber" in body
+    # compute + diarizer help present
+    assert "Modal cloud GPU" in body
+    assert "pyannote.ai Precision-2" in body
+    # live preview + derived-id scaffolding present, wired via new_meeting.js
+    assert 'id="preview"' in body
+    assert 'id="derived-id"' in body
+    assert "new_meeting.js" in body
