@@ -43,3 +43,59 @@ def test_meeting_summary_display_name_falls_back_to_city_and_type():
         completed_stage=2,
     )
     assert s.display_name == "Bloomington Regular Session"
+
+
+import json
+
+from gui.library import scan_meetings
+
+
+def test_scan_meetings_reads_state_and_sorts_by_date_desc(tagged_meeting_dir, tmp_meetings_dir):
+    # tagged_meeting_dir writes pipeline_state.json with completed_stage + body_slug.
+    older = tagged_meeting_dir(
+        "bloomington-common-council",
+        meeting_id="2026-01-10-regular-session",
+        completed_stage=4,
+    )
+    newer = tagged_meeting_dir(
+        "bloomington-common-council",
+        meeting_id="2026-03-02-special-session",
+        completed_stage=2,
+    )
+    # Enrich one state file with the newer metadata keys the GUI displays.
+    state_path = older / "pipeline_state.json"
+    data = json.loads(state_path.read_text())
+    data.update({"city": "Bloomington", "meeting_type": "Regular Session",
+                 "date": "2026-01-10", "event_kind": "council"})
+    state_path.write_text(json.dumps(data))
+
+    summaries = scan_meetings(tmp_meetings_dir)
+
+    assert [s.meeting_id for s in summaries] == [
+        "2026-03-02-special-session",  # newer date first
+        "2026-01-10-regular-session",
+    ]
+    older_summary = summaries[1]
+    assert older_summary.city == "Bloomington"
+    assert older_summary.completed_stage == 4
+    assert older_summary.stage_label == "Identified — ready to review"
+
+
+def test_scan_meetings_reads_title_from_named_transcript(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-regular-session", completed_stage=4)
+    # transcript_named.json holds the Meeting dict; title lives there, not in state.
+    (mdir / "transcript_named.json").write_text(json.dumps({"title": "Budget Hearing"}))
+
+    summaries = scan_meetings(tmp_meetings_dir)
+
+    assert summaries[0].title == "Budget Hearing"
+    assert summaries[0].display_name == "Budget Hearing"
+
+
+def test_scan_meetings_missing_dir_returns_empty(tmp_path):
+    assert scan_meetings(tmp_path / "does-not-exist") == []
+
+
+def test_scan_meetings_skips_dirs_without_state(tmp_meetings_dir):
+    (tmp_meetings_dir / "stray-dir").mkdir()
+    assert scan_meetings(tmp_meetings_dir) == []
