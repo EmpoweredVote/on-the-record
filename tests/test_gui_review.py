@@ -576,3 +576,29 @@ def test_speaker_card_exposes_status(tagged_meeting_dir, tmp_meetings_dir):
     page = load_review_page("2026-02-04-council")
     card = [c for c in (page.confirmed + page.needs_attention) if c.label == "SPEAKER_01"][0]
     assert card.speaker_status == "non_speaker"
+
+
+def test_merge_route(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    client = TestClient(create_app())
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/merge",
+                    data={"target": "SPEAKER_00"}, follow_redirects=False)
+    assert r.status_code == 303
+    import json as _json
+    assert "SPEAKER_01" not in _json.loads((mdir / "transcript_named.json").read_text())["speakers"]
+    # self-merge / unknown target -> 404
+    assert client.post("/meetings/2026-02-04-council/speakers/SPEAKER_00/merge",
+                       data={"target": "SPEAKER_00"}, follow_redirects=False).status_code == 404
+
+
+def test_unidentified_and_not_speaker_routes(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    assert client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/unidentified",
+                       data={"display_label": "Man in blue"}, follow_redirects=False).status_code == 303
+    assert client.post("/meetings/2026-02-04-council/speakers/SPEAKER_00/not-speaker",
+                       data={"display_label": ""}, follow_redirects=False).status_code == 303
+    assert client.post("/meetings/ghost/speakers/SPEAKER_00/not-speaker",
+                       data={}, follow_redirects=False).status_code == 404

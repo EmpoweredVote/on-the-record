@@ -92,4 +92,22 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
+    @app.post("/meetings/{meeting_id}/speakers/{label}/merge")
+    def merge_speaker_route(meeting_id: str, label: str, target: str = Form("")):
+        if not review_api.apply_merge(meeting_id, label, target.strip()):
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/unidentified")
+    def unidentified_route(meeting_id: str, label: str, display_label: str = Form("")):
+        if not review_api.apply_mark_unidentified(meeting_id, label, display_label):
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/not-speaker")
+    def not_speaker_route(meeting_id: str, label: str, display_label: str = Form("")):
+        if not review_api.apply_mark_non_speaker(meeting_id, label, display_label):
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
     return app
