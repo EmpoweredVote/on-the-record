@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Review — {{ page.display_name }}</title>
+</head>
+<body>
+  <h1>{{ page.display_name }}</h1>
+  <section>
+    <h2>Needs attention</h2>
+    {% for c in page.needs_attention %}<div>{{ c.label }} {{ c.display_name }}</div>{% endfor %}
+  </section>
+  <section>
+    <h2>Confirmed</h2>
+    {% for c in page.confirmed %}<div>{{ c.label }} {{ c.display_name }}</div>{% endfor %}
+  </section>
+</body>
+</html>

@@ -15,6 +15,7 @@ from src import config
 
 from gui.library import scan_meetings
 from gui.paths import is_safe_meeting_id
+from gui.review_api import find_meeting_media, load_review_page
 
 _GUI_DIR = Path(__file__).resolve().parent
 _templates = Jinja2Templates(directory=str(_GUI_DIR / "templates"))
@@ -41,5 +42,24 @@ def create_app() -> FastAPI:
         if not path.exists():
             raise HTTPException(status_code=404)
         return FileResponse(str(path), media_type="image/jpeg")
+
+    @app.get("/meetings/{meeting_id}/review", response_class=HTMLResponse)
+    def review_page(request: Request, meeting_id: str) -> HTMLResponse:
+        page = load_review_page(meeting_id)
+        if page is None:
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(request, "review.html", {"page": page})
+
+    @app.get("/meetings/{meeting_id}/media")
+    def media(meeting_id: str):
+        if not is_safe_meeting_id(meeting_id):
+            raise HTTPException(status_code=404)
+        meeting_dir = config.MEETINGS_DIR / meeting_id
+        found = find_meeting_media(meeting_dir)
+        if found is None:
+            raise HTTPException(status_code=404)
+        kind, filename = found
+        media_type = "video/mp4" if kind == "video" else "audio/wav"
+        return FileResponse(str(meeting_dir / filename), media_type=media_type)
 
     return app

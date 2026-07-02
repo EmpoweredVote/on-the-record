@@ -109,3 +109,50 @@ def test_load_review_page_video_seeks_add_clip_offset(tagged_meeting_dir, tmp_me
     assert page.media_kind == "video"
     # video is full source: seek = max(0, 10-3) + 600 = 607.0
     assert page.confirmed[0].clip_seeks[0] == pytest.approx(607.0)
+
+
+from fastapi.testclient import TestClient
+
+from gui.app import create_app
+
+
+def test_review_route_renders_groups(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    resp = client.get("/meetings/2026-02-04-council/review")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Mayor Johnson" in body            # confirmed speaker
+    assert "SPEAKER_01" in body               # needs-attention label
+    assert "Needs attention" in body and "Confirmed" in body
+
+
+def test_review_route_404_for_unknown_meeting(tmp_meetings_dir):
+    client = TestClient(create_app())
+    assert client.get("/meetings/ghost/review").status_code == 404
+
+
+def test_media_route_serves_audio_with_range(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "audio.wav").write_bytes(b"0123456789")
+    client = TestClient(create_app())
+
+    full = client.get("/meetings/2026-02-04-council/media")
+    assert full.status_code == 200
+    assert full.content == b"0123456789"
+
+    part = client.get("/meetings/2026-02-04-council/media", headers={"Range": "bytes=0-3"})
+    assert part.status_code == 206
+    assert part.content == b"0123"
+
+
+def test_media_route_404_when_no_media(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    client = TestClient(create_app())
+    assert client.get("/meetings/2026-02-04-council/media").status_code == 404
+
+
+def test_media_route_404_unsafe_id(tmp_meetings_dir):
+    client = TestClient(create_app())
+    assert client.get("/meetings/..%2Fx/media").status_code in (404, 400)
