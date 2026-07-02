@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New meeting</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+  <header><a class="back" href="/">← Library</a><h1>Process a new meeting</h1></header>
+  <main class="review">
+    <form method="post" action="/new" class="newform">
+      <label>Source URL or file path<input type="text" name="input" required></label>
+      <label>Date (YYYY-MM-DD)<input type="text" name="date" placeholder="2026-02-10" required></label>
+      <label>Meeting type<input type="text" name="meeting_type" placeholder="Regular Session" required></label>
+      <label>City<input type="text" name="city" placeholder="Bloomington"></label>
+      <label>Title (optional)<input type="text" name="title"></label>
+      <label>Event kind
+        <select name="event_kind">{% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Compute
+        <select name="compute">{% for c in computes %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+      </label>
+      <label>Diarizer
+        <select name="diarizer">{% for d in diarizers %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
+      </label>
+      <label>Clip start (optional)<input type="text" name="clip_start" placeholder="10:00"></label>
+      <label>Clip end (optional)<input type="text" name="clip_end" placeholder="20:00"></label>
+      <button type="submit" class="enroll">Start processing</button>
+    </form>
+  </main>
+</body></html>

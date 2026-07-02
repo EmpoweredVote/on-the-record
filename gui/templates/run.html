@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Processing {{ meeting_id }}</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+  <header><a class="back" href="/">← Library</a><h1>Processing: <span class="mid">{{ meeting_id }}</span></h1>
+    <p class="sub" id="run-state">Starting…</p></header>
+  <main class="review" data-meeting-id="{{ meeting_id }}">
+    <ol class="stepper" id="stepper">
+      {% for value, label in stages %}<li data-stage="{{ value }}">{{ label }}</li>{% endfor %}
+    </ol>
+    <div id="error-banner" class="error-banner" hidden></div>
+    <h2>Log</h2>
+    <pre id="log" class="runlog">(waiting for output…)</pre>
+    <p><a id="review-link" href="/meetings/{{ meeting_id }}/review" hidden>→ Review speakers</a></p>
+  </main>
+  <script src="/static/run.js"></script>
+</body></html>

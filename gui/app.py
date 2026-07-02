@@ -4,6 +4,7 @@ Slice 1: a single library route. Later slices mount review/launch/publish
 routers onto the same app."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -14,12 +15,17 @@ from fastapi.templating import Jinja2Templates
 from src import config
 
 from gui import review_api
+from gui import runner
 from gui.library import scan_meetings
+from gui.models import stage_label as stage_label_for
 from gui.paths import is_safe_meeting_id
 from gui.review_api import find_meeting_media, load_review_page
+from gui.runner import RunParams
 
 _GUI_DIR = Path(__file__).resolve().parent
 _templates = Jinja2Templates(directory=str(_GUI_DIR / "templates"))
+_REPO_DIR = _GUI_DIR.parent
+_RUN_LOCAL = str(_REPO_DIR / "run_local.py")
 
 
 def create_app() -> FastAPI:
@@ -115,5 +121,57 @@ def create_app() -> FastAPI:
         if not review_api.apply_enroll(meeting_id, label):
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.get("/new", response_class=HTMLResponse)
+    def new_meeting_form(request: Request) -> HTMLResponse:
+        from src.event_kinds import EVENT_KINDS
+        return _templates.TemplateResponse(
+            request, "new_meeting.html",
+            {"event_kinds": list(EVENT_KINDS), "computes": ["local", "modal"],
+             "diarizers": ["oss", "api", "vibevoice"]},
+        )
+
+    @app.post("/new")
+    def new_meeting_launch(
+        request: Request,
+        input: str = Form(""),
+        date: str = Form(""),
+        meeting_type: str = Form(""),
+        event_kind: str = Form("council"),
+        city: str = Form(""),
+        title: str = Form(""),
+        compute: str = Form("local"),
+        diarizer: str = Form("oss"),
+        clip_start: str = Form(""),
+        clip_end: str = Form(""),
+    ):
+        if not input.strip() or not date.strip() or not meeting_type.strip():
+            raise HTTPException(status_code=400, detail="input, date, and meeting_type are required")
+        p = RunParams(
+            input=input.strip(), date=date.strip(), meeting_type=meeting_type.strip(),
+            event_kind=event_kind, city=city.strip() or None, title=title.strip() or None,
+            compute=compute, diarizer=diarizer,
+            clip_start=clip_start.strip() or None, clip_end=clip_end.strip() or None,
+        )
+        try:
+            meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
+
+    @app.get("/meetings/{meeting_id}/run", response_class=HTMLResponse)
+    def run_page(request: Request, meeting_id: str) -> HTMLResponse:
+        from src.checkpoint import PipelineStage
+        stages = [(s.value, stage_label_for(s.value)) for s in PipelineStage if s.value >= 1]
+        return _templates.TemplateResponse(
+            request, "run.html", {"meeting_id": meeting_id, "stages": stages},
+        )
+
+    @app.get("/meetings/{meeting_id}/run/status")
+    def run_status_json(meeting_id: str) -> JSONResponse:
+        st = runner.run_status(meeting_id)
+        if st is None:
+            raise HTTPException(status_code=404)
+        return JSONResponse(st)
 
     return app
