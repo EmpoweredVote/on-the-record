@@ -93,6 +93,11 @@ def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.P
     # Open in a with-block so the PARENT closes its handle after Popen dups it
     # into the child (one leaked fd per launch otherwise). The child keeps its
     # own dup, so its writes to the log are unaffected.
+    # PYTHONUNBUFFERED so run_local's print() output flushes line-by-line to the
+    # log instead of sitting in a block buffer (stdout is a file, not a TTY, so
+    # Python would otherwise buffer ~8KB — making stage 2+ output invisible until
+    # the buffer fills or the process exits).
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     with open(meeting_dir / _LOG_NAME, "wb") as log_f:
         proc = popen(
             cmd,
@@ -100,6 +105,7 @@ def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.P
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             cwd=None,  # inherit the GUI's working directory (the repo root)
+            env=env,
         )
     _RUNS[meeting_id] = proc
     (meeting_dir / _SIDE_NAME).write_text(

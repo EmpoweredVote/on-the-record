@@ -202,3 +202,17 @@ def test_log_tail_collapses_download_spam(tmp_path):
     assert "100% of 56MiB in 5s" in tail
     assert tail.count("[download]") == 1   # collapsed to one line, not ~20
     assert "Done." in tail
+
+
+def test_launch_run_sets_unbuffered_env(tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    captured = {}
+
+    def fake_popen(cmd, **kw):
+        captured.update(kw)
+        return _FakePopen(cmd, **kw)
+
+    p = runner.RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
+    runner.launch_run(p, python_exe="py", script="s", popen=fake_popen)
+    assert captured["env"].get("PYTHONUNBUFFERED") == "1"
