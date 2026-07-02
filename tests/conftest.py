@@ -19,6 +19,17 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _no_real_db_env(monkeypatch):
+    """Defense-in-depth: run_local loads the real .env.local at import time, which
+    leaks DATABASE_URL / RENDER_DEPLOY_HOOK_URL into os.environ for the whole test
+    run. Clear them for every test so a forgotten mock can never connect to the
+    real Supabase or fire a deploy hook. Tests that need these set them explicitly.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("RENDER_DEPLOY_HOOK_URL", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_voice_profiles(tmp_path_factory, monkeypatch):
     """Never read the developer's real ~/CouncilScribe/profiles during tests.
 
