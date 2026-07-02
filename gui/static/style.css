@@ -15,3 +15,23 @@ img.thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 0.25rem
 .gate-review { background: #fdf3e0; color: #9a6a00; }
 .gate-failed { background: #fdeaea; color: #b32020; }
 .gate-none { color: #999; }
+.back { display: inline-block; margin-bottom: 0.5rem; color: #2a5db0; text-decoration: none; font-size: 0.9rem; }
+header .sub { margin: 0.25rem 0 0; color: #666; font-size: 0.9rem; }
+main.review { max-width: 900px; }
+.player { position: sticky; top: 0.5rem; width: 100%; max-height: 40vh; background: #000; border-radius: 0.5rem; margin-bottom: 1rem; z-index: 5; }
+audio.player { max-height: none; background: transparent; }
+.review section h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+.card { border: 1px solid #e2e2e2; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.6rem; }
+.card.attention { border-left: 4px solid #e0a52a; }
+.card.confirmed { border-left: 4px solid #2ea56a; }
+.card-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.card .label { font-family: ui-monospace, monospace; font-size: 0.8rem; color: #888; }
+.card .cname { font-weight: 600; }
+.card .conf, .card .mins { font-size: 0.8rem; color: #777; }
+.card .hint { font-size: 0.85rem; color: #9a6a00; }
+.card .sample { font-size: 0.9rem; color: #333; margin: 0.4rem 0; }
+.clips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+button.clip { font-size: 0.85rem; padding: 0.2rem 0.6rem; border: 1px solid #ccc; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; }
+button.clip:hover { background: #e9e9ef; }
+a.mlink { color: #2a5db0; text-decoration: none; }
+a.mlink:hover { text-decoration: underline; }

@@ -156,3 +156,19 @@ def test_media_route_404_when_no_media(tagged_meeting_dir, tmp_meetings_dir):
 def test_media_route_404_unsafe_id(tmp_meetings_dir):
     client = TestClient(create_app())
     assert client.get("/meetings/..%2Fx/media").status_code in (404, 400)
+
+
+def test_review_page_has_media_player_and_clip_buttons(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    (mdir / "audio.wav").write_bytes(b"RIFF0000")
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert '/meetings/2026-02-04-council/media' in body   # media element src
+    assert 'data-seek=' in body                            # at least one clip button
+    assert 'review.js' in body                             # playback script wired
+
+
+def test_library_links_to_review(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/").text
+    assert 'href="/meetings/2026-02-04-council/review"' in body

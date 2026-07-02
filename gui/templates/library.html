@@ -22,7 +22,7 @@
             <img class="thumb" src="/meetings/{{ m.meeting_id }}/thumbnail" alt="" loading="lazy">
             {% endif %}
             <div>
-              <div>{{ m.display_name }}</div>
+              <div><a class="mlink" href="/meetings/{{ m.meeting_id }}/review">{{ m.display_name }}</a></div>
               <div class="mid">{{ m.meeting_id }}</div>
             </div>
           </td>
