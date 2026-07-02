@@ -194,3 +194,44 @@ def test_load_review_page_malformed_embeddings_degrade_gracefully(tagged_meeting
     assert page is not None  # bad embeddings degrade to "no hints", not a crash
     resp = TestClient(create_app()).get("/meetings/2026-02-04-council/review")
     assert resp.status_code == 200
+
+
+from gui.review_api import _load_meeting_ctx, persist_review
+
+
+def test_load_meeting_ctx_returns_none_for_unsafe_or_missing(tmp_meetings_dir):
+    assert _load_meeting_ctx("../x") is None
+    assert _load_meeting_ctx("ghost") is None
+
+
+def test_persist_review_syncs_segments_and_writes_named(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    ctx = _load_meeting_ctx("2026-02-04-council")
+    assert ctx is not None
+    meeting, meeting_dir, _roster = ctx
+
+    # Simulate a rename having happened on the mapping only.
+    meeting.speakers["SPEAKER_01"].speaker_name = "Clerk Smith"
+    meeting.speakers["SPEAKER_01"].confidence = 1.0
+    meeting.speakers["SPEAKER_01"].id_method = "human_review"
+
+    persist_review(meeting, meeting_dir)
+
+    # transcript_named.json now carries the new name on BOTH mapping and segment.
+    import json as _json
+    data = _json.loads((meeting_dir / "transcript_named.json").read_text())
+    assert data["speakers"]["SPEAKER_01"]["speaker_name"] == "Clerk Smith"
+    seg01 = [s for s in data["segments"] if s["speaker_label"] == "SPEAKER_01"][0]
+    assert seg01["speaker_name"] == "Clerk Smith"
+
+
+def test_persist_review_recomputes_gate_quality_json(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    meeting, meeting_dir, _ = _load_meeting_ctx("2026-02-04-council")
+    persist_review(meeting, meeting_dir)
+    # Gate ran (best-effort): quality.json written and state mirrored.
+    assert (meeting_dir / "quality.json").exists()
+    from src.checkpoint import PipelineState
+    assert PipelineState(meeting_dir).review_status in ("pass", "review", "failed")
