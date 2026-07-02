@@ -469,3 +469,42 @@ def test_review_js_references_search_and_link(tmp_meetings_dir):
     js = Path("gui/static/review.js").read_text()
     assert "/api/politicians/search" in js
     assert "/link" in js
+
+
+import numpy as np
+
+
+def _write_embeddings(mdir, dim=8, labels=("SPEAKER_00", "SPEAKER_01")):
+    import json as _json
+    emb = {lbl: list(np.linspace(i, i + 1, dim)) for i, lbl in enumerate(labels)}
+    (mdir / "embeddings.json").write_text(_json.dumps(emb))
+
+
+def test_persist_review_with_embeddings_rewrites_diar_and_emb(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)
+    from gui.review_api import _load_embeddings, persist_review
+    meeting, meeting_dir, _ = _load_meeting_ctx("2026-02-04-council")
+    embeddings = _load_embeddings(meeting_dir)
+    # drop a label from embeddings to prove the file is rewritten from the arg
+    embeddings.pop("SPEAKER_01", None)
+
+    persist_review(meeting, meeting_dir, embeddings=embeddings)
+
+    import json as _json
+    emb_on_disk = _json.loads((meeting_dir / "embeddings.json").read_text())
+    assert "SPEAKER_01" not in emb_on_disk         # rewritten from the passed dict
+    assert (meeting_dir / "diarization.json").exists()  # written from meeting.segments
+
+
+def test_persist_review_without_embeddings_leaves_emb_untouched(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)
+    from gui.review_api import persist_review
+    meeting, meeting_dir, _ = _load_meeting_ctx("2026-02-04-council")
+    persist_review(meeting, meeting_dir)  # no embeddings -> rename/link path
+    import json as _json
+    emb = _json.loads((meeting_dir / "embeddings.json").read_text())
+    assert set(emb) == {"SPEAKER_00", "SPEAKER_01"}  # untouched

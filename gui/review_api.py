@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 from src import config
 from src.models import Meeting
 
@@ -78,13 +80,29 @@ def _load_meeting_ctx(meeting_id: str):
     return meeting, meeting_dir, _load_roster_for(meeting_dir)
 
 
-def persist_review(meeting, meeting_dir: Path) -> None:
-    """Persist review edits: sync segment fields from mappings, write
-    transcript_named.json, then best-effort re-export + gate recompute.
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Crash-safe write: temp file in the same dir, then os.replace."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
-    Mirrors run_local's --review save + _apply_gate. The transcript write is
-    authoritative and must succeed; export and gate are best-effort so a quirk
-    in either can't lose the user's correction."""
+
+def _load_embeddings(meeting_dir: Path) -> dict:
+    """embeddings.json -> {label: np.ndarray}, or {} if absent/malformed."""
+    emb_path = meeting_dir / "embeddings.json"
+    if not emb_path.exists():
+        return {}
+    try:
+        return {k: np.array(v) for k, v in json.loads(emb_path.read_text()).items()}
+    except (ValueError, OSError, TypeError, AttributeError):
+        return {}
+
+
+def persist_review(meeting, meeting_dir: Path, embeddings: dict | None = None) -> None:
+    """Persist review edits. Always: sync segments + write transcript_named.json
+    (authoritative). When embeddings is given (a merge relabeled segments +
+    combined embeddings), also rewrite diarization.json + embeddings.json,
+    mirroring run_local._persist_after_review. Export + gate are best-effort."""
     for seg in meeting.segments:
         m = meeting.speakers.get(seg.speaker_label)
         if m and m.speaker_name:
@@ -92,14 +110,25 @@ def persist_review(meeting, meeting_dir: Path) -> None:
             seg.confidence = m.confidence
             seg.id_method = m.id_method
 
-    # Atomic write: a crash/disk-full mid-write must not corrupt the sole
-    # authoritative copy. Write to a temp file in the SAME directory, then
-    # os.replace it over the target (atomic on the same filesystem). Kept
-    # OUTSIDE any try/except so real write errors still surface.
-    data = json.dumps(meeting.to_dict(), indent=2)
-    tmp = meeting_dir / "transcript_named.json.tmp"
-    tmp.write_text(data, encoding="utf-8")
-    os.replace(tmp, meeting_dir / "transcript_named.json")
+    _atomic_write_text(
+        meeting_dir / "transcript_named.json",
+        json.dumps(meeting.to_dict(), indent=2),
+    )
+
+    if embeddings is not None:
+        # Merge changed segment labels + embeddings — keep the caches consistent.
+        try:
+            _atomic_write_text(
+                meeting_dir / "diarization.json",
+                json.dumps([s.to_dict() for s in meeting.segments], indent=2),
+            )
+            emb_out = {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in embeddings.items()}
+            _atomic_write_text(meeting_dir / "embeddings.json", json.dumps(emb_out))
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Failed to rewrite diarization/embeddings for %s after merge", meeting_dir.name,
+                exc_info=True,
+            )
 
     try:
         from src.export import export_all
@@ -111,7 +140,7 @@ def persist_review(meeting, meeting_dir: Path) -> None:
         from src import quality
         from src.checkpoint import PipelineState
         report = quality.evaluate_meeting(meeting)
-        (meeting_dir / "quality.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        _atomic_write_text(meeting_dir / "quality.json", json.dumps(report, indent=2))
         state = PipelineState(meeting_dir)
         state.review_status = report.get("verdict")
         state.trusted_coverage = report.get("trusted_coverage")
