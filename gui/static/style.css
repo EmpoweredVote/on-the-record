@@ -1,0 +1,10 @@
+:root { font-family: -apple-system, system-ui, sans-serif; color: #1a1a1a; }
+body { margin: 0; }
+header { padding: 1rem 1.5rem; border-bottom: 1px solid #e2e2e2; }
+h1 { margin: 0; font-size: 1.25rem; }
+main { padding: 1.5rem; }
+table.library { width: 100%; border-collapse: collapse; }
+table.library th, table.library td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #eee; }
+td.mid { font-family: ui-monospace, monospace; font-size: 0.8rem; color: #666; }
+.stage { font-size: 0.85rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; background: #eef; }
+.empty { color: #888; }

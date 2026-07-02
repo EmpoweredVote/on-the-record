@@ -99,3 +99,27 @@ def test_scan_meetings_missing_dir_returns_empty(tmp_path):
 def test_scan_meetings_skips_dirs_without_state(tmp_meetings_dir):
     (tmp_meetings_dir / "stray-dir").mkdir()
     assert scan_meetings(tmp_meetings_dir) == []
+
+
+from fastapi.testclient import TestClient
+
+from gui.app import create_app
+
+
+def test_library_route_renders_meetings(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-regular-session", completed_stage=4)
+    client = TestClient(create_app())
+
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert "2026-02-04-regular-session" in body
+    assert "Identified — ready to review" in body
+
+
+def test_library_route_empty_state(tmp_meetings_dir):
+    client = TestClient(create_app())
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "No meetings processed yet" in resp.text
