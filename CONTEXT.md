@@ -59,6 +59,9 @@ The canonical field (formerly `key_decisions`) on `MeetingSummary` for the 3-5 m
 **Clip window**
 A single contiguous time range of a source recording that was transcribed and summarized, used when only part of the source is relevant (e.g. a politician interview inside a longer podcast). The Event still references and plays the *full* source recording — the clip window is provenance describing which slice was processed, not a separate artifact. Published segment and section timestamps stay in the full source's timeline (offset-corrected), never clip-relative. An absent window means the entire recording was processed (the default). Distinct from an *excerpt*: no clipped media file is ever created or hosted.
 
+**Source key**
+The normalized identity of a source recording, independent of how its URL was typed. Derived from the platform's own stable id — yt-dlp's `extractor:id` for online video (so `youtube.com/watch?v=X`, `youtu.be/X`, and `…?v=X&t=90s` all resolve to one key), the CATS TV archive id, or the absolute path for a local file. **One source key maps to at most one Event** — grabbing the same video again opens the existing Event rather than creating a duplicate. Distinct from [Clip window](#clip-window), which describes *which slice* of a source was processed, not *which* source it is.
+
 **Body Slug**
 *(deprecated)* A loose text reference to `essentials.chambers.slug` formerly stored on `meetings.meetings.body_slug`. Replaced by `chamber_id` UUID FK after backfill. Do not use in new code.
 
