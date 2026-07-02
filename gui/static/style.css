@@ -42,3 +42,11 @@ a.mlink:hover { text-decoration: underline; }
 .actions .rename button { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
 .linked { font-size: 0.85rem; color: #1b7a3d; margin-top: 0.4rem; }
 .linked .pslug { font-family: ui-monospace, monospace; }
+.link-search { position: relative; }
+.link-search input { padding: 0.2rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.85rem; min-width: 16rem; }
+.link-results { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem; }
+.link-results form { margin: 0; }
+button.link-result { text-align: left; width: 100%; padding: 0.25rem 0.5rem; border: 1px solid #d0d7e2; border-radius: 0.4rem; background: #f4f7fc; cursor: pointer; font-size: 0.85rem; }
+button.link-result:hover { background: #e6edfa; }
+button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius: 0.4rem; background: #fdeaea; color: #b32020; cursor: pointer; font-size: 0.85rem; }
+.link-msg { font-size: 0.8rem; color: #999; }

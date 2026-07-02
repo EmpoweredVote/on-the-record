@@ -54,6 +54,17 @@
           <input type="text" name="name" placeholder="Type a name…" autocomplete="off">
           <button type="submit">Save</button>
         </form>
+        {% if c.is_linked %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/unlink">
+          <button type="submit" class="unlink">Unlink</button>
+        </form>
+        {% endif %}
+        <div class="link-search"
+             data-search-url="/api/politicians/search"
+             data-link-action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/link">
+          <input type="text" placeholder="Link politician… (type a name)" autocomplete="off">
+          <div class="link-results"></div>
+        </div>
       </div>
     </div>
     {% endmacro %}

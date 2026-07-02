@@ -446,3 +446,26 @@ def test_link_and_unlink_routes(tagged_meeting_dir, tmp_meetings_dir):
 
     assert client.post("/meetings/ghost/speakers/SPEAKER_00/link",
                        data={"politician_slug": "s"}, follow_redirects=False).status_code == 404
+
+
+def test_review_page_has_link_widget_and_unlink(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    import json as _json
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    data["speakers"]["SPEAKER_00"]["politician_slug"] = "mayor-johnson"
+    (mdir / "transcript_named.json").write_text(_json.dumps(data))
+
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    # search widget present for a speaker, wired to the search API in JS
+    assert 'link-search' in body
+    assert '/api/politicians/search' in body  # referenced from review.js (served inline check below)
+    # unlink form for the already-linked SPEAKER_00
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_00/unlink"' in body
+
+
+def test_review_js_references_search_and_link(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/review.js").read_text()
+    assert "/api/politicians/search" in js
+    assert "/link" in js
