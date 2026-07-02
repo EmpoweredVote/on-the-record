@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from src import config
 
+from gui import publish_api
 from gui import review_api
 from gui import runner
 from gui.library import scan_meetings
@@ -208,5 +209,30 @@ def create_app() -> FastAPI:
         if st is None:
             raise HTTPException(status_code=404)
         return JSONResponse(st)
+
+    @app.get("/meetings/{meeting_id}/edit", response_class=HTMLResponse)
+    def edit_meeting_form(request: Request, meeting_id: str) -> HTMLResponse:
+        from gui.review_api import _load_meeting_ctx
+        from src.event_kinds import EVENT_KINDS
+        ctx = _load_meeting_ctx(meeting_id)
+        if ctx is None:
+            raise HTTPException(status_code=404)
+        meeting, _dir, _roster = ctx
+        return _templates.TemplateResponse(
+            request, "edit_meeting.html",
+            {"meeting_id": meeting_id, "m": meeting, "event_kinds": list(EVENT_KINDS)},
+        )
+
+    @app.post("/meetings/{meeting_id}/edit")
+    def edit_meeting_apply(
+        meeting_id: str,
+        title: str = Form(""), city: str = Form(""), date: str = Form(""),
+        meeting_type: str = Form(""), event_kind: str = Form(""),
+    ):
+        fields = {"title": title, "city": city, "date": date,
+                  "meeting_type": meeting_type, "event_kind": event_kind}
+        if publish_api.apply_metadata_edit(meeting_id, fields) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     return app

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit — {{ meeting_id }}</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+  <header><a class="back" href="/meetings/{{ meeting_id }}/review">← Review</a>
+    <h1>Edit metadata: <span class="mid">{{ meeting_id }}</span></h1>
+    <p class="sub">Changes save locally and, if this meeting is published, push live to the site. The URL never changes.</p>
+  </header>
+  <main class="review">
+    <form method="post" action="/meetings/{{ meeting_id }}/edit" class="newform">
+      <label>Title <input type="text" name="title" value="{{ m.title or '' }}"></label>
+      <label>City <input type="text" name="city" value="{{ m.city or '' }}"></label>
+      <label>Date <input type="text" name="date" value="{{ m.date or '' }}"></label>
+      <label>Event label (meeting_type) <input type="text" name="meeting_type" value="{{ m.meeting_type or '' }}"></label>
+      <label>Event kind
+        <select name="event_kind">
+          {% for k in event_kinds %}<option value="{{ k }}"{% if k == m.event_kind %} selected{% endif %}>{{ k }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="enroll">Save changes</button>
+    </form>
+  </main>
+</body></html>

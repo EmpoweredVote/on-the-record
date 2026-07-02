@@ -116,3 +116,35 @@ def test_apply_metadata_edit_pushes_to_supabase_when_published(tagged_meeting_di
 
 def test_apply_metadata_edit_unknown_meeting(tmp_meetings_dir):
     assert pub.apply_metadata_edit("ghost", {"title": "x"}) is None
+
+
+from fastapi.testclient import TestClient
+from gui.app import create_app
+
+
+def test_edit_form_prefills(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/edit").text
+    assert 'value="Regular Session"' in body    # meeting_type prefilled
+    assert 'value="Bloomington"' in body        # city prefilled
+    assert 'action="/meetings/2026-02-04-council/edit"' in body
+
+
+def test_edit_form_unknown_meeting_404(tmp_meetings_dir):
+    assert TestClient(create_app()).get("/meetings/ghost/edit").status_code == 404
+
+
+def test_post_edit_applies_and_redirects(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.publish_api as pub2
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    monkeypatch.setattr(pub2, "_db_url", lambda: None)  # no real DB in test
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/edit",
+                       data={"title": "Budget Hearing", "city": "Bloomington",
+                             "date": "2026-02-04", "meeting_type": "Special Session",
+                             "event_kind": "council"}, follow_redirects=False)
+    assert resp.status_code == 303
+    import json as _json
+    assert _json.loads((mdir / "transcript_named.json").read_text())["title"] == "Budget Hearing"
