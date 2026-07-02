@@ -1,0 +1,103 @@
+"""Load an already-processed meeting into a read-only ReviewPageData.
+
+Mirrors run_local's --review loading: Meeting.from_dict(transcript_named.json),
+embeddings.json, load_profiles(), then review.build_review_state(). Read-only —
+no mutation, no persistence (that arrives in Slice 2b)."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Optional
+
+from src import config
+from src.models import Meeting
+
+from gui.models import CONFIDENT_THRESHOLD, ReviewPageData, SpeakerCard
+from gui.paths import is_safe_meeting_id
+
+# Video container preference order (same set run_local.find_video_file checks).
+_VIDEO_EXTS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
+_LEAD_IN = 3.0  # seconds of context before a clip, mirroring run_local._review_seek
+
+
+def find_meeting_media(meeting_dir: Path) -> Optional[tuple[str, str]]:
+    """(kind, filename) for the best playable media: video if present, else
+    audio.wav, else None. kind is 'video' or 'audio'."""
+    for ext in _VIDEO_EXTS:
+        candidate = meeting_dir / f"source{ext}"
+        if candidate.exists():
+            return "video", candidate.name
+    if (meeting_dir / "audio.wav").exists():
+        return "audio", "audio.wav"
+    return None
+
+
+def _seek(candidate: float, *, is_video: bool, clip_offset: float) -> float:
+    """Seek position in the SERVED media. audio.wav is clip-local; the source
+    video is the full recording, so clip-local candidates need clip_offset added."""
+    base = max(0.0, candidate - _LEAD_IN)
+    return base + (clip_offset if is_video else 0.0)
+
+
+def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
+    if not is_safe_meeting_id(meeting_id):
+        return None
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    named = meeting_dir / "transcript_named.json"
+    if not named.exists():
+        return None
+    try:
+        meeting = Meeting.from_dict(json.loads(named.read_text(encoding="utf-8")))
+    except (ValueError, OSError, KeyError):
+        return None
+
+    import numpy as np
+    from src.enroll import load_profiles
+    from src import review
+
+    emb_path = meeting_dir / "embeddings.json"
+    embeddings = {}
+    if emb_path.exists():
+        try:
+            embeddings = {k: np.array(v) for k, v in json.loads(emb_path.read_text()).items()}
+        except (ValueError, OSError):
+            embeddings = {}
+    profile_db = load_profiles()
+
+    views = review.build_review_state(
+        meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True
+    )
+
+    media = find_meeting_media(meeting_dir)
+    media_kind = media[0] if media else None
+    is_video = media_kind == "video"
+    clip_offset = meeting.clip_start_seconds or 0.0
+
+    confirmed: list[SpeakerCard] = []
+    needs: list[SpeakerCard] = []
+    for v in views:
+        card = SpeakerCard(
+            label=v.label,
+            name=v.current_name,
+            confidence=v.current_confidence,
+            method=v.current_method,
+            minutes=v.total_speech_seconds / 60.0,
+            seg_count=v.seg_count,
+            sample_text=v.sample_text,
+            hints=[(h[0], h[1]) for h in v.soft_hints[:3]],
+            clip_seeks=[_seek(c, is_video=is_video, clip_offset=clip_offset)
+                        for c in v.clip_candidates],
+        )
+        (confirmed if card.is_confirmed else needs).append(card)
+
+    display_name = meeting.title or " ".join(
+        p for p in (meeting.city, meeting.meeting_type) if p
+    ) or meeting_id
+
+    return ReviewPageData(
+        meeting_id=meeting_id,
+        display_name=display_name,
+        media_kind=media_kind,
+        needs_attention=needs,
+        confirmed=confirmed,
+    )
