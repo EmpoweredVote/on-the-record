@@ -214,3 +214,40 @@ def test_new_meeting_js_applies_label_default():
     assert "__MEETING_TYPE_DEFAULTS" in js
     # only overwrite when empty or still a known default (don't clobber custom text)
     assert "f-mtype" in js
+
+
+def test_post_redo_launches_and_redirects(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    called = {}
+    monkeypatch.setattr(runner, "launch_redo",
+                        lambda mid, stage, **kw: called.setdefault("v", (mid, stage)) or mid)
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/redo", data={"stage": "diarize"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/meetings/2026-02-04-council/run"
+    assert called["v"] == ("2026-02-04-council", "diarize")
+
+
+def test_post_redo_invalid_stage_400(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    resp = TestClient(create_app()).post("/meetings/2026-02-04-council/redo",
+                                         data={"stage": "bogus"}, follow_redirects=False)
+    assert resp.status_code == 400
+
+
+def test_post_redo_unknown_meeting_404(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    monkeypatch.setattr(runner, "launch_redo", lambda mid, stage, **kw: None)  # unknown -> None
+    resp = TestClient(create_app()).post("/meetings/ghost/redo",
+                                         data={"stage": "diarize"}, follow_redirects=False)
+    assert resp.status_code == 404
+
+
+def test_run_page_has_redo_buttons(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/run").text
+    assert 'action="/meetings/2026-02-04-council/redo"' in body
+    assert 'value="diarize"' in body and 'value="transcribe"' in body
+    assert 'value="identify"' in body and 'value="summary"' in body

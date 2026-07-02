@@ -200,7 +200,8 @@ def create_app() -> FastAPI:
         from src.checkpoint import PipelineStage
         stages = [(s.value, stage_label_for(s.value)) for s in PipelineStage if s.value >= 1]
         return _templates.TemplateResponse(
-            request, "run.html", {"meeting_id": meeting_id, "stages": stages},
+            request, "run.html",
+            {"meeting_id": meeting_id, "stages": stages, "redo_stages": list(runner.REDO_STAGES)},
         )
 
     @app.get("/meetings/{meeting_id}/run/status")
@@ -209,6 +210,15 @@ def create_app() -> FastAPI:
         if st is None:
             raise HTTPException(status_code=404)
         return JSONResponse(st)
+
+    @app.post("/meetings/{meeting_id}/redo")
+    def redo_route(meeting_id: str, stage: str = Form("")):
+        stage = stage.strip()
+        if stage not in runner.REDO_STAGES:
+            raise HTTPException(status_code=400, detail="invalid redo stage")
+        if runner.launch_redo(meeting_id, stage, python_exe=sys.executable, script=_RUN_LOCAL) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
 
     @app.get("/meetings/{meeting_id}/edit", response_class=HTMLResponse)
     def edit_meeting_form(request: Request, meeting_id: str) -> HTMLResponse:

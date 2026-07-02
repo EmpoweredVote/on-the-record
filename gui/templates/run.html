@@ -12,6 +12,17 @@
     <div id="error-banner" class="error-banner" hidden></div>
     <h2>Log</h2>
     <pre id="log" class="runlog">(waiting for output…)</pre>
+    <details class="redo"><summary>Re-run a stage</summary>
+      <p class="mid">Re-processes from that stage onward (uses compute). Watch progress above.</p>
+      <div class="redo-buttons">
+        {% for stage in redo_stages %}
+        <form method="post" action="/meetings/{{ meeting_id }}/redo">
+          <input type="hidden" name="stage" value="{{ stage }}">
+          <button type="submit" class="mark">Re-run {{ stage }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </details>
     <p><a id="review-link" href="/meetings/{{ meeting_id }}/review" hidden>→ Review speakers</a></p>
   </main>
   <script src="/static/run.js"></script>
