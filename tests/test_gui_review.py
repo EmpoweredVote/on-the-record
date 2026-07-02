@@ -327,3 +327,30 @@ def test_persist_review_leaves_no_temp_file(tagged_meeting_dir, tmp_meetings_dir
     persist_review(meeting, meeting_dir)
     assert (meeting_dir / "transcript_named.json").exists()
     assert not (meeting_dir / "transcript_named.json.tmp").exists()
+
+
+def test_speaker_card_carries_politician_link_fields():
+    from gui.models import SpeakerCard
+    c = SpeakerCard(label="S", name="Tom Steyer", confidence=1.0, method="human_review",
+                    minutes=2, seg_count=3, politician_slug="tom-steyer", politician_id="uuid-1")
+    assert c.politician_slug == "tom-steyer"
+    assert c.politician_id == "uuid-1"
+    assert c.is_linked is True
+    assert SpeakerCard(label="S", name=None, confidence=0, method=None,
+                       minutes=0, seg_count=0).is_linked is False
+
+
+def test_load_review_page_populates_link_fields(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    # link SPEAKER_00 in the on-disk meeting
+    import json as _json
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    data["speakers"]["SPEAKER_00"]["politician_slug"] = "mayor-johnson"
+    data["speakers"]["SPEAKER_00"]["politician_id"] = "uuid-mj"
+    (mdir / "transcript_named.json").write_text(_json.dumps(data))
+
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in page.confirmed if c.label == "SPEAKER_00"][0]
+    assert card.politician_slug == "mayor-johnson"
+    assert card.is_linked is True

@@ -181,6 +181,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     confirmed: list[SpeakerCard] = []
     needs: list[SpeakerCard] = []
     for v in views:
+        mapping = meeting.speakers.get(v.label)
         card = SpeakerCard(
             label=v.label,
             name=v.current_name,
@@ -192,6 +193,8 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             hints=[(h[0], h[1]) for h in v.soft_hints[:3]],
             clip_seeks=[_seek(c, is_video=is_video, clip_offset=clip_offset)
                         for c in v.clip_candidates],
+            politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
+            politician_id=getattr(mapping, "politician_id", None) if mapping else None,
         )
         (confirmed if card.is_confirmed else needs).append(card)
 

@@ -111,10 +111,16 @@ class SpeakerCard:
     sample_text: Optional[str] = None
     hints: list[tuple[str, float]] = field(default_factory=list)
     clip_seeks: list[float] = field(default_factory=list)
+    politician_slug: Optional[str] = None
+    politician_id: Optional[str] = None
 
     @property
     def display_name(self) -> str:
         return self.name if self.name and self.name.strip() else _UNIDENTIFIED
+
+    @property
+    def is_linked(self) -> bool:
+        return bool(self.politician_slug)
 
     @property
     def is_confirmed(self) -> bool:

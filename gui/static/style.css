@@ -40,3 +40,5 @@ a.mlink:hover { text-decoration: underline; }
 .actions .accept { background: #e6f5ea; border: 1px solid #2ea56a; color: #1b7a3d; border-radius: 0.4rem; padding: 0.2rem 0.6rem; cursor: pointer; font-size: 0.85rem; }
 .actions input[type=text] { padding: 0.2rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.85rem; }
 .actions .rename button { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
+.linked { font-size: 0.85rem; color: #1b7a3d; margin-top: 0.4rem; }
+.linked .pslug { font-family: ui-monospace, monospace; }
