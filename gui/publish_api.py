@@ -97,3 +97,32 @@ def apply_metadata_edit(meeting_id: str, fields: dict) -> Optional[dict]:
 
     pushed = update_supabase_metadata(meeting_id, edits) if edits else False
     return {"local": True, "supabase": pushed}
+
+
+def apply_publish(meeting_id: str, *, force: bool = False) -> dict:
+    """Publish a meeting to the live site via src.publish.publish_meeting.
+
+    Gated on the confidence gate: only publishes when review_status == "pass",
+    unless force=True (human override). Best-effort — returns a structured result,
+    never raises. reasons: "unknown" | "gate" | "no_db" | "error"."""
+    from gui.review_api import _load_meeting_ctx
+    from src.checkpoint import PipelineState
+
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return {"ok": False, "reason": "unknown"}
+    meeting, meeting_dir, _roster = ctx
+    state = PipelineState(meeting_dir)
+    review_status = state.review_status
+
+    if not force and review_status != "pass":
+        return {"ok": False, "reason": "gate", "review_status": review_status}
+    if not _db_url():
+        return {"ok": False, "reason": "no_db"}
+    try:
+        from src.publish import publish_meeting
+        result = publish_meeting(meeting, state.body_slug)
+        return {"ok": True, "meeting_id": result.meeting_id,
+                "segments": result.segments, "speakers": result.speakers}
+    except Exception as exc:  # DB / validation failure — surface, don't crash
+        return {"ok": False, "reason": "error", "error": str(exc)}

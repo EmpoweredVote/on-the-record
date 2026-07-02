@@ -148,3 +148,71 @@ def test_post_edit_applies_and_redirects(tagged_meeting_dir, tmp_meetings_dir, m
     assert resp.status_code == 303
     import json as _json
     assert _json.loads((mdir / "transcript_named.json").read_text())["title"] == "Budget Hearing"
+
+
+def _publish_meeting_ctx(tagged_meeting_dir, review_status):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    from src.checkpoint import PipelineState
+    st = PipelineState(mdir); st.review_status = review_status; st.save()
+    return mdir
+
+
+def test_apply_publish_blocked_by_gate(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="review")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    called = {"n": 0}
+    import src.publish as sp
+    monkeypatch.setattr(sp, "publish_meeting", lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is False and res["reason"] == "gate"
+    assert res["review_status"] == "review"
+    assert called["n"] == 0                     # gate blocked -> never published
+
+
+def test_apply_publish_force_overrides_gate(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="review")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    from src.publish import PublishResult
+    monkeypatch.setattr(sp, "publish_meeting",
+                        lambda meeting, body_slug=None: PublishResult(meeting.meeting_id, 12, 3))
+    res = pub.apply_publish("2026-02-04-council", force=True)
+    assert res["ok"] is True and res["segments"] == 12 and res["speakers"] == 3
+
+
+def test_apply_publish_passes_gate(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    from src.publish import PublishResult
+    seen = {}
+    def fake_pub(meeting, body_slug=None):
+        seen["body_slug"] = body_slug
+        return PublishResult(meeting.meeting_id, 5, 2)
+    monkeypatch.setattr(sp, "publish_meeting", fake_pub)
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is True
+    assert "body_slug" in seen                  # body_slug forwarded from state
+
+
+def test_apply_publish_no_db(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: None)
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is False and res["reason"] == "no_db"
+
+
+def test_apply_publish_error_is_caught(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    def boom(*a, **k):
+        raise RuntimeError("db exploded")
+    monkeypatch.setattr(sp, "publish_meeting", boom)
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is False and res["reason"] == "error" and "db exploded" in res["error"]
+
+
+def test_apply_publish_unknown_meeting(tmp_meetings_dir):
+    assert pub.apply_publish("ghost", force=False)["reason"] == "unknown"
