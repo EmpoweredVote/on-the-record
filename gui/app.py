@@ -235,4 +235,33 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
+    @app.get("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
+    def publish_confirm(request: Request, meeting_id: str) -> HTMLResponse:
+        from gui.review_api import _load_meeting_ctx
+        from src.checkpoint import PipelineState
+        ctx = _load_meeting_ctx(meeting_id)
+        if ctx is None:
+            raise HTTPException(status_code=404)
+        _meeting, meeting_dir, _roster = ctx
+        state = PipelineState(meeting_dir)
+        return _templates.TemplateResponse(
+            request, "publish_confirm.html",
+            {
+                "meeting_id": meeting_id,
+                "review_status": state.review_status,
+                "gate_pass": state.review_status == "pass",
+                "already_published": publish_api.meeting_published_id(meeting_id) is not None,
+            },
+        )
+
+    @app.post("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
+    def publish_apply(request: Request, meeting_id: str, force: str = Form("")):
+        result = publish_api.apply_publish(meeting_id, force=bool(force.strip()))
+        if result.get("reason") == "unknown":
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(
+            request, "publish_result.html",
+            {"meeting_id": meeting_id, "result": result},
+        )
+
     return app

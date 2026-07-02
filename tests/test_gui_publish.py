@@ -216,3 +216,34 @@ def test_apply_publish_error_is_caught(tagged_meeting_dir, tmp_meetings_dir, mon
 
 def test_apply_publish_unknown_meeting(tmp_meetings_dir):
     assert pub.apply_publish("ghost", force=False)["reason"] == "unknown"
+
+
+def test_publish_confirm_shows_gate(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "meeting_published_id", lambda mid: None)  # not yet published
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/publish").text
+    assert "pass" in body.lower()
+    assert 'action="/meetings/2026-02-04-council/publish"' in body
+
+
+def test_publish_confirm_unknown_404(tmp_meetings_dir):
+    assert TestClient(create_app()).get("/meetings/ghost/publish").status_code == 404
+
+
+def test_post_publish_success(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "apply_publish",
+                        lambda mid, force=False: {"ok": True, "meeting_id": mid, "segments": 5, "speakers": 2})
+    resp = TestClient(create_app()).post("/meetings/2026-02-04-council/publish", data={})
+    assert resp.status_code == 200
+    assert "publish" in resp.text.lower()
+    assert "5" in resp.text                       # segment count shown
+
+
+def test_post_publish_gate_blocked_shown(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="review")
+    monkeypatch.setattr(pub, "apply_publish",
+                        lambda mid, force=False: {"ok": False, "reason": "gate", "review_status": "review"})
+    resp = TestClient(create_app()).post("/meetings/2026-02-04-council/publish", data={})
+    assert resp.status_code == 200
+    assert "gate" in resp.text.lower() or "review" in resp.text.lower()
