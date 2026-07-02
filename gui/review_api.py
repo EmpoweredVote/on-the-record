@@ -9,6 +9,8 @@ mutations go through src.review, then transcript_named.json is written
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -90,9 +92,14 @@ def persist_review(meeting, meeting_dir: Path) -> None:
             seg.confidence = m.confidence
             seg.id_method = m.id_method
 
-    (meeting_dir / "transcript_named.json").write_text(
-        json.dumps(meeting.to_dict(), indent=2), encoding="utf-8"
-    )
+    # Atomic write: a crash/disk-full mid-write must not corrupt the sole
+    # authoritative copy. Write to a temp file in the SAME directory, then
+    # os.replace it over the target (atomic on the same filesystem). Kept
+    # OUTSIDE any try/except so real write errors still surface.
+    data = json.dumps(meeting.to_dict(), indent=2)
+    tmp = meeting_dir / "transcript_named.json.tmp"
+    tmp.write_text(data, encoding="utf-8")
+    os.replace(tmp, meeting_dir / "transcript_named.json")
 
     try:
         from src.export import export_all
@@ -110,7 +117,10 @@ def persist_review(meeting, meeting_dir: Path) -> None:
         state.trusted_coverage = report.get("trusted_coverage")
         state.save()
     except Exception:
-        pass  # gate is best-effort; the transcript write above is the source of truth
+        logging.getLogger(__name__).warning(
+            "Gate recompute failed for %s; library badge may be stale", meeting_dir.name,
+            exc_info=True,
+        )
 
 
 def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:

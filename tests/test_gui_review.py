@@ -318,3 +318,12 @@ def test_review_page_has_rename_form_and_accept_button(tagged_meeting_dir, tmp_m
     assert 'name="name"' in body
     # SPEAKER_00 is named at high conf -> confirmed, still editable (rename form present).
     assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_00/name"' in body
+
+
+def test_persist_review_leaves_no_temp_file(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    meeting, meeting_dir, _ = _load_meeting_ctx("2026-02-04-council")
+    persist_review(meeting, meeting_dir)
+    assert (meeting_dir / "transcript_named.json").exists()
+    assert not (meeting_dir / "transcript_named.json.tmp").exists()
