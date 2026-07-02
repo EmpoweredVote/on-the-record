@@ -6,14 +6,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from src import config
 
 from gui.library import scan_meetings
+from gui.paths import is_safe_meeting_id
 
 _GUI_DIR = Path(__file__).resolve().parent
 _templates = Jinja2Templates(directory=str(_GUI_DIR / "templates"))
@@ -31,5 +32,14 @@ def create_app() -> FastAPI:
         return _templates.TemplateResponse(
             request, "library.html", {"meetings": meetings}
         )
+
+    @app.get("/meetings/{meeting_id}/thumbnail")
+    def thumbnail(meeting_id: str) -> FileResponse:
+        if not is_safe_meeting_id(meeting_id):
+            raise HTTPException(status_code=404)
+        path = config.MEETINGS_DIR / meeting_id / "thumbnail.jpg"
+        if not path.exists():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(path), media_type="image/jpeg")
 
     return app

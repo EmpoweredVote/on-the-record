@@ -281,3 +281,37 @@ def test_scan_meetings_enrichment_absent_is_graceful(tagged_meeting_dir, tmp_mee
     assert s.duration_seconds is None
     assert s.has_thumbnail is False
     assert s.gate_badge == ("none", "—")
+
+
+from gui.paths import is_safe_meeting_id
+
+
+def test_is_safe_meeting_id_rejects_traversal():
+    assert is_safe_meeting_id("2026-02-04-council") is True
+    assert is_safe_meeting_id("..") is False
+    assert is_safe_meeting_id(".") is False
+    assert is_safe_meeting_id("a/b") is False
+    assert is_safe_meeting_id("") is False
+    assert is_safe_meeting_id("/abs") is False
+
+
+def test_thumbnail_route_serves_existing_jpg(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff\xe0jpegbytes")
+    client = TestClient(create_app())
+    resp = client.get("/meetings/2026-02-04-council/thumbnail")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.content == b"\xff\xd8\xff\xe0jpegbytes"
+
+
+def test_thumbnail_route_404_when_missing(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    client = TestClient(create_app())
+    assert client.get("/meetings/2026-02-04-council/thumbnail").status_code == 404
+
+
+def test_thumbnail_route_404_on_unsafe_id(tmp_meetings_dir):
+    client = TestClient(create_app())
+    # A dot-segment id must never resolve outside MEETINGS_DIR.
+    assert client.get("/meetings/../thumbnail").status_code in (404, 400)
