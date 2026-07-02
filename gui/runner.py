@@ -109,12 +109,25 @@ def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.P
     return meeting_id
 
 
+def _collapse_progress(text: str) -> str:
+    """Render carriage-return progress the way a terminal would: for each line,
+    keep only the content after its final '\\r' overwrite. Turns yt-dlp's
+    hundreds of '[download] N% ...\\r' frames into the single last value."""
+    lines = []
+    for raw in text.split("\n"):
+        seg = raw.rstrip("\r")          # drop trailing CR (e.g. \r\n endings)
+        if "\r" in seg:
+            seg = seg.rsplit("\r", 1)[-1]  # keep only the final in-place update
+        lines.append(seg)
+    return "\n".join(lines)
+
+
 def _log_tail(meeting_dir: Path, max_bytes: int = 16000) -> str:
     log = meeting_dir / _LOG_NAME
     if not log.exists():
         return ""
     data = log.read_bytes()
-    return data[-max_bytes:].decode("utf-8", errors="replace")
+    return _collapse_progress(data[-max_bytes:].decode("utf-8", errors="replace"))
 
 
 def run_status(meeting_id: str) -> Optional[dict]:

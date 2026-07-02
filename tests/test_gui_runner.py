@@ -182,3 +182,23 @@ def test_find_meeting_by_source_fallback_to_audio_source(tagged_meeting_dir, tmp
 def test_find_meeting_by_source_blank_returns_none(tmp_meetings_dir):
     from gui.runner import find_meeting_by_source
     assert find_meeting_by_source("") is None
+
+
+def test_collapse_progress_keeps_final_overwrite():
+    from gui.runner import _collapse_progress
+    raw = ("[download] 1% of 56MiB\r[download] 50% of 56MiB\r"
+           "[download] 100% of 56MiB in 5s\n[Merger] merging\n")
+    assert _collapse_progress(raw) == "[download] 100% of 56MiB in 5s\n[Merger] merging\n"
+    # plain line untouched; \r\n endings must not blank the line
+    assert _collapse_progress("STAGE 1\r\nnext\n") == "STAGE 1\nnext\n"
+
+
+def test_log_tail_collapses_download_spam(tmp_path):
+    from gui.runner import _log_tail, _LOG_NAME
+    spam = "".join(f"[download] {p}% of 56MiB\r" for p in range(0, 100, 5))
+    spam += "[download] 100% of 56MiB in 5s\nDone.\n"
+    (tmp_path / _LOG_NAME).write_bytes(spam.encode())
+    tail = _log_tail(tmp_path)
+    assert "100% of 56MiB in 5s" in tail
+    assert tail.count("[download]") == 1   # collapsed to one line, not ~20
+    assert "Done." in tail
