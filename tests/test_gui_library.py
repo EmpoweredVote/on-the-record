@@ -333,3 +333,8 @@ def test_library_route_renders_enrichment_columns(tagged_meeting_dir, tmp_meetin
     assert "2h 52m" in body                 # duration
     assert ">3<" in body or "3 speakers" in body  # speaker count (see template choice below)
     assert "/meetings/2026-02-04-council/thumbnail" in body  # thumbnail img src
+
+
+def test_library_has_new_meeting_link(tmp_meetings_dir):
+    body = TestClient(create_app()).get("/").text
+    assert 'href="/new"' in body

@@ -67,3 +67,4 @@ ol.stepper li.done { background: #e6f5ea; color: #1b7a3d; }
 ol.stepper li.current { background: #fdf3e0; color: #9a6a00; font-weight: 600; }
 pre.runlog { background: #0e0e12; color: #d8d8e0; padding: 0.75rem; border-radius: 0.5rem; max-height: 45vh; overflow: auto; font-size: 0.8rem; white-space: pre-wrap; }
 .error-banner { background: #fdeaea; color: #b32020; border: 1px solid #e0a0a0; border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.6rem; }
+a.newlink { display: inline-block; margin-top: 0.4rem; color: #24507f; text-decoration: none; font-size: 0.9rem; }
