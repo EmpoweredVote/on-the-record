@@ -144,10 +144,12 @@ def launch_redo(meeting_id: str, stage: str, *, python_exe: str, script: str,
 
 def build_resume_command(python_exe: str, script: str, meeting_id: str, *,
                          override_gate: bool = False) -> list[str]:
-    """`run_local.py --resume <id>` — pick up the pipeline from the last completed
-    stage. override_gate adds --publish-anyway, the only non-interactive way past a
-    failing confidence gate (it does NOT publish — that needs a separate --publish)."""
-    cmd = [python_exe, script, "--resume", meeting_id]
+    """`run_local.py --resume <id> --no-publish` — pick up the pipeline from the
+    last completed stage WITHOUT publishing (--resume auto-enables publish unless
+    --no-publish; publishing stays the separate Publish action). override_gate adds
+    --publish-anyway, which lifts the summary/enroll review gate only (with
+    --no-publish in place it cannot publish)."""
+    cmd = [python_exe, script, "--resume", meeting_id, "--no-publish"]
     if override_gate:
         cmd.append("--publish-anyway")
     return cmd

@@ -280,9 +280,17 @@ def test_existing_launch_run_still_works(tmp_meetings_dir):
 
 def test_build_resume_command():
     from gui.runner import build_resume_command
-    assert build_resume_command("py", "s", "m") == ["py", "s", "--resume", "m"]
+    assert build_resume_command("py", "s", "m") == ["py", "s", "--resume", "m", "--no-publish"]
     assert build_resume_command("py", "s", "m", override_gate=True) == \
-        ["py", "s", "--resume", "m", "--publish-anyway"]
+        ["py", "s", "--resume", "m", "--no-publish", "--publish-anyway"]
+
+
+def test_resume_command_never_publishes():
+    """Safety: Continue must never publish — --no-publish is always present, in
+    both plain and gate-override modes (--resume auto-enables publish otherwise)."""
+    from gui.runner import build_resume_command
+    assert "--no-publish" in build_resume_command("py", "s", "m")
+    assert "--no-publish" in build_resume_command("py", "s", "m", override_gate=True)
 
 
 def test_launch_resume_spawns(tagged_meeting_dir, tmp_meetings_dir):
@@ -297,7 +305,7 @@ def test_launch_resume_spawns(tagged_meeting_dir, tmp_meetings_dir):
 
     mid = runner.launch_resume("2026-02-04-council", python_exe="py", script="s", popen=fake_popen)
     assert mid == "2026-02-04-council"
-    assert captured["cmd"] == ["py", "s", "--resume", "2026-02-04-council"]
+    assert captured["cmd"] == ["py", "s", "--resume", "2026-02-04-council", "--no-publish"]
     assert mid in runner._RUNS
 
 
