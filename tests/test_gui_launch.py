@@ -173,3 +173,13 @@ def test_post_new_no_duplicate_launches(tmp_meetings_dir, monkeypatch):
         "event_kind": "other",
     }, follow_redirects=False)
     assert resp.status_code == 303
+
+
+def test_meeting_type_defaults_cover_all_kinds():
+    from gui.formmeta import MEETING_TYPE_DEFAULTS
+    from src.event_kinds import EVENT_KINDS
+    assert set(MEETING_TYPE_DEFAULTS) == set(EVENT_KINDS)
+    # deliberative + electoral kinds get a non-empty suggestion
+    assert MEETING_TYPE_DEFAULTS["forum"] == "Candidate Forum"
+    assert MEETING_TYPE_DEFAULTS["council"] == "Regular Session"
+    assert MEETING_TYPE_DEFAULTS["debate"] == "Debate"

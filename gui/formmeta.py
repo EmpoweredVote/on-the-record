@@ -27,3 +27,17 @@ DIARIZER_HELP = {
     "api": "pyannote.ai Precision-2 — needs PYANNOTE_AI_KEY; higher accuracy.",
     "vibevoice": "VibeVoice — requires Compute = modal.",
 }
+
+# Sensible default event labels per kind. The field is required (pipeline +
+# publish), but it's really "a short label shown on the site", so we pre-fill a
+# natural default the user can edit. Keys must equal EVENT_KINDS (test-enforced).
+MEETING_TYPE_DEFAULTS = {
+    "council": "Regular Session",
+    "school_board": "Board Meeting",
+    "debate": "Debate",
+    "forum": "Candidate Forum",
+    "community_meeting": "Community Meeting",
+    "news_clip": "Interview",
+    "press_conference": "Press Conference",
+    "other": "",
+}
