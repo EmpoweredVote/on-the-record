@@ -137,11 +137,13 @@ def _log_tail(meeting_dir: Path, max_bytes: int = 16000) -> str:
 
 
 def run_status(meeting_id: str) -> Optional[dict]:
-    """Progress snapshot, or None if this meeting has no run sidecar/registry entry."""
+    """Progress snapshot for any meeting that has pipeline_state.json (GUI-launched
+    or not), or None if the meeting is truly absent."""
     if not is_safe_meeting_id(meeting_id):
         return None
     meeting_dir = config.MEETINGS_DIR / meeting_id
-    if not (meeting_dir / _SIDE_NAME).exists() and meeting_id not in _RUNS:
+    has_state = (meeting_dir / "pipeline_state.json").exists()
+    if not has_state and not (meeting_dir / _SIDE_NAME).exists() and meeting_id not in _RUNS:
         return None
 
     completed = 0

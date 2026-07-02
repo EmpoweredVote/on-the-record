@@ -79,3 +79,4 @@ main.newpage { display: grid; grid-template-columns: minmax(0, 32rem) 1fr; gap: 
 .pv-meta { margin-top: 0.3rem; color: #555; font-size: 0.9rem; }
 .pv-badge { background: #eef; color: #445; border-radius: 0.4rem; padding: 0.05rem 0.45rem; font-size: 0.78rem; }
 @media (max-width: 720px) { main.newpage { grid-template-columns: 1fr; } }
+a.runlink { margin-left: 1rem; }

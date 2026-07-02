@@ -216,3 +216,17 @@ def test_launch_run_sets_unbuffered_env(tmp_meetings_dir):
     p = runner.RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
     runner.launch_run(p, python_exe="py", script="s", popen=fake_popen)
     assert captured["env"].get("PYTHONUNBUFFERED") == "1"
+
+
+def test_run_status_works_without_sidecar(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    # a meeting with pipeline_state but NO gui_run.json sidecar (e.g. CLI-processed
+    # or reviewed) still returns a status snapshot, not None.
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    st = runner.run_status("2026-02-04-council")
+    assert st is not None
+    assert st["completed_stage"] == 5
+    assert st["running"] is False
+    # truly-unknown meeting is still None
+    assert runner.run_status("no-such-meeting") is None

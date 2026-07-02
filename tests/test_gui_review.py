@@ -772,3 +772,10 @@ def test_review_page_shows_link_for_id_only_speaker(tagged_meeting_dir, tmp_meet
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     # linked state shows (unlink form present) even though there's no slug
     assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_00/unlink"' in body
+
+
+def test_review_page_links_to_run(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert 'href="/meetings/2026-02-04-council/run"' in body
