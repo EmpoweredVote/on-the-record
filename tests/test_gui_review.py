@@ -699,3 +699,20 @@ def test_apply_enroll_skips_non_speaker(tagged_meeting_dir, tmp_meetings_dir):
     _write_embeddings(mdir)
     apply_mark_non_speaker("2026-02-04-council", "SPEAKER_00", "Music")
     assert apply_enroll("2026-02-04-council", "SPEAKER_00") is False  # non-speaker not enrollable
+
+
+def test_enroll_route(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    client = TestClient(create_app())
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_00/enroll", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/meetings/2026-02-04-council/review"
+    from src.enroll import load_profiles
+    assert load_profiles().profiles  # a profile now exists
+
+    # unknown / non-enrollable -> 404
+    assert client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/enroll",
+                       follow_redirects=False).status_code == 404  # unnamed
+    assert client.post("/meetings/ghost/speakers/SPEAKER_00/enroll",
+                       follow_redirects=False).status_code == 404

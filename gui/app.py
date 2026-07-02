@@ -110,4 +110,10 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
+    @app.post("/meetings/{meeting_id}/speakers/{label}/enroll")
+    def enroll_route(meeting_id: str, label: str):
+        if not review_api.apply_enroll(meeting_id, label):
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
     return app
