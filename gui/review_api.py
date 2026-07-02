@@ -48,7 +48,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         return None
     try:
         meeting = Meeting.from_dict(json.loads(named.read_text(encoding="utf-8")))
-    except (ValueError, OSError, KeyError):
+    except (ValueError, OSError, KeyError, TypeError, AttributeError):
         return None
 
     import numpy as np
@@ -60,7 +60,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if emb_path.exists():
         try:
             embeddings = {k: np.array(v) for k, v in json.loads(emb_path.read_text()).items()}
-        except (ValueError, OSError):
+        except (ValueError, OSError, TypeError, AttributeError):
             embeddings = {}
     profile_db = load_profiles()
 

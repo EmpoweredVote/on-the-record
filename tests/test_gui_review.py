@@ -172,3 +172,25 @@ def test_library_links_to_review(tagged_meeting_dir, tmp_meetings_dir):
     tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     body = TestClient(create_app()).get("/").text
     assert 'href="/meetings/2026-02-04-council/review"' in body
+
+
+def test_load_review_page_malformed_transcript_shape_returns_none(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    # Valid JSON but wrong shape: a list, not the Meeting object dict.
+    (mdir / "transcript_named.json").write_text("[]")
+
+    assert load_review_page("2026-02-04-council") is None
+    resp = TestClient(create_app()).get("/meetings/2026-02-04-council/review")
+    assert resp.status_code == 404
+
+
+def test_load_review_page_malformed_embeddings_degrade_gracefully(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    # Valid JSON but wrong shape for embeddings (list, not a dict of label->vector).
+    (mdir / "embeddings.json").write_text("[1, 2]")
+
+    page = load_review_page("2026-02-04-council")
+    assert page is not None  # bad embeddings degrade to "no hints", not a crash
+    resp = TestClient(create_app()).get("/meetings/2026-02-04-council/review")
+    assert resp.status_code == 200
