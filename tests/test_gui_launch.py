@@ -120,3 +120,14 @@ def test_new_form_shows_help_and_preview(tmp_meetings_dir):
     assert 'id="preview"' in body
     assert 'id="derived-id"' in body
     assert "new_meeting.js" in body
+
+
+def test_new_meeting_js_wires_preview_and_city_rule():
+    from pathlib import Path
+    js = Path("gui/static/new_meeting.js").read_text()
+    # updates the derived id, the preview, and toggles the city-required marker
+    assert "derived-id" in js
+    assert "preview" in js or "pv-title" in js
+    assert "city-req" in js
+    # slug derivation mirrors the server ({date}-{slug(meeting_type)})
+    assert "toLowerCase" in js
