@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -71,5 +71,25 @@ def create_app() -> FastAPI:
         if not review_api.apply_rename(meeting_id, label, name):
             raise HTTPException(status_code=404)  # unknown meeting / unsafe id / unknown label
         return redirect
+
+    @app.get("/api/politicians/search")
+    def politician_search(q: str = "") -> JSONResponse:
+        return JSONResponse(review_api.search_politicians_safe(q))
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/link")
+    def link_speaker_route(meeting_id: str, label: str,
+                           politician_slug: str = Form(""), politician_id: str = Form("")):
+        redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        if not politician_slug.strip():
+            return redirect
+        if not review_api.apply_link(meeting_id, label, politician_slug, politician_id):
+            raise HTTPException(status_code=404)
+        return redirect
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/unlink")
+    def unlink_speaker_route(meeting_id: str, label: str):
+        if not review_api.apply_unlink(meeting_id, label):
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     return app

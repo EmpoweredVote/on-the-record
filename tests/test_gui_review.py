@@ -404,3 +404,45 @@ def test_apply_link_guards(tagged_meeting_dir, tmp_meetings_dir):
     assert apply_link("2026-02-04-council", "SPEAKER_99", "s", "i") is False  # unknown label
     assert apply_link("2026-02-04-council", "SPEAKER_00", "", "i") is False   # empty slug
     assert apply_link("../x", "SPEAKER_00", "s", "i") is False            # unsafe id
+
+
+def test_search_route_returns_json(monkeypatch, tmp_meetings_dir):
+    import src.essentials_client as ec
+    monkeypatch.setattr(ec, "search_politicians", lambda q, **kw: [
+        {"politician_slug": "tom-steyer", "politician_id": "u1", "full_name": "Tom Steyer",
+         "office_title": "Governor", "district_label": "", "government_name": "CA"},
+    ])
+    client = TestClient(create_app())
+    resp = client.get("/api/politicians/search", params={"q": "steyer"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["results"][0]["politician_slug"] == "tom-steyer"
+    assert body["error"] is None
+
+
+def test_search_route_error_is_200_empty(monkeypatch, tmp_meetings_dir):
+    import src.essentials_client as ec
+    monkeypatch.setattr(ec, "search_politicians",
+                        lambda q, **kw: (_ for _ in ()).throw(ec.EssentialsClientError("bad", code="X", status=None)))
+    client = TestClient(create_app())
+    resp = client.get("/api/politicians/search", params={"q": "z"})
+    assert resp.status_code == 200          # best-effort: not a 500
+    assert resp.json()["results"] == []
+
+
+def test_link_and_unlink_routes(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/link",
+                    data={"politician_slug": "clerk-smith", "politician_id": "uuid-cs"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    assert "clerk-smith" in client.get("/meetings/2026-02-04-council/review").text
+
+    r2 = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/unlink", follow_redirects=False)
+    assert r2.status_code == 303
+
+    assert client.post("/meetings/ghost/speakers/SPEAKER_00/link",
+                       data={"politician_slug": "s"}, follow_redirects=False).status_code == 404
