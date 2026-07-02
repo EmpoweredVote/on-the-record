@@ -183,3 +183,10 @@ def test_meeting_type_defaults_cover_all_kinds():
     assert MEETING_TYPE_DEFAULTS["forum"] == "Candidate Forum"
     assert MEETING_TYPE_DEFAULTS["council"] == "Regular Session"
     assert MEETING_TYPE_DEFAULTS["debate"] == "Debate"
+
+
+def test_new_form_relabels_event_label_field(tmp_meetings_dir):
+    body = TestClient(create_app()).get("/new").text
+    assert "Event label" in body                 # relabeled (was "Meeting type")
+    assert 'name="meeting_type"' in body          # backend field name unchanged
+    assert "Candidate Forum" in body              # a default injected for JS/examples

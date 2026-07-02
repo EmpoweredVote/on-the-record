@@ -13,8 +13,9 @@
       <label>Date (YYYY-MM-DD)
         <input type="text" name="date" id="f-date" placeholder="2026-02-10" required>
       </label>
-      <label>Meeting type (shown on the site, e.g. "Regular Session")
+      <label>Event label — shown on the site (e.g. Regular Session, Candidate Forum, Debate)
         <input type="text" name="meeting_type" id="f-mtype" placeholder="Regular Session" required>
+        <small class="help">A short label for this specific event. The <em>category</em> is "Event kind" above.</small>
       </label>
       <label>Event kind
         <select name="event_kind" id="f-kind">
@@ -65,6 +66,7 @@
     window.__EVENT_KIND_HELP = {{ event_kind_help|tojson }};
     window.__COMPUTE_HELP = {{ compute_help|tojson }};
     window.__DIARIZER_HELP = {{ diarizer_help|tojson }};
+    window.__MEETING_TYPE_DEFAULTS = {{ meeting_type_defaults|tojson }};
   </script>
   <script src="/static/new_meeting.js"></script>
 </body></html>
