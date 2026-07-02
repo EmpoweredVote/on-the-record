@@ -1,5 +1,5 @@
-:root { font-family: -apple-system, system-ui, sans-serif; color: #1a1a1a; }
-body { margin: 0; }
+:root { color-scheme: light; font-family: -apple-system, system-ui, sans-serif; }
+body { margin: 0; background: #fff; color: #1a1a1a; }
 header { padding: 1rem 1.5rem; border-bottom: 1px solid #e2e2e2; }
 h1 { margin: 0; font-size: 1.25rem; }
 main { padding: 1.5rem; }
