@@ -128,3 +128,29 @@ def test_run_status_reports_stage_and_liveness(tmp_meetings_dir):
     assert st2["exit_code"] == 0
 
     assert runner.run_status("no-such-meeting") is None
+
+
+def test_run_status_liveness_fallback_via_sidecar_pid(tmp_meetings_dir, monkeypatch):
+    """After a GUI restart (_RUNS empty), liveness is recovered from the sidecar
+    pid via os.kill(pid, 0)."""
+    from gui import runner
+    runner._RUNS.clear()
+    mid = "2026-02-10-regular"
+    mdir = tmp_meetings_dir / mid
+    mdir.mkdir(parents=True, exist_ok=True)
+    (mdir / "gui_run.json").write_text(json.dumps({"pid": 9999, "cmd": [], "status": "running"}))
+    (mdir / "pipeline_state.json").write_text(json.dumps({"completed_stage": 2}))
+
+    # os.kill succeeds -> process alive -> running True
+    monkeypatch.setattr(runner.os, "kill", lambda pid, sig: None)
+    st = runner.run_status(mid)
+    assert st is not None
+    assert st["running"] is True
+    assert st["completed_stage"] == 2
+
+    # os.kill raises ProcessLookupError -> process dead -> running False
+    def _dead(pid, sig):
+        raise ProcessLookupError
+    monkeypatch.setattr(runner.os, "kill", _dead)
+    st2 = runner.run_status(mid)
+    assert st2["running"] is False

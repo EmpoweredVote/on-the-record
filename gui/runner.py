@@ -5,6 +5,7 @@ This module owns the *mechanics* of launching + monitoring; the pure helpers
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -89,14 +90,17 @@ def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.P
     meeting_dir = ensure_drive_structure(meeting_id)
     cmd = build_run_command(python_exe, script, p, meeting_id)
 
-    log_f = open(meeting_dir / _LOG_NAME, "wb")
-    proc = popen(
-        cmd,
-        stdout=log_f,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        cwd=None,  # inherit the GUI's working directory (the repo root)
-    )
+    # Open in a with-block so the PARENT closes its handle after Popen dups it
+    # into the child (one leaked fd per launch otherwise). The child keeps its
+    # own dup, so its writes to the log are unaffected.
+    with open(meeting_dir / _LOG_NAME, "wb") as log_f:
+        proc = popen(
+            cmd,
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            cwd=None,  # inherit the GUI's working directory (the repo root)
+        )
     _RUNS[meeting_id] = proc
     (meeting_dir / _SIDE_NAME).write_text(
         json.dumps({"pid": getattr(proc, "pid", None), "cmd": cmd, "status": "running"}),
@@ -135,9 +139,24 @@ def run_status(meeting_id: str) -> Optional[dict]:
         running = rc is None
         exit_code = rc
     else:
-        # No live handle (e.g. after a GUI restart): fall back to the sidecar.
+        # No live handle (GUI restarted): recover liveness from the sidecar pid.
         running = False
         exit_code = None
+        try:
+            side = json.loads((meeting_dir / _SIDE_NAME).read_text())
+            pid = side.get("pid")
+        except (ValueError, OSError, TypeError, AttributeError):
+            pid = None
+        if pid:
+            try:
+                os.kill(int(pid), 0)
+                running = True   # process still alive
+            except ProcessLookupError:
+                running = False  # dead
+            except PermissionError:
+                running = True   # exists but not ours -> alive
+            except (ValueError, TypeError):
+                running = False
 
     return {
         "meeting_id": meeting_id,

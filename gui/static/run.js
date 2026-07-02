@@ -29,13 +29,13 @@
     if (st.running) {
       stateEl.textContent = `Running — stage ${st.completed_stage}/7 (${st.stage_label})`;
       setTimeout(tick, 1500);
-    } else if (st.exit_code === 0 || st.completed_stage >= 5) {
-      stateEl.textContent = "Done.";
-      reviewLink.hidden = false;
     } else if (st.exit_code != null && st.exit_code !== 0) {
       stateEl.textContent = "Failed.";
       errBanner.hidden = false;
       errBanner.textContent = `Process exited with code ${st.exit_code}. See log below.`;
+    } else if (st.exit_code === 0 || st.completed_stage >= 5) {
+      stateEl.textContent = "Done.";
+      reviewLink.hidden = false;
     } else {
       stateEl.textContent = "Idle.";
       reviewLink.hidden = false;
