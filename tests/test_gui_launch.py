@@ -251,3 +251,42 @@ def test_run_page_has_redo_buttons(tagged_meeting_dir, tmp_meetings_dir):
     assert 'action="/meetings/2026-02-04-council/redo"' in body
     assert 'value="diarize"' in body and 'value="transcribe"' in body
     assert 'value="identify"' in body and 'value="summary"' in body
+
+
+def test_post_continue_launches_and_redirects(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    seen = {}
+    monkeypatch.setattr(runner, "launch_resume",
+                        lambda mid, override_gate=False, **kw: seen.setdefault("v", (mid, override_gate)) or mid)
+    client = TestClient(create_app())
+    r = client.post("/meetings/2026-02-04-council/continue", data={}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/meetings/2026-02-04-council/run"
+    assert seen["v"] == ("2026-02-04-council", False)
+
+
+def test_post_continue_override(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    seen = {}
+    monkeypatch.setattr(runner, "launch_resume",
+                        lambda mid, override_gate=False, **kw: seen.setdefault("og", override_gate) or mid)
+    TestClient(create_app()).post("/meetings/2026-02-04-council/continue",
+                                  data={"override": "1"}, follow_redirects=False)
+    assert seen["og"] is True
+
+
+def test_post_continue_unknown_404(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    monkeypatch.setattr(runner, "launch_resume", lambda mid, override_gate=False, **kw: None)
+    assert TestClient(create_app()).post("/meetings/ghost/continue", data={},
+                                         follow_redirects=False).status_code == 404
+
+
+def test_run_page_has_continue_button(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/run").text
+    assert 'action="/meetings/2026-02-04-council/continue"' in body
+    assert "Continue processing" in body
+    assert "override" in body.lower()  # the gate-override variant present

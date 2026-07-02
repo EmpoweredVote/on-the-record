@@ -12,6 +12,20 @@
     <div id="error-banner" class="error-banner" hidden></div>
     <h2>Log</h2>
     <pre id="log" class="runlog">(waiting for output…)</pre>
+    <section class="continue">
+      <h2>Continue processing</h2>
+      <p class="mid">Run the remaining stages (e.g. summary) from where this meeting stopped.
+        A meeting queued for review continues once its gate passes — review the speakers first.</p>
+      <div class="continue-buttons">
+        <form method="post" action="/meetings/{{ meeting_id }}/continue">
+          <button type="submit" class="enroll">Continue processing</button>
+        </form>
+        <form method="post" action="/meetings/{{ meeting_id }}/continue">
+          <input type="hidden" name="override" value="1">
+          <button type="submit" class="mark">Continue anyway (override the review gate)</button>
+        </form>
+      </div>
+    </section>
     <details class="redo"><summary>Re-run a stage</summary>
       <p class="mid">Re-processes from that stage onward (uses compute). Watch progress above.</p>
       <div class="redo-buttons">

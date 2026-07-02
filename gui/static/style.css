@@ -83,3 +83,6 @@ a.runlink { margin-left: 1rem; }
 details.redo { margin-top: 1rem; }
 .redo-buttons { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .redo-buttons form { margin: 0; }
+section.continue { margin-top: 1rem; }
+.continue-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; }
+.continue-buttons form { margin: 0; }

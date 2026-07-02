@@ -220,6 +220,13 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
 
+    @app.post("/meetings/{meeting_id}/continue")
+    def continue_route(meeting_id: str, override: str = Form("")):
+        if runner.launch_resume(meeting_id, override_gate=bool(override.strip()),
+                                python_exe=sys.executable, script=_RUN_LOCAL) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
+
     @app.get("/meetings/{meeting_id}/edit", response_class=HTMLResponse)
     def edit_meeting_form(request: Request, meeting_id: str) -> HTMLResponse:
         from gui.review_api import _load_meeting_ctx
