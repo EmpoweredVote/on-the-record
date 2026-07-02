@@ -51,3 +51,80 @@ def test_build_run_command_omits_absent_optionals():
         assert flag not in cmd
     # compute/diarizer default through to the flags (explicit is fine)
     assert cmd[cmd.index("--compute") + 1] == "local"
+
+
+import json
+from pathlib import Path
+
+
+class _FakePopen:
+    """Stand-in for subprocess.Popen: records args, controllable exit."""
+    def __init__(self, cmd, **kw):
+        self.cmd = cmd
+        self.kw = kw
+        self.pid = 4321
+        self._rc = None
+        # write a marker to the provided stdout so the log-tail path has content
+        out = kw.get("stdout")
+        if out is not None and hasattr(out, "write"):
+            out.write(b"STAGE 1: Audio Ingestion\n")
+            out.flush()
+
+    def poll(self):
+        return self._rc
+
+    def finish(self, rc=0):
+        self._rc = rc
+
+
+def test_launch_run_spawns_and_records(tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    captured = {}
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        captured["stdin_devnull"] = kw.get("stdin") is not None
+        return _FakePopen(cmd, **kw)
+
+    p = runner.RunParams(input="https://x/v", date="2026-02-10", meeting_type="Regular",
+                         event_kind="council")
+    mid = runner.launch_run(p, python_exe="py", script="run_local.py", popen=fake_popen)
+
+    assert mid == "2026-02-10-regular"
+    assert mid in runner._RUNS
+    mdir = tmp_meetings_dir / mid
+    assert (mdir / "gui_run.log").exists()      # stdout captured here
+    side = json.loads((mdir / "gui_run.json").read_text())
+    assert side["status"] == "running" and side["pid"] == 4321
+    assert captured["cmd"][0] == "py"
+
+
+def test_run_status_reports_stage_and_liveness(tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    p = runner.RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
+    proc_box = {}
+
+    def fake_popen(cmd, **kw):
+        proc = _FakePopen(cmd, **kw)
+        proc_box["p"] = proc
+        return proc
+
+    mid = runner.launch_run(p, python_exe="py", script="s", popen=fake_popen)
+    mdir = tmp_meetings_dir / mid
+    # simulate the pipeline having written progress
+    (mdir / "pipeline_state.json").write_text(json.dumps({"completed_stage": 2}))
+
+    st = runner.run_status(mid)
+    assert st["running"] is True
+    assert st["completed_stage"] == 2
+    assert st["stage_label"]                       # human label present
+    assert "STAGE 1" in st["log_tail"]
+
+    proc_box["p"].finish(rc=0)
+    st2 = runner.run_status(mid)
+    assert st2["running"] is False
+    assert st2["exit_code"] == 0
+
+    assert runner.run_status("no-such-meeting") is None
