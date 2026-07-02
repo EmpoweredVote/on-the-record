@@ -261,3 +261,37 @@ def test_apply_rename_rejects_unknown_meeting_label_and_empty(tagged_meeting_dir
     assert apply_rename("2026-02-04-council", "SPEAKER_99", "X") is False  # unknown label
     assert apply_rename("2026-02-04-council", "SPEAKER_00", "   ") is False  # empty name
     assert apply_rename("../x", "SPEAKER_00", "X") is False           # unsafe id
+
+
+def test_post_name_renames_and_redirects(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+
+    resp = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/name",
+                       data={"name": "Clerk Smith"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/meetings/2026-02-04-council/review"
+
+    # Follow-up GET shows the new name.
+    body = client.get("/meetings/2026-02-04-council/review").text
+    assert "Clerk Smith" in body
+
+
+def test_post_name_empty_is_noop_redirect(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/name",
+                       data={"name": "   "}, follow_redirects=False)
+    assert resp.status_code == 303  # back to the page, no change
+
+
+def test_post_name_unknown_meeting_or_label_404(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    assert client.post("/meetings/ghost/speakers/SPEAKER_00/name",
+                       data={"name": "X"}, follow_redirects=False).status_code == 404
+    assert client.post("/meetings/2026-02-04-council/speakers/SPEAKER_99/name",
+                       data={"name": "X"}, follow_redirects=False).status_code == 404

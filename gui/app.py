@@ -6,13 +6,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from src import config
 
+from gui import review_api
 from gui.library import scan_meetings
 from gui.paths import is_safe_meeting_id
 from gui.review_api import find_meeting_media, load_review_page
@@ -61,5 +62,14 @@ def create_app() -> FastAPI:
         kind, filename = found
         media_type = "video/mp4" if kind == "video" else "audio/wav"
         return FileResponse(str(meeting_dir / filename), media_type=media_type)
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/name")
+    def set_speaker_name(meeting_id: str, label: str, name: str = Form("")):
+        redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        if not name.strip():
+            return redirect  # empty submission: no-op, back to the page
+        if not review_api.apply_rename(meeting_id, label, name):
+            raise HTTPException(status_code=404)  # unknown meeting / unsafe id / unknown label
+        return redirect
 
     return app
