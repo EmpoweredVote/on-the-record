@@ -58,3 +58,20 @@ def test_run_page_and_status_json(tmp_meetings_dir, tagged_meeting_dir, monkeypa
     assert "STAGE 2" in body["log_tail"]
 
     assert client.get("/meetings/ghost/run/status").status_code == 404
+
+
+def test_formmeta_covers_all_event_kinds():
+    from gui.formmeta import EVENT_KIND_HELP, CITY_REQUIRED_KINDS
+    from src.event_kinds import EVENT_KINDS
+    # every controlled event kind has help text
+    assert set(EVENT_KIND_HELP) == set(EVENT_KINDS)
+    assert all(v.strip() for v in EVENT_KIND_HELP.values())
+    # deliberative kinds require a city
+    assert CITY_REQUIRED_KINDS == {"council", "school_board"}
+
+
+def test_formmeta_compute_and_diarizer_help():
+    from gui.formmeta import COMPUTE_HELP, DIARIZER_HELP
+    assert set(COMPUTE_HELP) == {"local", "modal"}
+    assert set(DIARIZER_HELP) == {"oss", "api", "vibevoice"}
+    assert all(v.strip() for v in {**COMPUTE_HELP, **DIARIZER_HELP}.values())
