@@ -285,6 +285,36 @@ def apply_mark_non_speaker(meeting_id: str, label: str, display_label: str = "")
     return _mark(meeting_id, label, fn)
 
 
+def apply_enroll(meeting_id: str, label: str) -> bool:
+    """Enroll a named speaker's voice into the profile DB (idempotent per meeting).
+    False on unsafe/unknown meeting, unknown label, no name, non-speaker, or no embedding."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, roster = ctx
+    mapping = meeting.speakers.get(label)
+    if mapping is None or not (mapping.speaker_name and mapping.speaker_name.strip()):
+        return False
+    if getattr(mapping, "speaker_status", None) == "non_speaker":
+        return False
+    embeddings = _load_embeddings(meeting_dir)
+    emb = embeddings.get(label)
+    if emb is None:
+        return False
+
+    from src.enroll import _enroll_mapping, load_profiles, resolve_mapping_enrollment, save_profiles
+    db = load_profiles()
+    key, _slug, _id = resolve_mapping_enrollment(mapping, roster)
+    prof = db.profiles.get(key)
+    if prof is not None and meeting_dir.name in getattr(prof, "meetings_seen", []):
+        return True  # already enrolled from this meeting — idempotent no-op (no duplicate record)
+
+    seg_count = sum(1 for s in meeting.segments if s.speaker_label == label)
+    _enroll_mapping(db, mapping, emb, meeting_dir.name, seg_count, roster=roster)
+    save_profiles(db)
+    return True
+
+
 def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if not is_safe_meeting_id(meeting_id):
         return None

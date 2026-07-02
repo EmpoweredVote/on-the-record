@@ -654,3 +654,48 @@ def test_load_review_page_enrollable_false_without_embedding(tagged_meeting_dir,
     page = load_review_page("2026-02-04-council")
     card = [c for c in page.confirmed if c.label == "SPEAKER_00"][0]
     assert card.is_enrollable is False  # no embedding to enroll
+
+
+from gui.review_api import apply_enroll
+
+
+def test_apply_enroll_writes_profile_and_is_idempotent(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)
+    from src.enroll import load_profiles, resolve_mapping_enrollment
+
+    assert apply_enroll("2026-02-04-council", "SPEAKER_00") is True
+    db = load_profiles()
+    # find SPEAKER_00's profile
+    from src.models import SpeakerMapping
+    import json as _json
+    sp = _json.loads((mdir / "transcript_named.json").read_text())["speakers"]["SPEAKER_00"]
+    key, _, _ = resolve_mapping_enrollment(SpeakerMapping(**{k: sp.get(k) for k in
+        ("speaker_label","speaker_name","confidence","id_method","politician_slug","politician_id","local_slug","local_role","speaker_status")}))
+    assert key in db.profiles
+    assert "2026-02-04-council" in db.profiles[key].meetings_seen
+    n_records = len(db.profiles[key].embeddings)
+
+    # Second enroll from the SAME meeting must be a no-op (no duplicate record).
+    assert apply_enroll("2026-02-04-council", "SPEAKER_00") is True
+    db2 = load_profiles()
+    assert len(db2.profiles[key].embeddings) == n_records  # unchanged
+
+
+def test_apply_enroll_guards(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)
+    assert apply_enroll("ghost", "SPEAKER_00") is False              # unknown meeting
+    assert apply_enroll("2026-02-04-council", "SPEAKER_99") is False  # unknown label
+    assert apply_enroll("2026-02-04-council", "SPEAKER_01") is False  # SPEAKER_01 is unnamed
+    assert apply_enroll("../x", "SPEAKER_00") is False               # unsafe id
+
+
+def test_apply_enroll_skips_non_speaker(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings(mdir)
+    apply_mark_non_speaker("2026-02-04-council", "SPEAKER_00", "Music")
+    assert apply_enroll("2026-02-04-council", "SPEAKER_00") is False  # non-speaker not enrollable
