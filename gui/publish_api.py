@@ -64,3 +64,36 @@ def update_supabase_metadata(meeting_id: str, fields: dict) -> bool:
             conn.close()
     except Exception:
         return False
+
+
+def apply_metadata_edit(meeting_id: str, fields: dict) -> Optional[dict]:
+    """Apply display-metadata edits (title/city/date/meeting_type/event_kind).
+    Writes the local meeting files, then best-effort pushes to Supabase if the
+    meeting is published. NEVER changes the slug / meeting_id / directory
+    (ADR-0002). Returns {"local": bool, "supabase": bool} or None if the meeting
+    doesn't exist."""
+    from gui.review_api import _atomic_write_text, _load_meeting_ctx
+    import json as _json
+
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return None
+    meeting, meeting_dir, _roster = ctx
+
+    edits = {k: v for k, v in fields.items() if k in _EDITABLE}
+    for k, v in edits.items():
+        setattr(meeting, k, (v.strip() or None) if isinstance(v, str) else v)
+
+    # local: transcript_named.json (the Meeting) — meeting_id/slug untouched.
+    _atomic_write_text(meeting_dir / "transcript_named.json",
+                       _json.dumps(meeting.to_dict(), indent=2))
+    # local: pipeline_state display fields (for --resume parity).
+    from src.checkpoint import PipelineState
+    state = PipelineState(meeting_dir)
+    for k in ("city", "date", "meeting_type", "event_kind"):
+        if k in edits:
+            setattr(state, k, getattr(meeting, k))
+    state.save()
+
+    pushed = update_supabase_metadata(meeting_id, edits) if edits else False
+    return {"local": True, "supabase": pushed}

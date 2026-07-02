@@ -65,3 +65,54 @@ def test_update_supabase_metadata_skips_when_unpublished(monkeypatch):
     ok = pub.update_supabase_metadata("ghost", {"title": "x"})
     assert ok is False
     assert conn.committed is False
+
+
+import json
+import pytest
+
+
+def _write_meeting(mdir):
+    from src.models import Meeting, Segment, SpeakerMapping
+    m = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
+                meeting_type="Regular Session", title=None, event_kind="council",
+                segments=[Segment(segment_id=0, start_time=0.0, end_time=5.0,
+                                  speaker_label="SPEAKER_00", speaker_name="X")],
+                speakers={"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="X")})
+    (mdir / "transcript_named.json").write_text(json.dumps(m.to_dict()))
+
+
+def test_apply_metadata_edit_writes_local_and_freezes_slug(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    # no DB configured -> Supabase skipped, local still written
+    monkeypatch.setattr(pub, "_db_url", lambda: None)
+
+    res = pub.apply_metadata_edit("2026-02-04-council",
+                                  {"title": "Budget Hearing", "meeting_type": "Special Session"})
+    assert res["local"] is True
+    assert res["supabase"] is False
+
+    data = json.loads((mdir / "transcript_named.json").read_text())
+    assert data["title"] == "Budget Hearing"
+    assert data["meeting_type"] == "Special Session"
+    assert data["meeting_id"] == "2026-02-04-council"   # FROZEN — slug/id unchanged
+    assert mdir.name == "2026-02-04-council"             # dir not renamed
+    # pipeline_state display fields updated too
+    from src.checkpoint import PipelineState
+    assert PipelineState(mdir).meeting_type == "Special Session"
+
+
+def test_apply_metadata_edit_pushes_to_supabase_when_published(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    calls = {}
+    monkeypatch.setattr(pub, "update_supabase_metadata",
+                        lambda mid, fields: (calls.__setitem__("args", (mid, fields)), True)[1])
+    res = pub.apply_metadata_edit("2026-02-04-council", {"title": "New"})
+    assert res["supabase"] is True
+    assert calls["args"][0] == "2026-02-04-council"
+    assert calls["args"][1]["title"] == "New"
+
+
+def test_apply_metadata_edit_unknown_meeting(tmp_meetings_dir):
+    assert pub.apply_metadata_edit("ghost", {"title": "x"}) is None
