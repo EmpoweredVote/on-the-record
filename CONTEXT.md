@@ -41,6 +41,9 @@ A recording published into `meetings.meetings`. Has an `event_kind`, optional `t
 **Event Kind**
 Controlled text enum on `meetings.meetings.event_kind`. Deliberative kinds (council, school_board) anchor to a Chamber. Electoral kinds (debate, forum) anchor to a Race. Content/other kinds (news_clip, community_meeting, other) have both anchors optional.
 
+**Meeting label** (`meeting_type` column)
+A short human label for a specific event — e.g. "Regular Session", "Candidate Forum", "Debate". Required (it's shown on the site as `{city} {meeting_type} · {date}` and forms the meeting's URL slug). Distinct from [Event Kind](#event-kind): the *kind* is the controlled category (council/forum/…), the *label* is the free-text name of this particular event. The GUI pre-fills a sensible label per kind.
+
 **Deliberative event**
 An event where a public body convenes to conduct official business (agenda, votes, roll call). Event kinds: `council`, `school_board`. Anchor: Chamber.
 
