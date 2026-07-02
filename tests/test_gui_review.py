@@ -536,3 +536,43 @@ def test_apply_merge_guards(tagged_meeting_dir, tmp_meetings_dir):
     assert apply_merge("2026-02-04-council", "SPEAKER_99", "SPEAKER_00") is False  # unknown source
     assert apply_merge("2026-02-04-council", "SPEAKER_00", "SPEAKER_99") is False  # unknown target
     assert apply_merge("ghost", "SPEAKER_00", "SPEAKER_01") is False               # unknown meeting
+
+
+from gui.review_api import apply_mark_non_speaker, apply_mark_unidentified
+
+
+def test_apply_mark_unidentified(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_mark_unidentified("2026-02-04-council", "SPEAKER_01", "Man in blue") is True
+    import json as _json
+    sp = _json.loads((mdir / "transcript_named.json").read_text())["speakers"]["SPEAKER_01"]
+    assert sp["speaker_status"] == "unidentified"
+    assert sp["local_slug"]  # a stable handle was assigned
+    assert sp["speaker_name"] == "Man in blue"
+
+
+def test_apply_mark_non_speaker(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_mark_non_speaker("2026-02-04-council", "SPEAKER_01", "Pledge") is True
+    import json as _json
+    sp = _json.loads((mdir / "transcript_named.json").read_text())["speakers"]["SPEAKER_01"]
+    assert sp["speaker_status"] == "non_speaker"
+
+
+def test_mark_guards(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_mark_unidentified("ghost", "SPEAKER_00", "") is False
+    assert apply_mark_unidentified("2026-02-04-council", "SPEAKER_99", "") is False
+    assert apply_mark_non_speaker("../x", "SPEAKER_00", "") is False
+
+
+def test_speaker_card_exposes_status(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    apply_mark_non_speaker("2026-02-04-council", "SPEAKER_01", "Pledge")
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in (page.confirmed + page.needs_attention) if c.label == "SPEAKER_01"][0]
+    assert card.speaker_status == "non_speaker"

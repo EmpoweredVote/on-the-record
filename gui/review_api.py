@@ -250,6 +250,41 @@ def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
     return True
 
 
+def _mark(meeting_id: str, label: str, fn) -> bool:
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    fn(meeting, meeting_dir)
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def apply_mark_unidentified(meeting_id: str, label: str, display_label: str = "") -> bool:
+    from src import review
+
+    def fn(meeting, meeting_dir):
+        review.mark_unidentified(
+            meeting.speakers, meeting.segments, label,
+            meeting_dir.name, display_label=(display_label or "").strip() or None,
+        )
+    return _mark(meeting_id, label, fn)
+
+
+def apply_mark_non_speaker(meeting_id: str, label: str, display_label: str = "") -> bool:
+    from src import review
+
+    def fn(meeting, meeting_dir):
+        review.mark_non_speaker(
+            meeting.speakers, meeting.segments, label,
+            display_label=(display_label or "").strip() or None,
+        )
+    return _mark(meeting_id, label, fn)
+
+
 def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if not is_safe_meeting_id(meeting_id):
         return None
@@ -301,6 +336,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
                         for c in v.clip_candidates],
             politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
             politician_id=getattr(mapping, "politician_id", None) if mapping else None,
+            speaker_status=getattr(mapping, "speaker_status", None) if mapping else None,
         )
         (confirmed if card.is_confirmed else needs).append(card)
 

@@ -113,6 +113,7 @@ class SpeakerCard:
     clip_seeks: list[float] = field(default_factory=list)
     politician_slug: Optional[str] = None
     politician_id: Optional[str] = None
+    speaker_status: Optional[str] = None  # None | "unidentified" | "non_speaker"
 
     @property
     def display_name(self) -> str:
