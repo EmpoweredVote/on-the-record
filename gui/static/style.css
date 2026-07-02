@@ -50,3 +50,8 @@ button.link-result { text-align: left; width: 100%; padding: 0.25rem 0.5rem; bor
 button.link-result:hover { background: #e6edfa; }
 button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius: 0.4rem; background: #fdeaea; color: #b32020; cursor: pointer; font-size: 0.85rem; }
 .link-msg { font-size: 0.8rem; color: #999; }
+.statusbadge { font-size: 0.75rem; padding: 0.05rem 0.4rem; border-radius: 0.4rem; margin-left: 0.4rem; }
+.statusbadge.unident { background: #eef; color: #445; }
+.statusbadge.nonspk { background: #eee; color: #777; }
+.actions select { font-size: 0.85rem; padding: 0.2rem; border: 1px solid #ccc; border-radius: 0.4rem; }
+.actions .mark { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }

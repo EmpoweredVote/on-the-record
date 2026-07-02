@@ -602,3 +602,23 @@ def test_unidentified_and_not_speaker_routes(tagged_meeting_dir, tmp_meetings_di
                        data={"display_label": ""}, follow_redirects=False).status_code == 303
     assert client.post("/meetings/ghost/speakers/SPEAKER_00/not-speaker",
                        data={}, follow_redirects=False).status_code == 404
+
+
+def test_review_page_has_merge_and_status_controls(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    # merge form + a target option referencing the OTHER speaker
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_01/merge"' in body
+    assert 'value="SPEAKER_00"' in body  # a merge target option
+    # unidentified + not-speaker forms
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_01/unidentified"' in body
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_01/not-speaker"' in body
+
+
+def test_status_badge_renders(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    apply_mark_non_speaker("2026-02-04-council", "SPEAKER_01", "Pledge")
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert "not-a-speaker" in body or "non-speaker" in body  # a visible status badge

@@ -152,3 +152,7 @@ class ReviewPageData:
     @property
     def speaker_count(self) -> int:
         return len(self.needs_attention) + len(self.confirmed)
+
+    @property
+    def all_cards(self) -> list["SpeakerCard"]:
+        return self.needs_attention + self.confirmed

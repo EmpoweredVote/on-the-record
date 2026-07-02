@@ -29,6 +29,8 @@
         {% if c.confidence > 0 %}<span class="conf">conf {{ '%.2f'|format(c.confidence) }}</span>{% endif %}
         <span class="mins">{{ '%.1f'|format(c.minutes) }}m · {{ c.seg_count }} segs</span>
       </div>
+      {% if c.speaker_status == "unidentified" %}<span class="statusbadge unident">unidentified</span>{% endif %}
+      {% if c.speaker_status == "non_speaker" %}<span class="statusbadge nonspk">not-a-speaker</span>{% endif %}
       {% for hname, hscore in c.hints %}
         <div class="hint">▸ voice match: {{ hname }} ({{ '%.2f'|format(hscore) }})</div>
       {% endfor %}
@@ -65,6 +67,23 @@
           <input type="text" placeholder="Link politician… (type a name)" autocomplete="off">
           <div class="link-results"></div>
         </div>
+        {% if page.all_cards|length > 1 %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/merge" class="merge">
+          <select name="target">
+            <option value="">Merge into…</option>
+            {% for o in page.all_cards %}{% if o.label != c.label %}
+            <option value="{{ o.label }}">{{ o.label }} — {{ o.display_name }}</option>
+            {% endif %}{% endfor %}
+          </select>
+          <button type="submit">Merge</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/unidentified">
+          <button type="submit" class="mark">Unidentified</button>
+        </form>
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/not-speaker">
+          <button type="submit" class="mark">Not a speaker</button>
+        </form>
       </div>
     </div>
     {% endmacro %}
