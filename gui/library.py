@@ -14,17 +14,38 @@ from src.checkpoint import PipelineState
 from gui.models import MeetingSummary
 
 
-def _title_from_named_transcript(meeting_dir: Path) -> Optional[str]:
-    """Title is stored on the Meeting (transcript_named.json), not in state."""
-    named = meeting_dir / "transcript_named.json"
-    if not named.exists():
-        return None
+def _read_json(path: Path):
     try:
-        data = json.loads(named.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, OSError):
         return None
-    title = data.get("title")
-    return title if isinstance(title, str) and title.strip() else None
+
+
+def _speaker_count(meeting_dir: Path, named: Optional[dict]) -> Optional[int]:
+    """Prefer identified/merged speakers (transcript_named 'speakers'); else unique
+    raw diarization labels; else None."""
+    if isinstance(named, dict) and isinstance(named.get("speakers"), list):
+        return len(named["speakers"])
+    diar = _read_json(meeting_dir / "diarization.json")
+    if isinstance(diar, list):
+        labels = {s.get("speaker_label") for s in diar if isinstance(s, dict)}
+        labels.discard(None)
+        return len(labels) if labels else None
+    return None
+
+
+def _duration_seconds(meeting_dir: Path, named: Optional[dict]) -> Optional[float]:
+    """transcript_named duration_seconds; else read the audio.wav header (cheap)."""
+    if isinstance(named, dict) and isinstance(named.get("duration_seconds"), (int, float)):
+        return float(named["duration_seconds"])
+    wav = meeting_dir / "audio.wav"
+    if wav.exists():
+        try:
+            import soundfile as sf
+            return float(sf.info(str(wav)).duration)
+        except Exception:
+            return None
+    return None
 
 
 def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
@@ -34,14 +55,24 @@ def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
         state = PipelineState(meeting_dir)
     except Exception:
         return None  # malformed/incompatible state file — skip, don't 500
+    named = _read_json(meeting_dir / "transcript_named.json")
+    title = None
+    if isinstance(named, dict):
+        t = named.get("title")
+        title = t if isinstance(t, str) and t.strip() else None
     return MeetingSummary(
         meeting_id=meeting_dir.name,
-        title=_title_from_named_transcript(meeting_dir),
+        title=title,
         city=state.city,
         meeting_type=state.meeting_type,
         date=state.date,
         event_kind=state.event_kind,
         completed_stage=int(state.completed_stage),
+        speaker_count=_speaker_count(meeting_dir, named),
+        duration_seconds=_duration_seconds(meeting_dir, named),
+        review_status=state.review_status,
+        trusted_coverage=state.trusted_coverage,
+        has_thumbnail=(meeting_dir / "thumbnail.jpg").exists(),
     )
 
 

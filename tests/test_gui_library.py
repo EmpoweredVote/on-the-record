@@ -233,3 +233,51 @@ def test_meeting_summary_new_fields_default_to_absent():
     assert s.duration_label == "—"
     assert s.gate_badge == ("none", "—")
     assert s.has_thumbnail is False
+
+
+def test_scan_meetings_reads_named_speaker_count_and_duration(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    # transcript_named.json: identified/merged speakers + duration live here.
+    (mdir / "transcript_named.json").write_text(json.dumps({
+        "title": "Council",
+        "duration_seconds": 10325.26,
+        "speakers": [{"speaker_label": "SPEAKER_00"}, {"speaker_label": "SPEAKER_01"},
+                     {"speaker_label": "SPEAKER_02"}],
+    }))
+    # gate fields come from state.
+    state = mdir / "pipeline_state.json"
+    data = json.loads(state.read_text())
+    data.update({"review_status": "pass", "trusted_coverage": 0.972})
+    state.write_text(json.dumps(data))
+
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.speaker_count == 3
+    assert round(s.duration_seconds) == 10325
+    assert s.gate_badge == ("pass", "97% trusted")
+
+
+def test_scan_meetings_speaker_count_falls_back_to_diarization(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-03-01-council", completed_stage=2)
+    # No transcript_named yet (pre-identification); count comes from diarization labels.
+    (mdir / "diarization.json").write_text(json.dumps([
+        {"speaker_label": "SPEAKER_00"}, {"speaker_label": "SPEAKER_00"},
+        {"speaker_label": "SPEAKER_01"},
+    ]))
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.speaker_count == 2  # unique labels
+
+
+def test_scan_meetings_thumbnail_flag(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-05-council", completed_stage=4)
+    (mdir / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff\xe0jpegbytes")
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.has_thumbnail is True
+
+
+def test_scan_meetings_enrichment_absent_is_graceful(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-06-council", completed_stage=1)
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.speaker_count is None
+    assert s.duration_seconds is None
+    assert s.has_thumbnail is False
+    assert s.gate_badge == ("none", "—")
