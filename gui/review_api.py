@@ -144,6 +144,63 @@ def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
     return True
 
 
+def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
+    """Best-effort essentials name search. Returns {"results": [...], "error": None|str}
+    — never raises, so a network/HTTP/short-query failure just yields no results."""
+    from src.essentials_client import EssentialsClientError, search_politicians
+    try:
+        raw = search_politicians(q, limit=limit)
+    except EssentialsClientError as exc:
+        return {"results": [], "error": str(exc)}
+    except Exception as exc:  # transport/unexpected — stay best-effort
+        return {"results": [], "error": f"search failed: {exc}"}
+    results = [
+        {
+            "politician_slug": r.get("politician_slug"),
+            "politician_id": r.get("politician_id"),
+            "full_name": r.get("full_name"),
+            "office_title": r.get("office_title"),
+            "district_label": r.get("district_label"),
+            "government_name": r.get("government_name"),
+        }
+        for r in raw
+    ]
+    return {"results": results, "error": None}
+
+
+def apply_link(meeting_id: str, label: str, politician_slug: str, politician_id: str) -> bool:
+    """Link a speaker to an essentials politician and persist. False on unsafe/unknown/empty slug."""
+    slug = (politician_slug or "").strip()
+    if not slug:
+        return False
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+    review.link_speaker(meeting.speakers, label, slug, (politician_id or "").strip() or None)
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def apply_unlink(meeting_id: str, label: str) -> bool:
+    """Clear a speaker's politician link and persist. False on unsafe/unknown."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+    review.link_speaker(meeting.speakers, label, None, None)
+    persist_review(meeting, meeting_dir)
+    return True
+
+
 def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if not is_safe_meeting_id(meeting_id):
         return None

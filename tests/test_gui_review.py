@@ -354,3 +354,53 @@ def test_load_review_page_populates_link_fields(tagged_meeting_dir, tmp_meetings
     card = [c for c in page.confirmed if c.label == "SPEAKER_00"][0]
     assert card.politician_slug == "mayor-johnson"
     assert card.is_linked is True
+
+
+from gui.review_api import apply_link, apply_unlink, search_politicians_safe
+
+
+def test_search_politicians_safe_success(monkeypatch):
+    import src.essentials_client as ec
+    monkeypatch.setattr(ec, "search_politicians", lambda q, **kw: [
+        {"politician_slug": "tom-steyer", "politician_id": "u1", "full_name": "Tom Steyer",
+         "office_title": "Governor", "district_label": "", "government_name": "California",
+         "is_incumbent": False},
+    ])
+    out = search_politicians_safe("steyer")
+    assert out["error"] is None
+    assert out["results"][0]["politician_slug"] == "tom-steyer"
+    assert out["results"][0]["full_name"] == "Tom Steyer"
+
+
+def test_search_politicians_safe_swallows_errors(monkeypatch):
+    import src.essentials_client as ec
+    def boom(q, **kw):
+        raise ec.EssentialsClientError("nope", code="INVALID_QUERY", status=None)
+    monkeypatch.setattr(ec, "search_politicians", boom)
+    out = search_politicians_safe("x")
+    assert out["results"] == []
+    assert out["error"]  # a message, not a crash
+
+
+def test_apply_link_and_unlink(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+
+    assert apply_link("2026-02-04-council", "SPEAKER_01", "clerk-smith", "uuid-cs") is True
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in (page.confirmed + page.needs_attention) if c.label == "SPEAKER_01"][0]
+    assert card.politician_slug == "clerk-smith"
+
+    assert apply_unlink("2026-02-04-council", "SPEAKER_01") is True
+    page2 = load_review_page("2026-02-04-council")
+    card2 = [c for c in (page2.confirmed + page2.needs_attention) if c.label == "SPEAKER_01"][0]
+    assert card2.is_linked is False
+
+
+def test_apply_link_guards(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_link("ghost", "SPEAKER_00", "s", "i") is False           # unknown meeting
+    assert apply_link("2026-02-04-council", "SPEAKER_99", "s", "i") is False  # unknown label
+    assert apply_link("2026-02-04-council", "SPEAKER_00", "", "i") is False   # empty slug
+    assert apply_link("../x", "SPEAKER_00", "s", "i") is False            # unsafe id
