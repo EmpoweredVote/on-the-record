@@ -716,3 +716,19 @@ def test_enroll_route(tagged_meeting_dir, tmp_meetings_dir):
                        follow_redirects=False).status_code == 404  # unnamed
     assert client.post("/meetings/ghost/speakers/SPEAKER_00/enroll",
                        follow_redirects=False).status_code == 404
+
+
+def test_review_page_shows_enroll_button(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_00/enroll"' in body
+    assert "Save this voice" in body
+
+
+def test_review_page_shows_saved_state_after_enroll(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    apply_enroll("2026-02-04-council", "SPEAKER_00")
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert "✓ voice saved" in body

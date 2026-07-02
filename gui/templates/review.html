@@ -84,6 +84,16 @@
         <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/not-speaker">
           <button type="submit" class="mark">Not a speaker</button>
         </form>
+        {% if c.is_enrollable %}
+          {% if c.is_enrolled %}
+          <span class="voice-saved">✓ voice saved</span>
+          {% else %}
+          <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/enroll">
+            <button type="submit" class="enroll">Save this voice for future meetings</button>
+            {% if c.thin_sample %}<span class="thin">⚠ short sample</span>{% endif %}
+          </form>
+          {% endif %}
+        {% endif %}
       </div>
     </div>
     {% endmacro %}

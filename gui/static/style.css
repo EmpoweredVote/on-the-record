@@ -55,3 +55,6 @@ button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius
 .statusbadge.nonspk { background: #eee; color: #777; }
 .actions select { font-size: 0.85rem; padding: 0.2rem; border: 1px solid #ccc; border-radius: 0.4rem; }
 .actions .mark { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
+button.enroll { padding: 0.2rem 0.6rem; border: 1px solid #7aa0d0; border-radius: 0.4rem; background: #eef4fc; color: #24507f; cursor: pointer; font-size: 0.85rem; }
+.voice-saved { font-size: 0.85rem; color: #1b7a3d; }
+.thin { font-size: 0.78rem; color: #9a6a00; margin-left: 0.3rem; }
