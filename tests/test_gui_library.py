@@ -180,3 +180,56 @@ def test_main_module_exposes_app_factory():
     from gui.app import create_app
     from fastapi import FastAPI
     assert isinstance(create_app(), FastAPI)
+
+
+from gui.models import gate_badge
+
+
+def test_gate_badge_pass_with_coverage():
+    level, text = gate_badge("pass", 0.972)
+    assert level == "pass"
+    assert text == "97% trusted"
+
+
+def test_gate_badge_pass_without_coverage():
+    assert gate_badge("pass", None) == ("pass", "passed")
+
+
+def test_gate_badge_review_and_failed():
+    assert gate_badge("review", None) == ("review", "needs review")
+    assert gate_badge("failed", 0.4) == ("failed", "failed")
+
+
+def test_gate_badge_none():
+    assert gate_badge(None, None) == ("none", "—")
+
+
+def test_duration_label_formats_hours_and_minutes():
+    from gui.models import duration_label
+    assert duration_label(10325.26) == "2h 52m"
+    assert duration_label(2820) == "47m"
+    assert duration_label(None) == "—"
+    assert duration_label(0) == "—"
+
+
+def test_meeting_summary_exposes_new_display_helpers():
+    s = MeetingSummary(
+        meeting_id="m", title="T", city=None, meeting_type=None, date=None,
+        event_kind="council", completed_stage=5,
+        speaker_count=12, duration_seconds=10325.26,
+        review_status="pass", trusted_coverage=0.972, has_thumbnail=True,
+    )
+    assert s.speakers_label == "12"
+    assert s.duration_label == "2h 52m"
+    assert s.gate_badge == ("pass", "97% trusted")
+
+
+def test_meeting_summary_new_fields_default_to_absent():
+    s = MeetingSummary(
+        meeting_id="m", title=None, city=None, meeting_type=None, date=None,
+        event_kind=None, completed_stage=0,
+    )
+    assert s.speakers_label == "—"
+    assert s.duration_label == "—"
+    assert s.gate_badge == ("none", "—")
+    assert s.has_thumbnail is False
