@@ -113,6 +113,27 @@ def persist_review(meeting, meeting_dir: Path) -> None:
         pass  # gate is best-effort; the transcript write above is the source of truth
 
 
+def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
+    """Rename a speaker (human-authoritative) and persist. Returns False on
+    unsafe/unknown meeting, unknown label, or empty name (caller maps to 404/no-op)."""
+    name = (new_name or "").strip()
+    if not name:
+        return False
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, roster = ctx
+
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+
+    from src import review
+    review.rename_speaker(meeting.speakers, meeting.segments, label, name, roster=roster)
+    persist_review(meeting, meeting_dir)
+    return True
+
+
 def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if not is_safe_meeting_id(meeting_id):
         return None

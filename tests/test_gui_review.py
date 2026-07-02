@@ -235,3 +235,29 @@ def test_persist_review_recomputes_gate_quality_json(tagged_meeting_dir, tmp_mee
     assert (meeting_dir / "quality.json").exists()
     from src.checkpoint import PipelineState
     assert PipelineState(meeting_dir).review_status in ("pass", "review", "failed")
+
+
+from gui.review_api import apply_rename
+
+
+def test_apply_rename_sets_name_and_confirms(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_rename("2026-02-04-council", "SPEAKER_01", "Clerk Smith") is True
+
+    # Reload the page: SPEAKER_01 is now named + confident -> Confirmed group.
+    page = load_review_page("2026-02-04-council")
+    conf_labels = [c.label for c in page.confirmed]
+    assert "SPEAKER_01" in conf_labels
+    card = [c for c in page.confirmed if c.label == "SPEAKER_01"][0]
+    assert card.name == "Clerk Smith"
+    assert card.confidence == 1.0
+
+
+def test_apply_rename_rejects_unknown_meeting_label_and_empty(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_rename("ghost", "SPEAKER_00", "X") is False          # no meeting
+    assert apply_rename("2026-02-04-council", "SPEAKER_99", "X") is False  # unknown label
+    assert apply_rename("2026-02-04-council", "SPEAKER_00", "   ") is False  # empty name
+    assert apply_rename("../x", "SPEAKER_00", "X") is False           # unsafe id
