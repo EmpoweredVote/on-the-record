@@ -40,6 +40,18 @@
         {% endfor %}
       </div>
       {% endif %}
+      <div class="actions">
+        {% if not c.is_confirmed and c.accept_name %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/name">
+          <input type="hidden" name="name" value="{{ c.accept_name }}">
+          <button type="submit" class="accept">✓ Accept {{ c.accept_name }}</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/name" class="rename">
+          <input type="text" name="name" placeholder="Type a name…" autocomplete="off">
+          <button type="submit">Save</button>
+        </form>
+      </div>
     </div>
     {% endmacro %}
 

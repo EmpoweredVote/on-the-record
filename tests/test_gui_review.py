@@ -295,3 +295,26 @@ def test_post_name_unknown_meeting_or_label_404(tagged_meeting_dir, tmp_meetings
                        data={"name": "X"}, follow_redirects=False).status_code == 404
     assert client.post("/meetings/2026-02-04-council/speakers/SPEAKER_99/name",
                        data={"name": "X"}, follow_redirects=False).status_code == 404
+
+
+def test_accept_name_prefers_current_name_then_hint():
+    from gui.models import SpeakerCard
+    c1 = SpeakerCard(label="S", name="Mayor Johnson", confidence=0.5, method=None,
+                     minutes=1, seg_count=1)
+    assert c1.accept_name == "Mayor Johnson"
+    c2 = SpeakerCard(label="S", name=None, confidence=0.0, method=None,
+                     minutes=1, seg_count=1, hints=[("Ada Lovelace", 0.7)])
+    assert c2.accept_name == "Ada Lovelace"
+    c3 = SpeakerCard(label="S", name=None, confidence=0.0, method=None, minutes=1, seg_count=1)
+    assert c3.accept_name is None
+
+
+def test_review_page_has_rename_form_and_accept_button(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    # A rename form posts to the name endpoint for the unnamed speaker.
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_01/name"' in body
+    assert 'name="name"' in body
+    # SPEAKER_00 is named at high conf -> confirmed, still editable (rename form present).
+    assert 'action="/meetings/2026-02-04-council/speakers/SPEAKER_00/name"' in body

@@ -124,6 +124,15 @@ class SpeakerCard:
             and self.confidence >= CONFIDENT_THRESHOLD
         )
 
+    @property
+    def accept_name(self) -> Optional[str]:
+        """Best one-click name to accept: the current name, else the top voice hint."""
+        if self.name and self.name.strip() not in ("", _UNIDENTIFIED):
+            return self.name.strip()
+        if self.hints:
+            return self.hints[0][0]
+        return None
+
 
 @dataclass
 class ReviewPageData:
