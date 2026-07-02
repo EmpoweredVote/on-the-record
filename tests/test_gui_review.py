@@ -527,6 +527,9 @@ def test_apply_merge_folds_source_into_target(tagged_meeting_dir, tmp_meetings_d
     assert all(s["speaker_label"] != "SPEAKER_01" for s in data["segments"])
     emb = _json.loads((mdir / "embeddings.json").read_text())
     assert "SPEAKER_01" not in emb  # dropped from embeddings too
+    # diarization.json (the riskiest cache) must be relabeled consistently too.
+    diar = _json.loads((mdir / "diarization.json").read_text())
+    assert all(s["speaker_label"] != "SPEAKER_01" for s in diar)
 
 
 def test_apply_merge_guards(tagged_meeting_dir, tmp_meetings_dir):
