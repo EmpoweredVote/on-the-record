@@ -739,6 +739,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
     if state.meeting_type != args.meeting_type and args.meeting_type is not None:
         state.meeting_type = args.meeting_type
         _state_dirty = True
+    # Record the normalized source key so the GUI can detect duplicate grabs.
+    if audio_path and not state.source_key:
+        from src.source_key import source_key as _source_key
+        _sk = _source_key(str(audio_path))
+        if _sk and state.source_key != _sk:
+            state.source_key = _sk
+            _state_dirty = True
     if _state_dirty:
         state.save()
 

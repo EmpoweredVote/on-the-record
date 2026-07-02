@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Processing {{ meeting_id }}</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+  <header><a class="back" href="/">← Library</a><h1>Processing: <span class="mid">{{ meeting_id }}</span></h1>
+    <p class="sub" id="run-state">Starting…</p></header>
+  <main class="review" data-meeting-id="{{ meeting_id }}">
+    <ol class="stepper" id="stepper">
+      {% for value, label in stages %}<li data-stage="{{ value }}">{{ label }}</li>{% endfor %}
+    </ol>
+    <div id="error-banner" class="error-banner" hidden></div>
+    <h2>Log</h2>
+    <pre id="log" class="runlog">(waiting for output…)</pre>
+    <details class="redo"><summary>Re-run a stage</summary>
+      <p class="mid">Re-processes from that stage onward (uses compute). Watch progress above.</p>
+      <div class="redo-buttons">
+        {% for stage in redo_stages %}
+        <form method="post" action="/meetings/{{ meeting_id }}/redo">
+          <input type="hidden" name="stage" value="{{ stage }}">
+          <button type="submit" class="mark">Re-run {{ stage }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </details>
+    <p><a id="review-link" href="/meetings/{{ meeting_id }}/review" hidden>→ Review speakers</a></p>
+  </main>
+  <script src="/static/run.js"></script>
+</body></html>

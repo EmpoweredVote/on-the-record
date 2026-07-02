@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review — {{ page.display_name }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <a class="back" href="/">← Library</a>
+    <a class="back runlink" href="/meetings/{{ page.meeting_id }}/run">Processing log &amp; progress →</a>
+    <a class="back runlink" href="/meetings/{{ page.meeting_id }}/edit">Edit metadata ✎</a>
+    <a class="back runlink" href="/meetings/{{ page.meeting_id }}/publish">Publish →</a>
+    <h1>{{ page.display_name }}</h1>
+    <p class="sub">{{ page.speaker_count }} speakers · {{ page.needs_attention|length }} need attention</p>
+  </header>
+  <main class="review">
+    {% if page.media_kind == "video" %}
+      <video id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></video>
+    {% elif page.media_kind == "audio" %}
+      <audio id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></audio>
+    {% else %}
+      <p class="empty">No media found for clip playback.</p>
+    {% endif %}
+
+    {% macro card(c) %}
+    <div class="card {{ 'confirmed' if c.is_confirmed else 'attention' }}">
+      <div class="card-head">
+        <span class="label">{{ c.label }}</span>
+        <span class="cname">{{ c.display_name }}</span>
+        {% if c.confidence > 0 %}<span class="conf">conf {{ '%.2f'|format(c.confidence) }}</span>{% endif %}
+        <span class="mins">{{ '%.1f'|format(c.minutes) }}m · {{ c.seg_count }} segs</span>
+      </div>
+      {% if c.speaker_status == "unidentified" %}<span class="statusbadge unident">unidentified</span>{% endif %}
+      {% if c.speaker_status == "non_speaker" %}<span class="statusbadge nonspk">not-a-speaker</span>{% endif %}
+      {% for hname, hscore in c.hints %}
+        <div class="hint">▸ voice match: {{ hname }} ({{ '%.2f'|format(hscore) }})</div>
+      {% endfor %}
+      {% if c.sample_text %}<p class="sample">“{{ c.sample_text[:200] }}”</p>{% endif %}
+      {% if c.clip_seeks %}
+      <div class="clips">
+        {% for s in c.clip_seeks %}
+        <button type="button" class="clip" data-seek="{{ '%.2f'|format(s) }}">▶ clip {{ loop.index }}</button>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if c.is_linked %}
+      <div class="linked">🔗 linked: <span class="pslug">{{ c.politician_slug or c.politician_id }}</span></div>
+      {% endif %}
+      <div class="actions">
+        {% if not c.is_confirmed and c.accept_name %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/name">
+          <input type="hidden" name="name" value="{{ c.accept_name }}">
+          <button type="submit" class="accept">✓ Accept {{ c.accept_name }}</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/name" class="rename">
+          <input type="text" name="name" placeholder="Type a name…" autocomplete="off">
+          <button type="submit">Save</button>
+        </form>
+        {% if c.is_linked %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/unlink">
+          <button type="submit" class="unlink">Unlink</button>
+        </form>
+        {% endif %}
+        <div class="link-search"
+             data-search-url="/api/politicians/search"
+             data-link-action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/link">
+          <input type="text" placeholder="Link politician… (type a name)" autocomplete="off">
+          <div class="link-results"></div>
+        </div>
+        {% if page.all_cards|length > 1 %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/merge" class="merge">
+          <select name="target">
+            <option value="">Merge into…</option>
+            {% for o in page.all_cards %}{% if o.label != c.label %}
+            <option value="{{ o.label }}">{{ o.label }} — {{ o.display_name }}</option>
+            {% endif %}{% endfor %}
+          </select>
+          <button type="submit">Merge</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/unidentified">
+          <button type="submit" class="mark">Unidentified</button>
+        </form>
+        <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/not-speaker">
+          <button type="submit" class="mark">Not a speaker</button>
+        </form>
+        {% if c.is_enrollable %}
+          {% if c.is_enrolled %}
+          <span class="voice-saved">✓ voice saved</span>
+          {% else %}
+          <form method="post" action="/meetings/{{ page.meeting_id }}/speakers/{{ c.label }}/enroll">
+            <button type="submit" class="enroll">Save this voice for future meetings</button>
+            {% if c.thin_sample %}<span class="thin">⚠ short sample</span>{% endif %}
+          </form>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endmacro %}
+
+    <section>
+      <h2>Needs attention</h2>
+      {% if page.needs_attention %}
+        {% for c in page.needs_attention %}{{ card(c) }}{% endfor %}
+      {% else %}<p class="empty">Nothing needs attention — every speaker is confirmed.</p>{% endif %}
+    </section>
+
+    <section>
+      <h2>Confirmed</h2>
+      {% for c in page.confirmed %}{{ card(c) }}{% endfor %}
+    </section>
+  </main>
+  <script src="/static/review.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CouncilScribe — Meeting Library</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header><h1>Meeting Library</h1>
+    <a class="newlink" href="/new">+ New meeting</a></header>
+  <main>
+    {% if meetings %}
+    <table class="library">
+      <thead>
+        <tr><th>Meeting</th><th>Date</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for m in meetings %}
+        <tr>
+          <td class="name">
+            {% if m.has_thumbnail %}
+            <img class="thumb" src="/meetings/{{ m.meeting_id }}/thumbnail" alt="" loading="lazy">
+            {% endif %}
+            <div>
+              <div><a class="mlink" href="/meetings/{{ m.meeting_id }}/review">{{ m.display_name }}</a></div>
+              <div class="mid">{{ m.meeting_id }}</div>
+            </div>
+          </td>
+          <td>{{ m.date or "—" }}</td>
+          <td>{{ m.event_kind or "—" }}</td>
+          <td>{{ m.speakers_label }}</td>
+          <td>{{ m.duration_label }}</td>
+          <td>
+            {% set level, text = m.gate_badge %}
+            <span class="gate gate-{{ level }}">{{ text }}</span>
+          </td>
+          <td><span class="stage stage-{{ m.completed_stage }}">{{ m.stage_label }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No meetings processed yet.</p>
+    {% endif %}
+  </main>
+</body>
+</html>
