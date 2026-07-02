@@ -131,3 +131,45 @@ def test_new_meeting_js_wires_preview_and_city_rule():
     assert "city-req" in js
     # slug derivation mirrors the server ({date}-{slug(meeting_type)})
     assert "toLowerCase" in js
+
+
+def test_post_new_warns_on_duplicate_source(tagged_meeting_dir, tmp_meetings_dir):
+    from src.checkpoint import PipelineState
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-10-regular", completed_stage=4)
+    st = PipelineState(mdir); st.source_key = "youtube:dup123"; st.save()
+
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://youtu.be/dup123", "date": "2026-05-05", "meeting_type": "Regular",
+        "event_kind": "other",
+    }, follow_redirects=False)
+    # Not launched: a confirm page (200) naming the existing meeting.
+    assert resp.status_code == 200
+    assert "already" in resp.text.lower()
+    assert "2026-02-10-regular" in resp.text
+
+
+def test_post_new_confirm_bypasses_dedup(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from src.checkpoint import PipelineState
+    from gui import runner
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-10-regular", completed_stage=4)
+    st = PipelineState(mdir); st.source_key = "youtube:dup123"; st.save()
+    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-05-05-regular")
+
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://youtu.be/dup123", "date": "2026-05-05", "meeting_type": "Regular",
+        "event_kind": "other", "confirm": "1",
+    }, follow_redirects=False)
+    assert resp.status_code == 303  # confirmed -> launched
+
+
+def test_post_new_no_duplicate_launches(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-05-05-regular")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://youtu.be/brandnew", "date": "2026-05-05", "meeting_type": "Regular",
+        "event_kind": "other",
+    }, follow_redirects=False)
+    assert resp.status_code == 303

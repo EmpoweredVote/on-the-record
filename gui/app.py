@@ -150,6 +150,7 @@ def create_app() -> FastAPI:
         diarizer: str = Form("oss"),
         clip_start: str = Form(""),
         clip_end: str = Form(""),
+        confirm: str = Form(""),
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
             raise HTTPException(status_code=400, detail="input, date, and meeting_type are required")
@@ -159,6 +160,26 @@ def create_app() -> FastAPI:
                 status_code=400,
                 detail=f"A city is required for event kind '{event_kind}'.",
             )
+        if not confirm.strip():
+            existing = runner.find_meeting_by_source(input)
+            if existing:
+                from src.checkpoint import PipelineState
+                st = PipelineState(config.MEETINGS_DIR / existing)
+                return _templates.TemplateResponse(
+                    request, "dedup_confirm.html",
+                    {
+                        "existing_id": existing,
+                        "completed_stage": int(st.completed_stage),
+                        "review_status": st.review_status,
+                        # echo the form so "Process anyway" can resubmit with confirm=1
+                        "form": {
+                            "input": input, "date": date, "meeting_type": meeting_type,
+                            "event_kind": event_kind, "city": city, "title": title,
+                            "compute": compute, "diarizer": diarizer,
+                            "clip_start": clip_start, "clip_end": clip_end,
+                        },
+                    },
+                )
         p = RunParams(
             input=input.strip(), date=date.strip(), meeting_type=meeting_type.strip(),
             event_kind=event_kind, city=city.strip() or None, title=title.strip() or None,

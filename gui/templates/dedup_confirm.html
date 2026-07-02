@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Already processed?</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+  <header><a class="back" href="/new">← Back to form</a><h1>You've already grabbed this source</h1></header>
+  <main class="review">
+    <div class="error-banner" style="background:#fdf3e0;color:#9a6a00;border-color:#e0c07a;">
+      This source is already processed as <strong>{{ existing_id }}</strong>
+      (stage {{ completed_stage }}/7{% if review_status %}, review: {{ review_status }}{% endif %}).
+      One source recording maps to one meeting — you probably want to open it.
+    </div>
+    <p>
+      <a class="enroll" href="/meetings/{{ existing_id }}/review" style="text-decoration:none;">→ Open existing meeting</a>
+    </p>
+    <form method="post" action="/new">
+      {% for k, v in form.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <input type="hidden" name="confirm" value="1">
+      <button type="submit" class="mark">Process anyway (re-run this source)</button>
+    </form>
+  </main>
+</body></html>
