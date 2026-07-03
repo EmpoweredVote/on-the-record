@@ -96,6 +96,7 @@
             {% if c.thin_sample %}<span class="thin">⚠ short sample</span>{% endif %}
           </form>
           {% endif %}
+          <span class="profile-strength {{ c.profile_strength }}" title="{% if c.profile_strength == 'strong' %}Already well-established — enroll only if this captures a new mic/setting.{% elif c.profile_strength == 'new' %}No profile yet — enrolling a clean sample here really helps future auto-ID.{% else %}Still building — a clean sample here strengthens future auto-ID.{% endif %}">{{ c.profile_hint }}</span>
         {% endif %}
       </div>
     </div>

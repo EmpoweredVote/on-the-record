@@ -58,6 +58,10 @@ button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius
 button.enroll { padding: 0.2rem 0.6rem; border: 1px solid #7aa0d0; border-radius: 0.4rem; background: #eef4fc; color: #24507f; cursor: pointer; font-size: 0.85rem; }
 .voice-saved { font-size: 0.85rem; color: #1b7a3d; }
 .thin { font-size: 0.78rem; color: #9a6a00; margin-left: 0.3rem; }
+.profile-strength { display: inline-block; font-size: 0.75rem; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 0.6rem; border: 1px solid transparent; cursor: help; }
+.profile-strength.strong { color: #1b7a3d; background: #e7f4ec; border-color: #b7dcc3; }
+.profile-strength.building { color: #7a5b00; background: #fbf3dd; border-color: #e6d59a; }
+.profile-strength.new { color: #24507f; background: #eaf1fb; border-color: #bcd2ee; }
 .newform { display: flex; flex-direction: column; gap: 0.6rem; max-width: 32rem; }
 .newform label { display: flex; flex-direction: column; font-size: 0.85rem; color: #444; gap: 0.2rem; }
 .newform input, .newform select { padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.95rem; }

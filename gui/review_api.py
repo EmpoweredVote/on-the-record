@@ -364,10 +364,18 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         not_nonspeaker = not (mapping and getattr(mapping, "speaker_status", None) == "non_speaker")
         is_enrollable = named and not_nonspeaker and has_emb
         is_enrolled = False
-        if is_enrollable:
+        profile_meetings = 0
+        profile_samples = 0
+        if named and not_nonspeaker:
             key, _slug, _id = resolve_mapping_enrollment(mapping, roster)
             prof = profile_db.profiles.get(key)
-            is_enrolled = prof is not None and meeting_dir.name in getattr(prof, "meetings_seen", [])
+            if prof is not None:
+                seen = getattr(prof, "meetings_seen", []) or []
+                is_enrolled = meeting_dir.name in seen
+                # Count only OTHER meetings until this one is enrolled, so the hint
+                # shows the profile's existing strength (what enrolling would add to).
+                profile_meetings = len(seen) - (1 if is_enrolled else 0)
+                profile_samples = len(getattr(prof, "embeddings", []) or [])
         card = SpeakerCard(
             label=v.label,
             name=v.current_name,
@@ -385,6 +393,8 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             is_enrollable=is_enrollable,
             is_enrolled=is_enrolled,
             thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
+            profile_meetings=profile_meetings,
+            profile_samples=profile_samples,
         )
         (confirmed if card.is_confirmed else needs).append(card)
 
