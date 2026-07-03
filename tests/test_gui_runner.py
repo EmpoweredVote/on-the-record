@@ -324,3 +324,47 @@ def test_launch_resume_guards(tagged_meeting_dir, tmp_meetings_dir):
     from gui import runner
     assert runner.launch_resume("ghost", python_exe="p", script="s") is None       # no meeting
     assert runner.launch_resume("../x", python_exe="p", script="s") is None         # unsafe id
+
+
+def _set_source(mdir, source_key_value):
+    from src.checkpoint import PipelineState
+    st = PipelineState(mdir); st.source_key = source_key_value; st.save()
+
+
+def test_unique_meeting_id_free_base(tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:AAA") == "2026-05-15-interview"
+
+
+def test_unique_meeting_id_same_source_reuses(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4)
+    _set_source(mdir, "youtube:AAA")
+    # same video re-submitted -> reuse the existing id (no new dir)
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:AAA") == "2026-05-15-interview"
+
+
+def test_unique_meeting_id_bumps_on_different_source(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4)
+    _set_source(mdir, "youtube:AAA")
+    # a DIFFERENT video, same date+label -> must not collide
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:ZZZ") == "2026-05-15-interview-2"
+
+
+def test_unique_meeting_id_bumps_past_multiple(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    _set_source(tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4), "youtube:AAA")
+    _set_source(tagged_meeting_dir("x", meeting_id="2026-05-15-interview-2", completed_stage=4), "youtube:BBB")
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:ZZZ") == "2026-05-15-interview-3"
+
+
+def test_launch_run_bumps_colliding_id(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    _set_source(tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4), "youtube:AAA")
+    p = runner.RunParams(input="https://youtu.be/ZZZ", date="2026-05-15",
+                         meeting_type="Interview", event_kind="news_clip")
+    mid = runner.launch_run(p, python_exe="py", script="s", popen=_FakePopen)
+    assert mid == "2026-05-15-interview-2"           # new video -> distinct meeting
+    assert (tmp_meetings_dir / "2026-05-15-interview-2").exists()

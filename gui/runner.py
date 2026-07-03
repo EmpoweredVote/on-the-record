@@ -113,11 +113,31 @@ def _spawn(meeting_id: str, meeting_dir: Path, cmd: list[str], popen) -> str:
     return meeting_id
 
 
+def _unique_meeting_id(base_id: str, source: str) -> str:
+    """A meeting id that won't clobber a DIFFERENT source. Returns base_id if its
+    dir is free or already belongs to this same source (a re-run); otherwise
+    appends -2, -3, ... until a free or same-source slot is found. Guards against
+    two different videos with the same {date}-{label} colliding."""
+    candidate = base_id
+    n = 1
+    while True:
+        mdir = config.MEETINGS_DIR / candidate
+        if not mdir.exists():
+            return candidate                    # free
+        if source and _meeting_source_key(mdir) == source:
+            return candidate                    # same video -> reuse (re-run)
+        n += 1
+        candidate = f"{base_id}-{n}"
+
+
 def launch_run(p: RunParams, *, python_exe: str, script: str, popen=subprocess.Popen) -> str:
-    """Spawn run_local.py for a NEW meeting in the background. Returns the meeting_id.
+    """Spawn run_local.py for a NEW meeting in the background. Returns the meeting_id
+    (bumped with a -N suffix if the derived id would collide with a different source).
     stdout+stderr are captured to gui_run.log; stdin is /dev/null so the pipeline
     runs non-interactively (terminal review is skipped — review happens in the GUI)."""
-    meeting_id = derive_meeting_id(p)
+    from src.source_key import source_key
+    base_id = derive_meeting_id(p)
+    meeting_id = _unique_meeting_id(base_id, source_key(p.input))
     meeting_dir = ensure_drive_structure(meeting_id)
     cmd = build_run_command(python_exe, script, p, meeting_id)
     return _spawn(meeting_id, meeting_dir, cmd, popen)
