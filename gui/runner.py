@@ -34,6 +34,7 @@ class RunParams:
     clip_end: Optional[str] = None
     num_speakers: int = 0
     event_orgs: list = field(default_factory=list)
+    body_slug: Optional[str] = None
 
 
 def _slug(text: str) -> str:
@@ -74,6 +75,8 @@ def build_run_command(python_exe: str, script: str, p: RunParams, meeting_id: st
     for org in (p.event_orgs or []):
         if org:
             cmd += ["--event-org", org]
+    if p.body_slug:
+        cmd += ["--body", p.body_slug]
     return cmd
 
 

@@ -386,3 +386,17 @@ def test_build_run_command_omits_event_orgs_when_empty():
     from gui.runner import RunParams, build_run_command
     p = RunParams(input="x", date="2026-05-15", meeting_type="Interview", event_kind="news_clip")
     assert "--event-org" not in build_run_command("py", "s", p, "m")
+
+
+def test_build_run_command_includes_body():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-02-04", meeting_type="Regular Session",
+                  event_kind="council", body_slug="bloomington-common-council")
+    cmd = build_run_command("py", "s", p, "2026-02-04-regular-session")
+    assert cmd[cmd.index("--body") + 1] == "bloomington-common-council"
+
+
+def test_build_run_command_omits_body_when_absent():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-02-04", meeting_type="Regular", event_kind="council")
+    assert "--body" not in build_run_command("py", "s", p, "m")
