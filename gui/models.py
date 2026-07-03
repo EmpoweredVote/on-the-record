@@ -15,7 +15,7 @@ _STAGE_LABELS = {
     4: "Identified — ready to review",
     5: "Summarized",
     6: "Voices enrolled",
-    7: "Published",
+    7: "Exported",  # local export files written — NOT the same as live on the site
 }
 
 
@@ -64,10 +64,20 @@ class MeetingSummary:
     review_status: Optional[str] = None
     trusted_coverage: Optional[float] = None
     has_thumbnail: bool = False
+    # Live-site status from the DB: True = live, False = queried but not live,
+    # None = not checked (no DB configured) so no badge is shown.
+    is_live: Optional[bool] = None
 
     @property
     def stage_label(self) -> str:
         return stage_label(self.completed_stage)
+
+    @property
+    def live_badge(self) -> Optional[tuple[str, str]]:
+        """(css_token, text) for the live-site badge, or None when unknown."""
+        if self.is_live is None:
+            return None
+        return ("live", "Live") if self.is_live else ("notlive", "Not live")
 
     @property
     def speakers_label(self) -> str:

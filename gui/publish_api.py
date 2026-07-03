@@ -20,6 +20,27 @@ def _db_url() -> Optional[str]:
     return url or None
 
 
+def live_published_slugs() -> Optional[set]:
+    """Slugs currently live in meetings.meetings, in one query.
+
+    Returns a set on success (possibly empty), or None when the DB isn't
+    configured or the query fails — so callers can tell "not live" apart from
+    "unknown" and avoid falsely flagging every meeting as unpublished."""
+    url = _db_url()
+    if not url:
+        return None
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT slug FROM meetings.meetings")
+                return {r[0] for r in cur.fetchall() if r and r[0]}
+        finally:
+            conn.close()
+    except Exception:  # DB down / auth / schema — treat as unknown, never crash
+        return None
+
+
 def meeting_published_id(meeting_id: str) -> Optional[str]:
     """The Supabase UUID for a published meeting (row where slug = meeting_id),
     or None if unpublished / DB not configured / any error."""

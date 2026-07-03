@@ -33,6 +33,33 @@ def _patch_db(monkeypatch, rows):
     return conn
 
 
+class _FakeCursorAll(_FakeCursor):
+    def fetchall(self):
+        rows, self._rows = self._rows, []
+        return rows
+
+
+def test_live_published_slugs_returns_set(monkeypatch):
+    conn = _FakeConn([])
+    conn.cursor_obj = _FakeCursorAll([("2026-02-04-council",), ("2026-03-04-council",)])
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(pub.psycopg2, "connect", lambda url: conn)
+    assert pub.live_published_slugs() == {"2026-02-04-council", "2026-03-04-council"}
+
+
+def test_live_published_slugs_none_without_db(monkeypatch):
+    monkeypatch.setattr(pub, "_db_url", lambda: None)
+    assert pub.live_published_slugs() is None      # unknown, not empty -> no false "not live"
+
+
+def test_live_published_slugs_none_on_error(monkeypatch):
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    def boom(url):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(pub.psycopg2, "connect", boom)
+    assert pub.live_published_slugs() is None
+
+
 def test_meeting_published_id_found(monkeypatch):
     conn = _patch_db(monkeypatch, [("uuid-123",)])
     assert pub.meeting_published_id("2026-02-04-council") == "uuid-123"

@@ -11,7 +11,7 @@ def test_stage_label_maps_each_stage_to_friendly_text():
     assert stage_label(4) == "Identified — ready to review"
     assert stage_label(5) == "Summarized"
     assert stage_label(6) == "Voices enrolled"
-    assert stage_label(7) == "Published"
+    assert stage_label(7) == "Exported"  # local export, NOT live-site publish
 
 
 def test_stage_label_tolerates_unknown_stage():
@@ -338,3 +338,47 @@ def test_library_route_renders_enrichment_columns(tagged_meeting_dir, tmp_meetin
 def test_library_has_new_meeting_link(tmp_meetings_dir):
     body = TestClient(create_app()).get("/").text
     assert 'href="/new"' in body
+
+
+# --- live-site status (distinct from the local export stage) --------------------
+
+def test_live_badge_states():
+    def s(is_live):
+        return MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                              date=None, event_kind=None, completed_stage=7, is_live=is_live)
+    assert s(None).live_badge is None                 # not checked -> no badge
+    assert s(True).live_badge == ("live", "Live")
+    assert s(False).live_badge == ("notlive", "Not live")
+
+
+def test_scan_meetings_marks_live_from_slug_set(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    tagged_meeting_dir("x", meeting_id="2026-03-04-council", completed_stage=7)
+    out = {s.meeting_id: s for s in
+           scan_meetings(tmp_meetings_dir, live_slugs={"2026-02-04-council"})}
+    assert out["2026-02-04-council"].is_live is True
+    assert out["2026-03-04-council"].is_live is False   # exported locally, not live
+
+
+def test_scan_meetings_live_none_when_not_checked(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    s = scan_meetings(tmp_meetings_dir)[0]              # no live_slugs passed
+    assert s.is_live is None and s.live_badge is None
+
+
+def test_library_route_shows_live_badge(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    tagged_meeting_dir("x", meeting_id="2026-03-04-council", completed_stage=7)
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "live_published_slugs", lambda: {"2026-02-04-council"})
+    body = TestClient(create_app()).get("/").text
+    assert "Live" in body and "Not live" in body
+    assert "Exported" in body            # stage 7 no longer mislabeled "Published"
+
+
+def test_library_route_no_live_badge_without_db(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "live_published_slugs", lambda: None)  # DB not configured
+    body = TestClient(create_app()).get("/").text
+    assert "live-badge" not in body      # no Live/Not-live badge rendered (only the "—" placeholder)

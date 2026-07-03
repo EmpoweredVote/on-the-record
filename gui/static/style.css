@@ -15,6 +15,10 @@ img.thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 0.25rem
 .gate-review { background: #fdf3e0; color: #9a6a00; }
 .gate-failed { background: #fdeaea; color: #b32020; }
 .gate-none { color: #999; }
+.live-badge { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; }
+.live-live { background: #e6f5ea; color: #1b7a3d; }
+.live-notlive { background: #f1f1f4; color: #777; }
+.live-unknown { color: #bbb; }
 .back { display: inline-block; margin-bottom: 0.5rem; color: #2a5db0; text-decoration: none; font-size: 0.9rem; }
 header .sub { margin: 0.25rem 0 0; color: #666; font-size: 0.9rem; }
 main.review { max-width: 900px; }

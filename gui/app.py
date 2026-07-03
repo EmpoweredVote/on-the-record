@@ -37,7 +37,9 @@ def create_app() -> FastAPI:
     def library(request: Request) -> HTMLResponse:
         # Read MEETINGS_DIR via the module at request time so tests that
         # monkeypatch src.config.MEETINGS_DIR are honored.
-        meetings = scan_meetings(config.MEETINGS_DIR)
+        # One batch query for live-site status; None (no DB) => no live badge.
+        live_slugs = publish_api.live_published_slugs()
+        meetings = scan_meetings(config.MEETINGS_DIR, live_slugs=live_slugs)
         return _templates.TemplateResponse(
             request, "library.html", {"meetings": meetings}
         )
