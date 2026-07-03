@@ -837,6 +837,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         meeting_type=args.meeting_type,
         title=args.title.strip() if args.title and args.title.strip() else None,
         event_kind=args.event_kind,
+        event_orgs=getattr(args, "event_org", None) or [],
         race_id=effective_race_id,
         audio_source=str(audio_path),
         clip_start_seconds=clip_start,
@@ -3525,6 +3526,14 @@ Environment Variables:
         "--title",
         default=None,
         help="Optional human display title; blank/omitted uses city + meeting type",
+    )
+    parser.add_argument(
+        "--event-org",
+        action="append",
+        default=None,
+        metavar="ORG",
+        help="Producing/hosting organization; repeatable (e.g. --event-org CBS "
+             "--event-org NBC). Published as 'Produced by ...'.",
     )
     parser.add_argument(
         "--event-kind",
