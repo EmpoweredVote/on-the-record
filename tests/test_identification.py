@@ -118,6 +118,25 @@ def test_merge_adjacent_segments_extends_to_later_end_time():
     assert merged[0].text == "First second"
 
 
+def test_merge_adjacent_segments_is_idempotent():
+    # Re-merging already-merged segments changes nothing (so the pipeline can run
+    # the merge at identify AND again at export without harm).
+    segments = [
+        Segment(segment_id=0, start_time=0.0, end_time=3.0, speaker_label="A",
+                speaker_name="Bass", text="hello"),
+        Segment(segment_id=1, start_time=3.2, end_time=5.0, speaker_label="A",
+                speaker_name="Bass", text="world"),
+        Segment(segment_id=2, start_time=5.1, end_time=7.0, speaker_label="B",
+                speaker_name="Host", text="hi"),
+    ]
+    once = merge_adjacent_segments(segments)
+    twice = merge_adjacent_segments([Segment.from_dict(s.to_dict()) for s in once])
+    assert len(once) == len(twice) == 2
+    assert [s.text for s in twice] == ["hello world", "hi"]
+
+
+
+
 # ---------------------------------------------------------------------------
 # CSIDENT-04: SpeakerMapping model — politician_slug and politician_id
 # ---------------------------------------------------------------------------

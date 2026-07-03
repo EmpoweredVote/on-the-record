@@ -1381,6 +1381,16 @@ def run_pipeline(args: argparse.Namespace) -> None:
         meeting.segments = segments
         meeting.speakers = mappings
 
+        # Merge adjacent same-speaker segments HERE, so transcript_named.json is
+        # the canonical merged transcript that every downstream reader shares:
+        # the review UI + GUI publish (which read this file), summary (whose
+        # section indices are computed against these segments), and export. The
+        # later export-time merge then becomes an idempotent no-op. Without this,
+        # the merge only reached exports/ + a full run's in-memory publish, so the
+        # review UI showed — and GUI publish pushed — the unmerged fragments.
+        from src.identify import merge_adjacent_segments
+        meeting.segments = merge_adjacent_segments(meeting.segments)
+
         with open(named_transcript_path, "w") as f:
             json.dump(meeting.to_dict(), f, indent=2)
         state.mark_complete(PipelineStage.IDENTIFIED)
