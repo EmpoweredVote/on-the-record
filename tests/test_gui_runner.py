@@ -368,3 +368,21 @@ def test_launch_run_bumps_colliding_id(tagged_meeting_dir, tmp_meetings_dir):
     mid = runner.launch_run(p, python_exe="py", script="s", popen=_FakePopen)
     assert mid == "2026-05-15-interview-2"           # new video -> distinct meeting
     assert (tmp_meetings_dir / "2026-05-15-interview-2").exists()
+
+
+def test_build_run_command_includes_event_orgs():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-05-15", meeting_type="Interview", event_kind="news_clip",
+                  event_orgs=["CBS", "NBC"])
+    cmd = build_run_command("py", "s", p, "2026-05-15-interview")
+    # one --event-org per org, in order
+    assert cmd.count("--event-org") == 2
+    i = cmd.index("--event-org")
+    assert cmd[i + 1] == "CBS"
+    assert "NBC" in cmd
+
+
+def test_build_run_command_omits_event_orgs_when_empty():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-05-15", meeting_type="Interview", event_kind="news_clip")
+    assert "--event-org" not in build_run_command("py", "s", p, "m")

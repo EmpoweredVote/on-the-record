@@ -26,6 +26,9 @@
         <input type="text" name="title" id="f-title" placeholder="e.g. Xavier Becerra — The Race for Governor">
         <small class="help">Optional. If blank, the site uses the video's own title, then falls back to "city + label".</small>
       </label>
+      <label>Event org(s) — "Produced by …" on the site (comma-separated)
+        <input type="text" name="event_orgs" id="f-orgs" placeholder="e.g. CBS, NBC">
+      </label>
       <label>Compute
         <select name="compute" id="f-compute">
           {% for c, h in compute_help.items() %}<option value="{{ c }}">{{ c }}</option>{% endfor %}

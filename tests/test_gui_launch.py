@@ -290,3 +290,23 @@ def test_run_page_has_continue_button(tagged_meeting_dir, tmp_meetings_dir):
     assert 'action="/meetings/2026-02-04-council/continue"' in body
     assert "Continue processing" in body
     assert "override" in body.lower()  # the gate-override variant present
+
+
+def test_post_new_parses_event_orgs(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    seen = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: seen.setdefault("orgs", p.event_orgs) or "2026-05-15-interview")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-05-15", "meeting_type": "Interview",
+        "event_kind": "news_clip", "event_orgs": "CBS, NBC ,, Telemundo",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert seen["orgs"] == ["CBS", "NBC", "Telemundo"]   # split, trimmed, blanks dropped
+
+
+def test_new_form_has_event_orgs_field(tmp_meetings_dir):
+    body = TestClient(create_app()).get("/new").text
+    assert 'name="event_orgs"' in body
+    assert "Produced by" in body

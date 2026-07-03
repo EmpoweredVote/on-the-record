@@ -8,7 +8,7 @@ import json
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +33,7 @@ class RunParams:
     clip_start: Optional[str] = None
     clip_end: Optional[str] = None
     num_speakers: int = 0
+    event_orgs: list = field(default_factory=list)
 
 
 def _slug(text: str) -> str:
@@ -70,6 +71,9 @@ def build_run_command(python_exe: str, script: str, p: RunParams, meeting_id: st
         cmd += ["--num-speakers", str(p.num_speakers)]
     if p.clip_start and p.clip_end:
         cmd += ["--clip", p.clip_start, p.clip_end]
+    for org in (p.event_orgs or []):
+        if org:
+            cmd += ["--event-org", org]
     return cmd
 
 
