@@ -4,7 +4,64 @@ from pathlib import Path
 
 import pytest
 
-from src.thumbnail import thumbnail_seek_start, extract_thumbnail
+from src.thumbnail import (
+    thumbnail_seek_start,
+    extract_thumbnail,
+    find_video_file,
+    attach_thumbnail,
+)
+
+
+class _FakeMeeting:
+    def __init__(self, meeting_dir):
+        self.audio_source = ""
+        self.clip_start_seconds = None
+        self.duration_seconds = 60.0
+        self.meeting_id = "2026-02-04-council"
+        self.thumbnail_url = None
+
+
+def test_find_video_file_prefers_source_in_dir(tmp_path: Path):
+    (tmp_path / "source.webm").write_bytes(b"x")
+    assert find_video_file(tmp_path, "https://youtu.be/abc") == str(tmp_path / "source.webm")
+
+
+def test_find_video_file_falls_back_to_local_input(tmp_path: Path):
+    local = tmp_path / "clip.mp4"; local.write_bytes(b"x")
+    assert find_video_file(tmp_path / "empty", str(local)) == str(local)
+
+
+def test_find_video_file_none_when_absent(tmp_path: Path):
+    assert find_video_file(tmp_path, "https://youtu.be/abc") is None
+
+
+def test_attach_thumbnail_extracts_and_sets_url(tmp_path: Path, monkeypatch):
+    (tmp_path / "source.webm").write_bytes(b"x")
+    m = _FakeMeeting(tmp_path)
+    import src.thumbnail as th
+    monkeypatch.setattr(th, "extract_thumbnail",
+                        lambda vp, cs, cd, out: out)          # pretend extraction worked
+    monkeypatch.setattr("src.storage.upload_thumbnail",
+                        lambda jpg, mid: "https://cdn/thumb.jpg")
+    attach_thumbnail(m, tmp_path)
+    assert m.thumbnail_url == "https://cdn/thumb.jpg"
+
+
+def test_attach_thumbnail_no_video_is_noop(tmp_path: Path):
+    m = _FakeMeeting(tmp_path)
+    attach_thumbnail(m, tmp_path)                             # no source.* present
+    assert m.thumbnail_url is None
+
+
+def test_attach_thumbnail_never_raises(tmp_path: Path, monkeypatch):
+    (tmp_path / "source.webm").write_bytes(b"x")
+    m = _FakeMeeting(tmp_path)
+    import src.thumbnail as th
+    def boom(*a, **k):
+        raise RuntimeError("ffmpeg exploded")
+    monkeypatch.setattr(th, "extract_thumbnail", boom)
+    attach_thumbnail(m, tmp_path)                             # must swallow the error
+    assert m.thumbnail_url is None
 
 
 def test_seek_no_clip_seeks_up_to_ten_percent():

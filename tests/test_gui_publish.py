@@ -196,6 +196,36 @@ def test_apply_publish_passes_gate(tagged_meeting_dir, tmp_meetings_dir, monkeyp
     assert "body_slug" in seen                  # body_slug forwarded from state
 
 
+def test_apply_publish_attaches_thumbnail(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    from src.publish import PublishResult
+    order = []
+    monkeypatch.setattr(pub, "attach_thumbnail",
+                        lambda meeting, meeting_dir: order.append("thumb"))
+    monkeypatch.setattr(sp, "publish_meeting",
+                        lambda meeting, body_slug=None: order.append("publish")
+                        or PublishResult(meeting.meeting_id, 5, 2))
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is True
+    assert order == ["thumb", "publish"]        # thumbnail extracted before publish
+
+
+def test_apply_publish_thumbnail_failure_is_nonfatal(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    # attach_thumbnail is best-effort and never raises, but even if it did the
+    # publish must still succeed — publish must never break over a thumbnail.
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    from src.publish import PublishResult
+    monkeypatch.setattr(sp, "publish_meeting",
+                        lambda meeting, body_slug=None: PublishResult(meeting.meeting_id, 5, 2))
+    # real attach_thumbnail runs (no ffmpeg output in test dir) -> no-op, no crash
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is True
+
+
 def test_apply_publish_no_db(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
     _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
     monkeypatch.setattr(pub, "_db_url", lambda: None)
