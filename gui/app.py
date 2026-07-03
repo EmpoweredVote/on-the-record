@@ -128,6 +128,7 @@ def create_app() -> FastAPI:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
                                    CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS)
+        from gui.rosters import list_cached_rosters
         return _templates.TemplateResponse(
             request, "new_meeting.html",
             {
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
                 "diarizer_help": DIARIZER_HELP,
                 "city_required_kinds": sorted(CITY_REQUIRED_KINDS),
                 "meeting_type_defaults": MEETING_TYPE_DEFAULTS,
+                "cached_rosters": list_cached_rosters(),
             },
         )
 
@@ -154,6 +156,7 @@ def create_app() -> FastAPI:
         clip_start: str = Form(""),
         clip_end: str = Form(""),
         event_orgs: str = Form(""),
+        body_slug: str = Form(""),
         confirm: str = Form(""),
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
@@ -181,7 +184,7 @@ def create_app() -> FastAPI:
                             "event_kind": event_kind, "city": city, "title": title,
                             "compute": compute, "diarizer": diarizer,
                             "clip_start": clip_start, "clip_end": clip_end,
-                            "event_orgs": event_orgs,
+                            "event_orgs": event_orgs, "body_slug": body_slug,
                         },
                     },
                 )
@@ -191,6 +194,7 @@ def create_app() -> FastAPI:
             compute=compute, diarizer=diarizer,
             clip_start=clip_start.strip() or None, clip_end=clip_end.strip() or None,
             event_orgs=[o.strip() for o in event_orgs.split(",") if o.strip()],
+            body_slug=body_slug.strip() or None,
         )
         try:
             meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)

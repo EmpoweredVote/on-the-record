@@ -310,3 +310,40 @@ def test_new_form_has_event_orgs_field(tmp_meetings_dir):
     body = TestClient(create_app()).get("/new").text
     assert 'name="event_orgs"' in body
     assert "Produced by" in body
+
+
+def test_new_form_has_body_picker(tmp_config_dir, tmp_meetings_dir):
+    import json
+    rosters = tmp_config_dir / "rosters"; rosters.mkdir(exist_ok=True)
+    (rosters / "bloomington-common-council.json").write_text(json.dumps(
+        {"body_key": "Bloomington Common Council", "politicians": [{}]}))
+    body = TestClient(create_app()).get("/new").text
+    assert 'name="body_slug"' in body
+    assert 'value="bloomington-common-council"' in body
+    assert "Bloomington Common Council" in body
+
+
+def test_post_new_threads_body_slug(tmp_config_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    seen = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: seen.setdefault("body", p.body_slug) or "2026-02-04-regular")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Regular Session",
+        "event_kind": "council", "city": "Bloomington",
+        "body_slug": "bloomington-common-council",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert seen["body"] == "bloomington-common-council"
+
+
+def test_post_new_blank_body_is_none(tmp_config_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    seen = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: seen.setdefault("body", p.body_slug) or "2026-02-04-clip")
+    TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Clip",
+        "event_kind": "news_clip", "body_slug": ""}, follow_redirects=False)
+    assert seen["body"] is None
