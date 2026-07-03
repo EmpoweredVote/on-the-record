@@ -37,7 +37,9 @@ def create_app() -> FastAPI:
     def library(request: Request) -> HTMLResponse:
         # Read MEETINGS_DIR via the module at request time so tests that
         # monkeypatch src.config.MEETINGS_DIR are honored.
-        meetings = scan_meetings(config.MEETINGS_DIR)
+        # One batch query for live-site status; None (no DB) => no live badge.
+        live_slugs = publish_api.live_published_slugs()
+        meetings = scan_meetings(config.MEETINGS_DIR, live_slugs=live_slugs)
         return _templates.TemplateResponse(
             request, "library.html", {"meetings": meetings}
         )
@@ -128,6 +130,7 @@ def create_app() -> FastAPI:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
                                    CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS)
+        from gui.rosters import list_cached_rosters
         return _templates.TemplateResponse(
             request, "new_meeting.html",
             {
@@ -137,6 +140,7 @@ def create_app() -> FastAPI:
                 "diarizer_help": DIARIZER_HELP,
                 "city_required_kinds": sorted(CITY_REQUIRED_KINDS),
                 "meeting_type_defaults": MEETING_TYPE_DEFAULTS,
+                "cached_rosters": list_cached_rosters(),
             },
         )
 
@@ -153,6 +157,8 @@ def create_app() -> FastAPI:
         diarizer: str = Form("oss"),
         clip_start: str = Form(""),
         clip_end: str = Form(""),
+        event_orgs: str = Form(""),
+        body_slug: str = Form(""),
         confirm: str = Form(""),
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
@@ -180,6 +186,7 @@ def create_app() -> FastAPI:
                             "event_kind": event_kind, "city": city, "title": title,
                             "compute": compute, "diarizer": diarizer,
                             "clip_start": clip_start, "clip_end": clip_end,
+                            "event_orgs": event_orgs, "body_slug": body_slug,
                         },
                     },
                 )
@@ -188,6 +195,8 @@ def create_app() -> FastAPI:
             event_kind=event_kind, city=city.strip() or None, title=title.strip() or None,
             compute=compute, diarizer=diarizer,
             clip_start=clip_start.strip() or None, clip_end=clip_end.strip() or None,
+            event_orgs=[o.strip() for o in event_orgs.split(",") if o.strip()],
+            body_slug=body_slug.strip() or None,
         )
         try:
             meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)
@@ -217,6 +226,13 @@ def create_app() -> FastAPI:
         if stage not in runner.REDO_STAGES:
             raise HTTPException(status_code=400, detail="invalid redo stage")
         if runner.launch_redo(meeting_id, stage, python_exe=sys.executable, script=_RUN_LOCAL) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/continue")
+    def continue_route(meeting_id: str, override: str = Form("")):
+        if runner.launch_resume(meeting_id, override_gate=bool(override.strip()),
+                                python_exe=sys.executable, script=_RUN_LOCAL) is None:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
 

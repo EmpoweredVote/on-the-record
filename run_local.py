@@ -407,46 +407,9 @@ def human_review(mappings: dict) -> dict:
     return mappings
 
 
-def find_video_file(meeting_dir: Path, original_input: str) -> str | None:
-    """Find the video file for a meeting, checking the meeting directory first.
-
-    Returns path to video file, or None if not found.
-    """
-    # Check for downloaded source video in meeting directory (source.m4v, source.mp4, etc.)
-    for ext in (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov"):
-        candidate = meeting_dir / f"source{ext}"
-        if candidate.exists():
-            return str(candidate)
-
-    # Check if original input is a local video file that still exists
-    if original_input and not original_input.startswith(("http://", "https://")):
-        p = Path(original_input)
-        if p.exists() and p.suffix.lower() in (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov"):
-            return str(p)
-
-    return None
-
-
-def _attach_thumbnail(meeting, meeting_dir) -> None:
-    """Best-effort: extract a frame from the kept section, upload it, and set
-    meeting.thumbnail_url. Never raises — a thumbnail must not break publishing."""
-    try:
-        from src.thumbnail import extract_thumbnail
-        from src.storage import upload_thumbnail
-
-        video_path = find_video_file(meeting_dir, meeting.audio_source)
-        if not video_path:
-            return
-        out = meeting_dir / "thumbnail.jpg"
-        if extract_thumbnail(
-            video_path, meeting.clip_start_seconds, meeting.duration_seconds, out
-        ):
-            url = upload_thumbnail(out, meeting.meeting_id)
-            if url:
-                meeting.thumbnail_url = url
-                print(f"  Thumbnail: {url}")
-    except Exception as exc:  # absolutely non-fatal
-        print(f"  WARNING: thumbnail step failed — {exc}")
+# find_video_file and _attach_thumbnail live in src.thumbnail so the GUI publish
+# path (gui/publish_api) can share the exact same thumbnail step.
+from src.thumbnail import find_video_file, attach_thumbnail as _attach_thumbnail
 
 
 def _review_seek(start_time: float, video_offset: float = 0.0) -> float:
@@ -837,6 +800,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         meeting_type=args.meeting_type,
         title=args.title.strip() if args.title and args.title.strip() else None,
         event_kind=args.event_kind,
+        event_orgs=getattr(args, "event_org", None) or [],
         race_id=effective_race_id,
         audio_source=str(audio_path),
         clip_start_seconds=clip_start,
@@ -3525,6 +3489,14 @@ Environment Variables:
         "--title",
         default=None,
         help="Optional human display title; blank/omitted uses city + meeting type",
+    )
+    parser.add_argument(
+        "--event-org",
+        action="append",
+        default=None,
+        metavar="ORG",
+        help="Producing/hosting organization; repeatable (e.g. --event-org CBS "
+             "--event-org NBC). Published as 'Produced by ...'.",
     )
     parser.add_argument(
         "--event-kind",

@@ -9,6 +9,8 @@ from typing import Optional
 
 import psycopg2
 
+from src.thumbnail import attach_thumbnail
+
 # Display columns a metadata edit may change. NEVER includes slug/id (ADR-0002).
 _EDITABLE = ("title", "city", "date", "meeting_type", "event_kind")
 
@@ -16,6 +18,27 @@ _EDITABLE = ("title", "city", "date", "meeting_type", "event_kind")
 def _db_url() -> Optional[str]:
     url = os.environ.get("DATABASE_URL", "").strip()
     return url or None
+
+
+def live_published_slugs() -> Optional[set]:
+    """Slugs currently live in meetings.meetings, in one query.
+
+    Returns a set on success (possibly empty), or None when the DB isn't
+    configured or the query fails — so callers can tell "not live" apart from
+    "unknown" and avoid falsely flagging every meeting as unpublished."""
+    url = _db_url()
+    if not url:
+        return None
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT slug FROM meetings.meetings")
+                return {r[0] for r in cur.fetchall() if r and r[0]}
+        finally:
+            conn.close()
+    except Exception:  # DB down / auth / schema — treat as unknown, never crash
+        return None
 
 
 def meeting_published_id(meeting_id: str) -> Optional[str]:
@@ -121,6 +144,9 @@ def apply_publish(meeting_id: str, *, force: bool = False) -> dict:
         return {"ok": False, "reason": "no_db"}
     try:
         from src.publish import publish_meeting
+        # Extract + upload the thumbnail before publishing, mirroring run_local's
+        # terminal publish path (both callers of _attach_thumbnail). Non-fatal.
+        attach_thumbnail(meeting, meeting_dir)
         result = publish_meeting(meeting, state.body_slug)
         return {"ok": True, "meeting_id": result.meeting_id,
                 "segments": result.segments, "speakers": result.speakers}

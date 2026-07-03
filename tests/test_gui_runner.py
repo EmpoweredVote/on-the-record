@@ -276,3 +276,127 @@ def test_existing_launch_run_still_works(tmp_meetings_dir):
     p = runner.RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
     mid = runner.launch_run(p, python_exe="py", script="s", popen=_FakePopen)
     assert mid == "2026-02-10-regular" and mid in runner._RUNS
+
+
+def test_build_resume_command():
+    from gui.runner import build_resume_command
+    assert build_resume_command("py", "s", "m") == ["py", "s", "--resume", "m", "--no-publish"]
+    assert build_resume_command("py", "s", "m", override_gate=True) == \
+        ["py", "s", "--resume", "m", "--no-publish", "--publish-anyway"]
+
+
+def test_resume_command_never_publishes():
+    """Safety: Continue must never publish — --no-publish is always present, in
+    both plain and gate-override modes (--resume auto-enables publish otherwise)."""
+    from gui.runner import build_resume_command
+    assert "--no-publish" in build_resume_command("py", "s", "m")
+    assert "--no-publish" in build_resume_command("py", "s", "m", override_gate=True)
+
+
+def test_launch_resume_spawns(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    captured = {}
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return _FakePopen(cmd, **kw)
+
+    mid = runner.launch_resume("2026-02-04-council", python_exe="py", script="s", popen=fake_popen)
+    assert mid == "2026-02-04-council"
+    assert captured["cmd"] == ["py", "s", "--resume", "2026-02-04-council", "--no-publish"]
+    assert mid in runner._RUNS
+
+
+def test_launch_resume_override_adds_flag(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    captured = {}
+    runner.launch_resume("2026-02-04-council", override_gate=True,
+                         python_exe="py", script="s",
+                         popen=lambda cmd, **kw: captured.setdefault("cmd", cmd) or _FakePopen(cmd, **kw))
+    assert "--publish-anyway" in captured["cmd"]
+
+
+def test_launch_resume_guards(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    assert runner.launch_resume("ghost", python_exe="p", script="s") is None       # no meeting
+    assert runner.launch_resume("../x", python_exe="p", script="s") is None         # unsafe id
+
+
+def _set_source(mdir, source_key_value):
+    from src.checkpoint import PipelineState
+    st = PipelineState(mdir); st.source_key = source_key_value; st.save()
+
+
+def test_unique_meeting_id_free_base(tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:AAA") == "2026-05-15-interview"
+
+
+def test_unique_meeting_id_same_source_reuses(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4)
+    _set_source(mdir, "youtube:AAA")
+    # same video re-submitted -> reuse the existing id (no new dir)
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:AAA") == "2026-05-15-interview"
+
+
+def test_unique_meeting_id_bumps_on_different_source(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4)
+    _set_source(mdir, "youtube:AAA")
+    # a DIFFERENT video, same date+label -> must not collide
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:ZZZ") == "2026-05-15-interview-2"
+
+
+def test_unique_meeting_id_bumps_past_multiple(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.runner import _unique_meeting_id
+    _set_source(tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4), "youtube:AAA")
+    _set_source(tagged_meeting_dir("x", meeting_id="2026-05-15-interview-2", completed_stage=4), "youtube:BBB")
+    assert _unique_meeting_id("2026-05-15-interview", "youtube:ZZZ") == "2026-05-15-interview-3"
+
+
+def test_launch_run_bumps_colliding_id(tagged_meeting_dir, tmp_meetings_dir):
+    from gui import runner
+    runner._RUNS.clear()
+    _set_source(tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=4), "youtube:AAA")
+    p = runner.RunParams(input="https://youtu.be/ZZZ", date="2026-05-15",
+                         meeting_type="Interview", event_kind="news_clip")
+    mid = runner.launch_run(p, python_exe="py", script="s", popen=_FakePopen)
+    assert mid == "2026-05-15-interview-2"           # new video -> distinct meeting
+    assert (tmp_meetings_dir / "2026-05-15-interview-2").exists()
+
+
+def test_build_run_command_includes_event_orgs():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-05-15", meeting_type="Interview", event_kind="news_clip",
+                  event_orgs=["CBS", "NBC"])
+    cmd = build_run_command("py", "s", p, "2026-05-15-interview")
+    # one --event-org per org, in order
+    assert cmd.count("--event-org") == 2
+    i = cmd.index("--event-org")
+    assert cmd[i + 1] == "CBS"
+    assert "NBC" in cmd
+
+
+def test_build_run_command_omits_event_orgs_when_empty():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-05-15", meeting_type="Interview", event_kind="news_clip")
+    assert "--event-org" not in build_run_command("py", "s", p, "m")
+
+
+def test_build_run_command_includes_body():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-02-04", meeting_type="Regular Session",
+                  event_kind="council", body_slug="bloomington-common-council")
+    cmd = build_run_command("py", "s", p, "2026-02-04-regular-session")
+    assert cmd[cmd.index("--body") + 1] == "bloomington-common-council"
+
+
+def test_build_run_command_omits_body_when_absent():
+    from gui.runner import RunParams, build_run_command
+    p = RunParams(input="x", date="2026-02-04", meeting_type="Regular", event_kind="council")
+    assert "--body" not in build_run_command("py", "s", p, "m")

@@ -251,3 +251,99 @@ def test_run_page_has_redo_buttons(tagged_meeting_dir, tmp_meetings_dir):
     assert 'action="/meetings/2026-02-04-council/redo"' in body
     assert 'value="diarize"' in body and 'value="transcribe"' in body
     assert 'value="identify"' in body and 'value="summary"' in body
+
+
+def test_post_continue_launches_and_redirects(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    seen = {}
+    monkeypatch.setattr(runner, "launch_resume",
+                        lambda mid, override_gate=False, **kw: seen.setdefault("v", (mid, override_gate)) or mid)
+    client = TestClient(create_app())
+    r = client.post("/meetings/2026-02-04-council/continue", data={}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/meetings/2026-02-04-council/run"
+    assert seen["v"] == ("2026-02-04-council", False)
+
+
+def test_post_continue_override(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    seen = {}
+    monkeypatch.setattr(runner, "launch_resume",
+                        lambda mid, override_gate=False, **kw: seen.setdefault("og", override_gate) or mid)
+    TestClient(create_app()).post("/meetings/2026-02-04-council/continue",
+                                  data={"override": "1"}, follow_redirects=False)
+    assert seen["og"] is True
+
+
+def test_post_continue_unknown_404(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    monkeypatch.setattr(runner, "launch_resume", lambda mid, override_gate=False, **kw: None)
+    assert TestClient(create_app()).post("/meetings/ghost/continue", data={},
+                                         follow_redirects=False).status_code == 404
+
+
+def test_run_page_has_continue_button(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/run").text
+    assert 'action="/meetings/2026-02-04-council/continue"' in body
+    assert "Continue processing" in body
+    assert "override" in body.lower()  # the gate-override variant present
+
+
+def test_post_new_parses_event_orgs(tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    seen = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: seen.setdefault("orgs", p.event_orgs) or "2026-05-15-interview")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-05-15", "meeting_type": "Interview",
+        "event_kind": "news_clip", "event_orgs": "CBS, NBC ,, Telemundo",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert seen["orgs"] == ["CBS", "NBC", "Telemundo"]   # split, trimmed, blanks dropped
+
+
+def test_new_form_has_event_orgs_field(tmp_meetings_dir):
+    body = TestClient(create_app()).get("/new").text
+    assert 'name="event_orgs"' in body
+    assert "Produced by" in body
+
+
+def test_new_form_has_body_picker(tmp_config_dir, tmp_meetings_dir):
+    import json
+    rosters = tmp_config_dir / "rosters"; rosters.mkdir(exist_ok=True)
+    (rosters / "bloomington-common-council.json").write_text(json.dumps(
+        {"body_key": "Bloomington Common Council", "politicians": [{}]}))
+    body = TestClient(create_app()).get("/new").text
+    assert 'name="body_slug"' in body
+    assert 'value="bloomington-common-council"' in body
+    assert "Bloomington Common Council" in body
+
+
+def test_post_new_threads_body_slug(tmp_config_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    seen = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: seen.setdefault("body", p.body_slug) or "2026-02-04-regular")
+    client = TestClient(create_app())
+    resp = client.post("/new", data={
+        "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Regular Session",
+        "event_kind": "council", "city": "Bloomington",
+        "body_slug": "bloomington-common-council",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert seen["body"] == "bloomington-common-council"
+
+
+def test_post_new_blank_body_is_none(tmp_config_dir, tmp_meetings_dir, monkeypatch):
+    from gui import runner
+    seen = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: seen.setdefault("body", p.body_slug) or "2026-02-04-clip")
+    TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Clip",
+        "event_kind": "news_clip", "body_slug": ""}, follow_redirects=False)
+    assert seen["body"] is None

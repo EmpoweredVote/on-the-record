@@ -13,7 +13,7 @@
     {% if meetings %}
     <table class="library">
       <thead>
-        <tr><th>Meeting</th><th>Date</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th></tr>
+        <tr><th>Meeting</th><th>Date</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th><th>Live</th></tr>
       </thead>
       <tbody>
         {% for m in meetings %}
@@ -36,6 +36,10 @@
             <span class="gate gate-{{ level }}">{{ text }}</span>
           </td>
           <td><span class="stage stage-{{ m.completed_stage }}">{{ m.stage_label }}</span></td>
+          <td>
+            {% set live = m.live_badge %}
+            {% if live %}<span class="live-badge live-{{ live[0] }}">{{ live[1] }}</span>{% else %}<span class="live-unknown">—</span>{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

@@ -67,3 +67,50 @@ def extract_thumbnail(
     if out_path.exists() and out_path.stat().st_size > 0:
         return out_path
     return None
+
+
+VIDEO_EXTENSIONS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
+
+
+def find_video_file(meeting_dir: Path, original_input: str) -> Optional[str]:
+    """Find the video file for a meeting, checking the meeting directory first.
+
+    Returns path to the video file, or None if not found.
+    """
+    meeting_dir = Path(meeting_dir)
+    # Downloaded source video in the meeting dir (source.m4v, source.mp4, ...).
+    for ext in VIDEO_EXTENSIONS:
+        candidate = meeting_dir / f"source{ext}"
+        if candidate.exists():
+            return str(candidate)
+
+    # Otherwise the original local input, if it still exists.
+    if original_input and not original_input.startswith(("http://", "https://")):
+        p = Path(original_input)
+        if p.exists() and p.suffix.lower() in VIDEO_EXTENSIONS:
+            return str(p)
+
+    return None
+
+
+def attach_thumbnail(meeting, meeting_dir) -> None:
+    """Best-effort: extract a frame from the kept section, upload it, and set
+    ``meeting.thumbnail_url``. Never raises — a thumbnail must not break
+    publishing. Called by both the terminal (run_local) and GUI publish paths.
+    """
+    try:
+        from src.storage import upload_thumbnail
+
+        video_path = find_video_file(meeting_dir, meeting.audio_source)
+        if not video_path:
+            return
+        out = Path(meeting_dir) / "thumbnail.jpg"
+        if extract_thumbnail(
+            video_path, meeting.clip_start_seconds, meeting.duration_seconds, out
+        ):
+            url = upload_thumbnail(out, meeting.meeting_id)
+            if url:
+                meeting.thumbnail_url = url
+                logger.info("Thumbnail: %s", url)
+    except Exception as exc:  # absolutely non-fatal
+        logger.warning("thumbnail step failed — %s", exc)

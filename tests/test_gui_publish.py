@@ -33,6 +33,33 @@ def _patch_db(monkeypatch, rows):
     return conn
 
 
+class _FakeCursorAll(_FakeCursor):
+    def fetchall(self):
+        rows, self._rows = self._rows, []
+        return rows
+
+
+def test_live_published_slugs_returns_set(monkeypatch):
+    conn = _FakeConn([])
+    conn.cursor_obj = _FakeCursorAll([("2026-02-04-council",), ("2026-03-04-council",)])
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(pub.psycopg2, "connect", lambda url: conn)
+    assert pub.live_published_slugs() == {"2026-02-04-council", "2026-03-04-council"}
+
+
+def test_live_published_slugs_none_without_db(monkeypatch):
+    monkeypatch.setattr(pub, "_db_url", lambda: None)
+    assert pub.live_published_slugs() is None      # unknown, not empty -> no false "not live"
+
+
+def test_live_published_slugs_none_on_error(monkeypatch):
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    def boom(url):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(pub.psycopg2, "connect", boom)
+    assert pub.live_published_slugs() is None
+
+
 def test_meeting_published_id_found(monkeypatch):
     conn = _patch_db(monkeypatch, [("uuid-123",)])
     assert pub.meeting_published_id("2026-02-04-council") == "uuid-123"
@@ -194,6 +221,36 @@ def test_apply_publish_passes_gate(tagged_meeting_dir, tmp_meetings_dir, monkeyp
     res = pub.apply_publish("2026-02-04-council", force=False)
     assert res["ok"] is True
     assert "body_slug" in seen                  # body_slug forwarded from state
+
+
+def test_apply_publish_attaches_thumbnail(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    from src.publish import PublishResult
+    order = []
+    monkeypatch.setattr(pub, "attach_thumbnail",
+                        lambda meeting, meeting_dir: order.append("thumb"))
+    monkeypatch.setattr(sp, "publish_meeting",
+                        lambda meeting, body_slug=None: order.append("publish")
+                        or PublishResult(meeting.meeting_id, 5, 2))
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is True
+    assert order == ["thumb", "publish"]        # thumbnail extracted before publish
+
+
+def test_apply_publish_thumbnail_failure_is_nonfatal(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    # attach_thumbnail is best-effort and never raises, but even if it did the
+    # publish must still succeed — publish must never break over a thumbnail.
+    _publish_meeting_ctx(tagged_meeting_dir, review_status="pass")
+    monkeypatch.setattr(pub, "_db_url", lambda: "postgres://fake")
+    import src.publish as sp
+    from src.publish import PublishResult
+    monkeypatch.setattr(sp, "publish_meeting",
+                        lambda meeting, body_slug=None: PublishResult(meeting.meeting_id, 5, 2))
+    # real attach_thumbnail runs (no ffmpeg output in test dir) -> no-op, no crash
+    res = pub.apply_publish("2026-02-04-council", force=False)
+    assert res["ok"] is True
 
 
 def test_apply_publish_no_db(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):

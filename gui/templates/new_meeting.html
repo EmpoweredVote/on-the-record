@@ -22,9 +22,19 @@
       <label id="city-label">City <span class="req" id="city-req" hidden>(required)</span>
         <input type="text" name="city" id="f-city" placeholder="Bloomington">
       </label>
+      <label>Body / roster (for council &amp; school-board meetings)
+        <select name="body_slug" id="f-body">
+          <option value="">— none —</option>
+          {% for slug, label in cached_rosters %}<option value="{{ slug }}">{{ label }}</option>{% endfor %}
+        </select>
+        <small class="help">Guides speaker naming and links the meeting to its Chamber. Only cached rosters appear (refresh with refresh_roster.py).</small>
+      </label>
       <label>Title — the headline shown on the site
         <input type="text" name="title" id="f-title" placeholder="e.g. Xavier Becerra — The Race for Governor">
         <small class="help">Optional. If blank, the site uses the video's own title, then falls back to "city + label".</small>
+      </label>
+      <label>Event org(s) — "Produced by …" on the site (comma-separated)
+        <input type="text" name="event_orgs" id="f-orgs" placeholder="e.g. CBS, NBC">
       </label>
       <label>Compute
         <select name="compute" id="f-compute">

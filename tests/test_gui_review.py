@@ -701,6 +701,53 @@ def test_apply_enroll_writes_profile_and_is_idempotent(tagged_meeting_dir, tmp_m
     assert len(db2.profiles[key].embeddings) == n_records  # unchanged
 
 
+def test_speaker_card_profile_strength_thresholds():
+    from gui.models import SpeakerCard
+    def card(m, s):
+        return SpeakerCard(label="X", name="A", confidence=0.9, method="voice",
+                           minutes=1.0, seg_count=1, profile_meetings=m, profile_samples=s)
+    assert card(0, 0).profile_strength == "new"
+    assert card(0, 0).profile_hint == "New voice — no profile yet"
+    assert card(1, 1).profile_strength == "building"
+    assert card(1, 1).profile_hint == "Profile building — 1 sample from 1 meeting"
+    assert card(2, 3).profile_strength == "building"
+    assert card(3, 5).profile_strength == "strong"
+    assert card(4, 6).profile_hint == "Profile strong — 6 samples from 4 meetings"
+
+
+def test_load_review_page_shows_existing_profile_strength(tagged_meeting_dir, tmp_meetings_dir):
+    # Enroll SPEAKER_00 (Mayor Johnson) from an EARLIER meeting to build a profile.
+    prior = tagged_meeting_dir("x", meeting_id="2026-01-07-council", completed_stage=4)
+    _write_meeting(prior); _write_embeddings(prior)
+    assert apply_enroll("2026-01-07-council", "SPEAKER_00") is True
+
+    # A new meeting with the same speaker, not yet enrolled here.
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in page.confirmed if c.label == "SPEAKER_00"][0]
+    assert card.is_enrolled is False           # this meeting hasn't contributed
+    assert card.profile_meetings == 1          # counts only the OTHER (prior) meeting
+    assert card.profile_samples == 1
+    assert card.profile_strength == "building"
+
+
+def test_load_review_page_no_profile_is_new(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in page.confirmed if c.label == "SPEAKER_00"][0]
+    assert card.profile_meetings == 0 and card.profile_strength == "new"
+
+
+def test_review_page_renders_profile_hint(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir); _write_embeddings(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert "profile-strength" in body
+    assert "New voice — no profile yet" in body
+
+
 def test_apply_enroll_guards(tagged_meeting_dir, tmp_meetings_dir):
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     _write_meeting(mdir)

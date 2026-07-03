@@ -15,7 +15,7 @@ _STAGE_LABELS = {
     4: "Identified — ready to review",
     5: "Summarized",
     6: "Voices enrolled",
-    7: "Published",
+    7: "Exported",  # local export files written — NOT the same as live on the site
 }
 
 
@@ -64,10 +64,20 @@ class MeetingSummary:
     review_status: Optional[str] = None
     trusted_coverage: Optional[float] = None
     has_thumbnail: bool = False
+    # Live-site status from the DB: True = live, False = queried but not live,
+    # None = not checked (no DB configured) so no badge is shown.
+    is_live: Optional[bool] = None
 
     @property
     def stage_label(self) -> str:
         return stage_label(self.completed_stage)
+
+    @property
+    def live_badge(self) -> Optional[tuple[str, str]]:
+        """(css_token, text) for the live-site badge, or None when unknown."""
+        if self.is_live is None:
+            return None
+        return ("live", "Live") if self.is_live else ("notlive", "Not live")
 
     @property
     def speakers_label(self) -> str:
@@ -99,6 +109,11 @@ CONFIDENT_THRESHOLD = 0.85
 # (guards against the profile pollution calibration found). Still allowed, but flagged.
 ENROLL_MIN_SPEECH_SECONDS = 30.0
 
+# A voice profile drawn from at least this many distinct meetings is "strong" —
+# robust enough that enrolling another routine sample adds little. Below it, the
+# profile is still "building" and clean samples are worth saving.
+PROFILE_STRONG_MEETINGS = 3
+
 _UNIDENTIFIED = "(unidentified)"
 
 
@@ -121,6 +136,32 @@ class SpeakerCard:
     is_enrollable: bool = False   # named, not a non-speaker, has an embedding
     is_enrolled: bool = False     # this meeting already contributed to the voice profile
     thin_sample: bool = False     # < ENROLL_MIN_SPEECH_SECONDS of speech
+    profile_meetings: int = 0     # distinct meetings the stored voice profile draws from
+    profile_samples: int = 0      # voice samples (embeddings) in the stored profile
+
+    @property
+    def profile_strength(self) -> str:
+        """'new' | 'building' | 'strong' — robustness of the existing voice profile.
+
+        When the enroll button is shown (this meeting not yet enrolled), the counts
+        reflect only OTHER meetings — i.e. how strong the profile already is before
+        this one, which is exactly what tells you whether enrolling adds value."""
+        if self.profile_meetings <= 0:
+            return "new"
+        if self.profile_meetings >= PROFILE_STRONG_MEETINGS:
+            return "strong"
+        return "building"
+
+    @property
+    def profile_hint(self) -> str:
+        """Human label for the card, e.g. 'Profile strong — 6 samples from 4 meetings'."""
+        n_m, n_s = self.profile_meetings, self.profile_samples
+        if n_m <= 0:
+            return "New voice — no profile yet"
+        meetings = "meeting" if n_m == 1 else "meetings"
+        samples = "sample" if n_s == 1 else "samples"
+        word = "strong" if self.profile_strength == "strong" else "building"
+        return f"Profile {word} — {n_s} {samples} from {n_m} {meetings}"
 
     @property
     def display_name(self) -> str:
