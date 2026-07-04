@@ -44,7 +44,7 @@ class Segment:
         if self.speaker_name is not None:
             d["speaker_name"] = self.speaker_name
         if self.confidence is not None:
-            d["confidence"] = self.confidence
+            d["confidence"] = float(self.confidence)
         if self.id_method is not None:
             d["id_method"] = self.id_method
         return d
@@ -81,7 +81,7 @@ class SpeakerMapping:
         d = {
             "speaker_label": self.speaker_label,
             "speaker_name": self.speaker_name,
-            "confidence": self.confidence,
+            "confidence": float(self.confidence),
             "id_method": self.id_method,
             "needs_review": self.needs_review,
         }

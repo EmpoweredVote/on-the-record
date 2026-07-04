@@ -1,4 +1,26 @@
-from src.models import Meeting, MeetingSummary
+from src.models import Meeting, MeetingSummary, Segment, SpeakerMapping
+
+
+def test_segment_to_dict_coerces_numpy_confidence_to_native_float():
+    # scipy's cosine similarity yields numpy floats; to_dict must emit a plain
+    # float so the serialized JSON/DB payload carries no numpy scalar. Use
+    # `type(...) is float` (not isinstance) since numpy.float64 subclasses float.
+    import numpy as np
+
+    seg = Segment(segment_id=1, start_time=0.0, end_time=1.0,
+                  speaker_label="A", confidence=np.float64(0.987))
+    d = seg.to_dict()
+    assert type(d["confidence"]) is float
+    assert d["confidence"] == 0.987
+
+
+def test_speaker_mapping_to_dict_coerces_numpy_confidence_to_native_float():
+    import numpy as np
+
+    sm = SpeakerMapping(speaker_label="A", confidence=np.float64(0.512))
+    d = sm.to_dict()
+    assert type(d["confidence"]) is float
+    assert d["confidence"] == 0.512
 
 
 def test_meeting_summary_highlights_field():
