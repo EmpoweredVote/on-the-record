@@ -160,6 +160,21 @@ outlet = event_orgs[0]  if event_orgs
 - **Chapters-present classification**: classifier receives the prior and preserves neutral titles;
   behavior with no chapters is unchanged.
 
+## Known limitations
+
+- **YouTube auto-generated chapters are not reachable.** yt-dlp reliably extracts two kinds of
+  chapters: creator description-timestamps and chapters a creator sets in YouTube Studio (the
+  player markers map). YouTube's *auto-generated* chapters (its ML "key moments") are rendered
+  client-side from a separate, session-gated request that yt-dlp does not call — they are absent
+  from the innertube player response and the watch-page HTML even with authenticated browser
+  cookies (verified against `youtube.com/watch?v=6HETwu7Kfu8`, an Ezra Klein Show forum whose
+  UI shows chapters but whose metadata exposes none). For such videos the pipeline falls back to
+  the existing LLM section classifier — no breakage, just no hint. Retrieving auto-chapters would
+  require a headless-browser scrape, which is out of scope.
+- Dry-run confirmation: `youtube.com/watch?v=BpS4q6wKctg` (CBS LA governor candidate comparison)
+  yields 10 creator chapters → 9 after intro-drop, and resolves the outlet to the channel
+  "CBS LA" instead of the video title — both goals working on a real target-case video.
+
 ## Non-goals (YAGNI)
 
 - Not auto-filling `event_orgs` from the channel — `event_orgs` stays "a value a human set."
