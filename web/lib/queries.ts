@@ -107,7 +107,7 @@ function mapPerson(p: any): Person {
     politician_id: p.politicianId,
     name: p.name,
     headshot_url: p.headshotUrl ?? null,
-    party: p.party ?? null,
+    // Party affiliation from the API is intentionally dropped — anti-partisan.
     office_title: p.officeTitle ?? null,
     district: p.district ?? null,
     jurisdiction: p.jurisdiction ?? null,

@@ -20,6 +20,7 @@ import type { Appearance, Candidate, SummarySection } from "@/lib/types";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
+import PersonPhoto from "@/components/PersonPhoto";
 
 const ESSENTIALS_BASE = "https://essentials.city";
 
@@ -91,21 +92,13 @@ export default function PersonDetailClient() {
         ← All people
       </Link>
       <header className="personHeader">
-        {person.headshot_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="personPhoto large" src={person.headshot_url} alt="" />
-        ) : (
-          <span className="personPhoto large personPhotoFallback" aria-hidden>
-            {person.name.charAt(0)}
-          </span>
-        )}
+        <PersonPhoto name={person.name} url={person.headshot_url} large />
         <div>
           <h1>{person.name}</h1>
           <p className="personOffice">
             {[person.office_title, person.district, person.jurisdiction]
               .filter(Boolean)
               .join(" · ")}
-            {person.party ? ` · ${person.party}` : ""}
           </p>
           {person.politician_id && (
             <a
@@ -114,7 +107,7 @@ export default function PersonDetailClient() {
               target="_blank"
               rel="noreferrer"
             >
-              Full profile on essentials.city ↗
+              Full profile on essentials ↗
             </a>
           )}
         </div>
@@ -458,7 +451,11 @@ function Turn({
   const grabbed = collection.cands.some(
     (c) => c.meeting_id === appearance.meeting_id && c.segment_id === segId
   );
-  const link = quoteDeepLink(meta?.source_url, meta?.playback_kind, startTime);
+  // Timestamps go to our own meeting page at the moment (player seeks via ?t=,
+  // transcript scrolls via #seg-), not out to the raw YouTube source.
+  const meetingLink = `/meetings/${appearance.meeting_id}?t=${Math.floor(
+    startTime
+  )}#seg-${segId}`;
 
   const handle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -478,13 +475,9 @@ function Turn({
       data-t={startTime}
       data-seg={segId}
     >
-      {link ? (
-        <a className="skimTs" href={link} target="_blank" rel="noreferrer">
-          {formatTime(startTime)}
-        </a>
-      ) : (
-        <span className="skimTs">{formatTime(startTime)}</span>
-      )}
+      <Link className="skimTs" href={meetingLink}>
+        {formatTime(startTime)}
+      </Link>
       <span className="skimTurnText">{text}</span>
       <button className="skimGrabBtn" onClick={handle}>
         {grabbed ? "✓ grabbed" : "＋ grab"}
