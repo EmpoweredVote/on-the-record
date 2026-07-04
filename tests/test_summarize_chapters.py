@@ -137,6 +137,26 @@ def test_overlapping_chapters_same_segment_are_dropped():
         assert h["start_segment"] <= h["end_segment"]
 
 
+def test_hints_use_segment_id_not_position():
+    # Production case: an empty-text segment was filtered out before hinting, so
+    # segment_ids are non-contiguous (id 1 is missing). A positional index would
+    # diverge from the segment_id the classifier actually sees in the transcript.
+    segments = [
+        Segment(segment_id=0, start_time=0.0, end_time=10.0, speaker_label="S", text="a"),
+        Segment(segment_id=2, start_time=30.0, end_time=40.0, speaker_label="S", text="b"),
+        Segment(segment_id=3, start_time=60.0, end_time=70.0, speaker_label="S", text="c"),
+    ]
+    chapters = [
+        {"start_time": 0.0, "end_time": 30.0, "title": "First"},
+        {"start_time": 30.0, "end_time": None, "title": "Second"},
+    ]
+    hints = chapters_to_segment_hints(chapters, segments)
+    assert hints == [
+        {"start_segment": 0, "end_segment": 0, "title": "First"},
+        {"start_segment": 2, "end_segment": 3, "title": "Second"},
+    ]
+
+
 from src.summarize import _resolve_outlet
 
 

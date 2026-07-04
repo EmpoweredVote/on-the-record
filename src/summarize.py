@@ -62,14 +62,16 @@ def chapters_to_segment_hints(
     Each chapter start snaps to the segment that contains it (the last segment
     whose start_time <= the chapter start), or segment 0 when the chapter
     precedes all segments.
-    Returns [{start_segment, end_segment, title}] with end_segment inferred from
-    the next chapter's start_segment.
+    Returns [{start_segment, end_segment, title}] where start_segment/end_segment
+    are Segment.segment_id values (matching the classifier's numbering), with
+    end_segment inferred from the next chapter's start.
     """
     if not chapters or not segments:
         return []
 
-    def _seg_index_for(t: float) -> int:
-        # Last segment starting at or before t; segment 0 if t precedes all segments.
+    def _pos_for(t: float) -> int:
+        # Positional index of the last segment starting at or before t;
+        # 0 if t precedes all segments.
         idx = 0
         for i, seg in enumerate(segments):
             if seg.start_time <= t:
@@ -78,22 +80,22 @@ def chapters_to_segment_hints(
                 break
         return idx
 
-    starts = [_seg_index_for(c["start_time"]) for c in chapters]
+    starts = [_pos_for(c["start_time"]) for c in chapters]
     hints = []
     for i, chap in enumerate(chapters):
-        start_seg = starts[i]
+        start_pos = starts[i]
         if i + 1 < len(chapters):
-            end_seg = starts[i + 1] - 1
+            end_pos = starts[i + 1] - 1
         else:
-            end_seg = len(segments) - 1
-        if end_seg < start_seg:
+            end_pos = len(segments) - 1
+        if end_pos < start_pos:
             # A later chapter snaps to the same (or earlier) segment, leaving
             # this one no room of its own — drop it to avoid overlapping,
             # contradictory boundary hints.
             continue
         hints.append({
-            "start_segment": start_seg,
-            "end_segment": end_seg,
+            "start_segment": segments[start_pos].segment_id,
+            "end_segment": segments[end_pos].segment_id,
             "title": chap.get("title", ""),
         })
     return hints
