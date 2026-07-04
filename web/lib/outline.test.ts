@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildOutline } from "./outline";
-import type { SummarySection } from "./types";
+import { buildOutline, meetingTopics } from "./outline";
+import type { SectionTopicRef, SummarySection } from "./types";
 
-function section(section_type: string, title = "T"): SummarySection {
+function section(
+  section_type: string,
+  title = "T",
+  topics: SectionTopicRef[] = []
+): SummarySection {
   return {
     section_type,
     title,
@@ -10,8 +14,12 @@ function section(section_type: string, title = "T"): SummarySection {
     start_time: 0,
     end_time: 1,
     sort_order: 0,
-    topics: [],
+    topics,
   } as SummarySection;
+}
+
+function topic(key: string, title = key): SectionTopicRef {
+  return { key, title, status: "predicted" };
 }
 
 describe("buildOutline", () => {
@@ -43,5 +51,25 @@ describe("buildOutline", () => {
   it("handles null/undefined sections", () => {
     expect(buildOutline(null)).toEqual([]);
     expect(buildOutline(undefined)).toEqual([]);
+  });
+});
+
+describe("meetingTopics", () => {
+  it("collects distinct topics across sections in first-seen order", () => {
+    const sections = [
+      section("topic", "Intro", []),
+      section("topic", "A", [topic("homelessness"), topic("housing")]),
+      section("topic", "B", [topic("housing"), topic("economic-development")]),
+    ];
+    expect(meetingTopics(sections).map((t) => t.key)).toEqual([
+      "homelessness",
+      "housing",
+      "economic-development",
+    ]);
+  });
+
+  it("returns [] when no section has topics (genuinely untagged)", () => {
+    expect(meetingTopics([section("topic", "Intro"), section("topic", "Outro")])).toEqual([]);
+    expect(meetingTopics(null)).toEqual([]);
   });
 });

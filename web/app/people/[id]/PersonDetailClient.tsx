@@ -13,6 +13,7 @@ import { useApi } from "@/lib/useApi";
 import { usePathParam } from "@/lib/usePathParam";
 import { useCandidates } from "@/lib/useCandidates";
 import { topicForTime } from "@/lib/topicForTime";
+import { meetingTopics } from "@/lib/outline";
 import { quoteDeepLink } from "@/lib/sourceLink";
 import { applyStar, groupByLabel } from "@/lib/candidates";
 import { candidatesToMarkdown } from "@/lib/candidateMarkdown";
@@ -308,7 +309,11 @@ function ReadView({
         const mid = a.meeting_id;
         const isCollapsed = collapsed.has(mid);
         const grabbedHere = collection.cands.filter((c) => c.meeting_id === mid).length;
-        const topic = barTopic[mid];
+        // When actively scrolling a tagged section, show that one topic (sticky
+        // indicator). Otherwise (collapsed, or at an untagged intro) fall back to
+        // the meeting's distinct topics so interviews don't read as "untagged".
+        const scrollTopic = barTopic[mid];
+        const topics = scrollTopic ? [scrollTopic] : meetingTopics(meta[mid]?.sections);
         return (
           <section
             key={mid}
@@ -329,11 +334,16 @@ function ReadView({
                 </div>
                 <div className="skimTopicRow">
                   <span className="skimLead">Topic</span>
-                  {topic ? (
-                    <span className={`skimChip${topic.status === "predicted" ? " pred" : ""}`}>
-                      <span className="skimDot" />
-                      {topic.title ?? topic.key}
-                    </span>
+                  {topics.length > 0 ? (
+                    topics.map((t) => (
+                      <span
+                        key={t.key}
+                        className={`skimChip${t.status === "predicted" ? " pred" : ""}`}
+                      >
+                        <span className="skimDot" />
+                        {t.title ?? t.key}
+                      </span>
+                    ))
                   ) : (
                     <span className="skimUntagged">— procedural / untagged</span>
                   )}
