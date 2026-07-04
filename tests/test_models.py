@@ -67,3 +67,24 @@ def test_meeting_from_dict_preserves_real_values():
     back = Meeting.from_dict(d)
     assert back.meeting_type == "Regular Session"
     assert back.event_kind == "council"
+
+
+def test_processing_metadata_roundtrips_channel_and_chapters():
+    from src.models import ProcessingMetadata
+
+    meta = ProcessingMetadata(
+        source_title="Some Video Title",
+        source_channel="Brian Tyler Cohen",
+        source_chapters=[{"start_time": 0.0, "end_time": 30.0, "title": "Intro"}],
+    )
+    restored = ProcessingMetadata.from_dict(meta.to_dict())
+    assert restored.source_channel == "Brian Tyler Cohen"
+    assert restored.source_chapters == [{"start_time": 0.0, "end_time": 30.0, "title": "Intro"}]
+
+
+def test_processing_metadata_omits_unset_new_fields():
+    from src.models import ProcessingMetadata
+
+    d = ProcessingMetadata().to_dict()
+    assert "source_channel" not in d
+    assert "source_chapters" not in d
