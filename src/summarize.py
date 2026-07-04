@@ -165,6 +165,7 @@ def _classify_sections_chunk(
     client,
     condensed: str,
     seg_offset: int = 0,
+    chapter_hint: str = "",
 ) -> list[dict]:
     """Classify one chunk of transcript into sections using Haiku."""
     message = client.messages.create(
@@ -173,7 +174,7 @@ def _classify_sections_chunk(
         system=_CLASSIFY_SYSTEM,
         messages=[{
             "role": "user",
-            "content": f"Classify this council meeting transcript into sections:\n\n{condensed}",
+            "content": f"Classify this council meeting transcript into sections:\n\n{condensed}{chapter_hint}",
         }],
     )
 
@@ -193,14 +194,17 @@ def _classify_sections_chunk(
 def classify_sections(
     client,
     segments: list[Segment],
+    chapter_hint: str = "",
 ) -> list[dict]:
     """Classify the full transcript into sections, chunking if needed."""
     chunk_size = config.SUMMARY_CHUNK_SIZE
 
     if len(segments) <= chunk_size:
         condensed = _condensed_transcript(segments)
-        return _classify_sections_chunk(client, condensed)
+        return _classify_sections_chunk(client, condensed, chapter_hint=chapter_hint)
 
+    # Chunked path: hint segment indices span the whole transcript, not a chunk,
+    # so we do not inject it here (falls back to today's behavior).
     # Chunk large transcripts with overlap for context
     all_sections = []
     for i in range(0, len(segments), chunk_size):
@@ -468,7 +472,11 @@ def _generate_executive_summary(
 # Interview/Media classification and executive summary helpers
 # ---------------------------------------------------------------------------
 
-def _classify_sections_interview(client, segments: list[Segment]) -> list[dict]:
+def _classify_sections_interview(
+    client,
+    segments: list[Segment],
+    chapter_hint: str = "",
+) -> list[dict]:
     """Classify interview transcript into topic sections using Haiku."""
     condensed = _condensed_transcript(segments)
     message = client.messages.create(
@@ -477,7 +485,7 @@ def _classify_sections_interview(client, segments: list[Segment]) -> list[dict]:
         system=_INTERVIEW_CLASSIFY_SYSTEM,
         messages=[{
             "role": "user",
-            "content": f"Classify this interview transcript into topic sections:\n\n{condensed}",
+            "content": f"Classify this interview transcript into topic sections:\n\n{condensed}{chapter_hint}",
         }],
     )
     text = message.content[0].text

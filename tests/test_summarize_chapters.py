@@ -55,3 +55,39 @@ def test_format_chapter_hint_includes_titles_and_guidance():
 
 def test_format_chapter_hint_empty_is_empty_string():
     assert _format_chapter_hint([]) == ""
+
+
+from unittest.mock import MagicMock
+from src.summarize import classify_sections, _classify_sections_interview
+
+
+def _capture_client(response_json: str):
+    client = MagicMock()
+    captured = {}
+
+    def create(**kwargs):
+        captured["content"] = kwargs["messages"][0]["content"]
+        msg = MagicMock()
+        msg.content = [MagicMock(text=response_json)]
+        return msg
+
+    client.messages.create.side_effect = create
+    return client, captured
+
+
+def test_council_classifier_includes_hint():
+    client, captured = _capture_client('{"sections": []}')
+    classify_sections(client, _segs([0.0, 10.0]), chapter_hint="HINTMARKER housing")
+    assert "HINTMARKER housing" in captured["content"]
+
+
+def test_council_classifier_omits_hint_when_absent():
+    client, captured = _capture_client('{"sections": []}')
+    classify_sections(client, _segs([0.0, 10.0]))
+    assert "HINTMARKER" not in captured["content"]
+
+
+def test_interview_classifier_includes_hint():
+    client, captured = _capture_client('{"sections": []}')
+    _classify_sections_interview(client, _segs([0.0, 10.0]), chapter_hint="HINTMARKER tax")
+    assert "HINTMARKER tax" in captured["content"]
