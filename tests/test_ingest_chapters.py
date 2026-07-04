@@ -60,3 +60,60 @@ def test_fewer_than_two_matches_returns_empty():
 def test_none_or_empty_description():
     assert parse_description_chapters(None) == []
     assert parse_description_chapters("") == []
+
+
+def test_normalize_uses_ytdlp_chapters_when_present():
+    # start times are non-zero so the intro-drop doesn't interfere here;
+    # this test isolates "prefer yt-dlp chapters over description".
+    info = {
+        "chapters": [
+            {"start_time": 10.0, "end_time": 40.0, "title": "Zoning"},
+            {"start_time": 40.0, "end_time": 90.0, "title": "Housing"},
+        ],
+        "description": "00:00 Ignored\n01:00 Also ignored",
+    }
+    chapters = normalize_chapters(info)
+    assert [c["title"] for c in chapters] == ["Zoning", "Housing"]
+    assert chapters[0]["start_time"] == 10.0
+    assert chapters[0]["end_time"] == 40.0
+
+
+def test_normalize_falls_back_to_description():
+    info = {
+        "chapters": [],
+        "description": "00:30 First topic\n01:30 Second topic",
+    }
+    chapters = normalize_chapters(info)
+    assert [c["title"] for c in chapters] == ["First topic", "Second topic"]
+    assert chapters[1]["start_time"] == 90.0
+
+
+def test_normalize_drops_intro_from_ytdlp():
+    info = {
+        "chapters": [
+            {"start_time": 0.0, "end_time": 30.0, "title": "Intro"},
+            {"start_time": 30.0, "end_time": 90.0, "title": "Housing"},
+        ],
+    }
+    chapters = normalize_chapters(info)
+    assert [c["title"] for c in chapters] == ["Housing"]
+
+
+def test_normalize_drops_intro_from_description():
+    info = {"chapters": [], "description": "00:00 Branding\n01:30 Real topic\n02:30 Another"}
+    chapters = normalize_chapters(info)
+    assert [c["title"] for c in chapters] == ["Real topic", "Another"]
+
+
+def test_normalize_no_chapters_no_timestamps_returns_empty():
+    assert normalize_chapters({"chapters": [], "description": "just prose"}) == []
+    assert normalize_chapters({}) == []
+
+
+def test_normalize_coerces_partial_ytdlp_entries():
+    # yt-dlp entries sometimes omit end_time; title may be missing.
+    info = {"chapters": [{"start_time": 5.0, "title": "A"}, {"start_time": 12.0}]}
+    chapters = normalize_chapters(info)
+    assert chapters[0] == {"start_time": 5.0, "end_time": None, "title": "A"}
+    assert chapters[1]["title"] == ""
+    assert chapters[1]["start_time"] == 12.0

@@ -59,9 +59,37 @@ def parse_description_chapters(description: str | None) -> list[dict]:
     return parsed
 
 
+def _drop_intro_chapters(chapters: list[dict]) -> list[dict]:
+    """Remove intro-type entries — a chapter starting at 0:00 is almost always a
+    cold open / branding card, not an agenda item."""
+    return [c for c in chapters if c.get("start_time") != 0.0]
+
+
 def normalize_chapters(info: dict) -> list[dict]:
-    """Placeholder — implemented in Task 2."""
-    raise NotImplementedError
+    """Build a normalized chapter list from a yt-dlp info dict.
+
+    Prefers the creator's formal chapters (info["chapters"]); when absent/empty,
+    falls back to timestamped lines in the description. Intro-type entries
+    (start_time 0:00) are dropped from either source. Each result is
+    {start_time: float, end_time: float | None, title: str}.
+    """
+    raw = info.get("chapters") or []
+    normalized: list[dict] = []
+    if raw:
+        for c in raw:
+            start = c.get("start_time")
+            if start is None:
+                continue
+            normalized.append({
+                "start_time": float(start),
+                "end_time": float(c["end_time"]) if c.get("end_time") is not None else None,
+                "title": (c.get("title") or "").strip(),
+            })
+
+    if not normalized:
+        normalized = parse_description_chapters(info.get("description"))
+
+    return _drop_intro_chapters(normalized)
 
 
 def _is_url(path: str) -> bool:
