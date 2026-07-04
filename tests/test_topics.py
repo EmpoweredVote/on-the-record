@@ -22,6 +22,18 @@ def test_substantive_sections_filters_by_type_and_keeps_index():
     assert [i for i, _ in result] == [1, 3]
 
 
+def test_substantive_sections_includes_interview_topic_type():
+    # Interviews (news_clip/press_conference) produce section_type="topic".
+    # These are substantive and must be eligible for topic classification,
+    # otherwise every interview comes out "untagged".
+    sections = [
+        _section("topic", title="Homelessness Crisis and Solutions"),
+        _section("topic", title="Housing Development"),
+    ]
+    result = substantive_sections(sections)
+    assert [i for i, _ in result] == [0, 1]
+
+
 def test_validate_drops_out_of_vocab_keys():
     vocab = {"housing", "data-centers"}
     assert validate_topic_keys(["housing", "made-up", "data-centers"], vocab) == ["housing", "data-centers"]
