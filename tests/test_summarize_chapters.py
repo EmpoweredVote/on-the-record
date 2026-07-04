@@ -119,3 +119,19 @@ def test_generate_summary_passes_chapter_hint_to_classifier():
         generate_summary(meeting)
     # First call is the classifier; its content should carry the hint.
     assert "UNIQUEHINT topic" in captured["content"]
+
+
+def test_overlapping_chapters_same_segment_are_dropped():
+    # Two chapters land in segment 0 (coarse segments); the earlier one has no
+    # room of its own and is dropped — no overlapping/contradictory hints.
+    segments = _segs([0.0, 100.0, 200.0])
+    chapters = [
+        {"start_time": 0.0, "title": "A"},
+        {"start_time": 1.0, "title": "B"},
+        {"start_time": 200.0, "title": "C"},
+    ]
+    hints = chapters_to_segment_hints(chapters, segments)
+    assert [h["title"] for h in hints] == ["B", "C"]
+    # Every emitted hint has a valid (non-inverted) range:
+    for h in hints:
+        assert h["start_segment"] <= h["end_segment"]

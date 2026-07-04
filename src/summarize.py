@@ -60,7 +60,8 @@ def chapters_to_segment_hints(
     """Map chapter start times to segment indices for use as a classifier prior.
 
     Each chapter start snaps to the segment that contains it (the last segment
-    whose start_time <= the chapter start), falling back to the nearest segment.
+    whose start_time <= the chapter start), or segment 0 when the chapter
+    precedes all segments.
     Returns [{start_segment, end_segment, title}] with end_segment inferred from
     the next chapter's start_segment.
     """
@@ -68,7 +69,7 @@ def chapters_to_segment_hints(
         return []
 
     def _seg_index_for(t: float) -> int:
-        # Last segment starting at or before t; else the closest by start_time.
+        # Last segment starting at or before t; segment 0 if t precedes all segments.
         idx = 0
         for i, seg in enumerate(segments):
             if seg.start_time <= t:
@@ -82,9 +83,14 @@ def chapters_to_segment_hints(
     for i, chap in enumerate(chapters):
         start_seg = starts[i]
         if i + 1 < len(chapters):
-            end_seg = max(start_seg, starts[i + 1] - 1)
+            end_seg = starts[i + 1] - 1
         else:
             end_seg = len(segments) - 1
+        if end_seg < start_seg:
+            # A later chapter snaps to the same (or earlier) segment, leaving
+            # this one no room of its own — drop it to avoid overlapping,
+            # contradictory boundary hints.
+            continue
         hints.append({
             "start_segment": start_seg,
             "end_segment": end_seg,
