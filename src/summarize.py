@@ -505,17 +505,27 @@ def _classify_sections_interview(
         return []
 
 
+def _resolve_outlet(meeting: Meeting) -> str:
+    """Interviewer/outlet for the exec summary.
+
+    Resolution order: a human-set event_org, then the captured source channel,
+    then a generic fallback. The raw video TITLE is never used — a clickbait
+    title must never land in the 'In an interview with ___' slot.
+    """
+    if meeting.event_orgs:
+        return meeting.event_orgs[0]
+    if meeting.processing_metadata.source_channel:
+        return meeting.processing_metadata.source_channel
+    return "the interviewer"
+
+
 def _generate_interview_executive_summary(
     client,
     sections: list[SummarySection],
     meeting: Meeting,
 ) -> tuple[str, list[str]]:
     """Generate source-attributed executive summary for interview/media events."""
-    outlet = (
-        meeting.event_orgs[0]
-        if meeting.event_orgs
-        else (meeting.processing_metadata.source_title or "the interviewer")
-    )
+    outlet = _resolve_outlet(meeting)
 
     section_text = []
     for sec in sections:

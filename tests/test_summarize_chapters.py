@@ -135,3 +135,37 @@ def test_overlapping_chapters_same_segment_are_dropped():
     # Every emitted hint has a valid (non-inverted) range:
     for h in hints:
         assert h["start_segment"] <= h["end_segment"]
+
+
+from src.summarize import _resolve_outlet
+
+
+def _meeting_for_outlet(event_orgs=None, channel=None, title=None):
+    m = Meeting(
+        meeting_id="t", city=None, date="2026-07-04",
+        meeting_type="News Clip", event_kind="news_clip",
+        event_orgs=event_orgs or [], segments=[],
+    )
+    m.processing_metadata.source_channel = channel
+    m.processing_metadata.source_title = title
+    return m
+
+
+def test_outlet_prefers_event_org():
+    m = _meeting_for_outlet(event_orgs=["KQED"], channel="Some Channel", title="CLICKBAIT")
+    assert _resolve_outlet(m) == "KQED"
+
+
+def test_outlet_uses_channel_when_no_event_org():
+    m = _meeting_for_outlet(channel="Brian Tyler Cohen", title="LA Mayor's race EXPLODES")
+    assert _resolve_outlet(m) == "Brian Tyler Cohen"
+
+
+def test_outlet_never_uses_title():
+    m = _meeting_for_outlet(title="LA Mayor's race EXPLODES with major UPDATE")
+    assert _resolve_outlet(m) == "the interviewer"
+
+
+def test_outlet_default_when_all_absent():
+    m = _meeting_for_outlet()
+    assert _resolve_outlet(m) == "the interviewer"
