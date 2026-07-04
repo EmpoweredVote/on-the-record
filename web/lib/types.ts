@@ -47,7 +47,7 @@ export interface Person {
   politician_id: string;          // essentials.politicians UUID (the key + URL)
   name: string;
   headshot_url: string | null;
-  party: string | null;
+  // Party affiliation is intentionally not modeled — the site is anti-partisan.
   office_title: string | null;
   district: string | null;
   jurisdiction: string | null;

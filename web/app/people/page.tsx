@@ -6,6 +6,7 @@ import { useApi } from "@/lib/useApi";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
+import PersonPhoto from "@/components/PersonPhoto";
 
 export default function PeoplePage() {
   const { data: people, loading, error } = useApi(fetchPeople);
@@ -31,14 +32,7 @@ export default function PeoplePage() {
           {people.map((p) => (
             <li key={p.politician_id}>
               <Link href={`/people/${p.politician_id}`} className="personCard">
-                {p.headshot_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img className="personPhoto" src={p.headshot_url} alt="" />
-                ) : (
-                  <span className="personPhoto personPhotoFallback" aria-hidden>
-                    {p.name.charAt(0)}
-                  </span>
-                )}
+                <PersonPhoto name={p.name} url={p.headshot_url} />
                 <span className="personName">{p.name}</span>
                 {p.office_title && (
                   <span className="personOffice">
