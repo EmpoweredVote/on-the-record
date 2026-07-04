@@ -1236,7 +1236,9 @@ a {
 }
 .skimBar {
   position: sticky;
-  top: 0;
+  /* Stick below the sticky site header (its height is measured into
+     --site-header-height by SiteHeader; fallback covers first paint/SSR). */
+  top: var(--site-header-height, 75px);
   z-index: 5;
   background: color-mix(in srgb, var(--background) 92%, transparent);
   backdrop-filter: blur(8px);

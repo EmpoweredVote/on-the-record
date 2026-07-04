@@ -40,6 +40,23 @@ function DarkToggle({ isDark, onToggle }: { isDark: boolean; onToggle: () => voi
 export default function SiteHeader() {
   const [isDark, setIsDark] = useState(false);
 
+  // Publish the sticky header's height so content can stick below it
+  // (e.g. .skimBar). The ev-ui Header height varies by breakpoint (~75px
+  // desktop / ~67px mobile), so measure it live rather than hardcode.
+  useEffect(() => {
+    const el = document.querySelector("header");
+    if (!el) return;
+    const setVar = () =>
+      document.documentElement.style.setProperty(
+        "--site-header-height",
+        `${el.getBoundingClientRect().height}px`
+      );
+    setVar();
+    const ro = new ResizeObserver(setVar);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => {
     const read = () => {
       const root = document.documentElement;
