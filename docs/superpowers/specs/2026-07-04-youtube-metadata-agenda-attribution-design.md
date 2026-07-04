@@ -169,10 +169,16 @@ outlet = event_orgs[0]  if event_orgs
   from the innertube player response and the watch-page HTML even with authenticated browser
   cookies (verified against `youtube.com/watch?v=6HETwu7Kfu8`, an Ezra Klein Show forum whose
   UI shows chapters but whose metadata exposes none). For such videos the pipeline falls back to
-  the existing LLM section classifier — no breakage, just no hint. Retrieving auto-chapters would
-  require a headless-browser scrape, which is out of scope. Verified not a version lag: reproduced
-  on the latest stable yt-dlp (`2026.6.9`, the installed version) and the newest nightly
-  (`2026.7.3`) — both return 0 chapters for that video across all player clients.
+  the existing LLM section classifier — no breakage, just no hint. Verified not a version lag:
+  reproduced on the latest stable yt-dlp (`2026.6.9`, the installed version) and the newest
+  nightly (`2026.7.3`) — both return 0 chapters for that video across all player clients.
+  A headless-browser (Playwright) PoC was also rejected: an anonymous automated browser does not
+  receive the chapters either (no "Chapters" section, no chapters engagement panel, single
+  full-width progress segment) — YouTube serves auto-generated chapters selectively to
+  real/logged-in sessions. Extracting them would require a signed-in, stealth (non-headless)
+  browser session inside ingest (local + Modal GPU), with cookie management, per-video render
+  latency, and bot-detection fragility — too heavy to justify avoiding one LLM classification
+  call that already works as the fallback. Out of scope.
 - Dry-run confirmation: `youtube.com/watch?v=BpS4q6wKctg` (CBS LA governor candidate comparison)
   yields 10 creator chapters → 9 after intro-drop, and resolves the outlet to the channel
   "CBS LA" instead of the video title — both goals working on a real target-case video.
