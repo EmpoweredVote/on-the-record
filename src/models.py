@@ -206,6 +206,8 @@ class ProcessingMetadata:
     gpu_used: bool = False
     processing_time_seconds: Optional[float] = None
     source_title: Optional[str] = None
+    source_channel: Optional[str] = None
+    source_chapters: Optional[list] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -218,6 +220,10 @@ class ProcessingMetadata:
             d["processing_time_seconds"] = self.processing_time_seconds
         if self.source_title is not None:
             d["source_title"] = self.source_title
+        if self.source_channel is not None:
+            d["source_channel"] = self.source_channel
+        if self.source_chapters is not None:
+            d["source_chapters"] = self.source_chapters
         return d
 
     @classmethod
@@ -229,6 +235,8 @@ class ProcessingMetadata:
             gpu_used=d.get("gpu_used", False),
             processing_time_seconds=d.get("processing_time_seconds"),
             source_title=d.get("source_title"),
+            source_channel=d.get("source_channel"),
+            source_chapters=d.get("source_chapters"),
         )
 
 
