@@ -9,8 +9,7 @@ import MeetingView from "./MeetingView";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
-
-const SUBSTANTIVE = new Set(["discussion", "public_comment", "consent_agenda", "vote"]);
+import { buildOutline } from "@/lib/outline";
 
 export default function MeetingDetailClient() {
   const id = usePathParam(1); // /meetings/<id> — real URL id, not the build sentinel
@@ -27,7 +26,7 @@ export default function MeetingDetailClient() {
   const meeting = meetingQ.data;
   const segments = segmentsQ.data ?? [];
   const summary = summaryQ.data ?? null;
-  const outline = (summary?.sections ?? []).filter((s) => SUBSTANTIVE.has(s.section_type));
+  const outline = buildOutline(summary?.sections);
 
   return (
     <main className="meetingPage">

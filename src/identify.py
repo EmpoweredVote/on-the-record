@@ -73,7 +73,7 @@ def match_voice_profiles(
                 mappings[label] = SpeakerMapping(
                     speaker_label=label,
                     speaker_name=display,
-                    confidence=round(best_score, 3),
+                    confidence=float(round(best_score, 3)),
                     id_method=method,
                     needs_review=(display is None),
                 )
