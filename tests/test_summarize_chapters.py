@@ -91,3 +91,31 @@ def test_interview_classifier_includes_hint():
     client, captured = _capture_client('{"sections": []}')
     _classify_sections_interview(client, _segs([0.0, 10.0]), chapter_hint="HINTMARKER tax")
     assert "HINTMARKER tax" in captured["content"]
+
+
+from unittest.mock import patch
+from src.models import Meeting
+from src.summarize import generate_summary
+
+
+def _meeting_with_chapters(chapters):
+    segs = _segs([0.0, 30.0, 60.0])
+    m = Meeting(
+        meeting_id="t", city=None, date="2026-07-04",
+        meeting_type="News Clip", event_kind="news_clip", segments=segs,
+    )
+    m.processing_metadata.source_chapters = chapters
+    return m
+
+
+def test_generate_summary_passes_chapter_hint_to_classifier():
+    meeting = _meeting_with_chapters(
+        [{"start_time": 0.0, "end_time": 60.0, "title": "UNIQUEHINT topic"},
+         {"start_time": 60.0, "end_time": None, "title": "Second"}]
+    )
+    client, captured = _capture_client('{"sections": []}')
+    with patch("src.summarize.anthropic") as mock_anthropic:
+        mock_anthropic.Anthropic.return_value = client
+        generate_summary(meeting)
+    # First call is the classifier; its content should carry the hint.
+    assert "UNIQUEHINT topic" in captured["content"]

@@ -585,10 +585,16 @@ def generate_summary(
 
     # --- Pass 1: Classify sections ---
     _progress("classifying sections")
+    chapter_hint = _format_chapter_hint(
+        chapters_to_segment_hints(
+            meeting.processing_metadata.source_chapters or [],
+            segments,
+        )
+    )
     if is_interview:
-        raw_sections = _classify_sections_interview(client, segments)
+        raw_sections = _classify_sections_interview(client, segments, chapter_hint=chapter_hint)
     else:
-        raw_sections = classify_sections(client, segments)
+        raw_sections = classify_sections(client, segments, chapter_hint=chapter_hint)
 
     if not raw_sections:
         return MeetingSummary(
