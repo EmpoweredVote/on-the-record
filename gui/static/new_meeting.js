@@ -53,6 +53,42 @@
     input.city.toggleAttribute("required", needCity);
   }
 
+  const sourceInput = $("f-input");
+  const note = $("source-meta-note");
+  let lastFetched = null;
+
+  const looksLikeUrl = (s) => /^https?:\/\//i.test(s.trim());
+
+  function fillIfEmpty(el, value) {
+    if (el && value && el.value.trim() === "") el.value = value;
+  }
+
+  async function fetchSourceMeta() {
+    const url = sourceInput.value.trim();
+    if (!looksLikeUrl(url) || url === lastFetched) return;
+    lastFetched = url;
+    note.textContent = "Fetching video details…";
+    try {
+      const resp = await fetch("/api/source-meta?url=" + encodeURIComponent(url));
+      if (!resp.ok) throw new Error("bad status");
+      const data = await resp.json();
+      if (!data.date && !data.title && !data.event_org) {
+        note.textContent = "";  // non-video URL or nothing to fill
+        return;
+      }
+      fillIfEmpty(input.date, data.date);
+      fillIfEmpty(input.title, data.title);
+      fillIfEmpty($("f-orgs"), data.event_org);
+      note.textContent = "";
+      refresh();
+    } catch (e) {
+      note.textContent = "Couldn't fetch details — fill in manually.";
+    }
+  }
+
+  sourceInput.addEventListener("blur", fetchSourceMeta);
+  sourceInput.addEventListener("change", fetchSourceMeta);
+
   main.querySelectorAll("input, select").forEach((el) => {
     el.addEventListener("input", refresh);
     el.addEventListener("change", refresh);
