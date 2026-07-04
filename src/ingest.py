@@ -212,15 +212,10 @@ def normalize_audio(
         ffmpeg_input = str(actual_path)
 
         if is_ytdlp_url(source_str):
-            try:
-                import yt_dlp
-                with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
-                    info = ydl.extract_info(source_str, download=False)
-                    source_title = info.get("title") or None
-                    source_channel = info.get("uploader") or info.get("channel") or None
-                    source_chapters = normalize_chapters(info)
-            except Exception:
-                pass
+            meta = fetch_source_metadata(source_str)
+            source_title = meta["title"]
+            source_channel = meta["channel"]
+            source_chapters = meta["chapters"]
     else:
         ffmpeg_input = str(Path(input_path))
 
