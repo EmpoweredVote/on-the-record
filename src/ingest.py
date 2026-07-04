@@ -92,6 +92,44 @@ def normalize_chapters(info: dict) -> list[dict]:
     return _drop_intro_chapters(normalized)
 
 
+def _normalize_upload_date(raw: str | None) -> str | None:
+    """yt-dlp's 'YYYYMMDD' → 'YYYY-MM-DD'; None for missing/malformed."""
+    if not raw or len(raw) != 8 or not raw.isdigit():
+        return None
+    return f"{raw[0:4]}-{raw[4:6]}-{raw[6:8]}"
+
+
+def fetch_source_metadata(url: str) -> dict:
+    """Fetch a video's metadata via yt-dlp without downloading it.
+
+    Single source of truth for what we pull off a source video, reused by both
+    the processing pipeline (normalize_audio) and the GUI new-meeting form.
+    Best-effort: any extractor error yields an all-empty dict.
+
+    Returns {title, channel, upload_date ('YYYY-MM-DD'), duration (s), chapters}.
+    """
+    empty = {"title": None, "channel": None, "upload_date": None,
+             "duration": None, "chapters": []}
+    try:
+        import yt_dlp
+
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception:
+        return empty
+
+    if not info:
+        return empty
+
+    return {
+        "title": info.get("title") or None,
+        "channel": info.get("uploader") or info.get("channel") or None,
+        "upload_date": _normalize_upload_date(info.get("upload_date")),
+        "duration": info.get("duration") or None,
+        "chapters": normalize_chapters(info),
+    }
+
+
 def _is_url(path: str) -> bool:
     """Check if a string looks like a URL."""
     try:
@@ -174,15 +212,10 @@ def normalize_audio(
         ffmpeg_input = str(actual_path)
 
         if is_ytdlp_url(source_str):
-            try:
-                import yt_dlp
-                with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
-                    info = ydl.extract_info(source_str, download=False)
-                    source_title = info.get("title") or None
-                    source_channel = info.get("uploader") or info.get("channel") or None
-                    source_chapters = normalize_chapters(info)
-            except Exception:
-                pass
+            meta = fetch_source_metadata(source_str)
+            source_title = meta["title"]
+            source_channel = meta["channel"]
+            source_chapters = meta["chapters"]
     else:
         ffmpeg_input = str(Path(input_path))
 

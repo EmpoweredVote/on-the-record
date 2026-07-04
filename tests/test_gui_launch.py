@@ -347,3 +347,26 @@ def test_post_new_blank_body_is_none(tmp_config_dir, tmp_meetings_dir, monkeypat
         "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Clip",
         "event_kind": "news_clip", "body_slug": ""}, follow_redirects=False)
     assert seen["body"] is None
+
+
+def test_source_meta_non_ytdlp_returns_empty(tmp_meetings_dir):
+    client = TestClient(create_app())
+    resp = client.get("/api/source-meta", params={"url": "/path/to/video.mp4"})
+    assert resp.status_code == 200
+    assert resp.json() == {"date": None, "title": None, "event_org": None}
+
+
+def test_source_meta_ytdlp_returns_mapped_json(tmp_meetings_dir, monkeypatch):
+    from src import ingest
+
+    monkeypatch.setattr(ingest, "fetch_source_metadata", lambda url: {
+        "title": "City Council Feb 10", "channel": "WFYI",
+        "upload_date": "2026-02-10", "duration": 3600, "chapters": [],
+    })
+    client = TestClient(create_app())
+    resp = client.get("/api/source-meta",
+                      params={"url": "https://youtube.com/watch?v=x"})
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "date": "2026-02-10", "title": "City Council Feb 10", "event_org": "WFYI",
+    }

@@ -13,6 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from src import config
+from src import ingest
+from src.download import is_ytdlp_url
 
 from gui import publish_api
 from gui import review_api
@@ -84,6 +86,21 @@ def create_app() -> FastAPI:
     @app.get("/api/politicians/search")
     def politician_search(q: str = "") -> JSONResponse:
         return JSONResponse(review_api.search_politicians_safe(q))
+
+    @app.get("/api/source-meta")
+    def source_meta(url: str = "") -> JSONResponse:
+        # Only video URLs carry fetchable metadata; local paths / other URLs
+        # return an empty payload the client treats as "nothing to fill".
+        if not is_ytdlp_url(url):
+            return JSONResponse({"date": None, "title": None, "event_org": None})
+        # Look up ingest.fetch_source_metadata at call time so tests can
+        # monkeypatch it on the module.
+        meta = ingest.fetch_source_metadata(url)
+        return JSONResponse({
+            "date": meta["upload_date"],
+            "title": meta["title"],
+            "event_org": meta["channel"],
+        })
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/link")
     def link_speaker_route(meeting_id: str, label: str,
