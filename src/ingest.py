@@ -162,6 +162,8 @@ def normalize_audio(
 
     # Download from URL if needed
     source_title = None
+    source_channel = None
+    source_chapters: list[dict] = []
     if _is_url(source_str):
         from .download import download_from_url, is_ytdlp_url
 
@@ -177,6 +179,8 @@ def normalize_audio(
                 with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
                     info = ydl.extract_info(source_str, download=False)
                     source_title = info.get("title") or None
+                    source_channel = info.get("uploader") or info.get("channel") or None
+                    source_chapters = normalize_chapters(info)
             except Exception:
                 pass
     else:
@@ -207,4 +211,6 @@ def normalize_audio(
         "clip_start_seconds": clip_start,
         "clip_end_seconds": clip_end,
         "source_title": source_title,
+        "source_channel": source_channel,
+        "source_chapters": source_chapters,
     }
