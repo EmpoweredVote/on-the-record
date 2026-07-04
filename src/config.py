@@ -73,8 +73,10 @@ CHECKPOINT_EVERY_N_SEGMENTS = 50
 
 # --- Topic classification (Phase 6) ---
 TOPIC_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"
-# Section types worth tagging with a topic (procedural/roll_call/opening/closing skipped)
-SUBSTANTIVE_SECTION_TYPES = ("discussion", "public_comment", "consent_agenda", "vote")
+# Section types worth tagging with a topic (procedural/roll_call/opening/closing skipped).
+# "topic" is the type produced by the interview/media summary path
+# (event_kind in news_clip/press_conference) — without it, interviews never tag.
+SUBSTANTIVE_SECTION_TYPES = ("discussion", "public_comment", "consent_agenda", "vote", "topic")
 
 # --- Profile DB ---
 PROFILE_DB_FILENAME = "speaker_profiles.pkl"

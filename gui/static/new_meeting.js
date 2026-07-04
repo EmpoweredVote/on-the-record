@@ -88,6 +88,9 @@
 
   sourceInput.addEventListener("blur", fetchSourceMeta);
   sourceInput.addEventListener("change", fetchSourceMeta);
+  // Fire on paste too, so fields fill immediately without needing to blur.
+  // The pasted text isn't in .value until after the event, so defer a tick.
+  sourceInput.addEventListener("paste", () => setTimeout(fetchSourceMeta, 0));
 
   main.querySelectorAll("input, select").forEach((el) => {
     el.addEventListener("input", refresh);

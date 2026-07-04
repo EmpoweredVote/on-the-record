@@ -31,9 +31,21 @@ _REPO_DIR = _GUI_DIR.parent
 _RUN_LOCAL = str(_REPO_DIR / "run_local.py")
 
 
+class _NoCacheStaticFiles(StaticFiles):
+    """Serve static assets with Cache-Control: no-cache so the browser always
+    revalidates (via the ETag StaticFiles already sends) instead of silently
+    reusing a stale JS/CSS file after an edit. Revalidation stays cheap — an
+    unchanged file still returns a 304."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="CouncilScribe GUI")
-    app.mount("/static", StaticFiles(directory=str(_GUI_DIR / "static")), name="static")
+    app.mount("/static", _NoCacheStaticFiles(directory=str(_GUI_DIR / "static")), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     def library(request: Request) -> HTMLResponse:

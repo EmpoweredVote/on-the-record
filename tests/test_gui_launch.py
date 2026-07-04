@@ -13,6 +13,12 @@ def test_new_form_renders(tmp_meetings_dir):
     assert 'name="input"' in body and 'name="event_kind"' in body
 
 
+def test_static_assets_send_no_cache(tmp_meetings_dir):
+    resp = TestClient(create_app()).get("/static/new_meeting.js")
+    assert resp.status_code == 200
+    assert resp.headers.get("cache-control") == "no-cache"
+
+
 def test_post_new_launches_and_redirects(tmp_meetings_dir, monkeypatch):
     from gui import runner
     launched = {}
