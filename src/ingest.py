@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,6 +14,54 @@ from .audio_utils import (
     get_audio_duration,
     load_wav,
 )
+
+# A line counts as a chapter only if its first non-whitespace token is a
+# timestamp (MM:SS or HH:MM:SS), followed by whitespace and a non-empty title.
+_TIMESTAMP_LINE_RE = re.compile(r"^\s*((?:\d{1,2}:)?\d{1,2}:\d{2})\s+(\S.*?)\s*$")
+
+
+def _timestamp_to_seconds(ts: str) -> float:
+    """Parse 'MM:SS' or 'HH:MM:SS' into float seconds."""
+    parts = [int(p) for p in ts.split(":")]
+    if len(parts) == 3:
+        h, m, s = parts
+        return float(h * 3600 + m * 60 + s)
+    m, s = parts
+    return float(m * 60 + s)
+
+
+def parse_description_chapters(description: str | None) -> list[dict]:
+    """Extract timestamped agenda lines from a video description.
+
+    Only lines whose first non-whitespace token is a timestamp are treated as
+    chapters. Requires at least 2 such lines, otherwise returns []. Each result
+    is {start_time, end_time, title}; end_time is the next entry's start_time
+    (None for the last entry).
+    """
+    if not description:
+        return []
+
+    parsed: list[dict] = []
+    for line in description.splitlines():
+        match = _TIMESTAMP_LINE_RE.match(line)
+        if match:
+            parsed.append({
+                "start_time": _timestamp_to_seconds(match.group(1)),
+                "title": match.group(2).strip(),
+            })
+
+    if len(parsed) < 2:
+        return []
+
+    for i, chap in enumerate(parsed):
+        chap["end_time"] = parsed[i + 1]["start_time"] if i + 1 < len(parsed) else None
+
+    return parsed
+
+
+def normalize_chapters(info: dict) -> list[dict]:
+    """Placeholder — implemented in Task 2."""
+    raise NotImplementedError
 
 
 def _is_url(path: str) -> bool:
