@@ -170,7 +170,9 @@ outlet = event_orgs[0]  if event_orgs
   cookies (verified against `youtube.com/watch?v=6HETwu7Kfu8`, an Ezra Klein Show forum whose
   UI shows chapters but whose metadata exposes none). For such videos the pipeline falls back to
   the existing LLM section classifier — no breakage, just no hint. Retrieving auto-chapters would
-  require a headless-browser scrape, which is out of scope.
+  require a headless-browser scrape, which is out of scope. Verified not a version lag: reproduced
+  on the latest stable yt-dlp (`2026.6.9`, the installed version) and the newest nightly
+  (`2026.7.3`) — both return 0 chapters for that video across all player clients.
 - Dry-run confirmation: `youtube.com/watch?v=BpS4q6wKctg` (CBS LA governor candidate comparison)
   yields 10 creator chapters → 9 after intro-drop, and resolves the outlet to the channel
   "CBS LA" instead of the video title — both goals working on a real target-case video.
