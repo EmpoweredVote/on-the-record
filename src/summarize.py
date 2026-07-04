@@ -53,6 +53,72 @@ def _condensed_transcript(segments: list[Segment], max_chars_per_seg: int = 120)
     return "\n".join(lines)
 
 
+def chapters_to_segment_hints(
+    chapters: list[dict],
+    segments: list[Segment],
+) -> list[dict]:
+    """Map chapter start times to segment indices for use as a classifier prior.
+
+    Each chapter start snaps to the segment that contains it (the last segment
+    whose start_time <= the chapter start), or segment 0 when the chapter
+    precedes all segments.
+    Returns [{start_segment, end_segment, title}] where start_segment/end_segment
+    are Segment.segment_id values (matching the classifier's numbering), with
+    end_segment inferred from the next chapter's start.
+    """
+    if not chapters or not segments:
+        return []
+
+    def _pos_for(t: float) -> int:
+        # Positional index of the last segment starting at or before t;
+        # 0 if t precedes all segments.
+        idx = 0
+        for i, seg in enumerate(segments):
+            if seg.start_time <= t:
+                idx = i
+            else:
+                break
+        return idx
+
+    starts = [_pos_for(c["start_time"]) for c in chapters]
+    hints = []
+    for i, chap in enumerate(chapters):
+        start_pos = starts[i]
+        if i + 1 < len(chapters):
+            end_pos = starts[i + 1] - 1
+        else:
+            end_pos = len(segments) - 1
+        if end_pos < start_pos:
+            # A later chapter snaps to the same (or earlier) segment, leaving
+            # this one no room of its own — drop it to avoid overlapping,
+            # contradictory boundary hints.
+            continue
+        hints.append({
+            "start_segment": segments[start_pos].segment_id,
+            "end_segment": segments[end_pos].segment_id,
+            "title": chap.get("title", ""),
+        })
+    return hints
+
+
+def _format_chapter_hint(hints: list[dict]) -> str:
+    """Render segment hints as prompt guidance, or '' when there are none."""
+    if not hints:
+        return ""
+    lines = [
+        f'- segments {h["start_segment"]}-{h["end_segment"]}: "{h["title"]}"'
+        for h in hints
+    ]
+    listing = "\n".join(lines)
+    return (
+        "\n\nThe video creator provided these chapter boundaries and titles:\n"
+        f"{listing}\n"
+        "Strongly prefer these boundaries and titles. Keep each title VERBATIM if "
+        "it is neutral and descriptive. Rewrite a title only if it is clickbait, "
+        "promotional, or ALL-CAPS hype. Adjust boundaries only if clearly wrong."
+    )
+
+
 def _full_section_transcript(segments: list[Segment], start: int, end: int) -> str:
     """Build full transcript text for a range of segments."""
     lines = []
@@ -107,6 +173,7 @@ def _classify_sections_chunk(
     client,
     condensed: str,
     seg_offset: int = 0,
+    chapter_hint: str = "",
 ) -> list[dict]:
     """Classify one chunk of transcript into sections using Haiku."""
     message = client.messages.create(
@@ -115,7 +182,7 @@ def _classify_sections_chunk(
         system=_CLASSIFY_SYSTEM,
         messages=[{
             "role": "user",
-            "content": f"Classify this council meeting transcript into sections:\n\n{condensed}",
+            "content": f"Classify this council meeting transcript into sections:\n\n{condensed}{chapter_hint}",
         }],
     )
 
@@ -135,14 +202,17 @@ def _classify_sections_chunk(
 def classify_sections(
     client,
     segments: list[Segment],
+    chapter_hint: str = "",
 ) -> list[dict]:
     """Classify the full transcript into sections, chunking if needed."""
     chunk_size = config.SUMMARY_CHUNK_SIZE
 
     if len(segments) <= chunk_size:
         condensed = _condensed_transcript(segments)
-        return _classify_sections_chunk(client, condensed)
+        return _classify_sections_chunk(client, condensed, chapter_hint=chapter_hint)
 
+    # Chunked path: hint segment indices span the whole transcript, not a chunk,
+    # so we do not inject it here (falls back to today's behavior).
     # Chunk large transcripts with overlap for context
     all_sections = []
     for i in range(0, len(segments), chunk_size):
@@ -410,7 +480,11 @@ def _generate_executive_summary(
 # Interview/Media classification and executive summary helpers
 # ---------------------------------------------------------------------------
 
-def _classify_sections_interview(client, segments: list[Segment]) -> list[dict]:
+def _classify_sections_interview(
+    client,
+    segments: list[Segment],
+    chapter_hint: str = "",
+) -> list[dict]:
     """Classify interview transcript into topic sections using Haiku."""
     condensed = _condensed_transcript(segments)
     message = client.messages.create(
@@ -419,7 +493,7 @@ def _classify_sections_interview(client, segments: list[Segment]) -> list[dict]:
         system=_INTERVIEW_CLASSIFY_SYSTEM,
         messages=[{
             "role": "user",
-            "content": f"Classify this interview transcript into topic sections:\n\n{condensed}",
+            "content": f"Classify this interview transcript into topic sections:\n\n{condensed}{chapter_hint}",
         }],
     )
     text = message.content[0].text
@@ -433,17 +507,27 @@ def _classify_sections_interview(client, segments: list[Segment]) -> list[dict]:
         return []
 
 
+def _resolve_outlet(meeting: Meeting) -> str:
+    """Interviewer/outlet for the exec summary.
+
+    Resolution order: a human-set event_org, then the captured source channel,
+    then a generic fallback. The raw video TITLE is never used — a clickbait
+    title must never land in the 'In an interview with ___' slot.
+    """
+    if meeting.event_orgs:
+        return meeting.event_orgs[0]
+    if meeting.processing_metadata.source_channel:
+        return meeting.processing_metadata.source_channel
+    return "the interviewer"
+
+
 def _generate_interview_executive_summary(
     client,
     sections: list[SummarySection],
     meeting: Meeting,
 ) -> tuple[str, list[str]]:
     """Generate source-attributed executive summary for interview/media events."""
-    outlet = (
-        meeting.event_orgs[0]
-        if meeting.event_orgs
-        else (meeting.processing_metadata.source_title or "the interviewer")
-    )
+    outlet = _resolve_outlet(meeting)
 
     section_text = []
     for sec in sections:
@@ -519,10 +603,16 @@ def generate_summary(
 
     # --- Pass 1: Classify sections ---
     _progress("classifying sections")
+    chapter_hint = _format_chapter_hint(
+        chapters_to_segment_hints(
+            meeting.processing_metadata.source_chapters or [],
+            segments,
+        )
+    )
     if is_interview:
-        raw_sections = _classify_sections_interview(client, segments)
+        raw_sections = _classify_sections_interview(client, segments, chapter_hint=chapter_hint)
     else:
-        raw_sections = classify_sections(client, segments)
+        raw_sections = classify_sections(client, segments, chapter_hint=chapter_hint)
 
     if not raw_sections:
         return MeetingSummary(
