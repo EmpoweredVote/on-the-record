@@ -67,3 +67,12 @@ def test_fetch_source_metadata_swallows_extractor_error(monkeypatch):
         "title": None, "channel": None, "upload_date": None,
         "duration": None, "chapters": [],
     }
+
+
+def test_fetch_source_metadata_none_info(monkeypatch):
+    _patch_ydl(monkeypatch, None)
+    meta = ingest.fetch_source_metadata("https://youtube.com/watch?v=x")
+    assert meta == {
+        "title": None, "channel": None, "upload_date": None,
+        "duration": None, "chapters": [],
+    }

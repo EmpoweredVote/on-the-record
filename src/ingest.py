@@ -118,6 +118,9 @@ def fetch_source_metadata(url: str) -> dict:
     except Exception:
         return empty
 
+    if not info:
+        return empty
+
     return {
         "title": info.get("title") or None,
         "channel": info.get("uploader") or info.get("channel") or None,
