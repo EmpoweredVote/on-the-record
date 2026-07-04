@@ -160,3 +160,27 @@ export interface TopicDetail {
   title: string | null;
   items: TopicItem[];
 }
+
+// A grabbed quote candidate, held client-side (localStorage) per politician.
+// The tool stays read-only against ev-accounts; candidates never touch the
+// compass taxonomy — `label` is a free-text personal tag reconciled to a real
+// topic_key later, at publish. `orig_text` is the verbatim grab; `edit_text` is
+// the trimmed/editorial version. `source_url` + `playback_kind` + `start_time`
+// build the deep-link back to the moment in the source video.
+export interface Candidate {
+  id: string;                 // local id (crypto.randomUUID)
+  politician_id: string;
+  meeting_id: string;
+  meeting_title: string;
+  meeting_date: string;       // YYYY-MM-DD
+  segment_id: number;         // originating segment (start segment for a cross-turn grab)
+  start_time: number;         // seconds — segment start (deep-link target)
+  source_url: string | null;  // meeting source (base url)
+  playback_kind: string | null;
+  orig_text: string;          // verbatim grab (never mutated)
+  edit_text: string;          // editorial-trimmed version
+  label: string;              // free-text topic label ("" = unlabeled)
+  note: string;               // note-to-self
+  starred: boolean;           // the one live pick for its label
+  created_at: number;         // epoch ms
+}
