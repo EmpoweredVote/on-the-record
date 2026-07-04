@@ -38,6 +38,10 @@ using them downstream.
   outlet. `--event-org` remains the authoritative manual override.
 - **Applies to council/agenda videos too**, not just interviews — the chapter-hint mechanism is
   generic across both classifiers.
+- **Drop intro-type entries.** A chapter whose start time is `0:00` is almost always a cold
+  open / branding card ("CBS News California Investigates", "Intro"), not an agenda item, so it
+  is removed during normalization — uniformly for both yt-dlp chapters and description-parsed
+  ones.
 
 ## Design
 
@@ -56,6 +60,9 @@ Derive a single normalized `chapters` list inside `normalize_audio`:
   `{start_time: float, end_time: float | None, title: str}`.
 - **Fallback:** when `chapters` is empty/absent, scan `description` line by line with a
   **leading-anchored** regex:
+
+  (The `≥2` threshold and the intro-drop below are counted/applied *after* extracting every
+  matching line — the raw parser returns all timestamped lines; normalization filters.)
 
   ```
   ^\s*((?:\d{1,2}:)?\d{1,2}:\d{2})\s+(\S.*?)\s*$
@@ -83,10 +90,11 @@ Derive a single normalized `chapters` list inside `normalize_audio`:
   COMING SOON | CBS News California Interactive Governor Candidate Guide
   ```
 
-  → **9 chapters** parsed (the `00:14`–`14:05` lines; note `05:59  Matt Mahan` with the double
-  space is included). The prose paragraphs, the `**` line, and the `COMING SOON` line are all
-  excluded because they do not start with a timestamp. (`00:00` is included as the first
-  boundary.)
+  → The parser extracts all **10** timestamped lines (`00:00`–`14:05`; note `05:59  Matt Mahan`
+  with the double space is included). The prose paragraphs, the `**` line, and the `COMING SOON`
+  line are all excluded because they do not start with a timestamp. Normalization then drops the
+  `00:00` intro entry ("CBS News California Investigates"), leaving **9** agenda chapters
+  (`00:14`–`14:05`).
 
 `normalize_audio`'s return dict gains `source_channel` and `source_chapters` alongside the
 existing `source_title`.
@@ -139,9 +147,11 @@ outlet = event_orgs[0]  if event_orgs
 
 ## Testing
 
-- **Description parser** (`src/ingest.py`): the CBS example above → exactly the 9 timestamped
-  titles; prose, `**`, and `COMING SOON` lines excluded. Also: `<2` matches → no chapters;
-  `HH:MM:SS` timestamps parse correctly; leading/inner whitespace tolerated.
+- **Description parser** (`src/ingest.py`): the CBS example above → all 10 timestamped titles
+  (parser keeps `00:00`); prose, `**`, and `COMING SOON` lines excluded. Also: `<2` matches →
+  no chapters; `HH:MM:SS` timestamps parse correctly; leading/inner whitespace tolerated.
+- **Intro drop** (`src/ingest.py`): `normalize_chapters` removes the `0:00` entry from both a
+  yt-dlp chapter list and a description-parsed list.
 - **Chapter → segment mapping** (`src/summarize.py`): chapter start times map to the expected
   segment indices given a synthetic segment list; boundaries inferred correctly for the last entry.
 - **Outlet fallback chain** (`src/summarize.py`): asserts channel is used when `event_orgs` is

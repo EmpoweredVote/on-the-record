@@ -14,7 +14,7 @@ Reference spec: `docs/superpowers/specs/2026-07-04-youtube-metadata-agenda-attri
 
 ## File Structure
 
-- `src/ingest.py` — **modify.** Add `parse_description_chapters` (pure) and `normalize_chapters` (pure); extend the existing `skip_download` `extract_info` block to also read `uploader`/`channel`, `chapters`, `description`; return `source_channel` and `source_chapters` in the metadata dict.
+- `src/ingest.py` — **modify.** Add `parse_description_chapters` (pure), `_drop_intro_chapters` (pure), and `normalize_chapters` (pure); extend the existing `skip_download` `extract_info` block to also read `uploader`/`channel`, `chapters`, `description`; return `source_channel` and `source_chapters` in the metadata dict.
 - `src/models.py` — **modify.** Add `source_channel` and `source_chapters` fields to `ProcessingMetadata`, with `to_dict`/`from_dict` support.
 - `run_local.py` — **modify.** Set the two new metadata fields alongside the existing `source_title` assignment (~line 849).
 - `src/summarize.py` — **modify.** Add `chapters_to_segment_hints` (pure) and `_format_chapter_hint` (pure); add an optional `chapter_hint` param to `classify_sections`, `_classify_sections_chunk`, and `_classify_sections_interview`, injecting prompt guidance; build the hint in `generate_summary`; change the outlet fallback in `_generate_interview_executive_summary`.
@@ -189,27 +189,46 @@ Append to `tests/test_ingest_chapters.py`:
 
 ```python
 def test_normalize_uses_ytdlp_chapters_when_present():
+    # start times are non-zero so the intro-drop doesn't interfere here;
+    # this test isolates "prefer yt-dlp chapters over description".
     info = {
         "chapters": [
-            {"start_time": 0.0, "end_time": 30.0, "title": "Intro"},
-            {"start_time": 30.0, "end_time": 90.0, "title": "Housing"},
+            {"start_time": 10.0, "end_time": 40.0, "title": "Zoning"},
+            {"start_time": 40.0, "end_time": 90.0, "title": "Housing"},
         ],
         "description": "00:00 Ignored\n01:00 Also ignored",
     }
     chapters = normalize_chapters(info)
-    assert [c["title"] for c in chapters] == ["Intro", "Housing"]
-    assert chapters[0]["start_time"] == 0.0
-    assert chapters[0]["end_time"] == 30.0
+    assert [c["title"] for c in chapters] == ["Zoning", "Housing"]
+    assert chapters[0]["start_time"] == 10.0
+    assert chapters[0]["end_time"] == 40.0
 
 
 def test_normalize_falls_back_to_description():
     info = {
         "chapters": [],
-        "description": "00:00 First topic\n01:30 Second topic",
+        "description": "00:30 First topic\n01:30 Second topic",
     }
     chapters = normalize_chapters(info)
     assert [c["title"] for c in chapters] == ["First topic", "Second topic"]
     assert chapters[1]["start_time"] == 90.0
+
+
+def test_normalize_drops_intro_from_ytdlp():
+    info = {
+        "chapters": [
+            {"start_time": 0.0, "end_time": 30.0, "title": "Intro"},
+            {"start_time": 30.0, "end_time": 90.0, "title": "Housing"},
+        ],
+    }
+    chapters = normalize_chapters(info)
+    assert [c["title"] for c in chapters] == ["Housing"]
+
+
+def test_normalize_drops_intro_from_description():
+    info = {"chapters": [], "description": "00:00 Branding\n01:30 Real topic\n02:30 Another"}
+    chapters = normalize_chapters(info)
+    assert [c["title"] for c in chapters] == ["Real topic", "Another"]
 
 
 def test_normalize_no_chapters_no_timestamps_returns_empty():
@@ -233,19 +252,26 @@ Expected: FAIL with `NotImplementedError`
 
 - [ ] **Step 3: Write minimal implementation**
 
-Replace the `normalize_chapters` stub in `src/ingest.py`:
+Replace the `normalize_chapters` stub in `src/ingest.py`, and add the intro-drop helper above it:
 
 ```python
+def _drop_intro_chapters(chapters: list[dict]) -> list[dict]:
+    """Remove intro-type entries — a chapter starting at 0:00 is almost always a
+    cold open / branding card, not an agenda item."""
+    return [c for c in chapters if c.get("start_time") != 0.0]
+
+
 def normalize_chapters(info: dict) -> list[dict]:
     """Build a normalized chapter list from a yt-dlp info dict.
 
     Prefers the creator's formal chapters (info["chapters"]); when absent/empty,
-    falls back to timestamped lines in the description. Each result is
+    falls back to timestamped lines in the description. Intro-type entries
+    (start_time 0:00) are dropped from either source. Each result is
     {start_time: float, end_time: float | None, title: str}.
     """
     raw = info.get("chapters") or []
+    normalized: list[dict] = []
     if raw:
-        normalized = []
         for c in raw:
             start = c.get("start_time")
             if start is None:
@@ -255,10 +281,11 @@ def normalize_chapters(info: dict) -> list[dict]:
                 "end_time": float(c["end_time"]) if c.get("end_time") is not None else None,
                 "title": (c.get("title") or "").strip(),
             })
-        if normalized:
-            return normalized
 
-    return parse_description_chapters(info.get("description"))
+    if not normalized:
+        normalized = parse_description_chapters(info.get("description"))
+
+    return _drop_intro_chapters(normalized)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -944,7 +971,7 @@ git commit -m "test: fix regressions from chapter/attribution changes"
 
 ## Self-Review Notes
 
-- **Spec §1 (capture metadata):** Tasks 1-3. ✓
+- **Spec §1 (capture metadata + intro drop):** Tasks 1-3. Intro-type (`0:00`) entries dropped in `_drop_intro_chapters` for both sources, tested in Task 2. ✓
 - **Spec §2 (persist):** Task 4. ✓
 - **Spec §3 (wire ingest→meeting):** Task 5. ✓
 - **Spec §4 (chapter hint, both classifiers, keep-if-clean):** Tasks 6-8. Hint text carries the "keep VERBATIM unless clickbait" guidance (`_format_chapter_hint`). ✓
