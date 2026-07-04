@@ -53,6 +53,64 @@ def _condensed_transcript(segments: list[Segment], max_chars_per_seg: int = 120)
     return "\n".join(lines)
 
 
+def chapters_to_segment_hints(
+    chapters: list[dict],
+    segments: list[Segment],
+) -> list[dict]:
+    """Map chapter start times to segment indices for use as a classifier prior.
+
+    Each chapter start snaps to the segment that contains it (the last segment
+    whose start_time <= the chapter start), falling back to the nearest segment.
+    Returns [{start_segment, end_segment, title}] with end_segment inferred from
+    the next chapter's start_segment.
+    """
+    if not chapters or not segments:
+        return []
+
+    def _seg_index_for(t: float) -> int:
+        # Last segment starting at or before t; else the closest by start_time.
+        idx = 0
+        for i, seg in enumerate(segments):
+            if seg.start_time <= t:
+                idx = i
+            else:
+                break
+        return idx
+
+    starts = [_seg_index_for(c["start_time"]) for c in chapters]
+    hints = []
+    for i, chap in enumerate(chapters):
+        start_seg = starts[i]
+        if i + 1 < len(chapters):
+            end_seg = max(start_seg, starts[i + 1] - 1)
+        else:
+            end_seg = len(segments) - 1
+        hints.append({
+            "start_segment": start_seg,
+            "end_segment": end_seg,
+            "title": chap.get("title", ""),
+        })
+    return hints
+
+
+def _format_chapter_hint(hints: list[dict]) -> str:
+    """Render segment hints as prompt guidance, or '' when there are none."""
+    if not hints:
+        return ""
+    lines = [
+        f'- segments {h["start_segment"]}-{h["end_segment"]}: "{h["title"]}"'
+        for h in hints
+    ]
+    listing = "\n".join(lines)
+    return (
+        "\n\nThe video creator provided these chapter boundaries and titles:\n"
+        f"{listing}\n"
+        "Strongly prefer these boundaries and titles. Keep each title VERBATIM if "
+        "it is neutral and descriptive. Rewrite a title only if it is clickbait, "
+        "promotional, or ALL-CAPS hype. Adjust boundaries only if clearly wrong."
+    )
+
+
 def _full_section_transcript(segments: list[Segment], start: int, end: int) -> str:
     """Build full transcript text for a range of segments."""
     lines = []
