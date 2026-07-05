@@ -15,6 +15,12 @@
   /* Inform pillar (ev-yellow) — subtle accent only, never text on light */
   --inform: #fed12e;
   --inform-soft: #f6f2e4;
+  /* Topic highlight tuning (hue supplied per-element via --th). Light theme. */
+  --tc-sat: 60%;
+  --tc-lit: 38%;
+  --tc-soft-sat: 72%;
+  --tc-soft-lit: 50%;
+  --tc-soft-a: 0.13;
 }
 
 /* =====================================================
@@ -34,6 +40,11 @@
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
     --inform: #fed12e;
     --inform-soft: #5b4b10;
+    --tc-sat: 72%;
+    --tc-lit: 68%;
+    --tc-soft-sat: 55%;
+    --tc-soft-lit: 58%;
+    --tc-soft-a: 0.24;
   }
 }
 
@@ -50,6 +61,11 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
   --inform: #fed12e;
   --inform-soft: #5b4b10;
+  --tc-sat: 72%;
+  --tc-lit: 68%;
+  --tc-soft-sat: 55%;
+  --tc-soft-lit: 58%;
+  --tc-soft-a: 0.24;
 }
 
 /* =====================================================
@@ -1230,6 +1246,18 @@ a {
   background: var(--inform);
 }
 
+/* Topic-colored chip: hue comes from inline --th; sat/lit/alpha are theme-aware.
+   The dot color matches the section highlight band for the same topic. */
+.skimChip.skimChip--topic {
+  background: hsl(var(--th) var(--tc-soft-sat) var(--tc-soft-lit) / var(--tc-soft-a));
+  border-color: hsl(var(--th) var(--tc-sat) var(--tc-lit));
+  color: hsl(var(--th) var(--tc-sat) var(--tc-lit));
+  font-style: normal;
+}
+.skimChip.skimChip--topic .skimDot {
+  background: hsl(var(--th) var(--tc-sat) var(--tc-lit));
+}
+
 /* meeting block + sticky bar */
 .skimMtg {
   margin-bottom: 2.25rem;
@@ -1389,6 +1417,13 @@ a.skimTs:hover {
   border-color: var(--inform);
   color: #7a5c00;
   background: transparent;
+}
+/* Topic highlight band on a turn (hue from inline --th). Lower specificity than
+   .skimTurn.grabbed so a grabbed turn keeps its yellow band. */
+.skimTurn--topic {
+  border-left-width: 3px;
+  border-left-color: hsl(var(--th) var(--tc-sat) var(--tc-lit));
+  background: hsl(var(--th) var(--tc-soft-sat) var(--tc-soft-lit) / var(--tc-soft-a));
 }
 
 /* selection-grab floating button */
