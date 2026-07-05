@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   fetchAppearances,
@@ -14,6 +14,7 @@ import { usePathParam } from "@/lib/usePathParam";
 import { useCandidates } from "@/lib/useCandidates";
 import { topicForTime } from "@/lib/topicForTime";
 import { meetingTopics } from "@/lib/outline";
+import { buildTopicHueMap, topicHueStyle } from "@/lib/topicColors";
 import { quoteDeepLink } from "@/lib/sourceLink";
 import { applyStar, groupByLabel } from "@/lib/candidates";
 import { candidatesToMarkdown } from "@/lib/candidateMarkdown";
@@ -176,6 +177,12 @@ function ReadView({
   collection: ReturnType<typeof useCandidates>;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // One hue per topic_key across the page, so a topic's chip dot matches its
+  // section highlight band everywhere on this page.
+  const hueMap = useMemo(
+    () => buildTopicHueMap(appearances.map((a) => meta[a.meeting_id]?.sections)),
+    [appearances, meta]
+  );
   // sticky-bar topic per meeting, tracked on scroll
   const [barTopic, setBarTopic] = useState<Record<string, SummarySection["topics"][number] | null>>({});
   // floating "grab selection" button + its payload
@@ -335,15 +342,21 @@ function ReadView({
                 <div className="skimTopicRow">
                   <span className="skimLead">Topic</span>
                   {topics.length > 0 ? (
-                    topics.map((t) => (
-                      <span
-                        key={t.key}
-                        className={`skimChip${t.status === "predicted" ? " pred" : ""}`}
-                      >
-                        <span className="skimDot" />
-                        {t.title ?? t.key}
-                      </span>
-                    ))
+                    topics.map((t) => {
+                      const hue = hueMap.get(t.key);
+                      return (
+                        <span
+                          key={t.key}
+                          className={`skimChip${t.status === "predicted" ? " pred" : ""}${
+                            hue != null ? " skimChip--topic" : ""
+                          }`}
+                          style={topicHueStyle(hue)}
+                        >
+                          <span className="skimDot" />
+                          {t.title ?? t.key}
+                        </span>
+                      );
+                    })
                   ) : (
                     <span className="skimUntagged">— procedural / untagged</span>
                   )}
@@ -356,6 +369,7 @@ function ReadView({
                   key={seg.segment_id}
                   appearance={a}
                   meta={meta[mid]}
+                  hueMap={hueMap}
                   segId={seg.segment_id}
                   startTime={seg.start_time}
                   text={seg.text}
@@ -444,6 +458,7 @@ function QuickLabel({
 function Turn({
   appearance,
   meta,
+  hueMap,
   segId,
   startTime,
   text,
@@ -452,6 +467,7 @@ function Turn({
 }: {
   appearance: Appearance;
   meta: MeetingMeta | undefined;
+  hueMap: Map<string, number>;
   segId: number;
   startTime: number;
   text: string;
@@ -461,6 +477,9 @@ function Turn({
   const grabbed = collection.cands.some(
     (c) => c.meeting_id === appearance.meeting_id && c.segment_id === segId
   );
+  // Band color = the hue of this turn's section's primary topic (topics[0]).
+  const sectionTopic = topicForTime(meta?.sections, startTime);
+  const hue = sectionTopic ? hueMap.get(sectionTopic.key) : undefined;
   // Timestamps go to our own meeting page at the moment (player seeks via ?t=,
   // transcript scrolls via #seg-), not out to the raw YouTube source.
   const meetingLink = `/meetings/${appearance.meeting_id}?t=${Math.floor(
@@ -481,7 +500,10 @@ function Turn({
 
   return (
     <div
-      className={`skimTurn${grabbed ? " grabbed" : ""}`}
+      className={`skimTurn${grabbed ? " grabbed" : ""}${
+        hue != null ? " skimTurn--topic" : ""
+      }`}
+      style={topicHueStyle(hue)}
       data-t={startTime}
       data-seg={segId}
     >
