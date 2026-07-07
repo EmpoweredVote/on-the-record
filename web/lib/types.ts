@@ -180,7 +180,7 @@ export interface Candidate {
   orig_text: string;          // verbatim grab (never mutated)
   edit_text: string;          // editorial-trimmed version
   label: string;              // free-text topic label ("" = unlabeled)
-  note: string;               // note-to-self
+  note: string;               // editor rationale: why selected + what was edited & why (required before publish export)
   starred: boolean;           // the one live pick for its label
   created_at: number;         // epoch ms
 }
