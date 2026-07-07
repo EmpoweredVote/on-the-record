@@ -1,7 +1,12 @@
 # Editorial discipline for quotes
 
+> **Principles live in** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` — the canonical *why*
+> behind selection, editing, sources, anonymity, the Compass coupling model, and accountability.
+> This file is the editing *mechanics*. If the two disagree, the principles doc wins and this
+> file should be updated.
+
 The goal: make the speaker's position **clear** without **editorializing**. Every cut must be
-honest and reversible by anyone holding the transcript. The user owns every wording decision —
+honest and auditable against the full source passage. The user owns every wording decision —
 present options and a recommendation; never decide for them.
 
 ## Splitting a long quote
@@ -13,23 +18,48 @@ present options and a recommendation; never decide for them.
 
 ## Trimming spoken text
 
-- **Mark every omission with `…`.** Never silently drop words. Filler ("um", "you know", repeated
-  "just", false starts) is fair to cut, but the ellipsis must show something was removed.
+- **Marking policy (journalistic standard).** Silently remove pure verbal tics ("um", "you know",
+  repeated "just"), stutters, and false starts / self-corrections — *no mark needed.* Mark any
+  removal of **substantive words or a span** with `…`. Total transparency is preserved by the full
+  source passage / show-your-work view, so the inline quote can read clean without being dishonest.
 - **Bracket any inserted or changed word: `[work with]`, `[it]`, `[the community]`.** If the
   speaker didn't say it, it must be visibly yours. Use only to bridge grammar, never to change meaning.
+- **Never cut a load-bearing qualifier.** Anything that modifies the *certainty, conditionality, or
+  scope* of the position stays ("I support X **but only if** Y"). Only pure filler is cuttable — when
+  in doubt, keep it.
+- **Ellipsis-density is a quality signal.** If a quote needs many `…` to cohere, the source span is
+  too scattered — find a more contiguous passage.
 - **Never reorder** the speaker's points.
 - **Repair broken spoken sentences** (merge a fragment like "Our money is just not okay" into the
   prior clause) **only when meaning is unchanged.**
 
 ## Faithfulness judgment calls
 
-- **Keep policy / administration attribution.** Naming the administration or policy responsible
-  ("the Newsom administration", "as governor") is accountable on-the-record speech — keep it.
+- **Keep policy / administration attribution in the canonical quote.** Naming the administration
+  or policy responsible ("the Newsom administration", "as governor") is accountable on-the-record
+  speech — keep it in `quote_text`.
 - **Cut genuine personal attacks** (a person's character, family, fitness). That's the line:
   attacking a *policy or office* stays; attacking a *person* goes.
 - **When another speaker supplies a word**, attribute it honestly — put the borrowed term in
   quotes (`'abortion tourism'`) and/or "what some have called …", and note the interjection rather
   than silently merging it into the speaker's mouth.
+
+## Two layers: canonical vs. blind (`deidentified_text`)
+
+Read & Rank shows quotes **blind** — the citizen ranks them without knowing who spoke. So every
+quote has two renderings, and **producing the blind version is a standard step, not an occasional
+override:**
+
+- **`quote_text` — canonical / revealed.** Keeps names and speaker self-identification. Shown
+  everywhere post-reveal (reveal card, Compass, Essentials).
+- **`deidentified_text` — blind card only.** The canonical quote **plus extra de-identification:**
+  - **Strip speaker self-identification** — "as governor", "in my district", touting their own
+    record. This leaks *who is speaking* and must go.
+  - **Depersonalize named people** in policy critiques — "Newsom" → "[the current administration]".
+    (Blind card only; the canonical quote keeps the name.)
+  - Extra redactions still obey the substance cap (never change the position) and are still honestly
+    marked (`…`, `[brackets]`). They relax back to the canonical quote at reveal.
+- If de-identifying would change the *position itself*, the quote isn't usable blind — pick another.
 
 ## Before storing
 
