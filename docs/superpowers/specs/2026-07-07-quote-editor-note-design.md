@@ -34,10 +34,11 @@ quotes per topic, not just the one starred pick.
 - **Publish sends all curated candidates** for the person as drafts (not only the
   starred one). The star stays a curator *hint*; choosing the live quote remains a
   human step in the ev-accounts admin.
-- **The publish script enforces a non-empty `editor_note`** on every quote. This
-  is the gate that guarantees every published quote has reasoning. The DB column
-  is nullable and the admin does not force one, so existing rows and quick admin
-  text fixes are not blocked.
+- **The rationale is required at the curation page before export**, and the
+  publish script re-enforces a non-empty `editor_note` as a backstop. Together
+  these guarantee every published quote has reasoning. The DB column is nullable
+  and the admin does not force one, so existing rows and quick admin text fixes
+  are not blocked.
 - **No new server / HTTP push** — publishing stays script-driven, human-in-the-
   loop, matching the current architecture (`web/` is a static-export public site
   with no DB creds or admin auth in the browser).
@@ -81,6 +82,10 @@ Nullable. No index. No backfill.
 - **Relabel the input** in `CandidateCard` (currently single-line, ~lines 661-666)
   and **change `<input>` → `<textarea>`** (a few rows / auto-grow). New placeholder
   along the lines of *"why this quote — and what you edited & why"*.
+- **Require the rationale before export.** The "Export publish batch (JSON)"
+  action is disabled (or blocks with an inline message) while any candidate has an
+  empty/whitespace `note`; the offending cards are flagged so the curator can fill
+  them in. This is the primary gate; the script check is a backstop.
 - **New "Export publish batch (JSON)" action** in `CurateView` alongside the
   existing Markdown export. It emits **all candidates** for the person (not just
   starred), each as:
@@ -147,8 +152,10 @@ Read & Rank admin  ── shows/edits editor_note; human selects the one live qu
   per-quote `topic_key`/`source_url` override batch defaults; verbatim
   `deidentified` default still applies; `editor_note` appears in preview and in
   the committed row. (Existing single-topic batch still parses.)
-- Curation page: rationale textarea persists to localStorage; JSON export
-  includes every candidate with `editor_note` and `topic_label`.
+- Curation page: rationale textarea persists to localStorage; export is blocked
+  while any candidate note is empty/whitespace (offending cards flagged); once all
+  are filled, JSON export includes every candidate with `editor_note` and
+  `topic_label`.
 - Admin: `editor_note` round-trips through GET → PATCH; a null note renders as
   "—" and is not required to save or select.
 
