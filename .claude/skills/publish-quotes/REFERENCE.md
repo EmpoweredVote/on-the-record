@@ -33,10 +33,12 @@ clears the others and sets one true in a transaction. Choosing it is a human cur
 **`deidentified_text` — public text + selection gate.** The public site serves
 `COALESCE(deidentified_text, quote_text)`, so whatever is here is what's shown; the migration says
 `NULL` means "original is safe to serve verbatim." **But** `selectReadrankQuote` refuses any row
-with `NULL` deidentified_text — so to be admin-selectable a row **must** have it populated. House
-norm (confirmed in live data): a **verbatim copy** of `quote_text`, lightly genericized only when a
-hyper-specific marker would reveal the speaker (e.g. "…to Louisiana" → "…to another state that has
-banned abortion").
+with `NULL` deidentified_text — so to be admin-selectable a row **must** have it populated. Current
+policy (see EDITORIAL.md "Two layers" + `essentials/docs/QUOTE-CURATION-PRINCIPLES.md`): produce it
+as a **standard step** = canonical quote **+ extra de-identification** (strip speaker self-ID;
+depersonalize named people, e.g. "…to Louisiana" → "…to another state that has banned abortion"). A
+verbatim copy is correct only when the canonical quote already carries nothing speaker-identifying.
+*(Legacy live rows may still hold verbatim copies from the earlier norm.)*
 
 ## Lookups
 

@@ -9,6 +9,9 @@ Convert messy spoken transcript text into faithful, on-the-record quotes stored 
 `essentials.quotes` (in the **ev-accounts** DB) as **not-live drafts**. A human then picks
 the single live quote per topic in `/admin/readrank-quotes`.
 
+Principles (the *why*): `essentials/docs/QUOTE-CURATION-PRINCIPLES.md`. This skill is the
+operational procedure that implements them.
+
 Two distinct jobs, do them in order:
 1. **Craft the quotes** — editorial judgment. See [EDITORIAL.md](EDITORIAL.md). Never skip; never
    editorialize. The user owns every wording call.
@@ -16,9 +19,15 @@ Two distinct jobs, do them in order:
 
 ## Workflow
 
-- [ ] **Finalize wording with the user.** Split into single-claim quotes, trim filler with `…`,
-      bracket any inserted words `[like this]`, keep policy attribution, cut personal attacks.
-      Follow [EDITORIAL.md](EDITORIAL.md). Confirm the exact text before touching the DB.
+- [ ] **Finalize wording with the user.** Split into single-claim quotes, trim filler (silent for
+      tics/stutters, `…` for substantive cuts), bracket any inserted words `[like this]`, keep policy
+      attribution, cut personal attacks. Follow [EDITORIAL.md](EDITORIAL.md). Confirm the exact text
+      before touching the DB.
+- [ ] **Produce the blind version (standard step).** Set `deidentified_text` = the canonical quote
+      **plus extra de-identification**: strip speaker self-ID ("as governor", "in my district", own
+      record) and depersonalize named people ("Newsom" → "[the current administration]"). This is
+      Read & Rank's blind-card text — do it for every quote, not just occasionally. If de-id would
+      change the position, pick a different quote. See [EDITORIAL.md](EDITORIAL.md).
 - [ ] **Resolve the politician.** Look up `politician_id` in `essentials.politicians` and show the
       user the matched name to confirm. Candidates may not have a row — verify they exist.
 - [ ] **Pick the topic_key.** Must be a canonical key in `inform.compass_topics` (lowercase). The
@@ -67,8 +76,10 @@ span multiple topics and sources (e.g. straight from a curation-page export).
 ## Non-negotiables
 
 - Insert as **drafts only** (`readrank_selected = false`). Selecting the live quote is a human step.
-- `deidentified_text` defaults to a **verbatim copy** of the quote (house norm) so the row is
-  admin-selectable. Only override when a quote needs genuine speaker-blinding.
+- `deidentified_text` is the **blind Read & Rank card text** and must be populated for the row to
+  be admin-selectable. Produce it as a **standard step** (see workflow): canonical quote + extra
+  de-identification (strip speaker self-ID, depersonalize named people). A verbatim copy is only
+  correct when the canonical quote already carries no speaker-identifying or personal-name material.
 - Every quote carries an **`editor_note`** (selection rationale + edit justification). No blank notes.
 - House cap: **≤ 2 drafts per (politician, topic)** — the script warns when exceeded.
 - Production DB write — **always dry-run and get the user's OK before `--commit`.**
