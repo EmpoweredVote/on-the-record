@@ -18,6 +18,7 @@ import { buildTopicHueMap, topicHueStyle } from "@/lib/topicColors";
 import { quoteDeepLink } from "@/lib/sourceLink";
 import { applyStar, groupByLabel } from "@/lib/candidates";
 import { candidatesToMarkdown } from "@/lib/candidateMarkdown";
+import { candidatesToPublishBatch, candidatesMissingNotes } from "@/lib/candidatePublish";
 import type { Appearance, Candidate, SummarySection } from "@/lib/types";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
@@ -531,6 +532,20 @@ function CurateView({
   const [copied, setCopied] = useState(false);
   const groups = groupByLabel(collection.cands);
   const md = candidatesToMarkdown(personName, collection.cands);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [jsonCopied, setJsonCopied] = useState(false);
+  const missingNotes = candidatesMissingNotes(collection.cands);
+  const publishJson = JSON.stringify(
+    candidatesToPublishBatch(collection.cands[0]?.politician_id ?? "", collection.cands),
+    null,
+    2,
+  );
+  const copyJson = () => {
+    navigator.clipboard.writeText(publishJson).then(() => {
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 1400);
+    });
+  };
 
   const copy = () => {
     navigator.clipboard.writeText(md).then(() => {
@@ -550,12 +565,28 @@ function CurateView({
         >
           Export Markdown
         </button>
+        <button
+          className="skimExportBtn"
+          onClick={() => setJsonOpen(true)}
+          disabled={collection.cands.length === 0 || missingNotes.length > 0}
+          title={missingNotes.length > 0
+            ? `${missingNotes.length} quote(s) still need an editor note`
+            : "Export a publish batch for the publish-quotes skill"}
+        >
+          Export publish batch
+        </button>
       </div>
       <p className="skimHint">
         Edit wording on the right — the verbatim grab stays on the left. Group by
         topic label; ★ marks the one quote that would go live for that topic.
         Reconcile labels to real compass topics later, at publish.
       </p>
+      {missingNotes.length > 0 && (
+        <p className="skimHint" style={{ color: "#b91c1c" }}>
+          {missingNotes.length} quote{missingNotes.length === 1 ? "" : "s"} need an editor note
+          before you can export a publish batch.
+        </p>
+      )}
 
       {collection.cands.length === 0 ? (
         <p className="skimEmpty">
@@ -595,6 +626,24 @@ function CurateView({
               </button>
               <button className="skimBtnPrimary" onClick={copy}>
                 {copied ? "Copied ✓" : "Copy to clipboard"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {jsonOpen && (
+        <div className="skimModal" onClick={() => setJsonOpen(false)}>
+          <div className="skimModalCard" onClick={(e) => e.stopPropagation()}>
+            <header>
+              <h3>Export — publish batch (JSON)</h3>
+              <button className="skimModalX" onClick={() => setJsonOpen(false)}>×</button>
+            </header>
+            <pre>{publishJson}</pre>
+            <footer>
+              <button className="skimBtnSoft" onClick={() => setJsonOpen(false)}>Close</button>
+              <button className="skimBtnPrimary" onClick={copyJson}>
+                {jsonCopied ? "Copied ✓" : "Copy to clipboard"}
               </button>
             </footer>
           </div>
@@ -658,13 +707,19 @@ function CandidateCard({
           placeholder="topic label"
           onChange={(e) => collection.update(c.id, { label: e.target.value })}
         />
-        <input
+        <textarea
           className="skimNoteIn"
+          rows={2}
           value={c.note}
-          placeholder="note to self — why it matters / spectrum hunch"
+          placeholder="why this quote — and what you edited & why (required to publish)"
           onChange={(e) => collection.update(c.id, { note: e.target.value })}
         />
       </div>
+      {!c.note.trim() && (
+        <div style={{ fontSize: "0.72rem", color: "#b91c1c", marginTop: "0.25rem" }}>
+          Editor note required before publish export.
+        </div>
+      )}
     </div>
   );
 }
