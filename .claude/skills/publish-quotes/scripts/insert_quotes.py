@@ -144,7 +144,10 @@ def main():
     print(f"Politician: {row['name']}  ({pid})")
 
     # 2. Build rows (enforces the editor_note gate + per-quote overrides).
-    rows_to_insert = build_insert_rows(batch, pid)
+    try:
+        rows_to_insert = build_insert_rows(batch, pid)
+    except ValueError as e:
+        sys.exit(str(e))
 
     # 3. Validate every distinct topic_key against the canonical compass spine.
     for tk in sorted({r[1] for r in rows_to_insert}):
