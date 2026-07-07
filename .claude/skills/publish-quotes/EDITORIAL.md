@@ -28,10 +28,31 @@ present options and a recommendation; never decide for them.
   scope* of the position stays ("I support X **but only if** Y"). Only pure filler is cuttable — when
   in doubt, keep it.
 - **Ellipsis-density is a quality signal.** If a quote needs many `…` to cohere, the source span is
-  too scattered — find a more contiguous passage.
+  too scattered. The fix is not to paraphrase or pad — **(a) split into separate sentences, each from
+  a contiguous run**, and **(b) reclassify self-corrections/restatements as silent cleanup.** If it
+  still needs a thicket of marks, it's carrying too many sub-claims — drop one. *E.g. "…block housing
+  … filed by … labor unions to extract … project labor agreements" → "…block housing. … They're filed
+  by labor unions to extract what they call project labor agreements."*
 - **Never reorder** the speaker's points.
 - **Repair broken spoken sentences** (merge a fragment like "Our money is just not okay" into the
   prior clause) **only when meaning is unchanged.**
+
+## Punctuation (spoken text is unpunctuated — you supply it)
+
+Every mark is interpretive and carries the same "never change meaning" cap as any edit. Punctuate
+to reflect the speaker's actual delivery, not to add polish.
+
+- **Respect punctuation the transcript already has** when it reflects delivery — don't "upgrade" a
+  plain period into a dramatic em dash.
+- **Neutrality hierarchy — least-interpretive mark that works:** periods/commas → colon/semicolon
+  (only when that explanatory/balancing relationship is genuinely there) → **em dash only for a real
+  self-interruption or aside the speaker actually made.** Never use a dash to manufacture emphasis or
+  to fuse two of their sentences into one. When tempted, use a period.
+- **No added exclamation points.** Question marks only for actual questions.
+- **Keep faithful comma-splices** that mirror a deliberate spoken rhythm ("they call it sprawl, I
+  call it the California dream") — don't normalize them into periods.
+- **Normalize numbers** ("300,000", "70%"). If a sentence boundary changes what a clause modifies,
+  check the audio and note the call in the `editor_note`.
 
 ## Faithfulness judgment calls
 
