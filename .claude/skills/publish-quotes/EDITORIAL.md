@@ -24,6 +24,8 @@ present options and a recommendation; never decide for them.
   source passage / show-your-work view, so the inline quote can read clean without being dishonest.
 - **Bracket any inserted or changed word: `[work with]`, `[it]`, `[the community]`.** If the
   speaker didn't say it, it must be visibly yours. Use only to bridge grammar, never to change meaning.
+- **No trailing `…`** at the end of a quote. Use a **leading `…`** only when you start partway into
+  the *same* sentence; none needed when the quote begins at a clean sentence/clause boundary.
 - **Never cut a load-bearing qualifier.** Anything that modifies the *certainty, conditionality, or
   scope* of the position stays ("I support X **but only if** Y"). Only pure filler is cuttable — when
   in doubt, keep it.
@@ -78,6 +80,9 @@ override:**
     record. This leaks *who is speaking* and must go.
   - **Depersonalize named people** in policy critiques — "Newsom" → "[the current administration]".
     (Blind card only; the canonical quote keeps the name.)
+  - **Neutralize partisan / side tells** — "Democrat", "Republican", "my party" reveal which side
+    is speaking in a two-way race. Prefer dropping them ("these policies") or "[the current
+    administration's] policies"; avoid a vague swap like "[current]" that shifts the meaning.
   - Extra redactions still obey the substance cap (never change the position) and are still honestly
     marked (`…`, `[brackets]`). They relax back to the canonical quote at reveal.
 - If de-identifying would change the *position itself*, the quote isn't usable blind — pick another.
@@ -89,8 +94,11 @@ that goes in the DB is the wording the public will see.
 
 ## Editor note (required)
 
-Every quote needs a one-to-few-sentence `editor_note`: **why this quote** (what stance it
-captures, why it's the clearest evidence) and, **if you edited it**, exactly what you changed
-and why (trimmed filler with `…`, bracketed an inserted word, condensed two sentences). If it's
-verbatim, say "verbatim, no edits." This is the defense of the wording — write it for a skeptical
-reader, not as a note-to-self.
+Every quote needs an `editor_note` — **two sentences max** (longer only when heavy editing needs
+explaining). Cover **why this quote / how it aligns with the candidate's current Compass stance**,
+and **if you edited it**, what changed (or "verbatim, no edits").
+
+**Write it to stand alone:** a human who hasn't read the principles doc must understand it. Flag
+source weakness plainly ("campaign website, not verifiable to video"); don't cite section numbers
+or internal jargon ("§4.3", "tier-1"). It's the public-facing defense of the wording — write it for
+a skeptical reader, not as a note-to-self.

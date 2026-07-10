@@ -31,7 +31,12 @@ Two distinct jobs, do them in order:
 - [ ] **Resolve the politician.** Look up `politician_id` in `essentials.politicians` and show the
       user the matched name to confirm. Candidates may not have a row — verify they exist.
 - [ ] **Pick the topic_key.** Must be a canonical key in `inform.compass_topics` (lowercase). The
-      script validates this and refuses unknown keys.
+      script validates this and refuses unknown keys. **Responsiveness gate:** assign a quote to the
+      topic whose *framed question* it actually answers — not just the subject it mentions. A quote
+      that's about the topic but dodges its question (e.g. answering "how to prevent homelessness"
+      under a "criminalization of homelessness" topic) is off-question: re-home it to the topic it
+      answers, or leave the candidate absent. Don't rank an off-question quote for distinctiveness.
+      See `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.1.
 - [ ] **Reconcile curation labels → topic keys.** A curation-page publish export uses free-text
       `topic_label`s. Map each to a canonical `inform.compass_topics` key and set it as the quote's
       `topic_key`. Confirm the mapping with the user.
