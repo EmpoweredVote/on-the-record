@@ -30,7 +30,10 @@ def main():
     findings = run_mechanical(rows)
     print(f"MECHANICAL FINDINGS: {len(findings)}")
 
-    run_dir = pathlib.Path(a.out or f".claude/skills/audit-quotes/.runs/{datetime.date.today()}")
+    # Default output dir resolves relative to this skill (cwd-independent), so it always lands
+    # under audit-quotes/.runs/ (which .gitignore covers) no matter where the CLI is invoked.
+    skill_root = pathlib.Path(__file__).resolve().parents[1]  # .../.claude/skills/audit-quotes
+    run_dir = pathlib.Path(a.out) if a.out else skill_root / ".runs" / str(datetime.date.today())
     (run_dir / "context").mkdir(parents=True, exist_ok=True)
     by_race = {}
     for r in rows:
