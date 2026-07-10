@@ -1,5 +1,5 @@
 """Gated fix applier. Dry-run (transaction+rollback) by default; --commit persists."""
-import argparse, json, sys
+import argparse, json
 from scripts.db import connect
 
 ALLOWED_FIELDS = {"editor_note", "deidentified_text", "quote_text", "topic_key"}
@@ -16,12 +16,15 @@ def build_statement(op):
         return (f"UPDATE essentials.quotes SET {op['field']} = regexp_replace({op['field']}, %s, %s) WHERE id = %s::uuid",
                 [op["pattern"], op["repl"], qid])
     if kind == "set_live":
-        return ("UPDATE essentials.quotes SET readrank_selected = %s WHERE id = %s::uuid", [bool(op["value"]), qid])
+        v = op["value"]
+        if not isinstance(v, bool):
+            raise ValueError(f"set_live value must be a JSON boolean, got {type(v).__name__}: {v!r}")
+        return ("UPDATE essentials.quotes SET readrank_selected = %s WHERE id = %s::uuid", [v, qid])
     raise ValueError(f"unknown op kind: {kind}")
 
 def _snapshot(cur, ids):
-    cur.execute("SELECT id, topic_key, readrank_selected, left(quote_text,60) qt, "
-                "left(deidentified_text,60) dt, left(editor_note,60) en "
+    cur.execute("SELECT id, topic_key, readrank_selected, left(quote_text,200) qt, "
+                "left(deidentified_text,200) dt, left(editor_note,200) en "
                 "FROM essentials.quotes WHERE id = ANY(%s::uuid[]) ORDER BY id", (ids,))
     return {r[0]: r for r in cur.fetchall()}
 
@@ -39,9 +42,12 @@ def main():
         sql, params = build_statement(op)
         cur.execute(sql, params)
     after = _snapshot(cur, ids)
+    missing = [i for i in ids if i not in before]
+    if missing:
+        print(f"WARNING: {len(missing)} id(s) not found in essentials.quotes: {missing}")
     print("=== DIFF (before → after) ===")
     for i in ids:
-        if before[i] != after[i]:
+        if i in before and before[i] != after[i]:
             print(f"[{i}]\n  before: {before[i][1:]}\n  after:  {after[i][1:]}")
     if a.commit:
         conn.commit(); print("*** COMMITTED ***")

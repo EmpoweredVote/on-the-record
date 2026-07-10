@@ -3,7 +3,7 @@ Modes:
   (default)         resolve scope, run mechanical checks, write context bundles + mechanical report
 Flags: --candidate NAME  --topic KEY  --ids id1,id2  --include-drafts  --out DIR  --scope-label LABEL
 """
-import argparse, json, pathlib, sys, datetime
+import argparse, json, pathlib, datetime
 from scripts.db import connect, fetch_rows, fetch_stance
 from scripts.checks import run_mechanical
 from scripts.report import render
@@ -16,7 +16,7 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--scope-label", default="all races")
     a = ap.parse_args()
-    ids = a.ids.split(",") if a.ids else None
+    ids = [s.strip() for s in a.ids.split(",") if s.strip()] if a.ids else None
 
     conn = connect()
     rows = fetch_rows(conn, ids=ids, candidate=a.candidate, topic=a.topic, race=a.race, include_drafts=a.include_drafts)

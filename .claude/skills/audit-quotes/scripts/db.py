@@ -17,17 +17,22 @@ def _database_url() -> str:
 def connect():
     return psycopg2.connect(_database_url(), sslmode="require")
 
+# Each quote maps to one race (lowest race_id) for grouping; a politician in multiple races is
+# audited once (not once per race) since essentials.race_candidates has no uniqueness on politician_id.
 SCOPE_SQL = """
 SELECT q.id, q.topic_key, q.readrank_selected, q.quote_text, q.deidentified_text,
        q.editor_note, q.source_name, q.source_url,
-       p.full_name AS candidate, rc.race_id::text AS race_id
+       p.full_name AS candidate,
+       (SELECT rc.race_id::text FROM essentials.race_candidates rc
+        WHERE rc.politician_id = q.politician_id ORDER BY rc.race_id LIMIT 1) AS race_id
 FROM essentials.quotes q
 JOIN essentials.politicians p ON p.id = q.politician_id
-LEFT JOIN essentials.race_candidates rc ON rc.politician_id = q.politician_id
 WHERE (%(ids)s IS NULL OR q.id = ANY(%(ids)s::uuid[]))
   AND (%(candidate)s IS NULL OR lower(p.full_name) = lower(%(candidate)s))
   AND (%(topic)s IS NULL OR q.topic_key = %(topic)s)
-  AND (%(race)s IS NULL OR rc.race_id::text = %(race)s)
+  AND (%(race)s IS NULL OR EXISTS (
+        SELECT 1 FROM essentials.race_candidates rc2
+        WHERE rc2.politician_id = q.politician_id AND rc2.race_id::text = %(race)s))
   AND (%(drafts)s OR q.readrank_selected = true)
 ORDER BY race_id, q.topic_key, q.readrank_selected DESC
 """

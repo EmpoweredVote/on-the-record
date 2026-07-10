@@ -1,11 +1,12 @@
 """Pure, deterministic mechanical checks. Input = plain dicts. No DB, no I/O."""
 import re
+from collections import Counter
 from typing import Optional
 from scripts.models import Finding
 
 _PARTISAN = re.compile(r"\b(Democrat|Democratic|Republican|GOP|MAGA|my party)\b", re.I)
 _SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
-CAMPAIGN_SITE = re.compile(r"(campaign|for\w*|20\d\d)\.com|/(issues|platform|homelessness|housing|immigration)\b", re.I)
+CAMPAIGN_SITE = re.compile(r"(for[a-z]+\d{2,4}|20\d\d|campaign)\.(com|org)|(vote|elect)[a-z]+\.(com|org)", re.I)
 
 def check_note_quality(r) -> Optional[Finding]:
     note = (r.get("editor_note") or "").strip()
@@ -73,13 +74,14 @@ def check_source_tier(r) -> Optional[Finding]:
     return None
 
 def topic_live_count(group) -> Optional[Finding]:
-    live = [q for q in group["quotes"] if q.get("readrank_selected")]
-    if len(live) <= 1:
+    counts = Counter(q["candidate"] for q in group["quotes"] if q.get("readrank_selected"))
+    dupes = {c: n for c, n in counts.items() if n > 1}
+    if not dupes:
         return None
     return Finding(check_id="multiple-live", level="topic", topic_key=group["topic_key"], race_id=group["race_id"],
                    principle="one live quote per candidate per topic", severity="high", fix_class="decision-required",
-                   what=f"{len(live)} live quotes in this topic for the same candidate(s): {[q['id'] for q in live]}",
-                   suggested_fix="Demote all but one to draft.")
+                   what=f"Candidate(s) with more than one live quote in this topic: {dict(dupes)}",
+                   suggested_fix="Demote all but one live quote per candidate to draft.")
 
 def topic_min_candidates(group) -> Optional[Finding]:
     cands = {q["candidate"] for q in group["quotes"] if q.get("readrank_selected")}
