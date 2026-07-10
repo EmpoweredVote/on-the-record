@@ -48,6 +48,10 @@ Two distinct jobs, do them in order:
       Capture each quote's start time (seconds) so the script deep-links the exact moment.
 - [ ] **Dry-run the insert**, show the user the preview, then `--commit`.
 - [ ] **Verify**, then tell the user to select the live quote in `/admin/readrank-quotes`.
+- [ ] **Auto-run the audit (handoff).** After `--commit`, run the `audit-quotes` skill scoped to the
+      just-inserted ids: `audit-quotes --ids <id1,id2,...> --include-drafts --scope-label "<race> new"`.
+      Show the findings before the user selects the live quote. Fix mechanical/guided findings via the
+      audit's gated flow; surface decision-required ones. See `.claude/skills/audit-quotes/SKILL.md`.
 
 ## Running the script
 
