@@ -2,7 +2,7 @@ from scripts.apply_fixes import build_statement
 
 def test_set_field():
     sql, params = build_statement({"kind": "set_field", "id": "q1", "field": "editor_note", "value": "hi"})
-    assert "UPDATE essentials.quotes SET editor_note = %s WHERE id = %s" == sql
+    assert "UPDATE essentials.quotes SET editor_note = %s WHERE id = %s::uuid" == sql
     assert params == ["hi", "q1"]
 
 def test_regex_sub_uses_regexp_replace():
