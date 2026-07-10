@@ -49,3 +49,4 @@ bench/results/
 
 # Local git worktrees
 .worktrees/
+.claude/skills/audit-quotes/.runs/
