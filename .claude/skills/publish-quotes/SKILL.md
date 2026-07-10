@@ -22,7 +22,8 @@ Two distinct jobs, do them in order:
 - [ ] **Finalize wording with the user.** Split into single-claim quotes, trim filler (silent for
       tics/stutters, `…` for substantive cuts), bracket any inserted words `[like this]`, keep policy
       attribution, cut personal attacks. Follow [EDITORIAL.md](EDITORIAL.md). Confirm the exact text
-      before touching the DB.
+      before touching the DB. **Every quote must be a verbatim sentence from the source** — including
+      written/campaign-site quotes; never a curator-summarized bullet list.
 - [ ] **Produce the blind version (standard step).** Set `deidentified_text` = the canonical quote
       **plus extra de-identification**: strip speaker self-ID ("as governor", "in my district", own
       record) and depersonalize named people ("Newsom" → "[the current administration]"). This is
@@ -36,7 +37,8 @@ Two distinct jobs, do them in order:
       that's about the topic but dodges its question (e.g. answering "how to prevent homelessness"
       under a "criminalization of homelessness" topic) is off-question: re-home it to the topic it
       answers, or leave the candidate absent. Don't rank an off-question quote for distinctiveness.
-      See `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.1.
+      A candidate who only spoke in record/attacks (no forward position) is **absent** — don't
+      launder record into a pseudo-position. See `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.1.
 - [ ] **Reconcile curation labels → topic keys.** A curation-page publish export uses free-text
       `topic_label`s. Map each to a canonical `inform.compass_topics` key and set it as the quote's
       `topic_key`. Confirm the mapping with the user.
