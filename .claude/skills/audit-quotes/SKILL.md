@@ -56,9 +56,10 @@ cd .claude/skills/audit-quotes
 ../../../.venv/bin/python -m scripts.audit --scope-label "CA governor" --out .runs/ca-gov
 ```
 
-Flags: `--candidate NAME`, `--topic KEY`, `--ids id1,id2`, `--include-drafts` (drafts are excluded
-by default), `--out DIR` (default resolves relative to the skill, cwd-independent), `--scope-label
-LABEL` (used in the rendered report heading).
+Flags: `--race RACE_ID` (scope to one race — both candidates; needed for the portfolio pass on a
+single race; find race_ids in a default run's report), `--candidate NAME`, `--topic KEY`,
+`--ids id1,id2`, `--include-drafts` (drafts are excluded by default), `--out DIR` (default resolves
+relative to the skill, cwd-independent), `--scope-label LABEL` (used in the rendered report heading).
 
 Fixes file for `scripts/apply_fixes.py` (dry-run by default; `--commit` persists):
 
