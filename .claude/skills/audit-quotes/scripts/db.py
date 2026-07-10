@@ -24,16 +24,17 @@ SELECT q.id, q.topic_key, q.readrank_selected, q.quote_text, q.deidentified_text
 FROM essentials.quotes q
 JOIN essentials.politicians p ON p.id = q.politician_id
 LEFT JOIN essentials.race_candidates rc ON rc.politician_id = q.politician_id
-WHERE (%(ids)s IS NULL OR q.id = ANY(%(ids)s))
+WHERE (%(ids)s IS NULL OR q.id = ANY(%(ids)s::uuid[]))
   AND (%(candidate)s IS NULL OR lower(p.full_name) = lower(%(candidate)s))
   AND (%(topic)s IS NULL OR q.topic_key = %(topic)s)
+  AND (%(race)s IS NULL OR rc.race_id::text = %(race)s)
   AND (%(drafts)s OR q.readrank_selected = true)
 ORDER BY race_id, q.topic_key, q.readrank_selected DESC
 """
 
-def fetch_rows(conn, ids=None, candidate=None, topic=None, include_drafts=False):
+def fetch_rows(conn, ids=None, candidate=None, topic=None, race=None, include_drafts=False):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(SCOPE_SQL, dict(ids=ids, candidate=candidate, topic=topic, drafts=include_drafts))
+        cur.execute(SCOPE_SQL, dict(ids=ids, candidate=candidate, topic=topic, race=race, drafts=include_drafts))
         return [dict(r) for r in cur.fetchall()]
 
 def fetch_stance(conn, candidate, topic_key):

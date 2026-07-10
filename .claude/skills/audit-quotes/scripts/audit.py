@@ -11,6 +11,7 @@ from scripts.report import render
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--candidate"); ap.add_argument("--topic"); ap.add_argument("--ids")
+    ap.add_argument("--race", help="Scope to one race_id (uuid). Find race_ids in a default run's report.")
     ap.add_argument("--include-drafts", action="store_true")
     ap.add_argument("--out", default=None)
     ap.add_argument("--scope-label", default="all races")
@@ -18,7 +19,7 @@ def main():
     ids = a.ids.split(",") if a.ids else None
 
     conn = connect()
-    rows = fetch_rows(conn, ids=ids, candidate=a.candidate, topic=a.topic, include_drafts=a.include_drafts)
+    rows = fetch_rows(conn, ids=ids, candidate=a.candidate, topic=a.topic, race=a.race, include_drafts=a.include_drafts)
     if not rows:
         print("No quotes matched scope."); return
 
