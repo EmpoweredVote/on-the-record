@@ -6,6 +6,7 @@ Flags: --candidate NAME  --topic KEY  --ids id1,id2  --include-drafts  --out DIR
 import argparse, json, pathlib, datetime
 from scripts.db import connect, fetch_rows, fetch_stance
 from scripts.checks import run_mechanical
+from scripts.verify_source import run_source_checks
 from scripts.report import render
 
 def main():
@@ -29,7 +30,8 @@ def main():
           f"drafts={'yes' if a.include_drafts else 'no'}")
 
     findings = run_mechanical(rows)
-    print(f"MECHANICAL FINDINGS: {len(findings)}")
+    findings += run_source_checks(conn, rows)
+    print(f"MECHANICAL+SOURCE FINDINGS: {len(findings)}")
 
     # Default output dir resolves relative to this skill (cwd-independent), so it always lands
     # under audit-quotes/.runs/ (which .gitignore covers) no matter where the CLI is invoked.
