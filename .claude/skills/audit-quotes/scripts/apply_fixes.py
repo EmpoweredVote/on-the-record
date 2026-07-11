@@ -2,7 +2,7 @@
 import argparse, json
 from scripts.db import connect
 
-ALLOWED_FIELDS = {"editor_note", "deidentified_text", "quote_text", "topic_key"}
+ALLOWED_FIELDS = {"editor_note", "deidentified_text", "quote_text", "topic_key", "source_name", "source_url"}
 
 def build_statement(op):
     kind = op["kind"]; qid = op["id"]

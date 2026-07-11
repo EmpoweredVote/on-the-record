@@ -18,3 +18,7 @@ def test_rejects_unknown_field():
     import pytest
     with pytest.raises(ValueError):
         build_statement({"kind": "set_field", "id": "q1", "field": "politician_id", "value": "x"})
+
+def test_set_field_allows_source_url():
+    sql, params = build_statement({"kind":"set_field","id":"q1","field":"source_url","value":"https://x"})
+    assert "source_url = %s" in sql and params == ["https://x","q1"]

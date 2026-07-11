@@ -57,6 +57,17 @@ flagged for a human to resolve even though the *detection* is mechanical.
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
+Source-verification checks (`scripts/verify_source.py`) — also deterministic, run against the
+ingested transcript for any `source_url` that's a YouTube link; non-video/written sources are out
+of scope here (see `source-tier-4` above):
+
+| id | level | principle | severity | fix-class |
+|---|---|---|---|---|
+| `source-unverified` | quote | quote must appear in its cited source | high | decision-required |
+| `source-speaker-mismatch` | quote | quote must be spoken by the candidate | high | decision-required |
+| `source-not-ingested` | quote | source must be verifiable | medium | decision-required |
+| `source-timestamp-drift` | quote | deep-link should point at the quote | low | decision-required |
+
 ## 3. Judgment checks
 
 These require reading the quote against its topic question and the candidate's Compass stance —
