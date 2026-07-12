@@ -1,0 +1,726 @@
+# Quote Audit — all races except CA Governor
+
+**Run date:** 2026-07-10/11 · **Scope:** all live quotes across ~341 races + 812 unmapped, CA Governor excluded.
+
+## Result
+- **366 quotes unpublished** (`readrank_selected`=false) — adversarially verified removals, COMMITTED, reversible.
+- **84 findings refuted** by the verifier (false positives; those quotes kept live).
+- Confirmed removals by type: 156 off-question, 154 source-summary, 55 not-forward, 1 is-attack.
+
+## Caveats
+- **245 live quotes are UNAUDITED** — an external publish job flipped them draft→live during this session, after the audit snapshot (4,633 quotes). Re-snapshot + re-run to cover them.
+- **Known dataset-wide gap (not per-quote):** 4612 quotes lack an editor_note, 13 lack blind text, 1992 topic-cells have <2 candidates. Uncurated-seed baseline.
+- 0 removal-worthy highs remain unverified (edge cases); left live.
+
+## Confirmed removals — 366 quotes (COMMITTED)
+
+### source-summary — 154
+
+- **Ahmad R. Hassan** · climate-change · race 1133f880 · `3bf5fbac-e0ea-44dc-895f-ed45f553b6d6` — “Rejoin the Paris Agreement, invest in renewable energy sources like wind and solar, promote green jobs and infrastructure, and implement regulations to reduce carbon emissions.”
+- **Ahmad R. Hassan** · healthcare · race 1133f880 · `57d7ea58-829f-4618-ad41-b8117d84f78a` — “Support and expand the Affordable Care Act (ACA), introduce a public option, negotiate lower prescription drug prices, and invest in healthcare infrastructure.”
+- **Alexandria Ocasio-Cortez** · abortion · race 7f0ae969 · `4faf0faf-4613-4444-a2c8-ea804c74a909` — “Women should have access to quality reproductive healthcare”
+- **Alexandria Ocasio-Cortez** · campaign-finance · race 7f0ae969 · `a78ca826-d973-4a31-b70f-938ed05e5d5d` — “First pledge to voters: clean up campaign finances”
+- **Alexandria Ocasio-Cortez** · climate-change · race 7f0ae969 · `0a8cfed1-8eb2-429a-b69c-8dbc12357f9e` — “Move to a carbon-free, 100% renewable energy system”
+- **Alexandria Ocasio-Cortez** · fossil-fuels · race 7f0ae969 · `277b7b75-c2e6-4631-97a3-bb28d079f74a` — “Green New Deal: economic & environmental transformation”
+- **Alexandria Ocasio-Cortez** · healthcare · race 7f0ae969 · `6a6ec62b-067c-4dde-96f5-1d4e59cbd28c` — “Medicare-for-All offers affordable healthcare to everyone”
+- **Alexandria Ocasio-Cortez** · housing · race 7f0ae969 · `3c310f07-2a39-4d42-aa71-16a21cee3af5` — “Bills to chip away at economic injustice: 'A Just Society'”
+- **Alexandria Ocasio-Cortez** · immigration · race 7f0ae969 · `f5d7be40-4e59-4850-b98f-498fe5b814a9` — “ICE must end; it's unaccountable to standards of due process”
+- **Alexandria Ocasio-Cortez** · medicare/aid · race 7f0ae969 · `26d1c028-8026-4cb5-97b4-ee0a355e1985` — “Medicare-for-All offers affordable healthcare to everyone”
+- **Alexandria Ocasio-Cortez** · same-sex-marriage · race 7f0ae969 · `730d83f3-f3c5-48b7-89a6-fc9a994c160e` — “Make discrimination by gender & sexual orientation illegal”
+- **Alexandria Ocasio-Cortez** · social-security · race 7f0ae969 · `8c44b46f-6211-424e-a0cf-98678ad26eb0` — “Avid supporter of Social Security; wants to see it expanded”
+- **Alexandria Ocasio-Cortez** · tariffs · race 7f0ae969 · `492e9479-87f7-4bf7-8a6e-0d74e7e283f3` — “Oppose USMCA until more environmental & job protections”
+- **Alexandria Ocasio-Cortez** · taxes · race 7f0ae969 · `c0fc59c1-53ef-4e1b-a96c-f50f02155c1c` — “70% marginal tax rate on income above $10M/year”
+- **Alexandria Ocasio-Cortez** · voting-rights · race 7f0ae969 · `66a65b2a-6374-4910-8adf-979d3caea92c` — “Attacks on right to vote puts democracy at risk”
+- **Andrew S. Clyde** · abortion · race 33420d45 · `10dcf72a-5417-41f5-aa59-13a6151f6463` — “Enforce life beginning at conception”
+- **Andrew S. Clyde** · same-sex-marriage · race 33420d45 · `df569c81-71a5-44bc-b927-88ccdd8a9540` — “Business liberty over gay marriage”
+- **Andrew S. Clyde** · ukraine-support · race 33420d45 · `a200f2d9-1a35-4b6a-803a-2bc8d18137b2` — “Cut foreign aid to countries not even our allies”
+- **Andrew Stoddard** · childcare · race 7bb027e3 · `ace858fe-8eed-4d67-8a9b-47ada3ab31b7` — “Rep. Stoddard supports increasing the minimum wage, removing the state tax on food, increasing access to affordable child care options, and strengthening protections for workers”
+- **Andrew Stoddard** · housing · race 7bb027e3 · `2ee11410-353b-464f-8641-030e99b9647d` — “Rep. Stoddard is committed to passing real solutions to lower housing costs”
+- **Ann Wagner** · abortion · race ede5be4a · `b019f7ec-6d3c-4a3a-b3ec-8b46df58f20d` — “I consider myself pro-life (Aug 30, 2012); she has stated she aims for a future”
+- **Aswar Rahman** · ai-regulation · race c1363bbb · `b42e6548-48ae-4ed8-9a3f-a004de666d0d` — “Aswar supports prohibiting unauthorized AI replication of a person's likeness or intellectual work, mandating 'human-in-the-loop' oversight for all federal AI decision-making, and establishing strong labor and copyright protections”
+- **Aswar Rahman** · civil-rights · race c1363bbb · `84b8226a-d8c7-4cfe-8e4e-60f8beae2dc0` — “Aswar strongly supports the George Floyd Justice in Policing Act, ending qualified immunity, and federal funding for co-responder models that pair social workers with police.”
+- **Aswar Rahman** · taxes · race c1363bbb · `09fa34c6-7950-4a8b-8175-12421bc17184` — “Aswar strongly supports restoring 50%+ marginal rates on extreme income, closing capital gains loopholes, and establishing a wealth tax on ultra-large fortunes”
+- **Aswar Rahman** · tariffs · race c1363bbb · `b18a2a64-679a-4ecd-9ad4-fd9a7fb6455b` — “Aswar strongly supports ending chaotic tariff wars and expanding fair export access for Minnesota's family farmers, while breaking up agribusiness monopolies”
+- **Austin Magee** · climate-change · race ae1a8dcd · `a6589139-2ebc-43d0-8d37-b7adf1861d85` — “part of the swamp in supporting the Socialist scam of carbon capture”
+- **Bennie G. Thompson** · medicare/aid · race 20c05b26 · `e6987ac9-d985-4ac4-892b-6ef50fb60d6a` — “Reject privatization; don't raise retirement age”
+- **Bennie G. Thompson** · taxes · race 20c05b26 · `4d2e8cdf-599b-4fca-ad3a-80adaf92dc54` — “Raising estate tax to 1990s level means $448B revenue”
+- **Bob Ferguson** · immigration · race UNMAPPED · `54a2445c-a704-41bf-ba2c-2217655ab870` — “Called ICE actions 'a shameful period'”
+- **Bob Ferguson** · taxes · race UNMAPPED · `6ff08415-c2ea-4f13-a50e-f7c866948640` — “Supports 'Millionaires' Tax on those earning more than $1M'”
+- **Bob Ferguson** · housing · race UNMAPPED · `2518dff5-a456-4fbf-8b11-5a10a2d08868` — “Proposes 'largest-ever budget investment in housing'”
+- **Bonnie Watson Coleman** · abortion · race UNMAPPED · `1a47485f-5f30-4176-9add-34da550af499` — “Protect women's access to comprehensive reproductive care”
+- **Brendan F. Boyle** · abortion · race 54e81562 · `867d638e-cf42-45c3-a2f7-94b248c7fd0e` — “Access safe legal abortion without restrictions”
+- **Brendan F. Boyle** · school-vouchers · race 54e81562 · `351d8c61-6533-4191-8db9-cd2bc62ac336` — “Oppose private and religious school voucher programs”
+- **Brett Guthrie** · school-vouchers · race fc032dbf · `0df14dc1-2425-4277-945a-d9966960064a` — “Vouchers break link of low-income and low-quality schools”
+- **Brian K. Fitzpatrick** · abortion · race e58302b2 · `3f21fed6-86fd-4440-8362-3713da56b6d9` — “Advocates for bipartisan consensus”
+- **Brian K. Fitzpatrick** · same-sex-marriage · race e58302b2 · `e3687194-f9b5-45bc-bbf7-8a9e96422b5b` — “Voted for the Respect for Marriage Act (2022)”
+- **Brian K. Fitzpatrick** · social-security · race e58302b2 · `62858b52-c865-41e7-8f4d-73d7574cef90` — “Protect and strengthen entitlement programs”
+- **Bruce Westerman** · abortion · race b2c0a192 · `7f098d04-5063-4f09-b2a1-28f29e03aba6` — “Pro-life; no exceptions for incest or rape”
+- **Bruce Westerman** · healthcare · race b2c0a192 · `0a4d625d-3d03-47f6-90a9-fc571bca363b` — “No public option; no individual mandates”
+- **Bruce Westerman** · immigration · race b2c0a192 · `0942581b-7dfd-41d4-bc9a-20e58e40c51f` — “Control the borders then implement guest worker program”
+- **Bruce Westerman** · same-sex-marriage · race b2c0a192 · `d225854a-dc21-4032-a234-ffa03a903455` — “No civil unions; no same-sex marriage”
+- **Bruce Westerman** · voting-rights · race b2c0a192 · `544706b4-3e98-4dbd-b1f5-4529a87dbf3b` — “Require proof of identity when voting”
+- **Carol Kitty Hafner** · deportation · race 8ac04a6b · `cad73acb-e0d8-413c-b0bb-ed333ce88c78` — “Ending Detention of Refugees and Separation of Families (Abolish ICE)”
+- **Clay Fuller** · deportation · race 523e7af5 · `0375428d-e23f-4901-90db-9f5aa1a17217` — “Clay supports all efforts to empower the Trump Administration”
+- **Danny K. Davis** · abortion · race UNMAPPED · `ac21959c-d99a-488e-abcb-0ecef7a30494` — “Access safe, legal abortion without restrictions”
+- **Danny K. Davis** · civil-rights · race UNMAPPED · `004cf613-35d1-4d7b-86bd-4b6bace91463` — “Constitutional Amendment for equal rights by gender”
+- **David Rouzer** · school-vouchers · race 5be80001 · `32a1a882-2afd-464d-9c83-f572003cbfa3` — “Vouchers break link of low-income and low-quality schools”
+- **David Rouzer** · religious-freedom · race 5be80001 · `77703806-97cc-4600-bac3-0398ed3cb893` — “Respect faith-based opposition to same-sex marriage”
+- **David Schweikert** · abortion · race UNMAPPED · `ff60daa5-f4b2-4fc6-bc55-c272018df228` — “Ban abortion after 20 weeks, except for maternal life”
+- **David Williams** · school-vouchers · race e39860fd · `143429fe-e178-4c76-b11b-2f73e8334e32` — “Williams supports school choice”
+- **Delia C. Ramirez** · abortion · race 74db93b8 · `3e4d27d8-2bcd-48b0-9daf-1f0f483d02c9` — “Will fight tooth and nail for our reproductive freedoms”
+- **Delia C. Ramirez** · campaign-finance · race 74db93b8 · `033a7404-8b4f-4d30-bcdd-794e3e2a45f5` — “Refuse to accept corporate PAC contributions”
+- **Derek Schmidt** · abortion · race 7a23e2c0 · `eb23946d-39d9-4bea-99e2-866f28b48490` — “Limited-government conservative who opposes abortion”
+- **Derek Schmidt** · religious-freedom · race 7a23e2c0 · `b520a06d-b6d2-4457-951a-d8a3f0281ba0` — “Conservative who believes in protecting traditional values”
+- **Derek Schmidt** · trans-athletes · race 7a23e2c0 · `32b76345-2243-445f-84de-69e310f17fb1` — “Would have signed vetoed transgender athlete ban”
+- **Dusty Johnson** · abortion · race UNMAPPED · `65eced96-7a85-4664-9b31-b174961a3c69` — “Pro-life; taxpayer dollars should not fund abortions”
+- **Elaine Marshall** · abortion · race UNMAPPED · `6565adc0-e218-4e3e-a5ff-49623babc97d` — “Protect reproductive choice”
+- **Elaine Marshall** · civil-rights · race UNMAPPED · `714b6195-2eec-45a1-aa63-ca103a6f7f22` — “End Defense of Marriage Act and sexual discrimination”
+- **Elaine Marshall** · fossil-fuels · race UNMAPPED · `ae8d0226-c718-4d9e-b242-66a6bdb79d5f` — “Opposes drilling off coast due to disastrous risks”
+- **Elise M. Stefanik** · abortion · race UNMAPPED · `2af4f6bf-030e-48ee-a58b-55ae8c039b5c` — “Ban abortion after 20 weeks, except for maternal life”
+- **Emanuel Cleaver** · abortion · race de8925c0 · `591d22bc-4e86-4117-8f4e-b28bc137409e` — “Access safe”
+- **Gentner Drummond** · deportation · race UNMAPPED · `9accd226-6728-48dd-b020-2761d2309dca` — “Secure the border, deport illegals, stop the flow of drugs”
+- **Gentner Drummond** · trans-athletes · race UNMAPPED · `c472e235-d870-4cbe-814c-6779545b4fa6` — “Limit girls' and women's sports to biological females”
+- **Gloria Vindas** · taxes · race da3831c5 · `6ac5c994-773a-4014-8303-38a2e48f7653` — “Gloria opposes unelected officials controlling land and money without voter approval”
+- **Gretchen Whitmer** · campaign-finance · race UNMAPPED · `2da13369-cf37-42e8-9dfd-b3eacfe94c3a` — “Disclose political donors; reverse Citizens United.”
+- **Harriet M. Hageman** · voting-rights · race UNMAPPED · `0917bce7-f949-4251-a917-ad4812c20d7c` — “Photo ID to vote; abolish drop boxes; robust poll-watching”
+- **Houston Gaines** · abortion · race 2cb356e5 · `a59e41c3-b034-4429-b4ba-366afb0a2331` — “He's pro-life. He voted for the Heartbeat Bill”
+- **Houston Gaines** · deportation · race 2cb356e5 · `67bc2481-d21d-4244-a0e8-0d2fb7e13768` — “Houston has led the charge at the state level to revamp immigration laws”
+- **Houston Gaines** · taxes · race 2cb356e5 · `3320300e-dd08-462f-a6df-67d9a605b3ac` — “In Georgia, Houston has supported a balanced budget every year”
+- **James Comer** · immigration · race aaecc75f · `a8006a54-0156-4dd1-8e4e-30f007129ab6` — “Support the wall; oppose amnesty & sanctuary cities.”
+- **James Comer** · voting-rights · race aaecc75f · `77b3498d-f6e2-43d9-8f12-ea3ea5a083eb` — “No holiday on election day; no same-day registration.”
+- **Jamie Davis** · immigration · race ba7bc250 · `fa960bba-4e9d-4f4f-a7a6-15bae1b93664` — “supports securing the border, while also saying he does not want a path to citizenship to be overly burdensome”
+- **Jamie Davis** · voting-rights · race ba7bc250 · `87effb63-13e1-4db5-b0a1-307150faa757` — “supports voter identification requirements while also arguing for expanded access”
+- **Janice D. Schakowsky** · abortion · race UNMAPPED · `f9ad4e12-fa08-4a3f-aa2b-aaf526f843d9` — “Funding abortion avoids discrimination against poor women”
+- **Janice D. Schakowsky** · campaign-finance · race UNMAPPED · `0142a9a3-ad95-4b4f-bd30-c5cd62303747` — “Full disclosure of campaign spending”
+- **Jesse West** · deportation · race e8bf41d4 · `f842eb52-9305-4014-a10d-eac5f8c1b3ce` — “Opposing oppressive immigration enforcement”
+- **Jesse West** · taxes · race e8bf41d4 · `6caa9c2b-df03-4ece-9282-b246cf77006d` — “Reducing taxes”
+- **John B. Larson** · abortion · race a12b38fe · `d4f4bd37-3300-4a3b-8af9-7d051a758ba4` — “Constitutional right to terminate pregnancy for health”
+- **John B. Larson** · campaign-finance · race a12b38fe · `516c5666-2f99-45ff-b99e-f8ef67fba10d` — “Corporate political spending is not free speech.”
+- **John W. Rose** · voting-rights · race UNMAPPED · `8ed448ca-14ac-4821-b6f2-0e555108dfa9` — “Oppose expanding voter registration and voter access.”
+- **Jonathan L. Jackson** · healthcare · race c89b6491 · `cde00750-90a8-47f3-8efc-46333fde6e25` — “People are hurting; fight for Medicare for All”
+- **Joseph D. Morelle** · medicare/aid · race c7a0aafc · `1d0e027b-dfbb-4608-8241-38db1eb667fa` — “Will not support cutting Medicare & Social Security benefits.”
+- **Josh Green** · abortion · race UNMAPPED · `239021f4-d645-4e24-9298-7e8d86ae5379` — “No residency requirement for abortions; clinics acceptable”
+- **Josh Green** · civil-rights · race UNMAPPED · `992f5ab0-529b-46d3-9184-76050faa158e` — “Shift toward restorative approach rather than strictly punitive”
+- **Julie Trang Le** · immigration · race 29612f94 · `729ef95a-7813-4583-8d3e-2a03b53ccb6c` — “Secure borders by upholding the Law, Pathway to Citizenship, Streamlining Legal Immigration, Humane and Sensible Policy”
+- **Julie Trang Le** · taxes · race 29612f94 · `f9f62412-19f5-419b-b3ad-4a95c0d24d62` — “Tax relief for small businesses; tax credits for Growing the Right way, Close corporate tax loopholes, Support Main Street over Wall Street, Fair tax code that rewards local job creators”
+- **Kelly Armstrong** · climate-change · race UNMAPPED · `3114a28e-fdc3-4e3b-865c-a62bfd09f892` — “Crack down on environmental extremist protesters”
+- **Kelly Armstrong** · fossil-fuels · race UNMAPPED · `dcfcd589-4326-4eea-94fa-4438be5cd3b6` — “Revitalizing oil and gas industry led to population growth”
+- **Kelly Ayotte** · voting-rights · race UNMAPPED · `898c0be8-669b-4e29-8a4b-68984debf576` — “Voted to require photo ID to vote in federal elections.”
+- **Kim Reynolds** · deportation · race UNMAPPED · `94ffaa52-c087-4a98-becb-6c995fc9b5a5` — “Migrant children not our problem, different under Trump”
+- **Kimberly Yee** · fossil-fuels · race UNMAPPED · `7582b7dc-2a21-41b8-8762-c68adba6b035` — “Arizona Treasurer Kimberly Yee Demands that the Biden Administration Stop Trying to De-Bank the Fossil Fuel Industry”
+- **Larry Foy** · civil-rights · race ae1a8dcd · `033fa8c4-b6e5-4d03-8fc4-1abf0939242e` — “direct monetary compensation and the return of stolen land and property”
+- **Larry Foy** · medicare/aid · race ae1a8dcd · `5b7e6b3b-3e24-453a-a395-a9a4ff701c87` — “legislation to preserve and expand Medicaid”
+- **Larry Foy** · school-vouchers · race ae1a8dcd · `b24c19c1-2e99-470f-82d5-4d3611034d92` — “fully funding our public schools”
+- **Larry Foy** · social-security · race ae1a8dcd · `f2cc0505-0587-492f-be9a-4a79df9bbb0c` — “fiercely oppose any cuts or attempts to eliminate these vital lifelines”
+- **Larry Foy** · voting-rights · race ae1a8dcd · `8466cf03-c3c8-409d-8248-3c5fdf2f716a` — “champion this crucial legislation to restore, protect, and prevent the disenfranchisement of African American voters”
+- **Larry Foy** · abortion · race ae1a8dcd · `d96fa58d-63a5-4149-bcac-dde3a074458f` — “have complete freedom to make their own healthcare decisions”
+- **Leslie Rutledge** · trans-athletes · race UNMAPPED · `a799b764-eb05-4609-86a1-ea56f3cfcd77` — “Ban transgender girls in sports to ensure equity”
+- **Lindsay Garcia** · medicare/aid · race ae1a8dcd · `bdbc5028-d086-45f5-91d4-2ddcca44c51f` — “defend Medicaid expansion, fight for rural hospital stabilization funding”
+- **Marcy Kaptur** · abortion · race f5c5e04b · `eae5b957-0093-44eb-90dc-d36d2e89fa00` — “Access safe, legal abortion without restrictions”
+- **Marcy Kaptur** · school-vouchers · race f5c5e04b · `89b50a83-13b5-4a3e-bfda-8254e200047b` — “Oppose private and religious school voucher programs”
+- **Marlin A. Stutzman** · healthcare · race b55b18e3 · `555f61da-02a9-4f59-a091-3b4fe56da25a` — “Defund, repeal, & replace federal care with free market”
+- **Marty Jackley** · civil-rights · race 3d338683 · `5a248d35-367b-4292-9b42-0104bc953aa7` — “Costco should end Diversity, Equity and Inclusion policies”
+- **Marty Jackley** · fossil-fuels · race 3d338683 · `a5fd5e1a-65e9-4920-84fe-ed57f207b9e8` — “EPA attack on fossil fuels creates undue burden on states”
+- **Marty Jackley** · healthcare · race 3d338683 · `bf462408-a75f-49a9-bfe6-b5895ddac967` — “States stopped ObamaCare's forced Medicaid expansion”
+- **Marty Jackley** · medicare/aid · race 3d338683 · `4d50cf24-4437-4895-9348-1a7d20671ed9` — “States stopped ObamaCare's forced Medicaid expansion”
+- **Matt Meyer** · taxes · race UNMAPPED · `ce971350-dd55-438b-b08d-52a04ca2243e` — “Supports adjusting scales so wealthy pay fair share”
+- **Melanie Lucero** · abortion · race 6a1bf3a1 · `a933573f-e4af-40ab-9795-e051681cb117` — “She supports defunding Planned Parenthood, the Born-Alive Abortion Survivors Protection Act, and opposing federal abortion funding.”
+- **Michael Echols** · voting-rights · race ae1a8dcd · `9cc9968d-5496-4ce2-88ea-e66c0a914246` — “Supports nationwide voter ID laws and the SAVE Act requiring proof of U.S. citizenship to register for federal elections.”
+- **Nancy Dahlstrom** · abortion · race UNMAPPED · `7cc27a3c-4d25-446c-b98b-758a53a66ca3` — “Pro-life with exceptions of rape, incest, life of the mother”
+- **Nicholas A. Langworthy** · school-vouchers · race 920d5128 · `a8511d8c-4ce6-4d65-b716-83daa30d0ced` — “Strongly Favors: School vouchers for parental choice”
+- **Nydia M. Velázquez** · campaign-finance · race UNMAPPED · `df4851d6-8585-445f-b375-43367df8b7db` — “Public financing of federal campaigns by voter vouchers”
+- **Paige Beauchemin** · campaign-finance · race 65195c8e · `b5cac306-3d51-4327-8b93-fe7cf64141a0` — “"End Citizens United"; "Cap campaign funding limits"; "Provide campaign fund matching"”
+- **Paige Beauchemin** · civil-rights · race 65195c8e · `bba706ae-e935-4371-9922-aae95fd05441` — “"Restore and codify necessary protections"; "Dismantling systems that perpetuate oppression, inequity, and suffering."”
+- **Paige Beauchemin** · climate-change · race 65195c8e · `0bac09e0-9d6b-4103-81d2-b9b93109b3aa` — “"Invest in renewable energy"; "Implement the Green New Deal."”
+- **Paige Beauchemin** · housing · race 65195c8e · `1c91193b-5c9c-4a2b-874d-1c10b3203274` — “"Building more affordable housing"; "Protecting renters' rights and unjust evictions"”
+- **Patrick Morrisey** · taxes · race UNMAPPED · `f4d121d4-4045-470f-a8da-28728771731b` — “Favors a flat tax”
+- **Paul Wikstrom** · healthcare · race c1363bbb · `158589c2-bf2d-492b-aab1-12d59b3c7128` — “Bring Back Competition in Healthcare – increase price transparency, allow purchase of insurance across state lines, stop drug companies from blocking access to generics and imported drugs”
+- **Paul Wikstrom** · taxes · race c1363bbb · `8496da43-5890-40c5-85ad-766a026b8a99` — “Protect and Expand Tax Cuts – eliminate tax on tips, no tax on overtime, expand child tax credits and eliminate the death tax”
+- **Pramila Jayapal** · same-sex-marriage · race daa56e32 · `4183dbd0-52ed-42e2-a689-2e78c0e9c978` — “Supports same-sex marriage”
+- **Raja Krishnamoorthi** · abortion · race UNMAPPED · `20617951-0b14-42f8-9ef5-cff937d87cf2` — “Consistent supporter of a woman's right to choose”
+- **Ralph Alvarado** · immigration · race fbe1b442 · `fc052f3d-a73b-46a4-8246-64d386210ee5` — “secure the southern border, stop the flow of fentanyl, restore energy independence, and grow the economy by unleashing American workers and cutting taxes”
+- **Ralph Alvarado** · taxes · race fbe1b442 · `d5e899c3-0cc8-4878-93fc-483fe5216f69` — “grow the economy by unleashing American workers and cutting taxes”
+- **Ralph Norman** · abortion · race UNMAPPED · `e2740021-a14f-443e-94c8-19acc46354a6` — “Include pre-born human beings in 14th Amendment protection”
+- **Ralph Norman** · civil-rights · race UNMAPPED · `7335ff60-a68e-4434-ba2c-01aa1a3ed09f` — “DEI is unacceptable at taxpayer-funded university”
+- **Ralph Norman** · climate-change · race UNMAPPED · `54ee9a45-ad45-4550-b6ea-10218aae5437` — “Limit EPA oversight to allow mining over fishing”
+- **Randy Feenstra** · immigration · race UNMAPPED · `e0dc5a29-bc00-4767-a542-eff87ca45b1f` — “Randy will support building the wall”
+- **Rosa L. DeLauro** · abortion · race 98f319ec · `1cfe721e-c952-48a6-ba87-ae8f32fe0b7f` — “Access safe, legal abortion without restrictions”
+- **Rosa L. DeLauro** · campaign-finance · race 98f319ec · `40d9a82e-3299-4bb2-9e62-0766b05da832` — “Corporate political spending is not free speech”
+- **Rosa L. DeLauro** · climate-change · race 98f319ec · `88bb01f6-91aa-47c0-ae94-ccd90dca4c76` — “Green New Deal: 10-year national mobilization”
+- **Rosa L. DeLauro** · fossil-fuels · race 98f319ec · `e8aa10a7-4c70-4769-9333-1b9b2e00408e` — “50% clean and carbon free electricity by 2030”
+- **Rosa L. DeLauro** · healthcare · race 98f319ec · `8bee6638-fd2c-4f51-8d3f-339fec752426` — “Make health care a right, not a privilege”
+- **Rosa L. DeLauro** · tariffs · race 98f319ec · `7a5807fe-35c0-4978-9eef-4af5cd524b95` — “Impose tariffs against countries which manipulate currency”
+- **Scott Franklin** · abortion · race eac394aa · `8bf50853-d318-4c54-b9f3-51d7786629b0` — “Scott is pro-life and he will fight to defend life”
+- **Sheri Biggs** · abortion · race 11cc08cf · `08019dc8-c8ba-40a4-b938-e8c36712bb98` — “Drawing from her Christian faith and personal experiences with miscarriages, Biggs emphasizes her commitment to protecting life from conception.”
+- **Stacy Garrity** · voting-rights · race UNMAPPED · `942de5a1-e62d-474a-bc82-6203c3251c4c` — “Opposes Pennsylvania's current mail-in ballot system.”
+- **Steven Horsford** · healthcare · race 81eb1a27 · `621c0289-243f-427d-b335-fee5e6d391b7` — “views healthcare as a right, not a privilege”
+- **Steven Horsford** · social-security · race 81eb1a27 · `202cd6ea-c5e8-49b1-89f3-122ed542a2c2` — “Say no to privatizing Social Security”
+- **Summer L. Lee** · abortion · race 91cc8aea · `2e6f759c-c8a1-4b6f-82ae-11e285e964d9` — “co-signed letter urging preservation of mifepristone FDA approval and advocates repealing the Hyde Amendment to guarantee abortion coverage”
+- **Tim Walz** · ukraine-support · race UNMAPPED · `731cf041-5a04-4c23-b921-1b69ce920a86` — “Support Ukraine; withdraw investments from Russia & Belarus”
+- **Tom Cole** · school-vouchers · race e1b60baf · `c03bff88-55c2-4cd9-a7d0-8585ff39ab2a` — “Vouchers break link of low-income schools”
+- **Tracey Mann** · same-sex-marriage · race 54aed082 · `35ca3288-7f41-4a0e-9512-8adb5050c1aa` — “Business liberty over gay marriage.”
+- **Tracey Mann** · abortion · race 54aed082 · `b1fca943-365d-4511-ba39-668bf1e44fce` — “Enforce life beginning at conception.”
+- **Trent Kelly** · school-vouchers · race b74193b3 · `a9c6557e-4f10-4b92-89c0-e71a7472d6e8` — “Vouchers break link of low-income and low-quality schools.”
+- **Trent Kelly** · same-sex-marriage · race b74193b3 · `1bbfc295-41e7-456e-ac9d-99dfbe4aeb44` — “Respect faith-based opposition to same-sex marriage.”
+- **Trent Kelly** · voting-rights · race b74193b3 · `c9939448-84b4-4325-803d-26abaa3ff085` — “No holiday on election day; no same-day registration.”
+- **Tripp Hutchinson** · medicare/aid · race 1d97a664 · `297c2ff3-679c-43be-95f4-4f0c68b4369f` — “Medicare Drug Negotiation”
+- **Tripp Hutchinson** · taxes · race 1d97a664 · `1b3b8288-f287-4326-ad1c-09b24ba1b628` — “Minimum Tax for Billionaires”
+- **Troy A. Carter** · civil-rights · race 00ce7640 · `e0b5610b-13a5-4095-b14e-a743d9335cb4` — “Current criminal justice system is a failure.”
+- **Troy A. Carter** · healthcare · race 00ce7640 · `595c543d-b0c8-48d3-96a0-8030ce437efd` — “Medicare for All but can choose employer insurance.”
+- **Troy A. Carter** · medicare/aid · race 00ce7640 · `cea95d4c-83b3-4c2e-bc00-34b165b7cbd2` — “Medicare for All but can choose employer insurance.”
+- **Troy A. Carter** · trans-athletes · race 00ce7640 · `ba03de4c-d672-41b1-b2f7-768120b69743` — “Oppose requiring only 'biological females' in women's sports.”
+- **Virginia Foxx** · school-vouchers · race b2e81abc · `314717e5-ec83-48df-9982-a43c399911ca` — “Vouchers break link of low-income and low-quality schools”
+
+### off-question — 156
+
+- **Aaron Flint** · deportation · race d92cf3b1 · `dc62dc0e-4ef1-46b7-9bf2-1cbd9339e639` — “Sanctuary cities, boys in girls' sports, public lands being fenced off, locals being priced out, and our way of life being pushed aside.”
+- **Aaron Flint** · fossil-fuels · race d92cf3b1 · `e98a8fff-3cc7-41d0-b2a0-01b6fab340db` — “End the Roadless Rule which cuts off access for the public to recreate, foresters to harvest timber, and firefighters responding to wildfires.”
+- **Adam Murphy** · ai-regulation · race da51cdee · `16a29c9d-dd46-4395-93e0-919f9666de3d` — “AI and Job Loss”
+- **Alan Wilson** · trans-athletes · race UNMAPPED · `5b2793ad-f92a-4f3d-94f2-50d61c434b4a` — “We don't experiment on kids in South Carolina; period”
+- **Analilia Mejia** · healthcare · race c47045f6 · `588c1770-58be-48f0-98e3-c547de1c048e` — “middle-class families, working-class families, should not find themselves falling behind in greater and greater debt, while billionaires consolidate their stranglehold”
+- **Analilia Mejia** · taxes · race c47045f6 · `ee8f5f60-1dab-48ea-a9b9-cfa5feb7c0be` — “The policies that really motivate people, that work for working families, are also popular ideas.”
+- **André Carson** · redistricting · race 3c0eda58 · `0eecaf68-6027-41fd-98e0-b83560cdee94` — “I don't think Indianapolis would be best represented by a MAGA acolyte.”
+- **Anna Paulina Luna** · healthcare · race 645c9cd9 · `625608ca-5adc-423e-a230-aa7c93a24003` — “For medical freedom and against vaccine mandates”
+- **April McClain Delaney** · childcare · race d5d7f27a · `5fa33b61-a769-44ec-89bc-ac5a0705b75c` — “When child care works, communities work”
+- **Austin Davis** · healthcare · race UNMAPPED · `25d3649b-eadd-47da-b1e6-ddca15476dbf` — “struggling with higher costs for groceries, health care, energy, and more”
+- **Becca Balint** · ai-regulation · race 5c1b3a06 · `56e1a280-77dc-44d4-8c30-0038fb6c0b0c` — “This ad is offensive and a dangerous example of what happens when AI is used to deceive voters.”
+- **Ben McAdams** · redistricting · race 55741b40 · `6f2ccc8a-7905-4afc-856d-b814d52a2cbd` — “It's too late in the 2026 electoral cycle to change the congressional map again.”
+- **Beth Macy** · school-vouchers · race 807d0f7c · `cfd3954b-c345-461d-9161-8c3b895c27d8` — “We should double Pell grants”
+- **Bob Carney Jr.** · tariffs · race 1133f880 · `4922d73b-f66e-450a-b0c8-88309170fd41` — “a very serious threat”
+- **Bob Ferguson** · voting-rights · race UNMAPPED · `d8dbd378-982c-4ba8-884b-ca0441100f4b` — “Secured largest campaign finance penalty in history”
+- **Bob Good** · healthcare · race 6a1bf3a1 · `b8f4088c-c55d-43c1-9d1c-3933ed45c081` — “We know what happens when you put a doctor in charge of government.”
+- **Bobby Charles** · homelessness · race deafeeb8 · `7ea47637-2d74-4add-bf4e-8cd6a2433f1b` — “In terms of faith-based prevention and treatment, absolutely, they are incredibly powerful. They work.”
+- **Bobby Charles** · misinformation · race deafeeb8 · `d5af6a52-df59-4707-b966-599411f664a0` — “States controlled by one-party Democrat governments, intent on pushing radical agendas, are simply ignoring the majority.”
+- **Bobby Khan** · housing · race a5295941 · `e074430f-e46c-4aa0-9f7d-7bb7e7edb268` — “over 80% of our land is controlled by the federal government”
+- **Brandon Wade** · immigration · race a3708318 · `193883ab-47a9-45a4-af1c-2bdde2325f6f` — “in need of significant reform”
+- **Bree Fram** · redistricting · race bb9b6411 · `81ce2b27-49aa-4bdf-9e70-3f0181c94fdc` — “That decision really was the end of my campaign”
+- **Bree Fram** · trans-athletes · race bb9b6411 · `def179c4-15e5-40db-8653-25cd6992f620` — “Any policy that excludes a class of individuals is inherently damaging to national security”
+- **Brent Bowles** · taxes · race 7e4c4da6 · `15ad0a7d-cd2a-4600-b01a-8bebbaf7cd0e` — “I thought, this is ridiculous”
+- **Brett Hueffmeier** · healthcare · race de8925c0 · `4591e2bc-00b3-4eb8-bf1b-f8a7e09e4fed` — “Reverse this through smart changes to the policies that caused this decline”
+- **Chad Young** · healthcare · race 7a23e2c0 · `9d5bed50-075f-4a79-a46e-613dac1b9a86` — “There's natural drugs out there that actually work.”
+- **Chase LaPorte** · abortion · race 33d0314b · `a0ed93ac-0146-476e-bcb5-3e9844c78305` — “protecting the sanctity of life”
+- **Chellie Pingree** · school-vouchers · race 85a71850 · `3cb75bad-103b-4263-bff3-8f51cee6014a` — “Universal quality education, tailored to meet the rapidly changing needs of tomorrow's workforce, is the absolute best way we have to break the cycle of poverty.”
+- **Chris Beck** · immigration · race 504a156a · `87807d5e-d4fc-42dd-9bd3-d2b4a47e6dfd` — “the absence of workers and their families who have gone into hiding”
+- **Chris Carr** · medicare/aid · race UNMAPPED · `b931b75b-b4cb-4734-a9fc-f47dee5a0d03` — “Children are not social experiments, they are not science experiments, and they are not political theories.”
+- **Chris McGowan** · fossil-fuels · race f8d9913f · `73bbb033-c634-46c7-ab68-875f05f73a7a` — “restoring energy independence”
+- **Chris McGowan** · taxes · race f8d9913f · `0d0400d3-dbdb-4905-8f92-bc67ef84a118` — “Eliminating wasteful spending”
+- **Chris Stigall** · tariffs · race 7104322a · `9fe96407-b9c8-409c-aec5-67059f42f08c` — “We're trying to dig out from a decades-old mess.”
+- **Christina Bohannan** · civil-rights · race 9aa818ab · `7931cd70-9f90-439a-a195-68d56eb7a343` — “less free and less safe”
+- **Christina Bohannan** · voting-rights · race 9aa818ab · `730b9f04-d38d-4eb0-a476-01b0d21ede92` — “a threat to democratic governance”
+- **Claudia Tenney** · misinformation · race 8f8dbd3b · `48bcffab-7a3e-4590-8325-15160d175aef` — “We don't know if it was stolen.”
+- **Colin McRoberts** · deportation · race 54aed082 · `03927639-6850-4727-a7a3-9b5c0751cb36` — “Hold ICE to same standard as local police.”
+- **Cory Mills** · civil-rights · race 0fb663a2 · `6f9ab25e-6a99-4a27-9452-39dbe1659114` — “This bill targets the Left's efforts to sexualize children in schools across the U.S.”
+- **Curt Meier** · fossil-fuels · race UNMAPPED · `a91de512-9bc6-40e5-a2db-9cdfb5c1a005` — “The changes made in House Bill 80 this morning were vital to Wyoming's investments.”
+- **Darren Croft** · transportation-priorities · race 7cfa44d2 · `d38de2c2-867b-4421-a884-8c3ccfe6faac` — “Phase 1 and 2 must be implemented, evaluated, and iteratively improved.”
+- **Dave Bushaw** · campaign-finance · race 6bcff5d4 · `1d43abb3-6ccf-46f1-929d-d37ac71d14d5` — “100 billionaire families together spent a total of $2.6 billion in campaign contributions”
+- **Dave Bushaw** · childcare · race 6bcff5d4 · `0b9ea8bc-6334-4838-bff5-d027711232b2` — “about 1/4 of our state's population lives in what is referred to as 'childcare deserts.'”
+- **David G Henry** · abortion · race 0b5ae739 · `c1bcfe58-5672-45cf-9ffc-4bdfed9f5ccb` — “I was there in paper, and demanding results and demanding accountability”
+- **Debbie Wasserman Schultz** · healthcare · race ca3b4e20 · `0d684b7a-7ed2-4491-acd6-a21f90c09e23` — “GOP can't beat ObamaCare, so they pretend it's a 'disaster'”
+- **Derek Schmidt** · deportation · race 7a23e2c0 · `424c98f2-663a-4701-a347-43ae746d96b0` — “Failing border security means more crime victims in Kansas”
+- **Derek Schmidt** · school-vouchers · race 7a23e2c0 · `633aba82-ea2d-4796-b168-8de5de2112ed` — “Don't subsidize teaching of Critical Race Theory”
+- **Donavan McKinney** · campaign-finance · race dc1b4f5b · `246fc681-3dac-4515-9665-f2e07cd300c2` — “You have to follow what you preach.”
+- **Elijah Crane** · ukraine-support · race 62309566 · `4272d503-f5e1-4932-847b-084eceb28fca` — “Does it concern you guys that we're $36 trillion in debt”
+- **Emily Randall** · deportation · race 4b77a69c · `33b3e2cf-99db-483e-bf97-7aac75bdf90b` — “We must demand accountability and prosecution of immigration agents who are shooting in the streets.”
+- **Emily Randall** · religious-freedom · race 4b77a69c · `2eab7a92-13cc-480a-8814-868f47c23c86` — “Queer folks deserve the same rights and protections as every American.”
+- **Erik Kiehle** · ai-regulation · race 8d2c0ae6 · `dd1579a7-efb2-418a-a0c4-f2ad586581f7` — “ensuring the electrical supply and reliability of America's aging power networks”
+- **Eryn A. Russo** · healthcare · race 7cfa44d2 · `1d28442a-eefb-4a0b-9c6f-67b7f5702dcf` — “As a mom and a doctor, I see government's impact on families every single day.”
+- **Frank Barnitz** · medicare/aid · race 78236d17 · `6de68735-ce40-41d4-9379-28d554d639b4` — “strongly opposes any arbitrary restrictions on investment in the American people.”
+- **Frank Barnitz** · social-security · race 78236d17 · `5e276b87-5921-4018-ac51-f499f9c62c74` — “strongly opposes any arbitrary restrictions on investment in the American people.”
+- **Frank D. Lucas** · fossil-fuels · race 23bbee96 · `00a65e12-af63-4377-bb8f-4328d746c39f` — “trigger an onslaught of additional red tape for farmers and ranchers in Oklahoma”
+- **Fred Wellman** · medicare/aid · race ede5be4a · `90e1ab0a-b6ba-45f1-8c22-fe852efe0d54` — “Every Missourian deserves access to affordable, quality healthcare”
+- **George Austin** · taxes · race ddb457b8 · `4069a16d-870c-4fe3-ab6a-bc691e32bbfe` — “I will fight to eradicate the omnibus so Congress is forced to pass bills separately”
+- **Gloria Vindas** · housing · race da3831c5 · `c53181a8-7405-42e8-b9de-a2cce726001e` — “Government exists to serve the people — not control their land.”
+- **Greg Stanton** · abortion · race 0bb81a0b · `93b1c804-a5c0-452f-96cb-5244725a726f` — “a dark, dark day for our country”
+- **Hillary J. Scholten** · religious-freedom · race 6e668afb · `7e5c2c95-f313-486c-9be0-ca835586c477` — “My West Michigan roots & Christian faith shaped who I am.”
+- **Hillary J. Scholten** · voting-rights · race 6e668afb · `9e67abe4-a2c1-4be3-9692-062c3f951149` — “Make our laws and democracy more just, fair and humane.”
+- **Jack Bergman** · voting-rights · race 25cf5499 · `d6b944f2-4a6c-4078-bc7d-90ff3e06cddd` — “absolutely necessary to ensure our elections remain free and fair.”
+- **Jackson Taddeo-Waite** · healthcare · race 8aea3c8a · `c6b19c80-0947-48cf-b7ac-455b5afa71e9` — “It's not about 'Socialism' or 'Capitalism' — it's about 'Honesty.'”
+- **Jake Hunsaker** · data-centers · race 962599c4 · `03811e8e-ed8b-4a09-a68a-cd380c28221a` — “My concern isn't with AI, data centers, or economic growth.”
+- **Jake Hunsaker** · redistricting · race 962599c4 · `8dbdc855-e84f-47f1-bc00-6e929f280d17` — “I'll side with transparency, public trust and the will of 'we the people' every time.”
+- **James D. Hooper** · healthcare · race 339a59d4 · `da79475c-13aa-4d5f-b250-64008e157e02` — “No person should be forced to undergo any medical treatment or procedure to travel, to work, or to engage in commerce.”
+- **James Uthmeier** · climate-change · race UNMAPPED · `7f16358c-e956-4e81-acc0-a8e7e3544239` — “toxic particulates being sprayed into our atmosphere, polluting our water, contaminating agriculture, and destroying human health”
+- **Janet T. Mills** · trans-athletes · race UNMAPPED · `4c9a666b-3159-4b0c-aa43-90a1670ed2d7` — “State of Maine will not be intimidated.”
+- **Jason Brown II** · school-vouchers · race a48dfb93 · `021f327f-6242-4ea6-95b1-924f4300b26c` — “Raises salaries for teachers, guidance counselors, and school staff nationally”
+- **Jay Collins** · healthcare · race UNMAPPED · `50bfe1a8-e822-400b-b621-b4aa49a9d03c` — “Don't discriminate against unvaccinated patients.”
+- **Jeff Jackson** · school-vouchers · race UNMAPPED · `340c2e8f-f2db-4d42-8ab6-b3cd9e69a231` — “This freeze in funds was unlawful.”
+- **Jeff Landry** · school-vouchers · race UNMAPPED · `fd0622c8-8d3c-49e7-8fb7-b9cacb07219c` — “We got the cell phones out and the Ten Commandments in.”
+- **Jeremy Moss** · same-sex-marriage · race 680f5ce9 · `4112433e-0f76-4380-afa9-73205bc24485` — “This was just as buffoonish as I expected it to be.”
+- **Jimmy Skovgard** · ai-regulation · race abdece9b · `f797d76f-c5ea-484e-8cd2-95da310ec66a` — “Once truth becomes flexible, democracy is at risk.”
+- **Joe Wilson** · deportation · race ba08d958 · `7ceffcc0-b1f5-4ba1-8643-7bad1ef9dd84` — “End Birthright Citizenship; no more anchor babies.”
+- **John Deaton** · tariffs · race 65b552af · `88318499-70de-442b-a4cc-50023696d87a` — “China is without question America's biggest economic competitor”
+- **John Munter** · climate-change · race 49cdd3b4 · `a5675d5e-ab51-400c-b5ed-c0e60997142b` — “lagoons requiring expensive bio-digesters for processing waste and catching methane should be phased out in favor of the dry storage of manure”
+- **John Thurston** · abortion · race UNMAPPED · `22d96af5-ecdb-445d-afcb-5d79897cc869` — “a signed statement confirming that canvassers were given the required documents before collecting signatures”
+- **Jonathan Ford** · medicare/aid · race e17ff0e7 · `ec4a43c4-8498-476b-984c-f6375b03cf93` — “We knew this was coming. We said it out loud, over and over.”
+- **Jonathan L. Jackson** · taxes · race c89b6491 · `8e22e60e-d3f5-4942-88df-f6c6151ea284` — “Raise the wages of all working women and provide pay equity”
+- **Joseph Oddo** · campaign-finance · race 3d1b0ecf · `3d0b2efa-bf41-4b15-aa0c-3696a0d29609` — “a multiracial, multi-ethnic coalition of working class, poor, and middle-class Americans fighting for democracy and against concentrated power”
+- **Josh Riley** · school-vouchers · race 9f71abe0 · `a4a60e98-4b98-4143-aa33-d32c5c9b5ae6` — “A four-year degree should not be the price of admission to the Middle Class.”
+- **Josh Riley** · voting-rights · race 9f71abe0 · `27eecb8c-7652-49d9-aef7-0d62788bc124` — “Voters should choose their political leaders, not the other way around.”
+- **Justin Filip** · climate-change · race c5023da0 · `7c5c19ae-739c-4cf6-81b1-6ee1902b1e41` — “You can trust me to listen to our environmental advocates, because I am an environmental advocate!”
+- **Katie Hobbs** · immigration · race UNMAPPED · `4c66d93f-e169-4c6e-a46f-e093bb0cd9e4` — “Immigration enforcement is primarily a federal responsibility.”
+- **Katrina deVille** · campaign-finance · race 6b05d033 · `32522af1-5103-475f-a33e-9a3050fb3261` — “I will fight to end these practices so the public servants holding office remain true to who they've supposed to have been this entire time.”
+- **Keith Ellison** · misinformation · race UNMAPPED · `d8ef71d7-e1dd-45f2-8763-fdc78ad99726` — “features like infinite scroll and near-constant alerts were created with the express goal of hooking young users”
+- **Ken Paxton** · religious-freedom · race 216ead27 · `8a22eff1-8e1a-4a3a-818d-ba724d524194` — “I will do everything I can from this office to be a public voice”
+- **Kevin Craig** · abortion · race fd81c215 · `d56f2bb9-0636-4ae8-bbe0-d29039114005` — “Murder is obviously a violation of the 'right to life.'”
+- **Kim Schrier** · same-sex-marriage · race 12c9e695 · `21b85e49-3041-4519-bbf5-c2230cc57cb4` — “We need full equality.”
+- **Kweisi Mfume** · deportation · race a6b83f0d · `1fa3dc5b-7240-4ee3-8ca8-4665448dd12d` — “what this agency needs is serious reform and meaningful oversight, not more money and a blank check”
+- **Laura Kelly** · same-sex-marriage · race UNMAPPED · `0fcfa326-6ef3-4973-a0bb-f9d6204c5970` — “Don't define gender to mean biological sex at birth”
+- **Laura Montoya** · tariffs · race UNMAPPED · `1f19c747-19f9-4e47-a675-79cf69b9ad8d` — “"Though he may falsely believe he's above the law, the courts and the Constitution say otherwise."”
+- **Lauren Boebert** · misinformation · race f2a99107 · `b28eedf5-260a-4c19-a154-a9c2795a9571` — “Everything I've heard of Q, I hope that this is real”
+- **Lee McInnis** · school-vouchers · race 6d5bb988 · `0e1da976-124d-4974-bd8f-906913e95de0` — “A child's education should never depend on their ZIP code or the challenges they face in learning.”
+- **Lindsay James** · abortion · race 6bcff5d4 · `ca089fb1-cf32-4f16-b892-ba5837e5660c` — “the lowest number of OB-GYNs per capita in the country”
+- **Liz Murrill** · religious-freedom · race UNMAPPED · `2fb9b82d-c233-42c1-a259-4e1e6a59e839` — “The Fifth Circuit's panel decision in this case directly rejected the Fifth Circuit's own precedents.”
+- **Luke Bronin** · deportation · race a12b38fe · `28e9b774-ac97-48d6-81a1-f3bca789c3ad` — “We must end the cruelty and lawlessness of the Trump Administration immediately.”
+- **Luke Bronin** · housing · race a12b38fe · `57c04d86-3887-402d-8b6b-daa2ecc8e38b` — “The housing crisis is one of the biggest issues facing Connecticut.”
+- **Lynn Chapman** · voting-rights · race 0c470cc0 · `b5cd0952-c5db-49d6-badb-c3d7fdad4d11` — “Surprise, surprise, I'm here supporting something. It's important to have a sample ballot come out first.”
+- **Matt Pierce** · redistricting · race 0bab4038 · `348e2c3c-48c8-4a8b-9e31-55955f0d0c01` — “The eyes are upon us for the moment. We have an opportunity to make a real statement.”
+- **Matt Pierce** · trans-athletes · race 0bab4038 · `be9fca4e-9c69-4f51-a04d-886602625aee` — “Every little kind of push, and behind-the-scenes discussion that you can do is helpful because that can help maybe stop bad legislation from becoming law.”
+- **Matthew D. Klein** · deportation · race f7551218 · `26702f5b-7739-4ce8-ac7b-015046401419` — “everyone deserves safe access to medical care, regardless of immigration status”
+- **Micah Beebe** · fossil-fuels · race de8925c0 · `9d93b7be-ae90-4b8f-b27f-22c958113cf4` — “Stop EPA overreach on water, land, and agricultural operations”
+- **Michael Duffin** · ukraine-support · race df4895e9 · `d43e2764-59b3-457c-99ca-c550ecc357ca` — “America should spread peace, not war. We must rebuild our alliances and restore USAID.”
+- **Michael Echols** · healthcare · race ae1a8dcd · `168f438c-8ff2-4fbb-976a-de253939665c` — “[PBMs] often drive prices higher through opaque rebate schemes, spread pricing, and backroom deals.”
+- **Michelle Kaufusi** · local-immigration · race 7e4c4da6 · `aa8a3b00-fe2f-4749-a24a-4d7f5e90967f` — “Utah County is where I need to stay focused.”
+- **Mike Haridopolos** · ai-regulation · race 70208bdf · `bc07c5e6-c43a-4885-baf2-4fca919bb546` — “America is open for digital asset innovation”
+- **Mike Haridopolos** · school-vouchers · race 70208bdf · `9db6d2ac-d984-4fb3-a937-4aeeea9febbc` — “I'm also glad to see we are moving away from Common Core”
+- **Mike Johnson** · taxes · race 21e715df · `06d76a24-9edb-4ce1-a78b-de92a3ae8048` — “dramatically strengthen the U.S. economy and restore economic mobility”
+- **Mike Johnson** · trans-athletes · race 21e715df · `6741f458-3758-4733-98bb-7149a1ce936a` — “Our American legal system recognizes the important public interest in protecting children from abuse and physical harm.”
+- **Monique DeSpain** · voting-rights · race c5023da0 · `a48324ba-8d3d-41f5-8daf-38c1b48b0b47` — “secure, accurate, and transparent”
+- **Monique DeSpain** · taxes · race c5023da0 · `eab63b3a-bea6-4fb7-8cc5-2ac3a2689b5f` — “Inflation is crushing family budgets.”
+- **Nik Anderson** · school-vouchers · race 962599c4 · `3909f284-9618-4275-b1a3-31635cbed529` — “What is best for the child?”
+- **Patrick McCracken** · housing · race e9d42a60 · `78f8b6ff-ec91-4023-b122-4719d85a980f` — “treats the symptom. The disease is cheap money.”
+- **Pete Lynch** · campaign-finance · race fbe1b442 · `2eb51f7c-ece3-49ef-bba7-9c40636a3a0c` — “campaign finance reform is the single most important policy issue.”
+- **Philip Harding** · childcare · race b9e08170 · `932b9660-72f2-4d6e-a117-dd97646bb650` — “When families are strong, everything else gets stronger.”
+- **Randy Fine** · deportation · race cba559f9 · `f9cbf647-0f04-403b-8c2e-19fa01f52a7c` — “If you're not an Islamophobe, you're a fool.”
+- **Randy Fine** · same-sex-marriage · race cba559f9 · `9f961444-e537-440f-9433-6242fe064f81` — “If it means erasing a community because you have to target children, then, damn right, we ought to do it!”
+- **Rick Crosson** · medicare/aid · race 6b05d033 · `3bd66447-daea-494f-a962-61581e76ecea` — “Seniors paid into these programs their whole working lives.”
+- **Rick Crosson** · social-security · race 6b05d033 · `56b9925e-298b-4771-ba08-c157acf1119c` — “Seniors paid into these programs their whole working lives.”
+- **Ritchie Torres** · medicare/aid · race 32d39b1d · `38c1b47d-5a61-415c-b450-b779a90af8f7` — “The nonworking population is mostly students and caregivers.”
+- **Robert F. Onder, Jr.** · fossil-fuels · race 4cc7f568 · `b4e181f4-a913-44b7-9c25-af8d10c96394` — “the idea of making America energy independent again”
+- **Robert Menendez** · deportation · race 90c5e29a · `ebc9eafe-3b81-4389-96d1-28b4a38932d4` — “ICE attempted to intimidate everyone involved and impede our ability to conduct oversight.”
+- **Robert Tracinski** · deportation · race 6a1bf3a1 · `f4ef22c5-fa8d-43d4-8c95-cea30636291e` — “You cannot kill unarmed civilians because a president has decided to call them terrorists.”
+- **Robert Tracinski** · immigration · race 6a1bf3a1 · `7cbc28c4-316a-426c-91d1-1f7f5cf78b83` — “This document didn't have a provision that says, 'unless you're close to the border.'”
+- **Rudy Yakym III** · healthcare · race 708804af · `c88f9994-4310-4d1c-98a1-44df40aca039` — “I strongly oppose any and all vaccine mandates pertaining to COVID-19.”
+- **Russ Fulcher** · abortion · race e944b588 · `b411d23b-3cfa-44a9-b728-37e576880a82` — “None.”
+- **Sarah Bella Spinosa** · deportation · race 45b66e2a · `b508f441-83b3-4b99-ab60-4429f07ec54e` — “Reinstate INS/Ellis Island style system”
+- **Sarah Godlewski** · healthcare · race UNMAPPED · `1372f386-6933-4a43-a84f-b1c88482b8bf` — “lower the deficit and address inflation, but make smart investments and save working families money”
+- **Sarah Huckabee Sanders** · religious-freedom · race UNMAPPED · `0a142d25-ce72-4186-b18b-b877fb0949aa` — “I'm a Christian, a wife, a mom, and a proud Arkansan”
+- **Scott Collier** · civil-rights · race a6b83f0d · `1293ddd0-9c75-4f5a-8af1-c58dee1ec656` — “the manufactured media sites relentlessly stoke the racial tension in America”
+- **Shannon Taylor** · redistricting · race 65dd3477 · `18ee18bb-5441-412f-8964-b498311d6d5a` — “willing to fight tooth and nail against the excesses of Donald Trump”
+- **Sky Danley** · tariffs · race 6fc27288 · `1b001ed3-e8a5-4d11-84ae-6786a93af37b` — “authorized by constitutional authority via Congress, not the unconstitutional imposition by the executive branch”
+- **Stephen Skoly** · medicare/aid · race 4fae9a83 · `5e4c99e3-ecd5-4f6f-8cca-ef58589cd005` — “the national debt and the long-term funding capabilities of Social Security and Medicare”
+- **Stephen Skoly** · social-security · race 4fae9a83 · `f527b3ea-d19f-4b88-a0c5-5545e9698bb2` — “the national debt and the long-term funding capabilities of Social Security and Medicare”
+- **Steven St John** · healthcare · race a5295941 · `6ccf994b-fd92-41ff-b555-d283c99f8867` — “I have seen the consequences of delayed medical care”
+- **Susan Bysiewicz** · childcare · race UNMAPPED · `7d5e804c-4ffe-4d21-ab89-b0330e5c54dc` — “free breakfast and free lunch”
+- **Teresa Leger Fernandez** · housing · race 521e4582 · `55f3d0e5-bf89-4b4d-9ac4-fa297f442b09` — “Home is not just where you live, it's where you make community.”
+- **Thomas DiNapoli** · ai-regulation · race UNMAPPED · `df10a89e-392b-4c38-97de-159bebd77496` — “pose challenges for our investments”
+- **Thomas Massie** · tariffs · race UNMAPPED · `c66dce5e-f114-4a39-9c54-844319d67d15` — “"Support all free market domestic sources of energy"”
+- **Tim Greimel** · housing · race 15e852be · `3ebbcd74-4e72-409a-b8fe-d6950d6816d0` — “The demolition of the long-derelict parking garage is the first step in the rebirth of our downtown.”
+- **Tim Walberg** · civil-rights · race 7564caef · `93b1caaa-77e6-46ff-82dc-0e69c88e8caf` — “He stood 'on the right side of God'”
+- **Tim Walberg** · religious-freedom · race 7564caef · `51bd813c-29aa-4c46-81df-9da1a37ee512` — “on the right side of God”
+- **Tim Walz** · trans-athletes · race UNMAPPED · `53e7f4f3-d98d-4f4a-bee5-d8b290379472` — “Protect gender affirming care for minors in Minnesota”
+- **Tom Emmer** · immigration · race c0f27cbe · `93ef3015-1036-415b-ab4f-1284646a6f64` — “Sharia is completely incompatible with the American way of life.”
+- **Tom Perriello** · climate-change · race 6a1bf3a1 · `b671c9b6-384a-4f9d-8276-6ff70de02136` — “There's got to be something more important than getting reelected.”
+- **Tom Weiler** · taxes · race 1133f880 · `378d9247-e97e-48df-805a-2912e36e860a` — “Congress passed 4 federal government budgets on time 4 times in the last 48 years.”
+- **Traci Crockett** · homelessness · race 2200bcdc · `b3a37ab7-85df-4d14-accd-abb092e6da9e` — “As a conservative, I don't believe in open-ended government programs or spending without results.”
+- **Traci Crockett** · homelessness-response · race 2200bcdc · `4720360b-7ae5-4700-a19d-417e5bc4f81f` — “As a conservative, I don't believe in open-ended government programs or spending without results.”
+- **Trent Kelly** · climate-change · race b74193b3 · `65ee6339-bf55-4ef2-9f76-318698ba281f` — “Congress, not unelected bureaucrats at the EPA or IRS, should approve new, major regulations.”
+- **Troy Downing** · taxes · race e9d42a60 · `ca6a684f-f7d7-441e-9aeb-99affdb832f5` — “done good work on issues like tax reform and the budget over the last year.”
+- **Trygve Hammer** · abortion · race a757de4e · `a9a8b5f5-0b52-4596-8ba1-73b4ed51edd5` — “a culture of cruelty, a culture of control”
+- **Warren Davidson** · misinformation · race 9c0ac72c · `72fccdcd-f838-45b7-be6a-e7cdc5e0f8e7` — “extralegal spying regime”
+- **Warren Davidson** · ukraine-support · race 9c0ac72c · `485bc1a4-2797-4b47-b951-44f83d24b61a` — “clear, strategic mission”
+- **Wendy Davis** · public-safety-approach · race 7bb027e3 · `ed7cf45d-1c00-42e0-bd1b-e6355d63fea4` — “Safety should not be a political issue”
+- **Wendy Davis** · taxes · race 7bb027e3 · `8f8198b5-6577-4f41-887b-0762c2707064` — “when working people do well the whole community does better”
+
+### not-forward — 55
+
+- **Aaron Ford** · civil-rights · race 7744880b · `20e9ee9a-25e8-4500-8825-2a76ff5d121b` — “Nevada's LGBTQ community has been able to count on me.”
+- **Ann Marie Danimus** · healthcare · race 4a654ab8 · `5cda20b6-a0b7-4a85-b4ed-9a0a6fffc4e3` — “Our for-profit healthcare system nearly destroyed me financially, forcing me to rebuild my life from scratch.”
+- **April McClain Delaney** · ai-regulation · race d5d7f27a · `c71e8d1f-9657-4397-8b9d-ad08240dbe53` — “I've built my career advocating for digital protections for our most vulnerable Americans”
+- **Bill Conlin** · campaign-finance · race 45b66e2a · `ab66ad8b-cffa-48f8-b392-df5b80d8c0c5` — “I'm not accepting any money for my campaign, and I'm doing it for a specific reason.”
+- **Bob Ferguson** · campaign-finance · race UNMAPPED · `ad3c5651-bdbb-4955-80f5-d15328522cf7` — “Secured largest campaign finance penalty in history”
+- **Bob Ferguson** · same-sex-marriage · race UNMAPPED · `3d06b401-ef38-4882-a841-67893797ed29` — “Won case guaranteeing rights for same-sex couples”
+- **Bob Ferguson** · healthcare · race UNMAPPED · `89930e89-eb8a-4d91-8746-3babf7acd5e1` — “His Supreme Court victory preserved health care for 825,000 Washingtonians”
+- **Brad Little** · taxes · race UNMAPPED · `6447fab3-847f-457a-bb93-30e9dc84790c` — “"On pace to deliver $3.7 billion in tax relief."”
+- **Brad Little** · civil-rights · race UNMAPPED · `be89d02b-de5d-4f07-8436-3571a924eeb9` — “We eliminated CRT and DEI.”
+- **Braeden Curwick** · ai-regulation · race 7a23e2c0 · `61ce0a94-c353-4075-9256-d24ca816181d` — “I have witnessed”
+- **Braeden Curwick** · healthcare · race 7a23e2c0 · `ab60a126-53e9-4f0b-9387-17c93dfd59ab` — “I have witnessed”
+- **Brian P. O'Gorman** · campaign-finance · race 4b77a69c · `254bdd62-99c3-4c6c-ad12-cfe9a4e13ed0` — “$0 in Corporate Donations. $0 in Party Backing. Success doesn't depend on a Super PAC.”
+- **Burt Jones** · taxes · race UNMAPPED · `98aeb7d3-ce2e-4d95-b896-4e35962ade6d` — “we have cut taxes every year I've been Lt. Governor”
+- **Chris Beck** · voting-rights · race 504a156a · `797ac2ca-2ed5-44e2-8947-f4b4eb28d03e` — “Cliff Bentz and the federal government are actively trying to undermine the first two and have tried to repeal the third”
+- **Claudia Tenney** · fossil-fuels · race 8f8dbd3b · `7b9f2576-8f1a-48dc-9ebf-6bb4aceac99b` — “Applauded decision to leave the Paris climate agreement.”
+- **Cliff Johnson** · taxes · race b74193b3 · `f51f88f3-f01a-4573-9e42-048b5fa2992f` — “tax cuts to the super-rich and making sure corporations continue to enjoy record profits”
+- **Daniel Elliott** · fossil-fuels · race UNMAPPED · `4afe7dfe-0e7b-493c-981e-a21a03ef1f45` — “I led the charge against ESG and other non-fiduciary policies”
+- **Eric Foreman** · taxes · race eefbf0bd · `c8285bb7-e720-4880-a155-0b01b6381ea9` — “Jacks up taxes and leaves borders wide open.”
+- **Eric Jenkins** · deportation · race 33d0314b · `6f556949-b801-401b-83f5-56912004ea49` — “Sharice Davids spent years backing the Biden-Harris agenda that drove up costs, weakened our economy, and failed to secure the border.”
+- **Frank LaRose** · immigration · race UNMAPPED · `63559993-27c4-4c44-9693-17f1dfe4c826` — “I saw firsthand the invasion at our southern border.”
+- **Frank LaRose** · taxes · race UNMAPPED · `df317fb2-b5cc-45e3-a84c-2f28aaa893ea` — “The only candidate who has never voted to raise taxes.”
+- **Garlin Gilchrist** · abortion · race UNMAPPED · `f7ef9aac-36cf-44dc-9c10-3ef954b11e01` — “Supported repeal of 1931 state abortion ban”
+- **Garlin Gilchrist** · healthcare · race UNMAPPED · `973ae059-0fe5-4cb3-89b5-fc03484a5ff5` — “Expanded access to affordable health care across Michigan”
+- **Herbert C. Conaway, Jr.** · healthcare · race 298389a6 · `50b53ece-f2b6-41a7-98a0-a29f289c19bf` — “This governor has cut funding repeatedly for people who have AIDS, who need drugs to save their life.”
+- **Jasmine Clark** · deportation · race f8294135 · `8dd8a958-b791-4582-822f-d1baef05a982` — “ICE has turned into a lawless organization where masked individuals are killing unarmed mothers”
+- **Jonathan De Barros** · abortion · race 8aea3c8a · `567698be-8e99-41e8-bb9f-ece8b6eaa85b` — “an event that deepened their Christian faith and commitment to pro-life advocacy”
+- **Jordan D. Teuscher** · taxes · race 13989ae9 · `87f7e323-1ef7-4d0e-8e76-35a5681163b6` — “we have cut taxes every year I have been in the Legislature, resulting in an overall reduction of more than 11% in income taxes for Utah families.”
+- **Kevin Christensen** · fossil-fuels · race 87674a21 · `63582535-79ef-4304-9fc3-7818adc6488f` — “I authorized more than 5,000 oil and gas wells and oversaw the production of 1.7 billion tons of coal.”
+- **Kim Reynolds** · taxes · race UNMAPPED · `653b042e-9866-4e7f-8527-b9fb0e0eb2c3` — “I'm proud to say we've cut taxes more than any other state”
+- **Kristi Burke** · healthcare · race 7c52bcfb · `872b6fd9-6665-42cf-b0d8-620ab961a50b` — “I don't have health insurance, navigating the same "pay or pray" system you do.”
+- **Laura Gillen** · deportation · race e03c23bc · `e1a14aa6-e960-48c5-af6c-be8966cb542f` — “I am proud to join a number of Democrats who voted for this legislation.”
+- **Laura Kelly** · civil-rights · race UNMAPPED · `c872dede-6cbd-4d66-ab26-bb5c064c0cc2` — “Reinstated Equal Protection for LGBTQ+ state workers”
+- **Leslie Rutledge** · climate-change · race UNMAPPED · `b4f75506-7c9b-4672-8405-a051da326c19` — “Joined challenge of revocation of Keystone Pipeline permit”
+- **Leslie Rutledge** · deportation · race UNMAPPED · `81e3c004-8c2e-48b1-9f15-f0d22a78199c` — “Sued to overturn Sanctuary jurisdiction rules under Obama”
+- **Maggie Goodlander** · medicare/aid · race 65195c8e · `f1838237-ef70-49eb-af22-70018d50a68a` — “I'm running against an opponent who would end Social Security as we know it, would gut Medicare”
+- **Mark Messmer** · abortion · race d225a061 · `076d36cf-ab83-42b7-a090-e290a1f9c801` — “I am a reliable vote for the Pro-Life community and have been a sponsor of many pieces of legislation.”
+- **Michelle Kaufusi** · taxes · race 7e4c4da6 · `27163f9f-beb9-4622-8d76-255ac97d3dd2` — “eight consecutive balanced budgets as Provo's mayor”
+- **Mo Seifeldein** · campaign-finance · race df4895e9 · `222291c7-279e-4174-9299-90d58efe3197` — “Our support comes from regular people, not corporate PACs.”
+- **Nathan Berning** · abortion · race e619d776 · `35356757-c072-455f-9a1f-e7bbb8a86e2e` — “Co-Founder & Executive Chairman @LetThemLiveOrg”
+- **Ned Pillersdorf** · healthcare · race 2535ec66 · `446df006-755a-4e39-bbbb-f97876d7111e` — “It's stunning to see how he has embraced this terrible bill”
+- **Ned Pillersdorf** · medicare/aid · race 2535ec66 · `c0fbbeab-86bf-49af-8e05-23cdca435cc6` — “He cast the deciding vote in the big ugly bill to slash more than 800 billion from Medicaid”
+- **Nick LaLota** · medicare/aid · race f1415ce1 · `d232b71f-850e-4ce3-9bac-e00748348dab` — “On Feb. 25, I voted yes on a budget resolution that protects Social Security, Medicare, and Medicaid”
+- **Nicole Malliotakis** · civil-rights · race ac2e8d2e · `ea0bacd6-1958-4d37-9497-3985b3190644` — “voted against H.R. 1280”
+- **Nikema Williams** · civil-rights · race 4688afb8 · `910f2865-662d-456c-9373-ce2ba854e96c` — “I'm in Congress because Rep Lewis broke barriers.”
+- **Nikema Williams** · immigration · race 4688afb8 · `fb58f6cf-d932-420b-b9b8-85be39634787` — “My story, born in South Korea, represents the American dream.”
+- **Rick Brattin** · abortion · race de8925c0 · `7f66df30-cd03-4b79-8ffe-bc98f2b53360` — “Endorsed by Missouri Right to Life in every legislative race he's run”
+- **Ritchie Torres** · deportation · race 32d39b1d · `2917ea4e-b816-4b8a-904d-f380356a2d00` — “When I first entered politics, I was on the left on the question of migration.”
+- **Sara Rodriguez** · healthcare · race UNMAPPED · `81832a90-ca26-4ca5-b1ab-aba38a7ee9f0` — “Led the charge to expand BadgerCare”
+- **Shannon Taylor** · abortion · race 65dd3477 · `9069dc56-41ff-46cf-ad30-9835115ad4c1` — “I protected women when we lost our abortion rights”
+- **Stacy Garrity** · abortion · race UNMAPPED · `12033a1f-2db9-4fd1-ac9a-0107457eec75` — “Supported the overturning of Roe v. Wade.”
+- **Steve Marshall** · fossil-fuels · race UNMAPPED · `7703c7ab-be70-49a9-b971-4a10acd9ae00` — “I sued President Biden over his illegal reversals of oil and gas drilling permits”
+- **Steve Scalise** · same-sex-marriage · race 10a69df9 · `37b3f25f-0a79-4b02-a0a6-a3caa5f3ff51` — “Authored constitutional amendment to protect marriage”
+- **Tim Walz** · taxes · race UNMAPPED · `bee66661-eee8-4fc8-9e0e-82623242f3b0` — “Invested surplus instead of giving tax cuts to the wealthy”
+- **Victor Orlando** · housing · race 65195c8e · `f387a60f-6605-426a-9fae-475fd0ecff21` — “I know the trades. I know construction.”
+- **Victoria Broderick** · abortion · race d15d79f6 · `8b3edff7-5786-4ab4-b8ea-c67f535e8e8a` — “Roe was overturned during my maternity leave, and I sprang into action.”
+
+### is-attack — 1
+
+- **Elijah Crane** · healthcare · race 62309566 · `f2f801e8-3baa-4dd5-a985-ea00a342054d` — “You've done enough damage. Probably best to sit this one out.”
+
+## Refuted by verifier — 84 (kept live)
+
+- **James Uthmeier** · not-forward · `e53457a5-ea9d-41c0-b641-8309dc42cd76` — Though wrapped in a defiant frame about his own contempt-of-court situation, the operative substance is a forward commitment to "stand firmly behind [the] agenda on illegal immigration," a restrictive enforcement position that engages the welcoming/restrictive axis, so the not-forward bar (record/attack IS the point with no forward position) is not clearly met.
+- **Liz Murrill** · not-forward · `90ce5bad-9400-4464-ba2c-4f9331def57c` — Although the opening clause reads as a press-release record of a legal win, the operative content ("barring the federal government from... coercing social media companies into censoring speech") expresses a clear, mappable anti-government-censorship position that directly answers the question's axis (value 5), so a position is present and the record is scaffolding rather than the point.
+- **Fred Wellman** · off-question · `fe7edf92-45c6-4ddf-ac7c-a1e5f49c9d9e` — Though the quote is framed as anti-government-overreach on privacy/parental rights, in its civil-rights/LGBTQ source context it plausibly takes a position on government's role toward a marginalized group's social equality, so it engages the question's axis rather than clearly failing it.
+- **Fred Wellman** · is-attack · `908c80fe-dab1-41a3-a0bc-802812c5181d` — The operative substance is a critique of the incumbent's tax-cut/healthcare vote — a policy and voting-record critique, which §4.1's carve-out explicitly permits — so "she's gotta go" reads as electoral framing grounded in that vote and "multi-millionaires like herself" as a point about who benefits from the policy, not a character/family/fitness attack on the person.
+- **Steve Marshall** · off-question · `00c4ac90-2584-4b3c-bc7a-3f5b9b5cb79e` — The quote comes from Alabama's Voting Rights Act redistricting case (racial vote dilution / majority-Black district), so its substantive position on racial representation genuinely engages the "government's role in racial inequality" axis via the voting-rights sub-dimension rather than an unrelated adjacent question, making the off-question call too weak to unpublish.
+- **Brian Cole** · off-question · `a70a4801-e829-4425-add9-8af92a93dc56` — 'Critical for our elderly population' mildly maps to a protect/preserve stance on the program, a defensible point on the funding-and-structure spectrum, so it does not clearly fail the axis.
+- **Brian Cole** · off-question · `2039b5c6-e6ac-4e65-8f1d-f94e66ed09fa` — The same fragment maps to a protect-the-program position on Social Security, a defensible axis point, so the off-question finding does not clearly hold.
+- **Paige Beauchemin** · not-forward · `f99229a1-9b41-4bd3-bf02-39d4fb927adb` — A voting record FOR a constitutional right to abortion and AGAINST tighter limits is a directly mappable pro-rights policy stance, which per the rule makes the not-forward flag not hold.
+- **Paige Beauchemin** · source-summary · `bfe38028-c2c7-4a40-bfc6-a61a73ff0ed8` — The quote contains a genuine verbatim first-person sentence ('I work with communities who are being affected by ICE...'), so it is not purely curator summary or a bullet list; unpublishing as source-summary would be a weak call.
+- **Paige Beauchemin** · not-forward · `e3a8e3c8-68d1-48a9-9eee-8c42f047acf5` — A specific roll-call voting record (voted against removing EFA income limits, for public school funding) maps precisely to a voucher-restriction policy stance, which the definition treats as real=false.
+- **Paige Beauchemin** · not-forward · `8ec00200-0b4b-44df-b2ce-1e1689bd0391` — Specific votes against banning income tax / against cutting business tax and for a high-value-home surcharge map cleanly to a progressive tax-and-spend stance, a mappable policy stance.
+- **Paige Beauchemin** · not-forward · `26e24d7b-dcbe-4dd6-b6d4-f50293dbb1d4` — The specific vote against a trans-athlete prohibition maps directly to a pro-inclusion eligibility stance (chair 1), a mappable policy stance rather than bare scaffolding record.
+- **Paige Beauchemin** · not-forward · `c73d8ea5-5ce2-458d-842a-9b23a49516d8` — Votes to continue student-ID voting and for affidavit ballots for new voters map to an expand-voter-access stance, a mappable policy position.
+- **Emily Berge** · off-question · `1602bae8-dd7f-46b4-9f5d-73ddeab51151` — 'using public dollars to fund private schools' is the literal definition of vouchers and squarely on the school-choice axis; the defect is a stanceless fragment, not off-question.
+- **Rustin Provance** · off-question · `7a94c791-6b5f-4d77-b56b-a66f4082d7ad` — The quote is explicitly about Social Security's viability ('failing'), on the Social-Security topic; whether it maps to a funding/structure chair is a weak call, so we should not unpublish.
+- **Rebecca Cooke** · off-question · `f52ae5cd-c10c-4b0a-bed3-b7fab50d6b21` — The anecdote is explicitly about tariffs and signals opposition to 'these tariffs,' engaging the trade/tariff axis; the concern is anecdotal framing, not off-question.
+- **Derrick Van Orden** · off-question · `a1b85b20-d2c5-4343-8405-a380f5fda83c` — Proudly standing with the 'One Big Beautiful Bill,' a specific tax-and-spending law, is a tax-axis endorsement, so off-question does not clearly hold.
+- **Katy Tyndell** · off-question · `7f35148d-265e-4d38-b498-1d64df41dd20` — Invoking the Kansas referendum result on abortion engages the abortion-access axis (deferring to the pro-choice vote maps to a stance), so it is a sub-dimension of the same question rather than off-axis.
+- **Chris Carmichael** · off-question · `f15175e1-5f0d-4622-9c69-e58620eaa99d` — 'Fully fund our schools' maps to the anti-voucher pole (chair 1 explicitly pairs full public funding with eliminating vouchers), so it engages a sub-dimension of the voucher/school-choice axis.
+- **Shannon Taylor** · is-attack · `00a46cb5-12dc-4330-b992-ceb418063081` — The quote is dominated by a healthcare-policy critique of the opponent (ripping away care of 300,000 for a donor tax cut); the 'lie to our face' jab is incidental, so it is policy/office critique not a personal-character attack.
+- **Tim Cywinski** · off-question · `1b23e4cd-e5d5-4d7b-ba25-a1bcef4a4a98` — 'Keep AI out of the classroom' plausibly engages the AI-deployment-restriction sub-dimension (banning AI in a domain), so it does not genuinely fail the oversight axis; a weak call.
+- **Jarrett Keohokalole** · not-forward · `947ea0f9-329f-45de-bf62-55cc1eb93027` — The accomplishment specifies the bill's substance (making Citizens United irrelevant), which is a clearly mappable stance to limit money in politics, so it is not merely backward-looking record.
+- **Jarrett Keohokalole** · not-forward · `16a91429-f018-48b2-8b2e-e0f61f43acd5` — Authoring a bill to ban state cooperation with ICE enforcement carries a clear mappable deportation stance (protect residents), not a bare record without a forward position.
+- **Taylor Burks** · off-question · `983a9952-513f-43f8-b382-cbc31c30df5c` — The 'must win the AI race' competitiveness framing is a recognized pole of the AI-oversight debate (prioritize winning over regulation), engaging the same axis within the AI domain.
+- **Rick Brattin** · off-question · `5ea34af9-e375-4b71-94f3-2fd01caf4da7` — A 2020 election-legitimacy claim is tightly bound to the election-security-maximalist end of the access-vs-security axis (assigned chair 5), engaging that sub-dimension rather than a wholly different question.
+- **Wes Climer** · off-question · `14774884-b949-4479-93d3-62c58a5a72fe` — Criticizing a court for striking down an abortion ban engages the abortion-access axis (supporting restriction), so it does not genuinely fail the question.
+- **Moshe Landman** · off-question · `c2c0e993-696f-4088-be31-cec20e0bebaa` — All three listed items (family separation, kids in cages, Title 42) are immigration-enforcement/removal policies signaling an anti-harsh-enforcement lean, engaging the deportation-aggression axis.
+- **Chris Stigall** · not-forward · `212b0afe-f070-41d7-9397-5d5936d09b5e` — Though framed as biographical record, 'worked actively to promote school choice' reveals a mappable pro-school-choice stance, so the not-forward finding fails.
+- **Chris Stigall** · off-question · `e300b2f5-55bb-4f7a-9d93-7f64c9e509ad` — Vague, but 'money disappearing into systems not watched' plausibly engages the cost-control sub-dimension of the funding/structure question.
+- **Ryan Mackenzie** · off-question · `081691dc-413f-4419-8085-d770c67817be` — The quote approvingly frames the passed budget as 'focused on delivering tax relief,' a mappable tax-priority signal on the taxes-vs-spending axis, so it does not genuinely fail the axis.
+- **Daniel Miressi** · is-attack · `33f01397-fff9-467e-9b61-4b678cf84243` — It attacks the named opponent's abortion POLICY ('extreme positions on medical choice') with policy-framed rhetorical questions, which is harsh policy critique, not an attack on his character, family, or fitness.
+- **Cheryl Riley** · off-question · `348c71a8-0519-4da4-b480-6adcda16f40a` — 'Unleashed energy for jobs and lower costs' engages the energy/economic-policy axis and signals value-5 (deprioritize climate for growth), so it does not fail the question's axis.
+- **Clyde Jones** · off-question · `75d0f36f-ec42-47cc-ac44-39d402951272` — A value platitude about childcare's importance is a different sub-dimension of the same childcare topic, not a failure of the axis, so off-question does not hold.
+- **Joseph Perez-Caputo** · off-question · `2d24b2dc-a074-4e51-b61f-d6aac0e682dc` — Condemning ICE spending signals opposition to aggressive enforcement, which engages the funding sub-dimension of the deportation-aggressiveness axis rather than genuinely failing it.
+- **Mark Coester** · off-question · `56a5a528-4fd8-45da-a51b-7cc026e6832b` — 'No threat to abortions in Vermont' is a substantive comment on abortion access implying status-quo acceptance, engaging the abortion-access topic rather than failing its axis.
+- **Aaron Flint** · off-question · `7a0c280f-d0c6-4812-a112-6274438388e4` — Deriding a teachers-union 'woke agenda' signals an anti-DEI/anti-equity lean, which maps to the high end of the racial/social-inequality axis (limit/eliminate race-based programs).
+- **Aaron Flint** · off-question · `40780d30-0ef9-42aa-9f6f-7c04f3668226` — 'Boys in girls' sports' directly names the transgender-athlete issue and signals a biological-sex-based eligibility stance, engaging the question's axis.
+- **Michael Chiaradio** · off-question · `abefb8cd-aedf-41ad-8767-b3c7c52fc78e` — The quote is squarely on the housing-affordability topic (high housing costs), just non-committal on the specific government role, so off-question does not cleanly hold.
+- **Kim Schrier** · off-question · `22e6942c-ab4a-4847-bc41-fd3723bf46b6` — 'We need full equality' is vague but is topically on the equality/inequality axis, so it is non-specific filler rather than genuinely failing the axis.
+- **Hannah Pingree** · off-question · `1fb95ded-7dba-43e7-954e-99d49007bc88` — Suing ICE for constitutional violations opposes lawless/aggressive enforcement, which engages the restraint end of the deportation-aggressiveness axis rather than failing it; a weak off-question call.
+- **Maxwell Saal** · off-question · `e948188f-0a38-4df0-844a-a84792b5298a` — The economic-disruption/jobs concern maps to a cautious 'don't dramatically restructure' position, which is a defensible point on the M/M funding-and-structure spectrum, so it does not clearly fail the axis.
+- **Matt Pierce** · off-question · `3cb25c5b-d07a-480e-a86b-90ae84b66dce` — Calling an abortion bill 'bad public policy' and opposing its continuation engages the legal-framework axis (opposition to the measure), rather than genuinely failing it.
+- **Matt Pierce** · off-question · `d80e009e-d396-4b18-a7c4-71a7092675e8` — The quote explicitly concerns impact on 'minority voters,' a racial-representation dimension that touches the racial/social-inequality axis rather than clearly failing it.
+- **Lilliana Young** · off-question · `5f421774-21df-43c7-807c-c8f865cdd963` — Condemning an anti-camping bill as 'heinous and inhumane' signals opposition to criminalizing public sleeping, which engages the axis rather than genuinely failing it.
+- **Riley M. Moore** · not-forward · `720972e0-2c8e-4b52-a4fe-da99cf15383c` — Although framed as a tour anecdote, the description of violent criminals 'recently deported from the U.S.' being housed there carries a clear implicit mappable stance endorsing aggressive deportation of violent criminals.
+- **Riley M. Moore** · not-forward · `1b1c4abe-9b81-4ee2-b5e1-33fbe622ef58` — Being first to divest BlackRock is a record, but it is a publicly recognized anti-ESG action that maps to a pro-fossil-fuel orientation, so the finding does not clearly hold.
+- **Derek Schmidt** · not-forward · `d4f1ba85-5803-4075-b39e-26f92dae9f2f` — Though a litigation record, 'suing Biden for trying to implement Green New Deal' reveals a mappable anti-climate-action stance, so the not-forward finding fails.
+- **Mark Alford** · off-question · `dba7a845-8777-4a3c-8166-3dcf99b22a99` — An election-integrity/'not secure' claim engages the security pole of the voter-access-vs-security axis and maps reasonably to a stricter-security stance, so it does not clearly fail the axis.
+- **Andy Harris** · off-question · `ac6ab08d-42ec-41a6-9ca6-f7867374f1d2` — The fragment 'allow you to remain' is topically on the deport-vs-remain axis; its defect is incoherence/mismapping, not failing the question's axis.
+- **Amir Hassan** · off-question · `e57d889f-17d7-4ca1-b002-8f504e32e007` — Defending ICE against 'the radical left' signals a pro-aggressive-enforcement posture that engages the aggressiveness dimension, making this a weak off-question call.
+- **Michael Bridgford** · off-question · `0587fab9-2cb4-45ca-8e45-929f0b0c96e3` — The quote is on the healthcare topic (complexity, 20% of GDP, cost creep); non-committal but not off the healthcare axis, so off-question does not cleanly hold.
+- **Sim Gill** · off-question · `605ea3ef-054c-4527-9c8a-58e60fa7db76` — The quote squarely addresses the bail/pretrial topic and pretrial public-safety risk assessment, so despite the narrow prosecutor-framed question wording it does not genuinely fail the topic axis.
+- **Diana Harshbarger** · off-question · `70361fb2-9f42-40ab-93c8-edf096e55589` — Quote mismatch: the actual quote is 'Expand Medicaid availability' (Andrew Sneed), which directly engages the Medicare/Medicaid funding axis, not the obesity text the finder describes.
+- **Carl Harris** · off-question · `ab76b748-e5d3-4c65-80a6-ef0e5018acb4` — The quote explicitly references 'targeting Planned Parenthood, reducing access to reproductive healthcare,' which is on the abortion-access axis, so off-question does not hold even though it is a third-person catalog.
+- **Carl Harris** · off-question · `673ae367-a79f-4a79-a22c-d0b17e1c1bdf` — The quote names 'civil rights enforcement' being deprioritized, directly engaging the racial/social-inequality axis, so it does not fail the axis.
+- **Carl Harris** · off-question · `ec2eeb74-08c2-473b-8353-a754cbc2506b` — 'Forced returns to third countries' and punitive actions against asylum seekers are squarely on the deportation axis, so off-question does not hold.
+- **Carl Harris** · off-question · `afe329f3-b3ce-44f1-af8b-c3b69af062dc` — The quote explicitly cites 'limiting their participation in sports,' which is the transgender-athlete eligibility axis, so it engages the axis.
+- **Carl Harris** · off-question · `9c6bb78d-336e-4f95-a89b-1998a22f19d5` — The quote names 'restricting voting access,' directly on the voter-access axis, so off-question does not hold.
+- **Chris Null** · off-question · `e5fecf4a-b84c-4ecf-a3e4-4e064945d6a1` — The quote is framed as an operational stance on how law enforcement should operate ('public safety works best when law enforcement is allowed to do its job'), which engages the 'operate public safety services' axis rather than genuinely failing it.
+- **Emily Randall** · off-question · `d250eed1-9560-441b-a180-4361beca7e38` — Asserting undocumented communities deserve healthcare access engages the welcoming-toward-undocumented / public-services sub-dimension of the immigration question, not a different axis.
+- **Dan Cox** · off-question · `5a4a008b-76bc-4529-b08b-5b9eafa09723` — Ending vaccine/health mandates engages government's role in healthcare (a limited-government orientation on a healthcare sub-dimension), so it does not cleanly fail the axis.
+- **Ed Gallrein** · not-forward · `eec665c8-d93e-4535-bd11-a6bb187d7d6b` — The Trump-vs-Massie contrast structure implies the candidate's own mappable pro-tax-cut position, so it is not a pure record/attack with no forward stance.
+- **Adam Murphy** · off-question · `62ce5063-c9b2-492b-a84b-5a85d88f2f8d` — A prediction about rural hospital closures from Medicaid cuts sits squarely within the Medicare/Medicaid domain and signals a protect/expand lean, a sub-dimension of the funding question.
+- **Mo Seifeldein** · off-question · `4130be92-477c-41e4-8a8a-cee017bb9242` — The quote is squarely on the childcare-cost axis (affordability, high costs, pressure on families); it is thin/problem-statement, not a different axis, so off-question does not hold.
+- **Adam Smith** · off-question · `f74849db-2df1-49b4-8282-b1094d971456` — Calling the emergency 'anti-immigrant and racist' signals a welcoming/pro-immigrant orientation, so it engages the same welcoming-vs-restrictive immigration axis rather than genuinely failing it.
+- **Kshama Sawant** · off-question · `95a66db1-4cb1-46a1-ac7c-81d871b842b4` — The 'not corporate cash' disclaimer thematically touches the corporate-money-in-politics axis, so off-question does not cleanly hold.
+- **Adam Dunigan** · off-question · `f81099cf-b392-4e9d-a634-33996283d95e` — Though generic, 'prioritize public interest over corporate profit' leans toward the pro-oversight direction of the AI axis and does not engage a distinct different axis; the flaw is vagueness, not off-question.
+- **Josh Riley** · off-question · `e55db33b-4035-49ae-ab45-ecfaf5e1f44c` — Reviving Upstate NY manufacturing engages the 'domestic industry' pole explicitly named in the trade-policy question, a sub-dimension of the same axis rather than a clear axis-failure.
+- **Lauren Boebert** · off-question · `0146c754-3e35-42fa-a4f6-088f8ed5555e` — 'Complete invasion at our southern border' is hardline immigration-enforcement rhetoric that signals the aggressive end of the axis; a weak off-question call, not a clear axis failure.
+- **Cleo Fields** · off-question · `3c06e4b3-e696-4888-8f46-54ce0318f403` — If 'this bill' is the Louisiana trans-athlete measure, opposing it as unnecessary maps to a permissive eligibility stance, and the source-reuse claim cannot be verified, so the finding does not clearly hold.
+- **John Deaton** · off-question · `4187263e-8cc9-4bab-af29-17695da98ef2` — The quote's war-spending-vs-domestic-needs framing is exactly the axis this stance uses for its reduce-aid pole (value 4: "reduce aid to Ukraine and focus American resources on domestic priorities instead"), so it is placeable on the Ukraine-support spectrum rather than off-question.
+- **Trygve Hammer** · not-forward · `55af693d-10b4-4202-99bc-7b81f5481066` — Lamenting the blocked bipartisan border-security bill embeds a mappable forward preference (support that legislation), so the not-forward finding does not clearly hold.
+- **David Matthews** · off-question · `5aba59ec-6793-4341-aacf-66c71c60b76c` — The list names the on-axis value 'religious liberty' as a priority, signaling a protective religious-freedom stance (chair 4), so it does not genuinely fail the axis.
+- **Julie Perry** · off-question · `90ce7118-4570-4aab-a4f1-447ee781b2b3` — The quote is a government-waste/bloat grievance that engages the spending side of the tax-vs-services axis and reads as a scale-back-government signal consistent with the assigned value 4.0, so under the leniency rule it is not clearly off-question enough to unpublish.
+- **Jefferson Shreve** · off-question · `5d9fdb61-5956-4470-b4c9-ce4030c7ec3e` — The finding cherry-picks the "far left" grievance clause but ignores the operative "unwilling and unable to defend our border" clause, which squarely engages the welcoming-vs-restrictive immigration axis and signals a restrictive stance, so the quote is on-question.
+- **Nick LaLota** · not-forward · `56af7816-578e-4f74-816d-25a0e843d1a2` — The bulk of the quote describes the SALT provision's tax relief, communicating a clear pro-tax-cut position on the tax-and-spend axis; the "I fought tooth and nail to deliver" is scaffolding record framing, not the operative point, so the not-forward finding does not clearly hold.
+- **Sarah McBride** · off-question · `7c4a51f0-979a-49d3-a1ec-74e06c9e1af1` — The quote explicitly states climate "must be a top priority," which directly engages the question's priority axis, so it does not fail that axis.
+- **Sarah McBride** · off-question · `75860104-d44e-41e5-99f9-85b59463d019` — "Every citizen can make their voice heard" gestures at the voter-access pole of the same axis; it is a thin but on-topic access value, not orthogonal.
+- **Lloyd Smucker** · off-question · `a1c9678f-b6b6-41c2-ad13-12b31a06460b` — Premium/deductible affordability is a sub-dimension of the healthcare-access question, not a different question, so it does not genuinely fail the axis.
+- **Emilia Strong Sykes** · off-question · `a43da5b6-fc9b-4f5c-a776-5b19d61146fc` — A gerrymandering-harm critique is on the redistricting axis and implies opposition to partisan map-drawing, so it does not genuinely fail the question's axis.
+- **Brian Jack** · off-question · `fff2c54b-d48a-4fd4-9783-0d4674a950c0` — Framing immigration as "an existential threat to America's sovereignty" squarely expresses the restrictive pole of the welcoming/restrictive axis.
+- **Kat Cammack** · off-question · `5eb75859-9d6a-4070-9fe7-adc91ad8023e` — The Equality Act is a civil-rights/anti-discrimination bill, so opposing it engages the same civil-rights-enforcement axis (mapped value 5); the faith framing is just the rationale, so this is a sub-dimension of the same question, not a genuine axis failure.
+- **Morgan McGarvey** · off-question · `205fa662-ea1a-4f83-bc46-9e72b3dd9b04` — The quote is substantively about healthcare access (millions kicked off insurance, hospitals closing), opposing a coverage-cutting bill, which engages the healthcare axis rather than failing it.
+- **Sanford D. Bishop, Jr.** · off-question · `30091cc9-4579-4574-98cf-5f5977fcb394` — Defends ObamaCare against 'disaster' framing, which engages the healthcare-access axis (supporting the ACA mixed model); it is on-subject partisan framing, not a genuine axis failure.
+
+## Other findings for review (not actioned)
+
+- 178 × off-question (medium)
+- 42 × deid-dishonest (high)
+- 41 × source-summary (medium)
+- 33 × deid-dishonest (medium)
+- 13 × not-forward (medium)
+- 9 × coupling-in-tension (medium)
+- 7 × off-question (low)
+- 3 × deid-dishonest (low)
+- 1 × coverage-skew (medium)
+- 1 × source-summary (low)
+
+- 129 × source-tier-4 (medium, mechanical)
+- 11 × partisan-tell (high, mechanical)
+- 10 × trailing-ellipsis (low, mechanical)
+- 4 × source-not-ingested (medium, mechanical)
+
+---
+
+## Follow-up: 245 late-published quotes (2026-07-11)
+
+Audited the 245 quotes that an external publish job flipped draft→live after the original snapshot. 27 races, 35 findings.
+
+**17 quotes unpublished** (COMMITTED): 14 off-question, 2 source-summary, 1 not-forward. 0 refuted.
+
+- **Brian L Bengs** · redistricting · off-question · race 10dda367 · `68376f94-222e-42bd-a3fa-24a92b3650c4` — “campaign finance reform and other efforts”
+- **Connor Burbridge** · healthcare · off-question · race b5187683 · `ffaaadd7-6f55-427c-a93d-c49320cc7750` — “One in four adults reported skipping or postponing necessary healthcare last year because of cost.”
+- **Everett Wess** · civil-rights · off-question · race 8ef02ec8 · `438eaef4-2dcd-4b55-90c5-cfa66a1fd826` — “PROTECTING YOUR RIGHTS is a fundamental pillar of our Alabama Senate campaign”
+- **Julian Beaudion** · civil-rights · off-question · race 10dda367 · `0e4e8bc8-09db-4cf9-8ccf-b6af558d973a` — “DEI, for my election, stands for 'Definitely Earned It'.”
+- **Julian Beaudion** · ukraine-support · off-question · race 10dda367 · `5159f1c3-891e-48e7-b423-b4d33b589815` — “Congress has the sole authority to declare war.”
+- **Kasie Whitener** · redistricting · off-question · race 29b5764f · `e2f904ab-d237-4f17-8fd4-3c182130a289` — “crazy. Irresponsible. Expensive.”
+- **Mark Baisley** · civil-rights · off-question · race 75218390 · `c1345db6-a1a7-48c8-a68c-160dd6c85356` — “Once you understand that they are in rebellion against the nature of God, then a lot of things come into play”
+- **Mark Baisley** · deportation · source-summary · race 75218390 · `70a6c256-77e0-4850-a1b8-9753bfcfbd7e` — “He will fully cooperate with ICE and reverse laws shielding criminal illegals.”
+- **Mark Baisley** · immigration · off-question · race 75218390 · `b9be256a-2dc1-40da-b728-1227234cd642` — “Each year, 1.2 million people are legally invited to live in the United States.”
+- **Mark Baisley** · taxes · source-summary · race 75218390 · `c770a5ff-b863-4e41-9950-11a224684ff5` — “He will cut taxes, ditch job-killing regulations, and make Colorado a magnet for employers”
+- **Michael Katz** · deportation · off-question · race 10217c7c · `6e7bad72-c1a2-433d-ae8c-cb94857b194d` — “A country without borders is not a country”
+- **Michael Katz** · healthcare · not-forward · race 10217c7c · `79fbf678-91a6-4fb9-8bce-78da3fce26ec` — “deserve a Senator who has lived this work for four decades”
+- **Nathan Bech** · immigration · off-question · race 65b552af · `f7c4775f-932f-43fb-978b-ea07d16b9671` — “A comprehensive plan, for me, is a code word for doing nothing.”
+- **Rachel Fetty Anderson** · ai-regulation · off-question · race d5767db7 · `2dca5924-b35e-4af8-9ac0-278437fd90d6` — “those who permitted abuses of the American people, their privacy and trust must be prosecuted to the fullest extent of the law.”
+- **Rachel Fetty Anderson** · misinformation · off-question · race d5767db7 · `934ea382-7ea0-4535-895e-4aab35182abe` — “I am committed to supporting our friends and neighbors, our journalists and a free press.”
+- **S. Marshall Wilson** · taxes · off-question · race d5767db7 · `7b65cc7e-2de2-4ef6-bc55-d203599277ed` — “robbing West Virginians”
+- **Yoshi D. Matthews** · civil-rights · off-question · race 9c6de8c1 · `8bbb4945-ec9e-4bac-965d-a1de7179864c` — “a narrowly defined, Tennessee-based policy approach that is fair, transparent, and limited in scope”
+
+---
+
+## Medium-severity bucket (2026-07-11)
+
+Verified the 232 medium-severity off-question/source-summary findings (the finders' lower-confidence calls).
+
+**161 unpublished** (COMMITTED): 120 off-question, 41 source-summary. **71 refuted (31%)** and kept live.
+
+### source-summary — 41
+
+- **Aswar Rahman** · campaign-finance · race c1363bbb · `84fab20d-b0fe-4f39-b86e-a7815bb236d8` — “Aswar strongly supports ending Citizens United, and launching federal public financing for campaigns”
+- **Aswar Rahman** · childcare · race c1363bbb · `814badee-25dc-4c1d-8b03-fea85a5c23b5` — “Aswar strongly supports universal Pre-K and federal subsidies to cap child care costs at 7% of a household's income.”
+- **Braeden Curwick** · childcare · race 7a23e2c0 · `612cd1f9-9de0-4692-a0b4-4b04433b2ed9` — “Healthcare expansions including childcare & eldercare”
+- **Brian Cole** · immigration · race 45b66e2a · `180a8fdb-a555-4df6-8357-95493b24fae7` — “Immigration Customs Enforcement enforcing the law”
+- **Bryan Steil** · abortion · race d20b92b8 · `d27e03b7-b974-4e3a-b068-2c1eaf8c4f2d` — “De-fund Planned Parenthood”
+- **Bryan Steil** · climate-change · race d20b92b8 · `6d1da2b4-106a-4b36-ab46-cdb8777ea790` — “Climate change is real; negotiate with India & China”
+- **Bryan Steil** · medicare/aid · race d20b92b8 · `3f119b21-c6d5-4174-a1ce-af48280e91cb` — “No changes to seniors' rights of Medicare & Social Security”
+- **Bryan Steil** · social-security · race d20b92b8 · `8f3a4830-ebad-4ce3-80c0-c6fdc752f22e` — “No changes to seniors' rights of Medicare & Social Security”
+- **Bryan Steil** · tariffs · race d20b92b8 · `328dd30f-26f1-4e6f-adeb-12a32aa159c6` — “Implement USMCA for improved North American trade”
+- **Bryan Steil** · taxes · race d20b92b8 · `f7ed142e-cbe1-481b-8e70-a35a18c79926` — “Don't increase taxes to balance budget”
+- **Burt Jones** · school-vouchers · race UNMAPPED · `0014da22-0972-4260-8348-0a1765584db3` — “Expand school choice and empower parents”
+- **Carol Kitty Hafner** · medicare/aid · race 8ac04a6b · `3812e826-b7ea-437d-9efc-b55350d2b990` — “Medicare for All”
+- **Dave Wallace** · fossil-fuels · race 01c39962 · `a788d7e9-ac7c-435b-8df0-94663b6ab58e` — “Dave Wallace will fight for lower gas prices and make America Energy Independent again.”
+- **Dave Wallace** · social-security · race 01c39962 · `eeef3bc3-56e5-4330-861b-d0307426a0e4` — “Dave Wallace will fight for younger people's right to invest their Social Security in 401Ks.”
+- **Dave Wallace** · taxes · race 01c39962 · `c26c6a85-27b6-4190-86ea-1dc5661cf3df` — “He believes working people deserve to keep more of what they earn.”
+- **David Schweikert** · school-vouchers · race UNMAPPED · `78bbaf40-6736-4416-b461-1afe441259ec` — “Vouchers break link of low-income and low-quality schools”
+- **Eric Chung** · childcare · race 15e852be · `bdb9bb0d-b155-4a27-8cdf-cfb8beb0f5f0` — “Eric supports universal Pre-K for all Americans.”
+- **Ernie Rivera** · fossil-fuels · race ad4e5568 · `c4dda062-fcf3-464d-be70-3013410f5144` — “Ernie will fight to lower taxes, cut wasteful spending, unleash American energy”
+- **Ernie Rivera** · immigration · race ad4e5568 · `8bf7ca3e-c341-4c96-a494-93c7acfa8dbf` — “Ernie supports legal immigration, strong border security, and ending sanctuary policies”
+- **Ernie Rivera** · social-security · race ad4e5568 · `f0363bd7-912d-4c62-b704-21bd59eba9a5` — “protect the Medicare and Social Security benefits seniors have earned”
+- **Glenn Grothman** · abortion · race afffd665 · `7372e18c-17e9-4ac7-9933-792d4591c74a` — “Sanctity of life from conception until natural death”
+- **Glenn Grothman** · healthcare · race afffd665 · `70802326-9452-480b-b9c8-ce1eb55005e2` — “ObamaCare is a harmful, bungled system”
+- **Glenn Grothman** · same-sex-marriage · race afffd665 · `e181aa22-3bb1-46f8-b6f2-2a5a383caa12` — “Marriage is a union of one man and one woman”
+- **Jared Polis** · childcare · race UNMAPPED · `bfd32159-64b3-4c14-be03-290a121b163c` — “Universal preschool drives economic mobility”
+- **Jim Priest** · campaign-finance · race UNMAPPED · `40396f15-57d0-45a3-a886-2a1c28f3ff46` — “Banning congressional stock trading”
+- **Jim Priest** · childcare · race UNMAPPED · `e50f2419-224c-4de2-be2a-da015f2c93f6` — “Expand affordable childcare”
+- **Jim Priest** · climate-change · race UNMAPPED · `b66c6ba3-10bd-4d46-831d-c2d3fceb28c9` — “Protect natural resources responsibly”
+- **Joan VonDras** · abortion · race ede5be4a · `58733ee6-6e9c-4382-babc-0fe3250d7e61` — “codifying Roe v. Wade”
+- **Lynn Chapman** · same-sex-marriage · race 0c470cc0 · `6692b135-0adb-4b8e-8023-e75d0cea6211` — “Chapman ... said that repealing the sodomy laws would ...”
+- **Mark E. Amodei** · school-vouchers · race UNMAPPED · `91615ccc-8919-4a78-baee-a7b42821e9d8` — “supports school vouchers breaking link between low-income and school quality”
+- **Mike Kehoe** · medicare/aid · race UNMAPPED · `2b83f3a0-ddb5-42bf-9380-6dee10b86429` — “Opposed Medicaid expansion: unsupportable and unsustainable.”
+- **Nick Vivio** · healthcare · race ede5be4a · `b68d0359-4bce-4990-a7c0-9a52ce788f73` — “introduce a plan under which Medicare would offer a buy-in option on the Health Insurance Marketplace”
+- **Pamela Evette** · school-vouchers · race UNMAPPED · `6c43f6f1-4ecb-44a3-989d-196a9e9a6565` — “Full Universal School Choice”
+- **Paul Wikstrom** · climate-change · race c1363bbb · `4a934d8a-a4f5-4e25-9de0-bbd46bdb0d2a` — “Unleash American Production – increase American energy, food and housing supply by reducing regulation”
+- **Reid Rasner** · fossil-fuels · race 87674a21 · `896530a2-6bb6-49c0-b07e-be0f2283762d` — “Cut stifling regulations; Drill Baby Drill.”
+- **Reid Rasner** · taxes · race 87674a21 · `7ac8d748-ae9b-4d36-aed3-3b083681cee9` — “Eliminate the IRS; Implement Flat Tax or National Sales Tax.”
+- **Seth Magaziner** · climate-change · race 4fae9a83 · `61b801fd-aaf9-44c2-af56-310174db6f13` — “Support clean energy jobs, invest in climate resilience.”
+- **Shawn Robinson** · judicial-prosecution-priorities · race 467d955a · `9e160f98-d203-4667-89be-3a9ce8bc45eb` — “public safety reform, alternatives to incarceration, victim advocacy, and accountability and fairness”
+- **Thomas P. Tiffany** · climate-change · race UNMAPPED · `469cf507-9ce9-4428-b6f1-9f5da168ec3c` — “Badge of honor to be attacked by environmentalists”
+- **Tim Walz** · school-vouchers · race UNMAPPED · `329ea45e-9afd-4815-b334-bcc29834be80` — “Oppose private and religious school voucher programs”
+- **Troy Balderson** · healthcare · race 064dc162 · `323df1d0-fe9f-41c2-b38c-2b5254cadc5d` — “believes we must repeal and replace ObamaCare once and for all”
+
+### off-question — 120
+
+- **Adam Schwarze** · trans-athletes · race 1133f880 · `eb17fe5c-35fe-4bfc-8cee-4114474c2028` — “Adam fully supports protecting America's girls and women.”
+- **Adrian Fontes** · misinformation · race UNMAPPED · `1f9c43ba-3160-4e62-8225-faf1a9ecbd08` — “protect election officials in Arizona and across the country from harassment, intimidation, threats and political interference”
+- **André Carson** · voting-rights · race 3c0eda58 · `77c5f2a6-b666-4419-a707-f49737c52dc1` — “The Supreme Court's decision to strike down a majority minority district takes us back.”
+- **Andy Beshear** · religious-freedom · race UNMAPPED · `aca22a82-28dc-4479-90d3-fd40c8e8a31c` — “my faith teaches that all children are children of God”
+- **Andy Biggs** · healthcare · race UNMAPPED · `209c71a6-a43b-4ab7-ae87-f6052d9b44bb` — “larded-up”
+- **Andy Harris** · medicare/aid · race cb9a70c8 · `5e897774-294e-43b5-9d5f-3696da604332` — “will do little to achieve that”
+- **April McClain Delaney** · medicare/aid · race d5d7f27a · `25b19efa-098f-454a-9d74-ac1a50282797` — “It's a tsunami that is headed towards rural America”
+- **Austin Davis** · taxes · race UNMAPPED · `c4b2d555-330c-4e7e-a0bc-0bdd1bcacaa6` — “it's measured in whether everyday Pennsylvanians feel like they aren't just getting by, but they're getting ahead”
+- **Ben McAdams** · deportation · race 55741b40 · `d8c119c0-c95c-4286-a2ee-c69e43eaa7cc` — “their conduct demands immediate reform”
+- **Bill Huizenga** · deportation · race b11085b9 · `0cc45513-b6c5-4fe7-8ff6-c5d78a8d2c9d` — “Seal our border; then create a guest worker program”
+- **Bo Biteman** · medicare/aid · race 87674a21 · `47303729-c8cc-45d2-9d6c-4f7898de06e0` — “looking under the mattress for quarters”
+- **Brad Little** · religious-freedom · race UNMAPPED · `fbde7e67-56af-4243-9b17-b0be3372d0b3` — “Being an American means freedom; self-reliance; faith in God.”
+- **Brad Patty** · deportation · race de8925c0 · `91914103-ea9a-4e76-8c2c-44c0e3bddfed` — “America's immigration system must serve American citizens first -- not illegal immigrants”
+- **Bradley Meyer** · medicare/aid · race 7d3f0042 · `8c9fb86f-b62e-4547-b2fb-c8108b137908` — “I won't stop working until every Hoosier has access to affordable healthcare.”
+- **Brandon Wade** · civil-rights · race a3708318 · `1f2b30c0-45e9-4f47-b634-ba54d0b6a5a7` — “Equality under the law is the foundation of our democracy.”
+- **Brandon Wade** · school-vouchers · race a3708318 · `2c790348-2180-4e63-97ac-41676b8d08ec` — “A strong system of public education is essential to the future of our children.”
+- **Brandon Wade** · taxes · race a3708318 · `4053dbe2-87e8-4800-8de3-4b47ff4e3f8a` — “A strong economy must be built from the working class up.”
+- **Brian J. Mast** · deportation · race 3805c5ab · `a594379a-d146-46cf-a576-f2ef315ecbd9` — “We must secure the border. That begins with a fence, more border patrol agents, and unmanned aerial surveillance.”
+- **Burt Jones** · healthcare · race UNMAPPED · `377e02e4-cc34-49fe-a29b-c886129a0792` — “Rural healthcare in Georgia and across our nation is in crisis”
+- **Byron H. Nolen** · housing · race 339a59d4 · `b26cd76b-70a7-4d0e-b86c-f8a264848514` — “The neighborhoods will look better with new housing.”
+- **Carleigh Beriont** · fossil-fuels · race 45b66e2a · `ade08764-5ac2-4f51-809d-e1c50fec805a` — “Public lands and waters belong to all of us”
+- **Carolina Herrin** · local-immigration · race add20d43 · `c6b23f7f-a5d8-4800-be1a-751a5fe9e02d` — “Utah is a community of law and order”
+- **Catherine Hanaway** · taxes · race UNMAPPED · `9a3ff8c4-d99e-460d-a7b1-4026454314c0` — “What part of 'No' don't you understand?”
+- **Christina Bertrand Hines** · civil-rights · race 15e852be · `81975f76-401b-49f9-b189-9773aebd2641` — “rebuild an independent, impartial Department of Justice where the rule of law is applied fairly, consistently, and without political interference”
+- **Christina Bertrand Hines** · tariffs · race 15e852be · `9dc39047-a8f8-4d7d-8abe-88ee750e2a89` — “fight to bring good-paying, family-sustaining jobs back to our district and across Michigan”
+- **Christopher Lancia** · social-security · race 98f319ec · `8d74faf0-f89a-471b-9b35-eb116d5c23b7` — “we need to take care of our Social Security”
+- **Dalia Al-Aqidi** · deportation · race 29612f94 · `c3aeb6d6-6e7c-449d-b877-63b6eb528d31` — “immigration is a privilege, not a loophole”
+- **Darren Soto** · same-sex-marriage · race e0cb8512 · `eafca0e7-c8ce-4509-89a8-69929ffdd4f4` — “We embrace our proud LGBT community.”
+- **David G Henry** · homelessness · race 0b5ae739 · `2141c13b-46de-49f7-96b1-e9e14b3b89cf` — “clean up a mess made by our board of commissioners”
+- **David G Henry** · voting-rights · race 0b5ae739 · `16c22419-bc5b-492c-baf9-ddb8745935ce` — “It required setting up a truly bipartisan committee of experts”
+- **David Giralt** · abortion · race 87674a21 · `2b67b28f-d2f2-4f6a-9afb-71f6f87df600` — “It's used as a negotiating bargaining chip. That should no longer happen.”
+- **David Kustoff** · healthcare · race d4e3985a · `4c37b690-3eb9-4974-bb87-5a7c791432db` — “our current health care system is failing Tennesseans”
+- **Deborah K. Ross** · abortion · race e7194bc9 · `04dda160-60e0-4bfe-8b61-269cd55c16ac` — “All employers should cover contraceptives (no RFRA)”
+- **Derrick Van Orden** · healthcare · race 1eadf6d9 · `bd572ac5-772e-48cb-b62b-d3add0803a0e` — “I should not have to vote for a temporary patch to a broken system”
+- **Diop Harris II** · voting-rights · race b11085b9 · `661f3a7e-75be-4179-9a50-3dcd2817fe33` — “Every voter deserves a voice that counts.”
+- **Doug Ollivant** · taxes · race b9e08170 · `96a64686-2a50-46c2-a12f-75defdf33b87` — “Taxpayers deserve a government that respects their hard work and uses their dollars wisely.”
+- **Everett Wess** · healthcare · race 8ef02ec8 · `ae10405f-f65b-4820-a573-7254bc8eef86` — “ensuring our veterans receive the quality healthcare and services they have earned”
+- **Glenn Ivey** · tariffs · race 1df5607b · `7b3d1bef-7a1d-44df-8458-4b8c97378abf` — “President Trump's rogue economic agenda takes us in the wrong direction.”
+- **Greg Abbott** · same-sex-marriage · race UNMAPPED · `2e24f458-8f7d-444b-afa8-38e8a610eb9b` — “The Supreme Court has abandoned its role as an impartial judicial arbiter.”
+- **Jack Bergman** · religious-freedom · race 25cf5499 · `18fb5fc3-c4d8-494c-a14f-f69c484b9f4a` — “I believe the Bible is the true word of God.”
+- **Jamee Decio** · ai-regulation · race 708804af · `648779b8-fe0e-441f-a7dd-fca95ad17011` — “It should never be used as a tool for corporate exploitation that burdens working families or silences local voices.”
+- **Jamee Decio** · climate-change · race 708804af · `70684109-ac81-48ae-9726-9e7303a22ad9` — “dismantling agencies and killing regulations that I expected would protect my new granddaughter from deadly diseases, natural disasters, and climate change”
+- **Jamee Decio** · immigration · race 708804af · `3f004f43-d3e6-4f50-b57b-4d8f3a75d488` — “Immigrants boost the American economy, contributing almost $580 billion annually.”
+- **James D. Hooper** · school-vouchers · race 339a59d4 · `093bf4c4-bde3-40a2-a0a4-774fb20af618` — “elimination of the Federal Department of Education”
+- **James Sceniak** · religious-freedom · race 3c0eda58 · `7d7248dc-e5e6-4bdc-9293-cd888579ee5c` — “Any business should be able to deny service for any reason”
+- **James Talarico** · ai-regulation · race 216ead27 · `d86d7da4-c3fa-4a12-a249-cf583db07c4e` — “We can defend free speech while holding powerful corporations accountable.”
+- **Jason Knapp** · housing · race 65dd3477 · `77c8f5a1-a329-4fba-ade1-0eda0d91e9a2` — “Housing is foundational. When it fails, every other part of a family's economic life starts to fail with it.”
+- **Jimmy Patronis** · fossil-fuels · race c2210a49 · `7ca8f8ad-5899-4158-ab71-ddbef55ebf30` — “Using our cash, however, to fund BlackRock's social-engineering project isn't something Florida ever signed up for.”
+- **Jimmy Skovgard** · healthcare · race abdece9b · `f1de1aac-77f8-40de-bc4f-04e599479f8c` — “We're paying Ferrari prices for a system that runs like a broken-down ranch truck.”
+- **John Braun** · taxes · race f22d3f01 · `86accca9-7d01-4fcf-8fdb-42a4d1368e98` — “In a submarine, you don't waste space. In manufacturing, you don't waste a dollar. In government, we shouldn't waste your money either.”
+- **John Croisant** · childcare · race 68f2cc44 · `e862289a-7b3e-48e1-86f0-8cfb1bb62dc1` — “Affordable childcare is both a family issue and an economic one.”
+- **John Croisant** · healthcare · race 68f2cc44 · `f41b974b-f910-4ffe-bc96-98f39c10c7f6` — “Every Oklahoman should be able to see a doctor when they need to.”
+- **John Goci** · ukraine-support · race dc1b4f5b · `8723be95-5974-4586-846f-3617efd5bd7b` — “America's credibility is American security.”
+- **John H. Rutherford** · deportation · race 3d7cad28 · `7ed55784-8b93-46cf-b0f7-e38b64085fab` — “First and foremost, strengthen wall along southern border.”
+- **John James** · school-vouchers · race UNMAPPED · `c4aebbd4-57bb-4f49-9232-b2a89eabfe60` — “We have failed our children.”
+- **John Joyce** · deportation · race aa9b7309 · `e6aea6e4-5db8-412b-86f7-0a672a3b5603` — “Support Trump's agenda to create a secure border”
+- **John Munter** · ukraine-support · race 49cdd3b4 · `00a11522-d3f2-4258-8a89-c7730487071a` — “the biggest single Pentagon expense to make our money 'go a lot further' could come by cutting the unneeded new intercontinental ballistic missile system”
+- **Jonny Larsen** · same-sex-marriage · race 49abd5a1 · `6a1fc27a-6470-4dcd-9b04-cb6309029bcc` — “LGBTQ+ and transgender Utahns deserve the same protections everyone else has.”
+- **Josh Green** · school-vouchers · race UNMAPPED · `a4195be6-12ae-4b5c-8d5d-337fb90ae4a2` — “Develop and fund universal public Pre-K program”
+- **Josh Stein** · housing · race UNMAPPED · `d7c135ad-dc58-4eb4-9644-24cfbedaa497` — “Too many families are struggling to make rent or afford a home.”
+- **Kathy Castor** · civil-rights · race 8a55101c · `974cce2a-bf68-48e7-ac93-7a1c1dd7511d` — “The march towards equality under the law for all of our citizens has sometimes been slow, but it has been steady.”
+- **Kathy Hochul** · housing · race UNMAPPED · `6dff2ea8-2196-4bc4-a329-8029cc4da7d3` — “Housing is the number one driver of our affordability crisis”
+- **Katie Hobbs** · housing · race UNMAPPED · `3bdc554f-397d-4bd6-b3e1-300573bc8d0c` — “The bill as written is a step too far and the outcomes are unclear.”
+- **Kris Mayes** · immigration · race UNMAPPED · `ce8f8eaa-eeb2-4cfa-ab8e-8e37d49a658d` — “No executive order can supersede the United States Constitution and over 150 years of settled law.”
+- **Kris Warner** · voting-rights · race UNMAPPED · `b7f477d4-0836-4df7-a63f-32cd7d731ecd` — “We educated and we got it passed and the governor signed it.”
+- **Larry E. Marker** · fossil-fuels · race 2ca27b13 · `edb142ec-3d36-4cc6-bc26-4578f43195a9` — “If they fail to meet this deadline, the permit will be deemed approved.”
+- **Lily Tang Williams** · ukraine-support · race 65195c8e · `2da833d1-3904-4a67-882f-ff3deb0a76ce` — “We thought, 'Hey, with our help, maybe the war will end pretty fast'”
+- **Lindsey Anderson** · social-security · race 45b66e2a · `553991a1-570b-4aee-addc-ce18490619bc` — “That is an underfunding gap of $342K per American.”
+- **Lisa C. McClain** · social-security · race 6827a6c1 · `76957982-0588-4067-b259-6004cd12b0e5` — “Social Security is of vital importance to many Americans”
+- **Lisa Kinney** · climate-change · race 87674a21 · `3857c179-59c3-4b69-8898-d53ecfe5bd80` — “Let's put aside our emotional reactions.”
+- **London Lamar** · abortion · race 8f437a2a · `8bb14d28-e9ee-4938-8924-29fad0e960be` — “Access to medical care should be the rule, not the exception.”
+- **Luke Bronin** · ai-regulation · race a12b38fe · `2c5fe760-3f3d-474d-93d3-6a8445edaf42` — “make sure AI innovation means more money in your pocket, not less”
+- **Mark Alford** · religious-freedom · race c51e3abd · `97a382f7-dcbe-4533-957c-218041bac02d` — “Set this country, one blessed by God, back on the right track.”
+- **Mark Baisley** · healthcare · race 75218390 · `c13e524f-f7a9-4aa5-b901-843ae70affe6` — “prioritize the needs of Colorado citizens and lawfully present residents first”
+- **Mark Coester** · climate-change · race 5c1b3a06 · `57994c96-554c-4b59-92b2-eae6d104ad15` — “The CO2 levels during the golden ages when humanity flourished beyond imagination were 0.6%.”
+- **Mark Messmer** · childcare · race d225a061 · `d0e967ba-4e20-4e01-a876-f039da85d3d5` — “Bureaucratic red tape and expensive mandates are costing businesses AND employees valuable money”
+- **Mary Waters** · housing · race dc1b4f5b · `de6f733f-7fad-41df-bdba-87df5d0a6206` — “they signed a lease without reading it or understanding it”
+- **Michelle Kaufusi** · transportation-priorities · race 7e4c4da6 · `aec5e2c0-fa30-4b35-9d55-6a67486e2e4d` — “There is a way to get out ahead of the infrastructure...I have not seen it, and we have got to get to it.”
+- **Mike DeWine** · trans-athletes · race UNMAPPED · `bdc92b56-3562-4f70-96ad-8e42e3ebf19f` — “parents need to make these decisions for their kids”
+- **Mike Haridopolos** · deportation · race 70208bdf · `ff11792d-90cd-4c91-a7aa-a36a839662c7` — “Our Southern Border is in chaos. Illegal immigration is out of control.”
+- **N'Kiyla Thomas** · housing · race 19cb9ec1 · `8f0eb38e-34e2-4db0-b049-082d2480fec3` — “The system should not trap people in permanent debt.”
+- **Neal P. Dunn** · taxes · race UNMAPPED · `0075ebbe-66d4-4c90-9478-d123fa6460d5` — “Good medicine for America”
+- **Nicholas J. Begich III** · medicare/aid · race da67c539 · `a82a146e-b88c-451c-b405-7a6c69ea0da8` — “If someone is able to work or contribute in some way, even volunteer, they should do that”
+- **Nikki Budzinski** · healthcare · race 9969d601 · `7e7016e1-0954-4d39-b08f-c4d02af71482` — “that's only the beginning of how we need to get to addressing the impacts of what these big changes to health care are going to look like”
+- **Nithya Raman** · deportation · race 24bc3631 · `8403a778-c94c-4bd1-971d-76ae1abdaf8c` — “LAPD's job is keeping Angelenos safe, not assisting ICE.”
+- **Nithya Raman** · housing · race 24bc3631 · `ea35df13-e121-41e5-9a0d-fc63ffdfd06f` — “L.A. is one of the most segregated cities in America.”
+- **Oliver R. Morlan** · taxes · race 5b89c8c8 · `5bd3dc25-aa1f-4d27-93f7-06a98d480498` — “it is just too big.”
+- **Patrick Mosolf** · redistricting · race 73a46730 · `9fbf2bf8-fe7b-4696-9562-fb4a4b126f48` — “The Trump administration seeks to impose election procedures on the states, gerrymander to hold onto control of the House and coerce the media”
+- **Patrick Mosolf** · social-security · race 73a46730 · `e1ffa0b0-acfe-428a-9cc3-814f583660cf` — “I will prioritize finding and implementing solutions to ensure that Social Security continues to benefit Americans into the distant future.”
+- **Phil McGrane** · misinformation · race UNMAPPED · `c54ac9de-3ebb-4808-8afe-56fb21379dae` — “Both parties have helped weaken trust in our electoral system.”
+- **Phil Scott** · voting-rights · race UNMAPPED · `3c0010e8-b987-4a14-80c6-65edcc1c9ae3` — “The fabric of our democracy is under attack”
+- **Philip Harding** · fossil-fuels · race b9e08170 · `5fe11906-6956-4ea8-ba02-380ac8bb6096` — “Affordable energy powers strong communities.”
+- **Philip Harding** · healthcare · race b9e08170 · `64e8bc6d-5b7b-41aa-9f2c-5efc7b218c20` — “Healthcare should be accessible, affordable, and personal.”
+- **Philip Harding** · school-vouchers · race b9e08170 · `616f3c47-eb9c-41af-a868-7bbceca728c6` — “Schools should educate, not replace parents.”
+- **Rachel Fetty Anderson** · civil-rights · race d5767db7 · `a37efb67-81a6-4727-83e8-7ecbea8a0021` — “block, defund and impeach government actors who permit, fund or otherwise encourage violations of Human Rights within our borders”
+- **Robert Chew** · medicare/aid · race 75218390 · `d202989b-7e80-4d33-a01d-e7fdc154d0e5` — “Social Security and Medicare are going bankrupt in the next few years.”
+- **Robert Chew** · social-security · race 75218390 · `c8f5a62d-2047-4a6a-9bc6-10d4d1904562` — “Social Security and Medicare are going bankrupt in the next few years.”
+- **Robert Tracinski** · same-sex-marriage · race 6a1bf3a1 · `fbc01045-cb68-4297-b2e1-1e940625190d` — “the old 'groomer' smear that treats all homosexuals as suspected pedophiles”
+- **Ron DeSantis** · social-security · race UNMAPPED · `bc22f99d-030a-4366-a82a-51e860b4b965` — “A promise made will be a promise kept.”
+- **Sara Rodriguez** · same-sex-marriage · race UNMAPPED · `6923c83a-a7f9-44e6-b100-59ab8cecf312` — “LGBTQ people part of families across the political spectrum”
+- **Sarah Trone Garriott** · immigration · race edebece1 · `304f1147-c92b-4762-93d7-3bfe43b2d5be` — “Our immigration system is broken, and Washington is making the problem worse”
+- **Sarah Zabel** · climate-change · race e944b588 · `6c841e8d-bcd5-4cda-a0d0-d30740630a69` — “Climate change is real. It's real, it's measurable, it's a fact.”
+- **Sarah Zabel** · healthcare · race e944b588 · `c98af064-50fc-49c5-934d-88d669d0262e` — “We spend more per person on health care than any comparable country — and get worse outcomes.”
+- **Sarah Zabel** · housing · race e944b588 · `b1ff2673-c86a-427e-a1bc-7bd79b83bc49` — “Housing is the top budget priority for Idahoans three years running”
+- **Seth Magaziner** · school-vouchers · race 4fae9a83 · `4322d4df-83ad-403e-aa11-bfe1d502f559` — “Ensure every child has access to free universal pre-school.”
+- **Seth Magaziner** · voting-rights · race 4fae9a83 · `adc5a0bc-5d3a-4e4d-b9e4-50299acaeb29` — “Democracy only works when people can make their voices heard.”
+- **Shanelle Jackson** · healthcare · race 339a59d4 · `b9f55ec0-6ffa-4312-92a9-b3d87bea098f` — “Every American deserves access to affordable healthcare.”
+- **Sim Gill** · local-immigration · race 467d955a · `8ad14120-cd66-491c-97c7-ac5e237d3c7e` — “give them the certainty of status so they can live without fear”
+- **Steve Marshall** · misinformation · race UNMAPPED · `b73ad7a9-4ec6-421d-99c9-7dda55a04a5a` — “This is unconstitutional, illegal, and un-American”
+- **Ted Brown** · ukraine-support · race 216ead27 · `8933460f-4658-40a9-afd3-a9b8f017f8f2` — “Bring ALL troops home from foreign assignments”
+- **Thomas Laehn** · medicare/aid · race 4fc0ebfd · `d2451174-29a8-46c2-91fd-bf68a7fd4fad` — “They are a settled part of the fabric of American life.”
+- **Thomas Laehn** · social-security · race 4fc0ebfd · `861083b9-04e6-4f52-925b-6363f01e3fa0` — “They are a settled part of the fabric of American life.”
+- **Tom Perriello** · taxes · race 6a1bf3a1 · `87506dc5-4cab-4eda-8a77-bcaa9529e6d6` — “Guarantee a living wage and secure retirement.”
+- **Tom Schmitz** · abortion · race 13749c0c · `c86590ef-dbc1-4bf2-9707-ed9d75b5994a` — “innovations in medical technology unleashed by the free market can make abortion obsolete in our society”
+- **Trygve Hammer** · healthcare · race a757de4e · `e81990da-c660-45d1-95c7-3ccaeb76126b` — “Americans are paying the highest prices in the world for healthcare.”
+- **Vince George** · fossil-fuels · race 5e2fe982 · `7fb667c6-24dc-4855-8097-a1fa97fc071b` — “I'll fight for policies that increase mine safety, support miners with black lung, and hold powerful coal companies accountable”
+- **Wes Allen** · religious-freedom · race UNMAPPED · `8b4679f1-5789-4c34-8721-025099cb2834` — “My Christian faith is the most important thing to me.”
+- **Whitfield Harrington Jr.** · tariffs · race 0418c7a4 · `8f3f1d3f-33bc-4310-b538-0824bc330eaa` — “Pooling tariffs into a fund focused on community-led job creation supports real projects with bipartisan oversight”
+- **William Gates** · taxes · race 7eda9036 · `327f04b8-5b3c-4646-aca4-81b8c482f837` — “It is a moral document.”
+- **Zyon Khalifa** · immigration · race ba08d958 · `f713be93-c8df-4b26-ae39-e69903dde2cc` — “We can be a nation of laws and a nation of opportunity at the same time”
+
+
+---
+
+## Deid-dishonest bucket (2026-07-11)
+
+81 quotes flagged for broken blind text (all genuinely had `deidentified_text` — the earlier 'inflated' concern was wrong). Triaged 80 live quotes:
+
+- **61 blind-text corrections** — redrafted `deidentified_text` from `quote_text` with honest `…`/`[bracket]` marking, depersonalizing office/geographic/partisan tells (verified: 0 residual leaks, 0 trailing ellipses). COMMITTED.
+- **19 removals** — `quote_text` itself was a curator summary/fragment or had a load-bearing partisan tell that couldn't be neutralized. Set live=false. COMMITTED.
+
+Full old→new detail: `docs/audits/2026-07-11-deid-triage-review.md`.
+
+
+---
+
+## Partisan-tell bucket (2026-07-11)
+
+11 mechanical partisan-tell findings triaged. The check regex-matches any 'democratic', so it is noisy:
+
+- **4 already removed** (not live): André Carson, Christina Bohannan, Debbie Wasserman Schultz, Robin L. Kelly.
+- **5 false positives** — small-d 'democratic' or symmetric bipartisan framing: Adrian Boafo, Jeffrey Hulum III, Steve Marshall, Grace Meng, Jamee Decio.
+- **2 genuine tells fixed** (blind-text edit, COMMITTED):
+  - Darren Croft (taxes): dropped self-ID 'I am a Reagan Republican.' from blind card.
+  - Mark Messmer (climate-change): 'a Democrat tool' → 'a [political] tool' on blind card.
+
+Note: Jamee Decio's quotes carry unhandled geographic tells ('Indiana', 'Hoosier') — a separate de-id gap, not actioned here.

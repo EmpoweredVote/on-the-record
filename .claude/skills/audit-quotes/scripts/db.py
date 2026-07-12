@@ -22,6 +22,7 @@ def connect():
 SCOPE_SQL = """
 SELECT q.id, q.topic_key, q.readrank_selected, q.quote_text, q.deidentified_text,
        q.editor_note, q.source_name, q.source_url,
+       q.politician_id::text AS politician_id,
        p.full_name AS candidate,
        (SELECT rc.race_id::text FROM essentials.race_candidates rc
         WHERE rc.politician_id = q.politician_id ORDER BY rc.race_id LIMIT 1) AS race_id
@@ -42,17 +43,17 @@ def fetch_rows(conn, ids=None, candidate=None, topic=None, race=None, include_dr
         cur.execute(SCOPE_SQL, dict(ids=ids, candidate=candidate, topic=topic, race=race, drafts=include_drafts))
         return [dict(r) for r in cur.fetchall()]
 
-def fetch_stance(conn, candidate, topic_key):
-    """Returns {'question_text':..., 'value': float|None, 'chairs': [{'v','text'}...]} or None."""
+def fetch_stance(conn, politician_id, topic_key):
+    """Returns {'question_text':..., 'value': float|None, 'chairs': [{'v','text'}...]} or None.
+    Keyed on politician_id (not full_name) — names collide across the national race set."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute("""
           SELECT t.question_text,
                  (SELECT a.value FROM inform.politician_answers a
-                  JOIN essentials.politicians p ON p.id=a.politician_id
-                  WHERE a.topic_id=t.id AND lower(p.full_name)=lower(%s)) AS value,
+                  WHERE a.topic_id=t.id AND a.politician_id=%s::uuid) AS value,
                  (SELECT json_agg(json_build_object('v', s.value, 'text', s.text) ORDER BY s.value)
                   FROM inform.compass_stances s WHERE s.topic_id=t.id) AS chairs
           FROM inform.compass_topics t WHERE t.topic_key=%s
-        """, (candidate, topic_key))
+        """, (politician_id, topic_key))
         row = cur.fetchone()
         return dict(row) if row else None

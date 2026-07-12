@@ -38,6 +38,26 @@ def test_partisan_tell_in_blind_flagged():
     f = check_partisan_tell_in_blind(row(deidentified_text="These Democrat policies failed."))
     assert f and f.check_id == "partisan-tell" and f.fix_class == "guided"
 
+def test_partisan_tell_genuine_side_tells_flagged():
+    for blind in ["I am a Reagan Republican.", "The Endangerment Finding is a Democrat tool.",
+                  "Best not represented by a MAGA acolyte.", "GOP can't beat the ACA.",
+                  "These policies betray my party."]:
+        f = check_partisan_tell_in_blind(row(deidentified_text=blind))
+        assert f and f.check_id == "partisan-tell", f"should flag: {blind!r}"
+
+def test_partisan_tell_small_d_democratic_not_flagged():
+    # small-d "democratic" (democracy, not the party) must not false-match
+    for blind in ["Stand firmly with democratic allies by strengthening NATO.",
+                  "the right to participate in the democratic process",
+                  "a threat to democratic governance"]:
+        assert check_partisan_tell_in_blind(row(deidentified_text=blind)) is None, blind
+
+def test_partisan_tell_symmetric_bipartisan_framing_not_flagged():
+    # naming BOTH parties reveals no side
+    for blind in ["These are not Democratic or Republican priorities.",
+                  "Voters — Democratic, Republican and independent — must reject this."]:
+        assert check_partisan_tell_in_blind(row(deidentified_text=blind)) is None, blind
+
 def test_source_tier_campaign_site_flagged():
     f = check_source_tier(row(source_url="https://www.xavierbecerra2026.com/housing", source_name="www.xavierbecerra2026.com"))
     assert f and f.check_id == "source-tier-4"
