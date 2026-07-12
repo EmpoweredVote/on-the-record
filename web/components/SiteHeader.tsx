@@ -63,12 +63,14 @@ export default function SiteHeader() {
       return root.classList.contains("dark") || root.getAttribute("data-theme") === "dark";
     };
 
-    // Initialize: saved preference wins, then fall back to OS
+    // Initialize: saved preference wins, then fall back to OS. Light must be set
+    // explicitly (not by removing data-theme) — on an OS that prefers dark, the
+    // `:root:not([data-theme="light"])` dark rule would otherwise still match.
     const saved = localStorage.getItem("theme");
     if (saved === "dark") {
       document.documentElement.setAttribute("data-theme", "dark");
     } else if (saved === "light") {
-      document.documentElement.removeAttribute("data-theme");
+      document.documentElement.setAttribute("data-theme", "light");
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       document.documentElement.setAttribute("data-theme", "dark");
     }
@@ -83,14 +85,12 @@ export default function SiteHeader() {
   }, []);
 
   const toggle = useCallback(() => {
-    const newDark = !isDark;
-    if (newDark) {
-      document.documentElement.setAttribute("data-theme", "dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
-      localStorage.setItem("theme", "light");
-    }
+    // Always set data-theme to an explicit value. Removing it for light mode
+    // leaves the dark `@media (prefers-color-scheme: dark)` rule in force on an
+    // OS that prefers dark, so the page would never actually switch to light.
+    const theme = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
   }, [isDark]);
 
   return (

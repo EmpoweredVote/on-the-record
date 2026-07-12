@@ -24,6 +24,7 @@ import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
 import PersonPhoto from "@/components/PersonPhoto";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const ESSENTIALS_BASE = "https://essentials.city";
 
@@ -91,9 +92,13 @@ export default function PersonDetailClient() {
 
   return (
     <main className="indexPage personPage skim">
-      <Link href="/people" className="backLink">
-        ← All people
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Meetings", href: "/" },
+          { label: "People", href: "/people" },
+          { label: person.name },
+        ]}
+      />
       <header className="personHeader">
         <PersonPhoto name={person.name} url={person.headshot_url} large />
         <div>

@@ -163,6 +163,45 @@ a {
   max-width: 52ch;
 }
 
+/* Breadcrumb trail — hierarchical "walk back up" nav at the top of a page */
+.breadcrumbs {
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.breadcrumbs a {
+  color: var(--accent);
+}
+
+.breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbs [aria-current="page"] {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.breadcrumbSep {
+  color: var(--border);
+}
+
 .siteNav {
   display: flex;
   gap: 0.5rem;

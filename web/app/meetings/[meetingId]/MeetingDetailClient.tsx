@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { fetchMeeting, fetchSegments, fetchSummary } from "@/lib/queries";
 import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
@@ -9,6 +8,7 @@ import MeetingView from "./MeetingView";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildOutline } from "@/lib/outline";
 
 export default function MeetingDetailClient() {
@@ -31,7 +31,12 @@ export default function MeetingDetailClient() {
   return (
     <main className="meetingPage">
       <header className="meetingHeader">
-        <Link href="/" className="backLink">← All meetings</Link>
+        <Breadcrumbs
+          items={[
+            { label: "Meetings", href: "/" },
+            { label: meetingTitle(meeting) },
+          ]}
+        />
         <h1>{meetingTitle(meeting)}</h1>
         <span className="eventKind">{eventKindLabel(meeting.event_kind)}</span>
         {meeting.event_orgs.length > 0 && (
