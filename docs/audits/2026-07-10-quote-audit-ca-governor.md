@@ -1,0 +1,188 @@
+# Quote Audit — CA Governor
+
+**60 findings** — 33 high, 25 medium, 2 low
+
+## Summary by race
+- **race bc936a36-287c-4ffd-abd8-5e4fd798bae5** — 60 findings (33 high, 25 med, 2 low)
+
+## race bc936a36-287c-4ffd-abd8-5e4fd798bae5
+- `high` · `decision-required` · **not-forward** (quote) — Xavier Becerra / abortion [9afd3c42-1aeb-45e6-87ac-5d98386543a1]
+    - The operative clause 'We protect the women of the state' reads as touting his own past/current protective role (as AG, defending reproductive rights) rather than stating a forward legal-framework position; the supporting clause just cites a ballot measure's vote share, not his own future policy.
+    - fix: Look for a quote where Becerra states what legal framework he would pursue as governor (codifying access, funding, etc.), rather than one that cites past electoral results or implies his own protective record.
+- `high` · `decision-required` · **off-question** (quote) — Steve Hilton / abortion [95f98f9c-b58e-41bc-bc50-83e2db0ea812]
+    - The quote argues for a 'culture of responsibility' and faith-community engagement to reduce abortions, but never states what legal framework or restrictions he supports for abortion access — the axis the topic's question actually asks about.
+    - fix: Find or re-home a Hilton quote that states the legal restrictions he'd support (matching his rape/incest/life-exception stance); if none exists, he may be genuinely absent from this topic rather than represented by an off-axis cultural quote.
+- `high` · `decision-required` · **off-question** (quote) — Xavier Becerra / childcare [46c74d88-3202-4f9c-a8b5-24a6db15613c]
+    - The quote argues for starting 'early childhood education' sooner — an educational-readiness point — and doesn't engage the topic's cost/availability-of-childcare axis at all.
+    - fix: Look for a Becerra quote addressing childcare affordability/subsidy mechanisms directly, matching his stance; otherwise re-home this quote under an education topic.
+- `high` · `decision-required` · **source-summary** (quote) — Xavier Becerra / data-centers [3b57c45f-985b-48e4-ad1b-5ee513f387eb]
+    - 'powered with clean energy, cover the costs of their own energy needs' is a subjectless fragment — reads like a curator-lifted bullet point from the campaign AI page rather than a complete verbatim sentence, with no leading ellipsis marking whatever precedes it.
+    - fix: Pull the full sentence from the source page (with subject, e.g. 'Data centers...') and mark any real cut with a leading '…', or confirm this is genuinely a complete candidate sentence.
+- `high` · `decision-required` · **off-question** (quote) — Steve Hilton / deportation [feef72e2-a573-49a5-9990-2ac823874ab8]
+    - The quote is entirely about denying commercial driver's licenses to non-English-speaking undocumented residents — a licensing policy, not a statement of who should be deported or how aggressively.
+    - fix: Find a Hilton quote that directly addresses deportation scope/priority (matching his v4 stance), or re-home this quote to an immigration-services/licensing topic if one exists.
+- `high` · `decision-required` · **off-question** (quote) — Steve Hilton / rent-regulation [fc3a5867-a568-4e1d-8cc5-c0835363202a]
+    - 'The starter home was the foundation of the California Dream' is a homeownership/affordability nostalgia line — it says nothing about rent regulation or tenant protections, the topic's actual question.
+    - fix: Source a Hilton quote that states his rent-control/tenant-protection position (matching his v5 'oppose rent control entirely' stance), or re-home this line under a housing-supply/affordability topic.
+- `high` · `decision-required` · **off-question** (quote) — Xavier Becerra / same-sex-marriage [aecf67ba-0112-4931-a467-b8ea67525e6b]
+    - 'Live and love without restraint' is a values slogan from the campaign's rights page — it doesn't state what legal recognition same-sex marriages should receive.
+    - fix: Find or source a Becerra quote that states a legal-recognition position (matching his v1 'full federal recognition' stance) rather than a generic values slogan.
+- `high` · `decision-required` · **off-question** (quote) — Xavier Becerra / trans-athletes [b3fcbb17-37ec-4baf-abfd-d56fb4a301b3]
+    - The quote ('follow the rules of that sport... should be that easy') is a content-free proceduralism that never states what the eligibility rules should be — it sidesteps the actual policy question rather than answering it, consistent with the stance value being unsynthesized (null).
+    - fix: Given the null stance value, confirm whether Becerra has ever stated a substantive position on trans-athlete eligibility; if not, he may be genuinely absent from this topic rather than represented by a non-answer.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / abortion [9afd3c42-1aeb-45e6-87ac-5d98386543a1]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / abortion [95f98f9c-b58e-41bc-bc50-83e2db0ea812]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / ai-regulation [45da4ddb-ba85-4223-9872-133aaefead39]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / childcare [1927f300-0970-43c2-a618-cffb8251fe52]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / childcare [46c74d88-3202-4f9c-a8b5-24a6db15613c]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / climate-change [220bda88-a14a-43ac-80f5-0cca638b63c2]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / climate-change [1987eb56-8be6-4fb5-b64d-c983be0423e5]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / data-centers [3b57c45f-985b-48e4-ad1b-5ee513f387eb]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / deportation [feef72e2-a573-49a5-9990-2ac823874ab8]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / economic-development [c5c21dce-b093-4846-8d77-5c519f243603]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / economic-development [6e475503-a1c8-4bbe-bcf3-1c9243981d51]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / growth-and-development [45fa274d-0eef-42f6-a78c-3a042bb83fcf]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **deid-dishonest** (quote) — Steve Hilton / immigration [79a7a652-9223-4015-a247-b0fc5e33293d]
+    - The blind text still reads '...As governor, [I] will be there for our...' — 'As governor' is the exact self-identification leak example named in the curation principles ('as governor,' 'in my district'), despite the editor_note claiming the self-ID opener was removed.
+    - fix: Strip or bracket 'As governor' from the blind card (e.g., '[When elected,] [I] will be there...' or drop the clause with '…'), consistent with how the 'I am an immigrant' opener was already handled.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / jail-capacity [4da9cf64-eb31-405b-bd2a-283e4cf8686c]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / medicare/aid [2b10ecd6-7238-45e2-bbee-12eb438175e0]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / medicare/aid [587fe080-8d8d-4cb6-b987-052cded919be]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / rent-regulation [fc3a5867-a568-4e1d-8cc5-c0835363202a]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / rent-regulation [c3cc1ca9-2a53-4359-b3b7-80297500e63f]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / same-sex-marriage [aecf67ba-0112-4931-a467-b8ea67525e6b]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / taxes [4aa0c231-342a-4f83-b3a5-816d8d2bec74]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / taxes [243fbe61-ce38-4e9f-b96c-a3f975f8c75b]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **deid-dishonest** (quote) — Xavier Becerra / taxes [4aa0c231-342a-4f83-b3a5-816d8d2bec74]
+    - The blind text drops two full sentences ('That won't be so difficult. If you look at the governor's budget from today...corporate welfare loopholes...') and the named 'like Tom Steyer' — with zero '…' marks anywhere in the deidentified text despite the substantial cuts.
+    - fix: Insert '…' at each cut point so the blind card honestly reflects the trims, or restore the material if it isn't actually identity-revealing.
+- `high` · `guided` · **note-missing** (quote) — Xavier Becerra / trans-athletes [b3fcbb17-37ec-4baf-abfd-d56fb4a301b3]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / trans-athletes [02d60a03-bce5-4d8c-a8c1-13baa4dfaf82]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Steve Hilton / transportation-priorities [30be3454-2e7e-4d7c-9323-139935e51ffe]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / ai-regulation [ai-regulation]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Steve Hilton / childcare [1927f300-0970-43c2-a618-cffb8251fe52]
+    - The quote's 'ensuring high quality and universal access' language reads toward a universal-guarantee position, in tension with the candidate's stance value (v4: 'reducing regulations... limited subsidies reserved for lowest-income families').
+    - fix: Re-review whether this quote is representative of the deregulation-leaning Compass value, or whether the value/quote pairing needs reconciling (confirm 'facilitate rather than provide' is the operative point, not 'universal access').
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Steve Hilton / climate-change [1987eb56-8be6-4fb5-b64d-c983be0423e5]
+    - The quote opens with 'I'm an environmentalist' and affirms 'clean air, clean water, of course, that's right,' reading more moderate than the candidate's v5 stance ('reject climate change policies and focus on economic growth instead').
+    - fix: Reconcile: either the Compass value should account for this moderating language, or select a quote more squarely reinforcing full rejection of climate policy if that's the intended synthesis.
+- `medium` · `decision-required` · **source-tier-4** (quote) — Xavier Becerra / data-centers [3b57c45f-985b-48e4-ad1b-5ee513f387eb]
+    - Source looks like a campaign/written page (tier 4): https://www.xavierbecerra2026.com/ai
+    - fix: Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / data-centers [data-centers]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / deportation [deportation]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-tier-4** (quote) — Xavier Becerra / economic-development [c5c21dce-b093-4846-8d77-5c519f243603]
+    - Source looks like a campaign/written page (tier 4): https://www.xavierbecerra2026.com/priorities/filmindustry/
+    - fix: Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.
+- `medium` · `decision-required` · **source-tier-4** (quote) — Xavier Becerra / growth-and-development [45fa274d-0eef-42f6-a78c-3a042bb83fcf]
+    - Source looks like a campaign/written page (tier 4): https://www.xavierbecerra2026.com/priorities/housing/
+    - fix: Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / growth-and-development [growth-and-development]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / immigration [immigration]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / jail-capacity [jail-capacity]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-tier-4** (quote) — Xavier Becerra / rent-regulation [c3cc1ca9-2a53-4359-b3b7-80297500e63f]
+    - Source looks like a campaign/written page (tier 4): https://www.xavierbecerra2026.com/priorities/housing/
+    - fix: Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.
+- `medium` · `decision-required` · **source-tier-4** (quote) — Xavier Becerra / same-sex-marriage [aecf67ba-0112-4931-a467-b8ea67525e6b]
+    - Source looks like a campaign/written page (tier 4): https://www.xavierbecerra2026.com/rights
+    - fix: Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / same-sex-marriage [same-sex-marriage]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / transportation-priorities [transportation-priorities]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **off-question** (quote) — Steve Hilton / transportation-priorities [30be3454-2e7e-4d7c-9323-139935e51ffe]
+    - The quote only criticizes high-speed rail's cost overruns ('a massively over-budget, permanently subsidized train') — it never states where transportation investment should focus (roads vs. transit), the topic's actual question.
+    - fix: Find a Hilton quote that affirmatively states his transportation-investment priority (matching his v4 'focus on road capacity' stance), rather than one that only critiques a specific rail project's execution.
+- `medium` · `guided` · **deid-dishonest** (quote) — Xavier Becerra / ai-regulation [45da4ddb-ba85-4223-9872-133aaefead39]
+    - The blind text silently drops 'because it is an industry that is going to offer us great opportunity' compared to the canonical quote, with no '…' marking the cut.
+    - fix: Insert '…' at the cut point (or restore the clause) so the blind card honestly reflects the trim.
+- `medium` · `guided` · **deid-dishonest** (quote) — Steve Hilton / climate-change [1987eb56-8be6-4fb5-b64d-c983be0423e5]
+    - 'and exactly as Chad said,' naming a third party, is silently dropped from the blind text with no ellipsis or bracket marking the removal.
+    - fix: Mark the cut with '…' (e.g., '...not ideology that ends up being counterproductive, ... hurting every small business...') so the edit is honestly indicated.
+- `medium` · `guided` · **note-section-ref** (quote) — Steve Hilton / fossil-fuels [727b4b2d-f600-4090-9bd1-96c017aba0cb]
+    - editor_note cites internal section numbers / jargon.
+    - fix: Rewrite without §-refs or 'tier-N'; keep it human-readable.
+- `medium` · `guided` · **note-section-ref** (quote) — Xavier Becerra / fossil-fuels [a5747450-a662-4959-8e3a-defc226cf986]
+    - editor_note cites internal section numbers / jargon.
+    - fix: Rewrite without §-refs or 'tier-N'; keep it human-readable.
+- `medium` · `guided` · **note-section-ref** (quote) — Steve Hilton / healthcare [5a671040-83bc-4323-83d9-ee26a5a347e4]
+    - editor_note cites internal section numbers / jargon.
+    - fix: Rewrite without §-refs or 'tier-N'; keep it human-readable.
+- `medium` · `guided` · **note-section-ref** (quote) — Xavier Becerra / healthcare [fcc79f0d-5a60-4f5b-8dbe-1f4ebc017886]
+    - editor_note cites internal section numbers / jargon.
+    - fix: Rewrite without §-refs or 'tier-N'; keep it human-readable.
+- `medium` · `guided` · **note-section-ref** (quote) — Xavier Becerra / housing [733cbf7e-3650-404a-ad1c-0d991b58f6a7]
+    - editor_note cites internal section numbers / jargon.
+    - fix: Rewrite without §-refs or 'tier-N'; keep it human-readable.
+- `medium` · `guided` · **note-section-ref** (quote) — Steve Hilton / housing [1e592373-0fcb-4147-9af2-c430368c7a53]
+    - editor_note cites internal section numbers / jargon.
+    - fix: Rewrite without §-refs or 'tier-N'; keep it human-readable.
+- `medium` · `guided` · **note-not-self-contained** (quote) — Steve Hilton / housing [1e592373-0fcb-4147-9af2-c430368c7a53]
+    - The editor_note says the trim followed 'EDITORIAL's ellipsis-density guidance' — naming an internal skill document a skeptical outside reader (journalist, citizen) wouldn't recognize or be able to check.
+    - fix: Rewrite that clause in plain language (e.g., 'split into two sentences rather than packing multiple claims into one heavily-marked quote') without naming the internal skill doc.
+- `low` · `guided` · **deid-dishonest** (quote) — Xavier Becerra / economic-development [c5c21dce-b093-4846-8d77-5c519f243603]
+    - 'California' is silently substituted with 'the state' in the blind text with no bracket marking the substitution. Minor: the word isn't itself identity-revealing in a CA governor's race, but the substitution is unmarked.
+    - fix: Mark the substitution as '[the state]' per the bracket convention, or leave 'California' if the substitution isn't actually needed for anonymity.
+- `low` · `guided` · **deid-dishonest** (quote) — Steve Hilton / taxes [243fbe61-ce38-4e9f-b96c-a3f975f8c75b]
+    - 'my plan' is silently changed to 'The plan' in the blind text (a self-reference scrub) without bracket marking the substitution.
+    - fix: Mark the substitution as '[The] plan' per the bracket convention.
