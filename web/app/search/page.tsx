@@ -1,15 +1,13 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import SearchView from "./SearchView";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export const metadata = { title: "Search — On the Record" };
 
 export default function SearchPage() {
   return (
     <main className="indexPage searchPage">
-      <Link href="/" className="backLink">
-        ← All meetings
-      </Link>
+      <Breadcrumbs items={[{ label: "Meetings", href: "/" }, { label: "Search" }]} />
       <h1>Search</h1>
       <p className="tagline">
         Search every word spoken across all published meetings.

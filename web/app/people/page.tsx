@@ -7,12 +7,14 @@ import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
 import PersonPhoto from "@/components/PersonPhoto";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export default function PeoplePage() {
   const { data: people, loading, error } = useApi(fetchPeople);
 
   return (
     <main className="indexPage">
+      <Breadcrumbs items={[{ label: "Meetings", href: "/" }, { label: "People" }]} />
       <h1>People</h1>
       <p className="tagline">
         Everyone identified speaking in published meetings, linked to every

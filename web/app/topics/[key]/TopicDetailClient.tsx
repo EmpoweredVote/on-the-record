@@ -9,6 +9,7 @@ import ProvenanceBadge from "@/components/ProvenanceBadge";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 function fmt(seconds: number | null): string {
   if (seconds == null) return "";
@@ -30,7 +31,13 @@ export default function TopicDetailClient() {
 
   return (
     <main className="indexPage">
-      <Link href="/topics" className="backLink">← All topics</Link>
+      <Breadcrumbs
+        items={[
+          { label: "Meetings", href: "/" },
+          { label: "Topics", href: "/topics" },
+          { label: topic.title ?? topic.topic_key },
+        ]}
+      />
       <h1>{topic.title ?? topic.topic_key}</h1>
       <p className="tagline">{topic.items.length} item{topic.items.length === 1 ? "" : "s"} across meetings</p>
       <ul className="topicItems">

@@ -6,13 +6,14 @@ import { useApi } from "@/lib/useApi";
 import Loading from "@/components/Loading";
 import ErrorState from "@/components/ErrorState";
 import EmptyState from "@/components/EmptyState";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export default function TopicsPage() {
   const { data: topics, loading, error } = useApi(fetchTopics);
 
   return (
     <main className="indexPage">
-      <Link href="/" className="backLink">← All meetings</Link>
+      <Breadcrumbs items={[{ label: "Meetings", href: "/" }, { label: "Topics" }]} />
       <h1>Topics</h1>
       <p className="tagline">Issues discussed across meetings, from the Compass topic set.</p>
       {loading ? (
