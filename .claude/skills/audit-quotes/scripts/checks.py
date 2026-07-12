@@ -4,7 +4,12 @@ from collections import Counter
 from typing import Optional
 from scripts.models import Finding
 
-_PARTISAN = re.compile(r"\b(Democrat|Democratic|Republican|GOP|MAGA|my party)\b", re.I)
+# Case-SENSITIVE party labels — capitalized proper nouns, so small-d "democratic"
+# (democratic process/allies/governance) and small-r "republican" don't false-match.
+_DEM = re.compile(r"\b(Democrat|Democrats|Democratic)\b")
+_REP = re.compile(r"\b(Republican|Republicans|GOP)\b")
+_PARTISAN = re.compile(r"\b(Democrat|Democrats|Democratic|Republican|Republicans|GOP|MAGA)\b")
+_PARTY_PHRASE = re.compile(r"\b(?:my|our) party\b", re.I)
 _SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
 CAMPAIGN_SITE = re.compile(r"(for[a-z]+\d{2,4}|20\d\d|campaign)\.(com|org)|(vote|elect)[a-z]+\.(com|org)", re.I)
 
@@ -52,7 +57,11 @@ def check_trailing_ellipsis(r) -> Optional[Finding]:
 
 def check_partisan_tell_in_blind(r) -> Optional[Finding]:
     blind = r.get("deidentified_text") or ""
-    m = _PARTISAN.search(blind)
+    # Symmetric framing that names BOTH major parties ("neither Democratic nor Republican",
+    # "Democratic, Republican and independent") reveals no side — not a tell.
+    if _DEM.search(blind) and _REP.search(blind):
+        return None
+    m = _PARTISAN.search(blind) or _PARTY_PHRASE.search(blind)
     if not m:
         return None
     return Finding(check_id="partisan-tell", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
