@@ -8,6 +8,7 @@ directory walk, file writes, profile DB, publish, and deploy. Mirrors how
 """
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
@@ -18,6 +19,27 @@ DECISION_LINK = "link"
 DECISION_REVIEW = "review"
 DECISION_SKIP = "skip"
 VALID_DECISIONS = (DECISION_LINK, DECISION_REVIEW, DECISION_SKIP)
+
+# Obviously-generic role labels that are never a person to link. Excluded from
+# enumeration outright so they never reach the operator's review file.
+GENERIC_ROLE_LABELS = frozenset(
+    {"host", "moderator", "narrator", "interviewee", "pledge", "applause"}
+)
+
+
+def _name_tokens(name: str) -> set[str]:
+    """Lowercase whole-word tokens of a name (alphanumeric runs)."""
+    return set(re.findall(r"\w+", (name or "").lower()))
+
+
+def _is_strong_match(speaker_name: str, full_name: str) -> bool:
+    """A single search match is *strong* only when the speaker name shares a
+    whole-word token with the candidate's full_name (case-insensitive).
+
+    This rejects mere substring/fuzzy hits — e.g. the label "Host" against
+    "Matthew Hostettler" — which the essentials name search can return.
+    """
+    return bool(_name_tokens(speaker_name) & _name_tokens(full_name))
 
 
 @dataclass
@@ -68,6 +90,8 @@ def enumerate_unlinked(meetings, profile_db) -> list[UnlinkedSpeaker]:
             if mapping.local_slug is not None:
                 continue
             key = _normalize(mapping.speaker_name)
+            if key in GENERIC_ROLE_LABELS:
+                continue
             row = rows.get(key)
             if row is None:
                 ids = linked_ids.get(key, set())
@@ -122,6 +146,11 @@ def suggest_link(speaker, *, search=_search_politicians) -> tuple[str, list[dict
     Otherwise mirror resolve_link_target: exactly one search match -> LINK; zero
     or several -> REVIEW. EssentialsClientError propagates (an outage must not be
     silently rendered as 'no matches').
+
+    A lone match is only auto-approved when it is a *strong* match (shares a
+    whole-word token with the candidate's full_name). A weak fuzzy/substring hit
+    — e.g. "Host" matching "Matthew Hostettler" — is downgraded to REVIEW with the
+    candidate still listed, so the operator confirms rather than auto-linking.
     """
     if speaker.known_id:
         stub = {"politician_id": speaker.known_id, "politician_slug": None,
@@ -130,7 +159,9 @@ def suggest_link(speaker, *, search=_search_politicians) -> tuple[str, list[dict
         return DECISION_LINK, [stub]
 
     matches = search(speaker.display_name)
-    if len(matches) == 1:
+    if len(matches) == 1 and _is_strong_match(
+        speaker.display_name, matches[0].get("full_name") or ""
+    ):
         return DECISION_LINK, matches
     return DECISION_REVIEW, matches
 
