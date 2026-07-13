@@ -16,7 +16,13 @@
     <p class="sub">{{ page.speaker_count }} speakers · {{ page.needs_attention|length }} need attention</p>
   </header>
   <main class="review">
-    {% if page.media_kind == "video" %}
+    {% if page.youtube_id %}
+      <iframe id="yt-player" class="player"
+              src="https://www.youtube.com/embed/{{ page.youtube_id }}"
+              title="source video" frameborder="0"
+              allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+              allowfullscreen></iframe>
+    {% elif page.media_kind == "video" %}
       <video id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></video>
     {% elif page.media_kind == "audio" %}
       <audio id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></audio>

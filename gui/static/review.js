@@ -1,14 +1,23 @@
-// Clip playback: clicking a clip button seeks the shared media element and plays.
+// Clip playback: clicking a clip button seeks the media. For a YouTube embed we
+// reload the iframe at ?start=<seconds> (no IFrame API needed); otherwise we seek
+// the shared <video>/<audio> element.
 document.addEventListener("click", function (e) {
   const btn = e.target.closest(".clip");
   if (!btn) return;
+  const seek = parseFloat(btn.getAttribute("data-seek"));
+  if (Number.isNaN(seek)) return;
+
+  const yt = document.getElementById("yt-player");
+  if (yt) {
+    const base = yt.src.split("?")[0];
+    yt.src = base + "?start=" + Math.floor(seek) + "&autoplay=1";
+    return;
+  }
+
   const player = document.getElementById("player");
   if (!player) return;
-  const seek = parseFloat(btn.getAttribute("data-seek"));
-  if (!Number.isNaN(seek)) {
-    player.currentTime = seek;
-    player.play();
-  }
+  player.currentTime = seek;
+  player.play();
 });
 
 // Politician link search: debounced query to the search API; each result is a

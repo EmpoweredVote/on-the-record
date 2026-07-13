@@ -845,6 +845,17 @@ def test_find_meeting_media_falls_back_to_opus(tmp_path):
     assert find_meeting_media(tmp_path) == ("video", "source.mp4")
 
 
+def test_review_route_renders_youtube_iframe(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_youtube_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert 'id="yt-player"' in body
+    assert "youtube.com/embed/abc123XYZ" in body
+
+
 def test_media_route_serves_opus_as_ogg(tagged_meeting_dir, tmp_meetings_dir):
     from fastapi.testclient import TestClient
     from gui.app import create_app
