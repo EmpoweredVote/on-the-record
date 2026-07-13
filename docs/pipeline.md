@@ -228,3 +228,24 @@ provenance evidence) and deletes `source.<ext>` + `audio.wav`. Review still work
 YouTube-sourced meetings stream the embed (seeked to each clip); other sources
 play the local `audio.opus`. If a later checkpoint rewind needs `audio.wav`, it is
 regenerated from `audio.opus`.
+
+### Deleting a meeting (hard erase)
+
+To fully remove a mistakenly-processed meeting — local files AND live-DB rows:
+
+- CLI: `.venv/bin/python run_local.py --delete-meeting <meeting_id>` (prompts for
+  typed confirmation; add `--confirm <meeting_id>` to run non-interactively).
+- GUI: the "⚠ Delete this meeting" danger zone on the review page (type the id to confirm).
+
+This deletes the `meetings/<slug>/` folder and every `meetings.*` row for the
+meeting (segments, speakers, event_races, meeting_topics, event_orgs, and the
+parent row). It does NOT delete:
+- **Derived quotes** in `essentials.quotes` — they have no foreign key to a meeting,
+  so they are *reported* (with ids) for you to handle via the audit-quotes tooling.
+- **Voice profiles** — the meeting's embeddings remain in `speaker_profiles.pkl`.
+  When the meeting contributed to profiles, the tool warns you to run
+  `reenroll_profiles.py` to rebuild them.
+- **`meetings.local_people`** rows — shared across meetings.
+
+Hard delete is irreversible (no undo/soft-delete). Distinct from media cleanup,
+which keeps the transcript and a compressed audio copy.
