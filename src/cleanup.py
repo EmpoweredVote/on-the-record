@@ -6,11 +6,14 @@ Never touches the download/ingest hot path. Triggered only manually (CLI + GUI).
 """
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 from pathlib import Path
 
 from src import config
+
+logger = logging.getLogger(__name__)
 
 # Mirror the video container set used by review/thumbnail lookups.
 _VIDEO_EXTS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
@@ -44,7 +47,13 @@ def compress_audio_to_opus(wav_path: Path, opus_path: Path, bitrate: str = "32k"
 
 
 def _is_safe_meeting_id(meeting_id: str) -> bool:
-    return bool(meeting_id) and "/" not in meeting_id and ".." not in meeting_id
+    return (
+        bool(meeting_id)
+        and meeting_id not in (".", "..")
+        and "/" not in meeting_id
+        and "\\" not in meeting_id
+        and ".." not in meeting_id
+    )
 
 
 def cleanup_meeting(meeting_id: str) -> dict:
@@ -99,5 +108,5 @@ def _mark_cleaned(meeting_dir: Path) -> None:
         ps = PipelineState(meeting_dir)
         ps.media_cleaned = True
         ps.save()
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort: never block the deletion result
+        logger.warning("failed to persist media_cleaned for %s: %s", meeting_dir, exc)

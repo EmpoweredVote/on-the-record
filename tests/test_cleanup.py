@@ -128,3 +128,4 @@ def test_cleanup_meeting_unknown_id(tmp_meetings_dir):
 
     assert cleanup.cleanup_meeting("ghost")["status"] == "not_found"
     assert cleanup.cleanup_meeting("../escape")["status"] == "not_found"
+    assert cleanup.cleanup_meeting(".")["status"] == "not_found"
