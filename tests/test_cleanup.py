@@ -64,3 +64,67 @@ def test_pipeline_state_persists_media_cleaned(tmp_path):
 
     reloaded = PipelineState(tmp_path)
     assert reloaded.media_cleaned is True
+
+
+def _fake_compress(wav_path, opus_path, bitrate="32k"):
+    Path(opus_path).write_bytes(b"OPUSDATA")
+    return Path(opus_path)
+
+
+def _finalized_meeting(mdir):
+    (mdir / "transcript_named.json").write_text("{}")
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)
+    (mdir / "source.mp4").write_bytes(b"0" * 5000)
+
+
+def test_cleanup_meeting_compresses_and_deletes(tmp_meetings_dir, monkeypatch):
+    from src import cleanup
+
+    mdir = tmp_meetings_dir / "2026-02-04-council"
+    mdir.mkdir()
+    _finalized_meeting(mdir)
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus", _fake_compress)
+
+    result = cleanup.cleanup_meeting("2026-02-04-council")
+
+    assert result["status"] == "cleaned"
+    assert result["reclaimed_bytes"] == 6000  # wav + video
+    assert (mdir / "audio.opus").exists()
+    assert not (mdir / "audio.wav").exists()
+    assert not (mdir / "source.mp4").exists()
+
+
+def test_cleanup_meeting_is_idempotent(tmp_meetings_dir, monkeypatch):
+    from src import cleanup
+
+    mdir = tmp_meetings_dir / "2026-02-04-council"
+    mdir.mkdir()
+    _finalized_meeting(mdir)
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus", _fake_compress)
+
+    cleanup.cleanup_meeting("2026-02-04-council")
+    second = cleanup.cleanup_meeting("2026-02-04-council")
+
+    assert second["status"] == "already_clean"
+    assert second["reclaimed_bytes"] == 0
+
+
+def test_cleanup_meeting_refuses_unfinalized(tmp_meetings_dir, monkeypatch):
+    from src import cleanup
+
+    mdir = tmp_meetings_dir / "half-done"
+    mdir.mkdir()
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)  # no transcript_named.json
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus", _fake_compress)
+
+    result = cleanup.cleanup_meeting("half-done")
+
+    assert result["status"] == "not_finalized"
+    assert (mdir / "audio.wav").exists()  # nothing deleted
+
+
+def test_cleanup_meeting_unknown_id(tmp_meetings_dir):
+    from src import cleanup
+
+    assert cleanup.cleanup_meeting("ghost")["status"] == "not_found"
+    assert cleanup.cleanup_meeting("../escape")["status"] == "not_found"
