@@ -187,3 +187,21 @@ def test_find_orphan_quotes_is_read_only(monkeypatch):
         assert "DELETE" not in sql.upper()
         assert "UPDATE" not in sql.upper()
     assert conn.committed is False  # read-only: no commit
+
+
+def test_format_delete_summary_lists_blast_radius():
+    import run_local
+
+    result = {
+        "meeting_id": "2026-02-04-council", "status": "deleted",
+        "db_deleted": True, "rows_deleted": {"segments": 120, "meetings": 1},
+        "local_deleted": True,
+        "quotes_found": [{"id": 7, "politician_id": "p1", "topic_key": "housing",
+                          "source_url": "u", "preview": "we must build"}],
+        "profile_contamination": True,
+    }
+    text = run_local._format_delete_summary(result)
+    assert "2026-02-04-council" in text
+    assert "segments: 120" in text
+    assert "1 quote" in text.lower() or "quotes: 1" in text.lower() or "found (not deleted): 1" in text.lower()
+    assert "reenroll_profiles.py" in text  # profile warning surfaced
