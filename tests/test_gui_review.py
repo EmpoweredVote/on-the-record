@@ -857,3 +857,42 @@ def test_media_route_serves_opus_as_ogg(tagged_meeting_dir, tmp_meetings_dir):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("audio/ogg")
     assert resp.content == b"OPUSBYTES"
+
+
+def _write_youtube_meeting(mdir, *, clip_start=0.0):
+    from src.models import Meeting, Segment, SpeakerMapping
+
+    segs = [
+        Segment(segment_id=0, start_time=10.0, end_time=70.0, speaker_label="SPEAKER_00",
+                text="Good evening.", speaker_name="Mayor Johnson"),
+    ]
+    speakers = {
+        "SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
+                                     confidence=0.95, id_method="voice"),
+    }
+    meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
+                      meeting_type="Regular Session", event_kind="debate",
+                      segments=segs, speakers=speakers, clip_start_seconds=clip_start,
+                      audio_source="https://www.youtube.com/watch?v=abc123XYZ")
+    (mdir / "transcript_named.json").write_text(json.dumps(meeting.to_dict()))
+
+
+def test_load_review_page_exposes_youtube_id(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import load_review_page
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_youtube_meeting(mdir)
+    page = load_review_page("2026-02-04-council")
+    assert page.youtube_id == "abc123XYZ"
+
+
+def test_youtube_seeks_add_clip_offset_even_without_local_video(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import load_review_page
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_youtube_meeting(mdir, clip_start=600.0)
+    # No local media on disk at all — streaming from YouTube.
+    page = load_review_page("2026-02-04-council")
+    assert page.youtube_id == "abc123XYZ"
+    # seek = max(0, 10-3) + 600 = 607.0 (full-source semantics)
+    assert page.confirmed[0].clip_seeks[0] == pytest.approx(607.0)
