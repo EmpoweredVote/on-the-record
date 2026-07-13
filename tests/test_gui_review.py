@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from gui.models import SpeakerCard, ReviewPageData, CONFIDENT_THRESHOLD
 
 
@@ -833,3 +835,164 @@ def test_review_page_links_to_publish(tagged_meeting_dir, tmp_meetings_dir):
     _write_meeting(mdir)
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     assert 'href="/meetings/2026-02-04-council/publish"' in body
+
+
+def test_find_meeting_media_falls_back_to_opus(tmp_path):
+    from gui.review_api import find_meeting_media
+
+    (tmp_path / "audio.opus").write_bytes(b"OPUS")
+    assert find_meeting_media(tmp_path) == ("audio", "audio.opus")
+    # video still wins when present
+    (tmp_path / "source.mp4").write_bytes(b"\x00")
+    assert find_meeting_media(tmp_path) == ("video", "source.mp4")
+
+
+def test_review_route_renders_youtube_iframe(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_youtube_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+    assert 'id="yt-player"' in body
+    assert "youtube.com/embed/abc123XYZ" in body
+
+
+def test_media_route_serves_opus_as_ogg(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "audio.opus").write_bytes(b"OPUSBYTES")
+    client = TestClient(create_app())
+
+    resp = client.get("/meetings/2026-02-04-council/media")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("audio/ogg")
+    assert resp.content == b"OPUSBYTES"
+
+
+def _write_youtube_meeting(mdir, *, clip_start=0.0):
+    from src.models import Meeting, Segment, SpeakerMapping
+
+    segs = [
+        Segment(segment_id=0, start_time=10.0, end_time=70.0, speaker_label="SPEAKER_00",
+                text="Good evening.", speaker_name="Mayor Johnson"),
+    ]
+    speakers = {
+        "SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
+                                     confidence=0.95, id_method="voice"),
+    }
+    meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
+                      meeting_type="Regular Session", event_kind="debate",
+                      segments=segs, speakers=speakers, clip_start_seconds=clip_start,
+                      audio_source="https://www.youtube.com/watch?v=abc123XYZ")
+    (mdir / "transcript_named.json").write_text(json.dumps(meeting.to_dict()))
+
+
+def test_load_review_page_exposes_youtube_id(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import load_review_page
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_youtube_meeting(mdir)
+    page = load_review_page("2026-02-04-council")
+    assert page.youtube_id == "abc123XYZ"
+
+
+def test_youtube_seeks_add_clip_offset_even_without_local_video(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import load_review_page
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_youtube_meeting(mdir, clip_start=600.0)
+    # No local media on disk at all — streaming from YouTube.
+    page = load_review_page("2026-02-04-council")
+    assert page.youtube_id == "abc123XYZ"
+    # seek = max(0, 10-3) + 600 = 607.0 (full-source semantics)
+    assert page.confirmed[0].clip_seeks[0] == pytest.approx(607.0)
+
+
+def test_cleanup_route_removes_media(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import cleanup
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("{}")
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)
+    (mdir / "source.mp4").write_bytes(b"0" * 4000)
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus",
+                        lambda w, o, bitrate="32k": (Path(o).write_bytes(b"OPUS"), Path(o))[1])
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/cleanup", follow_redirects=False)
+    assert resp.status_code == 303
+    assert not (mdir / "source.mp4").exists()
+    assert (mdir / "audio.opus").exists()
+
+
+def test_cleanup_route_404_for_unsafe_id(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    client = TestClient(create_app())
+    assert client.post("/meetings/..%2Fescape/cleanup", follow_redirects=False).status_code == 404
+
+
+def test_cleanup_all_route_redirects(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import cleanup
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("{}")
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)
+    (mdir / "source.mp4").write_bytes(b"0" * 4000)
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus",
+                        lambda w, o, bitrate="32k": (Path(o).write_bytes(b"OPUS"), Path(o))[1])
+
+    client = TestClient(create_app())
+    resp = client.post("/cleanup-all", follow_redirects=False)
+    assert resp.status_code == 303
+    assert not (mdir / "source.mp4").exists()
+
+
+def test_delete_route_purges_on_matching_slug(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import purge
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("{}")
+    monkeypatch.setattr(purge, "_db_url", lambda: None)
+    monkeypatch.setattr(purge, "_profile_contaminated", lambda slug: False)
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/delete",
+                       data={"confirm_slug": "2026-02-04-council"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+    assert not mdir.exists()
+
+
+def test_delete_route_noop_on_mismatched_slug(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import purge
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    monkeypatch.setattr(purge, "_db_url", lambda: None)
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/delete",
+                       data={"confirm_slug": "WRONG"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert mdir.exists()  # nothing deleted
+
+
+def test_delete_route_404_for_unsafe_id(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    client = TestClient(create_app())
+    assert client.post("/meetings/..%2Fx/delete",
+                       data={"confirm_slug": "x"}, follow_redirects=False).status_code == 404

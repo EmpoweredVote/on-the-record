@@ -12,11 +12,21 @@
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/run">Processing log &amp; progress →</a>
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/edit">Edit metadata ✎</a>
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/publish">Publish →</a>
+    <form method="post" action="/meetings/{{ page.meeting_id }}/cleanup" class="cleanup-media"
+          onsubmit="return confirm('Delete the local video and WAV for this meeting? A compressed audio copy is kept, and (for YouTube sources) the video streams from the source.');">
+      <button type="submit" class="cleanup-btn">🧹 Clean up media</button>
+    </form>
     <h1>{{ page.display_name }}</h1>
     <p class="sub">{{ page.speaker_count }} speakers · {{ page.needs_attention|length }} need attention</p>
   </header>
   <main class="review">
-    {% if page.media_kind == "video" %}
+    {% if page.youtube_id %}
+      <iframe id="yt-player" class="player"
+              src="https://www.youtube.com/embed/{{ page.youtube_id }}"
+              title="source video" frameborder="0"
+              allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+              allowfullscreen></iframe>
+    {% elif page.media_kind == "video" %}
       <video id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></video>
     {% elif page.media_kind == "audio" %}
       <audio id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></audio>
@@ -113,6 +123,18 @@
       <h2>Confirmed</h2>
       {% for c in page.confirmed %}{{ card(c) }}{% endfor %}
     </section>
+
+    <details class="danger-zone">
+      <summary>⚠ Delete this meeting</summary>
+      <p>Permanently removes the local folder and all live-DB rows for this meeting.
+         Derived quotes are reported, not deleted. This cannot be undone.</p>
+      <form method="post" action="/meetings/{{ page.meeting_id }}/delete"
+            onsubmit="return confirm('Permanently delete {{ page.meeting_id }}? This cannot be undone.');">
+        <input type="text" name="confirm_slug" autocomplete="off"
+               placeholder="Type the meeting id to confirm">
+        <button type="submit" class="delete-btn">Delete meeting</button>
+      </form>
+    </details>
   </main>
   <script src="/static/review.js"></script>
 </body>

@@ -196,6 +196,7 @@ CouncilScribe/
   meetings/
     <meeting_id>/
       audio.wav
+      audio.opus
       diarization.json
       embeddings.json
       transcript_raw.json
@@ -208,3 +209,43 @@ CouncilScribe/
   profiles/
     speaker_profiles.pkl
 ```
+
+`audio.opus` is compressed audio kept as durable provenance evidence after
+media cleanup (see below); it's absent until cleanup runs.
+
+### Media cleanup (manual)
+
+Processing keeps the downloaded `source.<ext>` video and the 16 kHz `audio.wav`
+indefinitely. To reclaim disk space, run cleanup on a finalized meeting:
+
+- CLI: `.venv/bin/python run_local.py --cleanup-media <meeting_id>` (one meeting)
+  or `--cleanup-all` (every finalized meeting).
+- GUI: "🧹 Clean up media" on the review page, or "Clean up all finalized media"
+  in the library.
+
+Cleanup compresses `audio.wav` → `audio.opus` (32 kbps mono, kept as durable
+provenance evidence) and deletes `source.<ext>` + `audio.wav`. Review still works:
+YouTube-sourced meetings stream the embed (seeked to each clip); other sources
+play the local `audio.opus`. If a later checkpoint rewind needs `audio.wav`, it is
+regenerated from `audio.opus`.
+
+### Deleting a meeting (hard erase)
+
+To fully remove a mistakenly-processed meeting — local files AND live-DB rows:
+
+- CLI: `.venv/bin/python run_local.py --delete-meeting <meeting_id>` (prompts for
+  typed confirmation; add `--confirm <meeting_id>` to run non-interactively).
+- GUI: the "⚠ Delete this meeting" danger zone on the review page (type the id to confirm).
+
+This deletes the `meetings/<slug>/` folder and every `meetings.*` row for the
+meeting (segments, speakers, event_races, meeting_topics, event_orgs, and the
+parent row). It does NOT delete:
+- **Derived quotes** in `essentials.quotes` — they have no foreign key to a meeting,
+  so they are *reported* (with ids) for you to handle via the audit-quotes tooling.
+- **Voice profiles** — the meeting's embeddings remain in `speaker_profiles.pkl`.
+  When the meeting contributed to profiles, the tool warns you to run
+  `reenroll_profiles.py` to rebuild them.
+- **`meetings.local_people`** rows — shared across meetings.
+
+Hard delete is irreversible (no undo/soft-delete). Distinct from media cleanup,
+which keeps the transcript and a compressed audio copy.

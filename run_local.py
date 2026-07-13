@@ -412,6 +412,34 @@ def human_review(mappings: dict) -> dict:
 from src.thumbnail import find_video_file, attach_thumbnail as _attach_thumbnail
 
 
+def _format_delete_summary(result: dict) -> str:
+    lines = [f"Meeting: {result['meeting_id']}  [{result['status']}]"]
+    if result.get("db_deleted"):
+        rows = ", ".join(f"{t}: {n}" for t, n in result.get("rows_deleted", {}).items())
+        lines.append(f"  live DB rows deleted — {rows}")
+    else:
+        lines.append("  live DB: no rows deleted (unpublished or DB not configured)")
+    lines.append(f"  local folder deleted: {'yes' if result.get('local_deleted') else 'no'}")
+    quotes = result.get("quotes_found") or []
+    lines.append(f"  derived quotes found (NOT deleted): {len(quotes)}")
+    for q in quotes:
+        lines.append(f"    - quote id={q['id']} politician={q['politician_id']} topic={q['topic_key']}")
+    if result.get("profile_contamination"):
+        lines.append("  ⚠ this meeting contributed to voice profiles; its embeddings remain in "
+                     "speaker_profiles.pkl. Run reenroll_profiles.py to rebuild if needed.")
+    return "\n".join(lines)
+
+
+def _review_audio_path(meeting_dir: Path) -> str | None:
+    """Clip-local audio for terminal review: audio.wav if present, else the
+    compressed audio.opus left after media cleanup, else None."""
+    for name in ("audio.wav", "audio.opus"):
+        candidate = meeting_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 def _review_seek(start_time: float, video_offset: float = 0.0) -> float:
     """Seek position for a review clip: 3s of lead-in, plus the clip offset.
 
@@ -1102,7 +1130,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
         changes = _interactive_speaker_review(
             segments, temp_mappings, _pre_embeddings, _pre_profile_db,
-            video_path, str(meeting_dir / "audio.wav"),
+            video_path, _review_audio_path(meeting_dir),
             body_slug=effective_body_slug, show_text=False,
             event_kind=args.event_kind,
             meeting_id=meeting_dir.name,
@@ -3232,7 +3260,7 @@ def _review_meeting(meeting_id: str) -> None:
 
     changes = _interactive_speaker_review(
         meeting.segments, meeting.speakers, embeddings, profile_db,
-        video_path, str(meeting_dir / "audio.wav"),
+        video_path, _review_audio_path(meeting_dir),
         body_slug=body_slug, show_text=True,
         event_kind=meeting.event_kind,
         meeting_id=meeting_id,
@@ -3397,7 +3425,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
 
     changes = _interactive_speaker_review(
         segments, current_mappings, embeddings, profile_db,
-        video_path, str(meeting_dir / "audio.wav"),
+        video_path, _review_audio_path(meeting_dir),
         body_slug=body_slug, show_text=has_text,
         event_kind=meeting.event_kind if meeting else _state.event_kind,
         meeting_id=meeting_id,
@@ -3639,6 +3667,15 @@ Environment Variables:
                         help="Interactively review and correct all speakers in an existing meeting (alias of --review)")
     parser.add_argument("--identify-speakers", metavar="MEETING_ID",
                         help="Standalone speaker identification with video clips and voice hints (works pre-transcription) (alias of --review)")
+    parser.add_argument("--delete-meeting", metavar="MEETING_ID",
+                        help="HARD-DELETE a meeting: remove its local folder and all meetings.* "
+                             "rows from the live DB. Reports (never deletes) derived quotes.")
+    parser.add_argument("--confirm", metavar="MEETING_ID", default="",
+                        help="Non-interactive confirmation for --delete-meeting (must equal the id).")
+    parser.add_argument("--cleanup-media", metavar="MEETING_ID",
+                        help="Compress audio to Opus and delete the source video + WAV for one finalized meeting.")
+    parser.add_argument("--cleanup-all", action="store_true",
+                        help="Run media cleanup across every meeting (backfill). Skips unfinalized meetings.")
     parser.add_argument("--pre-identify", action="store_true",
                         help="Interactive speaker identification after diarization, before transcription (pipeline mode)")
     parser.add_argument("--batch", metavar="FILE_OR_DIR",
@@ -3836,6 +3873,51 @@ def main():
     if args.fix_transcripts:
         _fix_transcripts()
         return
+
+    if args.cleanup_media:
+        from src.cleanup import cleanup_meeting
+
+        result = cleanup_meeting(args.cleanup_media)
+        mb = result["reclaimed_bytes"] / 1_000_000
+        print(f"[{result['status']}] {result['meeting_id']} — reclaimed {mb:.1f} MB")
+        return 0
+
+    if args.cleanup_all:
+        from src.cleanup import backfill_all
+
+        results = backfill_all()
+        total = sum(r["reclaimed_bytes"] for r in results)
+        cleaned = sum(1 for r in results if r["status"] == "cleaned")
+        for r in results:
+            if r["status"] not in ("already_clean", "not_finalized"):
+                print(f"  [{r['status']}] {r['meeting_id']}")
+        print(f"Cleaned {cleaned}/{len(results)} meetings — reclaimed {total / 1_000_000:.1f} MB total")
+        return 0
+
+    if args.delete_meeting:
+        from src import purge
+
+        slug = args.delete_meeting
+        preview = purge.purge_meeting(slug, delete_db=False, delete_local=False)
+        if preview["status"] == "invalid":
+            print(f"Invalid meeting id: {slug!r}")
+            return 1
+        if preview["status"] == "not_found":
+            print(f"No such meeting (no local folder and no live DB row): {slug}")
+            return 1
+        print("About to HARD-DELETE (irreversible):")
+        print(_format_delete_summary(preview))
+        confirmed = args.confirm == slug
+        if not confirmed and sys.stdin.isatty():
+            typed = input(f"\nType the meeting id to confirm deletion ({slug}): ").strip()
+            confirmed = typed == slug
+        if not confirmed:
+            print("Aborted — confirmation did not match.")
+            return 1
+        result = purge.purge_meeting(slug)
+        print("\nDeleted:")
+        print(_format_delete_summary(result))
+        return 0
 
     if args.publish_meeting:
         _publish_meeting_standalone(args.publish_meeting, getattr(args, "publish_anyway", False))

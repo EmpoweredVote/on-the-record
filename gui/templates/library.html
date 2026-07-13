@@ -8,7 +8,12 @@
 </head>
 <body>
   <header><h1>Meeting Library</h1>
-    <a class="newlink" href="/new">+ New meeting</a></header>
+    <a class="newlink" href="/new">+ New meeting</a>
+    <form method="post" action="/cleanup-all" class="cleanup-all"
+          onsubmit="return confirm('Compress audio and delete source video + WAV for ALL finalized meetings? This frees disk space and cannot be undone without reprocessing.');">
+      <button type="submit" class="cleanup-btn">🧹 Clean up all finalized media</button>
+    </form>
+  </header>
   <main>
     {% if meetings %}
     <table class="library">

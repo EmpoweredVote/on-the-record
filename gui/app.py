@@ -82,9 +82,45 @@ def create_app() -> FastAPI:
         found = find_meeting_media(meeting_dir)
         if found is None:
             raise HTTPException(status_code=404)
-        kind, filename = found
-        media_type = "video/mp4" if kind == "video" else "audio/wav"
+        _kind, filename = found
+        suffix = Path(filename).suffix.lower()
+        if suffix in (".opus", ".ogg"):
+            media_type = "audio/ogg"
+        elif suffix == ".wav":
+            media_type = "audio/wav"
+        else:
+            media_type = "video/mp4"
         return FileResponse(str(meeting_dir / filename), media_type=media_type)
+
+    @app.post("/meetings/{meeting_id}/cleanup")
+    def cleanup_media_route(meeting_id: str):
+        if not is_safe_meeting_id(meeting_id):
+            raise HTTPException(status_code=404)
+        from src.cleanup import cleanup_meeting
+
+        result = cleanup_meeting(meeting_id)
+        if result["status"] == "not_found":
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/cleanup-all")
+    def cleanup_all_route():
+        from src.cleanup import backfill_all
+
+        backfill_all()
+        return RedirectResponse(url="/", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/delete")
+    def delete_meeting_route(meeting_id: str, confirm_slug: str = Form("")):
+        if not is_safe_meeting_id(meeting_id):
+            raise HTTPException(status_code=404)
+        if confirm_slug != meeting_id:
+            # Typed confirmation didn't match — no-op, back to the review page.
+            return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        from src.purge import purge_meeting
+
+        purge_meeting(meeting_id)
+        return RedirectResponse(url="/", status_code=303)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/name")
     def set_speaker_name(meeting_id: str, label: str, name: str = Form("")):

@@ -28,12 +28,15 @@ _LEAD_IN = 3.0  # seconds of context before a clip, mirroring run_local._review_
 
 
 def find_meeting_media(meeting_dir: Path) -> Optional[tuple[str, str]]:
-    """(kind, filename) for the best playable media: video if present, else
-    audio.wav, else None. kind is 'video' or 'audio'."""
+    """(kind, filename) for the best playable media: video if present, else the
+    compressed audio.opus (left after cleanup), else audio.wav, else None.
+    kind is 'video' or 'audio'."""
     for ext in _VIDEO_EXTS:
         candidate = meeting_dir / f"source{ext}"
         if candidate.exists():
             return "video", candidate.name
+    if (meeting_dir / "audio.opus").exists():
+        return "audio", "audio.opus"
     if (meeting_dir / "audio.wav").exists():
         return "audio", "audio.wav"
     return None
@@ -350,9 +353,14 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True
     )
 
+    from src.publish import extract_youtube_id
+
+    youtube_id = extract_youtube_id(meeting.audio_source or "")
     media = find_meeting_media(meeting_dir)
     media_kind = media[0] if media else None
-    is_video = media_kind == "video"
+    # Full-source playback (add clip_offset to seeks): a YouTube stream, or a local
+    # full-source video. Local audio (opus/wav) is clip-local, so no offset.
+    is_full_source = bool(youtube_id) or (media_kind == "video")
     clip_offset = meeting.clip_start_seconds or 0.0
 
     confirmed: list[SpeakerCard] = []
@@ -385,7 +393,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             seg_count=v.seg_count,
             sample_text=v.sample_text,
             hints=[(h[0], h[1]) for h in v.soft_hints[:3]],
-            clip_seeks=[_seek(c, is_video=is_video, clip_offset=clip_offset)
+            clip_seeks=[_seek(c, is_video=is_full_source, clip_offset=clip_offset)
                         for c in v.clip_candidates],
             politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
             politician_id=getattr(mapping, "politician_id", None) if mapping else None,
@@ -406,6 +414,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         meeting_id=meeting_id,
         display_name=display_name,
         media_kind=media_kind,
+        youtube_id=youtube_id,
         needs_attention=needs,
         confirmed=confirmed,
     )

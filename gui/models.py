@@ -194,6 +194,7 @@ class ReviewPageData:
     meeting_id: str
     display_name: str
     media_kind: Optional[str]  # "video" | "audio" | None
+    youtube_id: Optional[str] = None  # set when the source is a YouTube URL: review streams the embed
     needs_attention: list[SpeakerCard] = field(default_factory=list)
     confirmed: list[SpeakerCard] = field(default_factory=list)
 
