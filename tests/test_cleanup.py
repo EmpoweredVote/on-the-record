@@ -29,3 +29,26 @@ def test_compress_audio_to_opus_produces_nonempty_file(tmp_path):
 
     assert result == opus
     assert opus.exists() and opus.stat().st_size > 0
+
+
+def test_compress_audio_to_opus_raises_without_ffmpeg(tmp_path, monkeypatch):
+    from src import cleanup
+
+    monkeypatch.setattr(cleanup.shutil, "which", lambda _: None)
+    with pytest.raises(RuntimeError, match="ffmpeg"):
+        cleanup.compress_audio_to_opus(tmp_path / "a.wav", tmp_path / "a.opus")
+
+
+def test_compress_audio_to_opus_raises_on_ffmpeg_error(tmp_path, monkeypatch):
+    import subprocess
+
+    from src import cleanup
+
+    monkeypatch.setattr(cleanup.shutil, "which", lambda _: "/usr/bin/ffmpeg")
+
+    def boom(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, "ffmpeg", stderr=b"Invalid data found")
+
+    monkeypatch.setattr(cleanup.subprocess, "run", boom)
+    with pytest.raises(RuntimeError, match="Invalid data found"):
+        cleanup.compress_audio_to_opus(tmp_path / "a.wav", tmp_path / "a.opus")

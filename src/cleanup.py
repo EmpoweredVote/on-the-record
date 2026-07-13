@@ -33,5 +33,11 @@ def compress_audio_to_opus(wav_path: Path, opus_path: Path, bitrate: str = "32k"
         "-ac", str(config.CHANNELS),
         str(opus_path),
     ]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode("utf-8", "replace").strip()
+        raise RuntimeError(
+            f"ffmpeg failed to compress {wav_path} -> {opus_path}: {stderr[-500:]}"
+        ) from exc
     return opus_path
