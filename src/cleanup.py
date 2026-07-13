@@ -100,6 +100,22 @@ def cleanup_meeting(meeting_id: str) -> dict:
     return {**base, "status": status, "reclaimed_bytes": reclaimed}
 
 
+def backfill_all() -> list[dict]:
+    """Run cleanup_meeting over every meeting dir. Never raises; per-meeting
+    failures become an "error: ..." status so the sweep continues."""
+    results: list[dict] = []
+    if not config.MEETINGS_DIR.is_dir():
+        return results
+    for mdir in sorted(config.MEETINGS_DIR.iterdir()):
+        if not mdir.is_dir():
+            continue
+        try:
+            results.append(cleanup_meeting(mdir.name))
+        except Exception as exc:  # noqa: BLE001 - report, don't abort the sweep
+            results.append({"meeting_id": mdir.name, "status": f"error: {exc}", "reclaimed_bytes": 0})
+    return results
+
+
 def _mark_cleaned(meeting_dir: Path) -> None:
     """Best-effort persist of media_cleaned=True; never blocks the deletion result."""
     try:

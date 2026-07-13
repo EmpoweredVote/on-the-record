@@ -129,3 +129,28 @@ def test_cleanup_meeting_unknown_id(tmp_meetings_dir):
     assert cleanup.cleanup_meeting("ghost")["status"] == "not_found"
     assert cleanup.cleanup_meeting("../escape")["status"] == "not_found"
     assert cleanup.cleanup_meeting(".")["status"] == "not_found"
+
+
+def test_backfill_all_cleans_finalized_skips_others(tmp_meetings_dir, monkeypatch):
+    from src import cleanup
+
+    done = tmp_meetings_dir / "done"
+    done.mkdir()
+    (done / "transcript_named.json").write_text("{}")
+    (done / "audio.wav").write_bytes(b"0" * 1000)
+    (done / "source.mp4").write_bytes(b"0" * 4000)
+
+    partial = tmp_meetings_dir / "partial"
+    partial.mkdir()
+    (partial / "audio.wav").write_bytes(b"0" * 1000)  # no transcript
+
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus", _fake_compress)
+
+    results = cleanup.backfill_all()
+
+    by_id = {r["meeting_id"]: r for r in results}
+    assert by_id["done"]["status"] == "cleaned"
+    assert by_id["done"]["reclaimed_bytes"] == 5000
+    assert by_id["partial"]["status"] == "not_finalized"
+    assert not (done / "source.mp4").exists()
+    assert (partial / "audio.wav").exists()
