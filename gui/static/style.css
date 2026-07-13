@@ -24,6 +24,11 @@ header .sub { margin: 0.25rem 0 0; color: #666; font-size: 0.9rem; }
 main.review { max-width: 900px; }
 .player { position: sticky; top: 0.5rem; width: 100%; max-height: 40vh; background: #000; border-radius: 0.5rem; margin-bottom: 1rem; z-index: 5; }
 audio.player { max-height: none; background: transparent; }
+/* iframe (YouTube embed) has no intrinsic aspect ratio, so width:100% alone
+   collapses it to the browser's default height. Give it a 16:9 box, capped to the
+   same ~40vh footprint the <video> element used: width tracks the column but never
+   exceeds what 40vh tall allows at 16:9, so height stays <= 40vh without distortion. */
+iframe.player { width: min(100%, calc(40vh * 16 / 9)); height: auto; aspect-ratio: 16 / 9; max-height: none; display: block; margin: 0 auto 1rem; border: 0; }
 .review section h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
 .card { border: 1px solid #e2e2e2; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.6rem; }
 .card.attention { border-left: 4px solid #e0a52a; }
