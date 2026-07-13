@@ -412,6 +412,16 @@ def human_review(mappings: dict) -> dict:
 from src.thumbnail import find_video_file, attach_thumbnail as _attach_thumbnail
 
 
+def _review_audio_path(meeting_dir: Path) -> str | None:
+    """Clip-local audio for terminal review: audio.wav if present, else the
+    compressed audio.opus left after media cleanup, else None."""
+    for name in ("audio.wav", "audio.opus"):
+        candidate = meeting_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 def _review_seek(start_time: float, video_offset: float = 0.0) -> float:
     """Seek position for a review clip: 3s of lead-in, plus the clip offset.
 
@@ -1102,7 +1112,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
         changes = _interactive_speaker_review(
             segments, temp_mappings, _pre_embeddings, _pre_profile_db,
-            video_path, str(meeting_dir / "audio.wav"),
+            video_path, _review_audio_path(meeting_dir),
             body_slug=effective_body_slug, show_text=False,
             event_kind=args.event_kind,
             meeting_id=meeting_dir.name,
@@ -3232,7 +3242,7 @@ def _review_meeting(meeting_id: str) -> None:
 
     changes = _interactive_speaker_review(
         meeting.segments, meeting.speakers, embeddings, profile_db,
-        video_path, str(meeting_dir / "audio.wav"),
+        video_path, _review_audio_path(meeting_dir),
         body_slug=body_slug, show_text=True,
         event_kind=meeting.event_kind,
         meeting_id=meeting_id,
@@ -3397,7 +3407,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
 
     changes = _interactive_speaker_review(
         segments, current_mappings, embeddings, profile_db,
-        video_path, str(meeting_dir / "audio.wav"),
+        video_path, _review_audio_path(meeting_dir),
         body_slug=body_slug, show_text=has_text,
         event_kind=meeting.event_kind if meeting else _state.event_kind,
         meeting_id=meeting_id,
@@ -3639,6 +3649,10 @@ Environment Variables:
                         help="Interactively review and correct all speakers in an existing meeting (alias of --review)")
     parser.add_argument("--identify-speakers", metavar="MEETING_ID",
                         help="Standalone speaker identification with video clips and voice hints (works pre-transcription) (alias of --review)")
+    parser.add_argument("--cleanup-media", metavar="MEETING_ID",
+                        help="Compress audio to Opus and delete the source video + WAV for one finalized meeting.")
+    parser.add_argument("--cleanup-all", action="store_true",
+                        help="Run media cleanup across every meeting (backfill). Skips unfinalized meetings.")
     parser.add_argument("--pre-identify", action="store_true",
                         help="Interactive speaker identification after diarization, before transcription (pipeline mode)")
     parser.add_argument("--batch", metavar="FILE_OR_DIR",
@@ -3836,6 +3850,26 @@ def main():
     if args.fix_transcripts:
         _fix_transcripts()
         return
+
+    if args.cleanup_media:
+        from src.cleanup import cleanup_meeting
+
+        result = cleanup_meeting(args.cleanup_media)
+        mb = result["reclaimed_bytes"] / 1_000_000
+        print(f"[{result['status']}] {result['meeting_id']} — reclaimed {mb:.1f} MB")
+        return 0
+
+    if args.cleanup_all:
+        from src.cleanup import backfill_all
+
+        results = backfill_all()
+        total = sum(r["reclaimed_bytes"] for r in results)
+        cleaned = sum(1 for r in results if r["status"] == "cleaned")
+        for r in results:
+            if r["status"] not in ("already_clean", "not_finalized"):
+                print(f"  [{r['status']}] {r['meeting_id']}")
+        print(f"Cleaned {cleaned}/{len(results)} meetings — reclaimed {total / 1_000_000:.1f} MB total")
+        return 0
 
     if args.publish_meeting:
         _publish_meeting_standalone(args.publish_meeting, getattr(args, "publish_anyway", False))

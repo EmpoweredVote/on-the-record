@@ -62,3 +62,15 @@ def test_stop_player_terminates_running(monkeypatch):
     assert fake.terminated is True
     # tolerant of None
     run_local._stop_player(None)
+
+
+def test_review_audio_path_prefers_wav_then_opus(tmp_path):
+    import run_local
+
+    assert run_local._review_audio_path(tmp_path) is None
+
+    (tmp_path / "audio.opus").write_bytes(b"OPUS")
+    assert run_local._review_audio_path(tmp_path) == str(tmp_path / "audio.opus")
+
+    (tmp_path / "audio.wav").write_bytes(b"RIFF")
+    assert run_local._review_audio_path(tmp_path) == str(tmp_path / "audio.wav")
