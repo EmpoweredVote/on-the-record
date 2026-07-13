@@ -146,3 +146,44 @@ def test_find_orphan_quotes_matches_by_youtube_id(monkeypatch):
     assert found[0]["id"] == 1 and found[0]["politician_id"] == "pol-1"
     like_param = [p for sql, p in cur.executed if "essentials.quotes" in sql][0]
     assert like_param == ("%abc123%",)
+
+
+def test_purge_skips_local_delete_when_db_delete_raises(tmp_meetings_dir, monkeypatch):
+    from src import purge
+
+    mdir = tmp_meetings_dir / "2026-02-04-council"
+    _local_meeting(mdir)
+
+    class _RaisingCursor(_FakeCursor):
+        def execute(self, sql, params=None):
+            super().execute(sql, params)
+            if "DELETE FROM meetings.segments" in sql:
+                raise RuntimeError("db boom")
+
+    cur = _RaisingCursor({"SELECT id FROM meetings.meetings": ("uuid-123",)})
+    conn = _FakeConn(cur)
+    monkeypatch.setattr(purge, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(purge.psycopg2, "connect", lambda url: conn)
+    monkeypatch.setattr(purge, "_profile_contaminated", lambda slug: False)
+
+    with pytest.raises(RuntimeError, match="db boom"):
+        purge.purge_meeting("2026-02-04-council")
+
+    assert conn.rolled_back is True
+    assert mdir.exists()  # local folder NOT deleted after a failed DB delete
+
+
+def test_find_orphan_quotes_is_read_only(monkeypatch):
+    from src import purge
+
+    cur = _FakeCursor({"FROM essentials.quotes": []})
+    conn = _FakeConn(cur)
+    monkeypatch.setattr(purge, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(purge.psycopg2, "connect", lambda url: conn)
+
+    purge._find_orphan_quotes("https://youtu.be/abc123")
+
+    for sql, _ in cur.executed:
+        assert "DELETE" not in sql.upper()
+        assert "UPDATE" not in sql.upper()
+    assert conn.committed is False  # read-only: no commit
