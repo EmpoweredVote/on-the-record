@@ -28,12 +28,15 @@ _LEAD_IN = 3.0  # seconds of context before a clip, mirroring run_local._review_
 
 
 def find_meeting_media(meeting_dir: Path) -> Optional[tuple[str, str]]:
-    """(kind, filename) for the best playable media: video if present, else
-    audio.wav, else None. kind is 'video' or 'audio'."""
+    """(kind, filename) for the best playable media: video if present, else the
+    compressed audio.opus (left after cleanup), else audio.wav, else None.
+    kind is 'video' or 'audio'."""
     for ext in _VIDEO_EXTS:
         candidate = meeting_dir / f"source{ext}"
         if candidate.exists():
             return "video", candidate.name
+    if (meeting_dir / "audio.opus").exists():
+        return "audio", "audio.opus"
     if (meeting_dir / "audio.wav").exists():
         return "audio", "audio.wav"
     return None

@@ -833,3 +833,27 @@ def test_review_page_links_to_publish(tagged_meeting_dir, tmp_meetings_dir):
     _write_meeting(mdir)
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     assert 'href="/meetings/2026-02-04-council/publish"' in body
+
+
+def test_find_meeting_media_falls_back_to_opus(tmp_path):
+    from gui.review_api import find_meeting_media
+
+    (tmp_path / "audio.opus").write_bytes(b"OPUS")
+    assert find_meeting_media(tmp_path) == ("audio", "audio.opus")
+    # video still wins when present
+    (tmp_path / "source.mp4").write_bytes(b"\x00")
+    assert find_meeting_media(tmp_path) == ("video", "source.mp4")
+
+
+def test_media_route_serves_opus_as_ogg(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "audio.opus").write_bytes(b"OPUSBYTES")
+    client = TestClient(create_app())
+
+    resp = client.get("/meetings/2026-02-04-council/media")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("audio/ogg")
+    assert resp.content == b"OPUSBYTES"

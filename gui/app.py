@@ -82,8 +82,14 @@ def create_app() -> FastAPI:
         found = find_meeting_media(meeting_dir)
         if found is None:
             raise HTTPException(status_code=404)
-        kind, filename = found
-        media_type = "video/mp4" if kind == "video" else "audio/wav"
+        _kind, filename = found
+        suffix = Path(filename).suffix.lower()
+        if suffix in (".opus", ".ogg"):
+            media_type = "audio/ogg"
+        elif suffix == ".wav":
+            media_type = "audio/wav"
+        else:
+            media_type = "video/mp4"
         return FileResponse(str(meeting_dir / filename), media_type=media_type)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/name")
