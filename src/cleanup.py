@@ -7,6 +7,7 @@ Never touches the download/ingest hot path. Triggered only manually (CLI + GUI).
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,27 +23,35 @@ _VIDEO_EXTS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
 def compress_audio_to_opus(wav_path: Path, opus_path: Path, bitrate: str = "32k") -> Path:
     """Compress a WAV to mono Opus via ffmpeg. Returns opus_path on success.
 
+    Encodes to a temp file and atomically renames, so a crash mid-encode can never
+    leave a truncated audio.opus that a later cleanup would trust. Raises on failure
+    so the caller never deletes the WAV when compression did not produce valid output.
+
     32 kbps mono libopus is transparent for speech (incl. overlapping voices) and
-    yields ~10-14 MB/hr vs ~115 MB/hr for the 16 kHz WAV. Raises on failure so the
-    caller never deletes the WAV when compression did not produce output.
+    yields ~10-14 MB/hr vs ~115 MB/hr for the 16 kHz WAV.
     """
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg is not installed or not on PATH")
+    opus_path = Path(opus_path)
+    tmp_path = opus_path.with_suffix(opus_path.suffix + ".tmp")
     cmd = [
         "ffmpeg", "-y",
         "-i", str(wav_path),
         "-c:a", "libopus",
         "-b:a", bitrate,
         "-ac", str(config.CHANNELS),
-        str(opus_path),
+        "-f", "opus",  # temp path ends in .tmp; force the muxer explicitly
+        str(tmp_path),
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True)
     except subprocess.CalledProcessError as exc:
+        tmp_path.unlink(missing_ok=True)
         stderr = (exc.stderr or b"").decode("utf-8", "replace").strip()
         raise RuntimeError(
             f"ffmpeg failed to compress {wav_path} -> {opus_path}: {stderr[-500:]}"
         ) from exc
+    os.replace(tmp_path, opus_path)
     return opus_path
 
 
@@ -81,7 +90,11 @@ def cleanup_meeting(meeting_id: str) -> dict:
     if not opus_ready:
         if not wav.exists():
             return {**base, "status": "no_audio"}
-        compress_audio_to_opus(wav, opus)
+        try:
+            compress_audio_to_opus(wav, opus)
+        except RuntimeError as exc:
+            logger.warning("cleanup compress failed for %s: %s", meeting_id, exc)
+            return {**base, "status": "compress_failed"}
         if not (opus.exists() and opus.stat().st_size > 0):
             return {**base, "status": "compress_failed"}
 

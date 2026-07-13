@@ -131,6 +131,29 @@ def test_cleanup_meeting_unknown_id(tmp_meetings_dir):
     assert cleanup.cleanup_meeting(".")["status"] == "not_found"
 
 
+def test_cleanup_meeting_compress_failure_keeps_media(tmp_meetings_dir, monkeypatch):
+    from src import cleanup
+
+    mdir = tmp_meetings_dir / "boom"
+    mdir.mkdir()
+    (mdir / "transcript_named.json").write_text("{}")
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)
+    (mdir / "source.mp4").write_bytes(b"0" * 4000)
+
+    def boom(wav_path, opus_path, bitrate="32k"):
+        raise RuntimeError("ffmpeg boom")
+
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus", boom)
+
+    result = cleanup.cleanup_meeting("boom")
+
+    assert result["status"] == "compress_failed"
+    assert result["reclaimed_bytes"] == 0
+    assert (mdir / "audio.wav").exists()       # nothing deleted
+    assert (mdir / "source.mp4").exists()
+    assert not (mdir / "audio.opus").exists()
+
+
 def test_backfill_all_cleans_finalized_skips_others(tmp_meetings_dir, monkeypatch):
     from src import cleanup
 
