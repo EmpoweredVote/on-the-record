@@ -110,6 +110,18 @@ def create_app() -> FastAPI:
         backfill_all()
         return RedirectResponse(url="/", status_code=303)
 
+    @app.post("/meetings/{meeting_id}/delete")
+    def delete_meeting_route(meeting_id: str, confirm_slug: str = Form("")):
+        if not is_safe_meeting_id(meeting_id):
+            raise HTTPException(status_code=404)
+        if confirm_slug != meeting_id:
+            # Typed confirmation didn't match — no-op, back to the review page.
+            return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        from src.purge import purge_meeting
+
+        purge_meeting(meeting_id)
+        return RedirectResponse(url="/", status_code=303)
+
     @app.post("/meetings/{meeting_id}/speakers/{label}/name")
     def set_speaker_name(meeting_id: str, label: str, name: str = Form("")):
         redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)

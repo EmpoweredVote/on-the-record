@@ -123,6 +123,18 @@
       <h2>Confirmed</h2>
       {% for c in page.confirmed %}{{ card(c) }}{% endfor %}
     </section>
+
+    <details class="danger-zone">
+      <summary>⚠ Delete this meeting</summary>
+      <p>Permanently removes the local folder and all live-DB rows for this meeting.
+         Derived quotes are reported, not deleted. This cannot be undone.</p>
+      <form method="post" action="/meetings/{{ page.meeting_id }}/delete"
+            onsubmit="return confirm('Permanently delete {{ page.meeting_id }}? This cannot be undone.');">
+        <input type="text" name="confirm_slug" autocomplete="off"
+               placeholder="Type the meeting id to confirm">
+        <button type="submit" class="delete-btn">Delete meeting</button>
+      </form>
+    </details>
   </main>
   <script src="/static/review.js"></script>
 </body>

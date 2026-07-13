@@ -954,3 +954,45 @@ def test_cleanup_all_route_redirects(tagged_meeting_dir, tmp_meetings_dir, monke
     resp = client.post("/cleanup-all", follow_redirects=False)
     assert resp.status_code == 303
     assert not (mdir / "source.mp4").exists()
+
+
+def test_delete_route_purges_on_matching_slug(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import purge
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("{}")
+    monkeypatch.setattr(purge, "_db_url", lambda: None)
+    monkeypatch.setattr(purge, "_profile_contaminated", lambda slug: False)
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/delete",
+                       data={"confirm_slug": "2026-02-04-council"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+    assert not mdir.exists()
+
+
+def test_delete_route_noop_on_mismatched_slug(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import purge
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    monkeypatch.setattr(purge, "_db_url", lambda: None)
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/delete",
+                       data={"confirm_slug": "WRONG"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert mdir.exists()  # nothing deleted
+
+
+def test_delete_route_404_for_unsafe_id(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    client = TestClient(create_app())
+    assert client.post("/meetings/..%2Fx/delete",
+                       data={"confirm_slug": "x"}, follow_redirects=False).status_code == 404
