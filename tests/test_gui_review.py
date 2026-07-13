@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from gui.models import SpeakerCard, ReviewPageData, CONFIDENT_THRESHOLD
 
 
@@ -907,3 +909,48 @@ def test_youtube_seeks_add_clip_offset_even_without_local_video(tagged_meeting_d
     assert page.youtube_id == "abc123XYZ"
     # seek = max(0, 10-3) + 600 = 607.0 (full-source semantics)
     assert page.confirmed[0].clip_seeks[0] == pytest.approx(607.0)
+
+
+def test_cleanup_route_removes_media(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import cleanup
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("{}")
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)
+    (mdir / "source.mp4").write_bytes(b"0" * 4000)
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus",
+                        lambda w, o, bitrate="32k": (Path(o).write_bytes(b"OPUS"), Path(o))[1])
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/cleanup", follow_redirects=False)
+    assert resp.status_code == 303
+    assert not (mdir / "source.mp4").exists()
+    assert (mdir / "audio.opus").exists()
+
+
+def test_cleanup_route_404_for_unsafe_id(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+
+    client = TestClient(create_app())
+    assert client.post("/meetings/..%2Fescape/cleanup", follow_redirects=False).status_code == 404
+
+
+def test_cleanup_all_route_redirects(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    from src import cleanup
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("{}")
+    (mdir / "audio.wav").write_bytes(b"0" * 1000)
+    (mdir / "source.mp4").write_bytes(b"0" * 4000)
+    monkeypatch.setattr(cleanup, "compress_audio_to_opus",
+                        lambda w, o, bitrate="32k": (Path(o).write_bytes(b"OPUS"), Path(o))[1])
+
+    client = TestClient(create_app())
+    resp = client.post("/cleanup-all", follow_redirects=False)
+    assert resp.status_code == 303
+    assert not (mdir / "source.mp4").exists()

@@ -92,6 +92,24 @@ def create_app() -> FastAPI:
             media_type = "video/mp4"
         return FileResponse(str(meeting_dir / filename), media_type=media_type)
 
+    @app.post("/meetings/{meeting_id}/cleanup")
+    def cleanup_media_route(meeting_id: str):
+        if not is_safe_meeting_id(meeting_id):
+            raise HTTPException(status_code=404)
+        from src.cleanup import cleanup_meeting
+
+        result = cleanup_meeting(meeting_id)
+        if result["status"] == "not_found":
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/cleanup-all")
+    def cleanup_all_route():
+        from src.cleanup import backfill_all
+
+        backfill_all()
+        return RedirectResponse(url="/", status_code=303)
+
     @app.post("/meetings/{meeting_id}/speakers/{label}/name")
     def set_speaker_name(meeting_id: str, label: str, name: str = Form("")):
         redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)

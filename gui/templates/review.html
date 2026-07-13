@@ -12,6 +12,10 @@
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/run">Processing log &amp; progress →</a>
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/edit">Edit metadata ✎</a>
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/publish">Publish →</a>
+    <form method="post" action="/meetings/{{ page.meeting_id }}/cleanup" class="cleanup-media"
+          onsubmit="return confirm('Delete the local video and WAV for this meeting? A compressed audio copy is kept, and (for YouTube sources) the video streams from the source.');">
+      <button type="submit" class="cleanup-btn">🧹 Clean up media</button>
+    </form>
     <h1>{{ page.display_name }}</h1>
     <p class="sub">{{ page.speaker_count }} speakers · {{ page.needs_attention|length }} need attention</p>
   </header>
