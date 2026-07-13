@@ -44,6 +44,7 @@ class PipelineState:
         self.clip_start_seconds: Optional[float] = None
         self.clip_end_seconds: Optional[float] = None
         self.source_key: Optional[str] = None          # normalized source identity (GUI dedup)
+        self.media_cleaned: bool = False                # source video + WAV removed, audio.opus kept
         self._load()
 
     def _load(self) -> None:
@@ -65,6 +66,7 @@ class PipelineState:
             self.clip_start_seconds = data.get("clip_start_seconds")
             self.clip_end_seconds = data.get("clip_end_seconds")
             self.source_key = data.get("source_key")
+            self.media_cleaned = data.get("media_cleaned", False)
 
     def save(self) -> None:
         """Atomic write: write to temp file then rename."""
@@ -84,6 +86,7 @@ class PipelineState:
             "clip_start_seconds": self.clip_start_seconds,
             "clip_end_seconds": self.clip_end_seconds,
             "source_key": self.source_key,
+            "media_cleaned": self.media_cleaned,
         }
         fd, tmp_path = tempfile.mkstemp(
             dir=str(self.meeting_dir), suffix=".tmp"

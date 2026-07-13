@@ -52,3 +52,15 @@ def test_compress_audio_to_opus_raises_on_ffmpeg_error(tmp_path, monkeypatch):
     monkeypatch.setattr(cleanup.subprocess, "run", boom)
     with pytest.raises(RuntimeError, match="Invalid data found"):
         cleanup.compress_audio_to_opus(tmp_path / "a.wav", tmp_path / "a.opus")
+
+
+def test_pipeline_state_persists_media_cleaned(tmp_path):
+    from src.checkpoint import PipelineState
+
+    ps = PipelineState(tmp_path)
+    assert ps.media_cleaned is False  # default
+    ps.media_cleaned = True
+    ps.save()
+
+    reloaded = PipelineState(tmp_path)
+    assert reloaded.media_cleaned is True
