@@ -97,6 +97,20 @@ def prompt_for_speaker_id(
         if m.speaker_name:
             known_speakers.append(f"  - {label} = {m.speaker_name}")
     known_section = "\n".join(known_speakers) if known_speakers else "  (none identified yet)"
+    # These names are already claimed by OTHER, distinct voices. The unknown
+    # speaker is a different voice, so it cannot be any of them — reusing one
+    # would collapse two people into one. This matters most in interviews, where
+    # the interviewer is often never named and the transcript is dominated by the
+    # interviewee; the safe answer there is null, not the interviewee's name.
+    claimed_note = ""
+    if any(m.speaker_name for m in current_mappings.values()):
+        claimed_note = (
+            "\nThe names under 'Known speakers' already belong to different "
+            "voices. Do NOT reuse any of them for this speaker — it is another, "
+            "distinct person. If you cannot identify who this is from the "
+            "context, answer with null rather than guessing a name that is "
+            "already taken or merely discussed in the transcript.\n"
+        )
 
     roster_section = ""
     if roster_hint:
@@ -106,7 +120,7 @@ def prompt_for_speaker_id(
 {roster_section}
 Known speakers:
 {known_section}
-
+{claimed_note}
 Unknown speaker to identify: {unknown_label}
 
 Transcript excerpt:

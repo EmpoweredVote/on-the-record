@@ -598,3 +598,140 @@ def test_voice_match_uses_display_name_when_present():
     assert m.speaker_name == "Steve Hilton"
     assert m.politician_slug == "steve-hilton"
     assert m.needs_review is False
+
+
+# ---------------------------------------------------------------------------
+# Identity-collision guard: two distinct diarized voices are two distinct
+# people. A shared identity across labels is a mis-ID (typically an LLM guess
+# that reuses a name already claimed by a voice match), NOT a merge. The guard
+# keeps the single strongest mapping and demotes the rest to needs_review.
+#
+# Regression: interview-chris-swanson-wdiv, where SPEAKER_00 (Ty Steele, the
+# unenrolled interviewer) was LLM-guessed as "Chris Swanson" — the same person
+# as voice-matched SPEAKER_01 — then merge_adjacent_segments collapsed all 142
+# segments into one "Chris Swanson" block.
+# ---------------------------------------------------------------------------
+
+
+def test_merge_does_not_collapse_distinct_speakers_sharing_a_name():
+    """Two different diarized labels mislabeled with the same name must NOT merge.
+
+    This is the 142->1 collapse: merge keys on diarization identity
+    (speaker_label), never on a display name that a mis-ID can duplicate.
+    """
+    segments = [
+        Segment(segment_id=0, start_time=0.0, end_time=5.0,
+                speaker_label="SPEAKER_00", speaker_name="Chris Swanson",
+                text="So tell me about your campaign."),
+        Segment(segment_id=1, start_time=5.1, end_time=10.0,
+                speaker_label="SPEAKER_01", speaker_name="Chris Swanson",
+                text="Happy to. My focus is public safety."),
+        Segment(segment_id=2, start_time=10.1, end_time=15.0,
+                speaker_label="SPEAKER_00", speaker_name="Chris Swanson",
+                text="And on housing?"),
+    ]
+
+    merged = merge_adjacent_segments(segments)
+
+    assert len(merged) == 3
+    assert [s.speaker_label for s in merged] == \
+        ["SPEAKER_00", "SPEAKER_01", "SPEAKER_00"]
+
+
+def test_identify_speakers_rejects_duplicate_person_across_labels():
+    """When two labels resolve to the same person, the stronger wins and the
+    weaker is un-named, unlinked, and flagged for review."""
+    import numpy as np
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
+
+    v_chris = np.array([1.0, 0.0, 0.0])
+    v_other = np.array([0.0, 1.0, 0.0])
+    prof = StoredProfile(
+        speaker_id="essentials:chris-swanson",
+        display_name="Chris Swanson",
+        embeddings=[EmbeddingRecord(v_chris, "m0")],
+        centroid=v_chris,
+        meetings_seen=["m0"],
+        politician_slug="chris-swanson",
+        politician_id="uuid-chris",
+    )
+    db = ProfileDB(profiles={prof.speaker_id: prof})
+    stored = {"essentials:chris-swanson": v_chris}
+    embeddings = {"SPEAKER_00": v_other, "SPEAKER_01": v_chris}
+
+    segments = [
+        Segment(segment_id=0, start_time=0.0, end_time=5.0,
+                speaker_label="SPEAKER_00", text="So tell me about your campaign."),
+        Segment(segment_id=1, start_time=5.0, end_time=10.0,
+                speaker_label="SPEAKER_01", text="Happy to. My focus is public safety."),
+    ]
+
+    # The LLM wrongly guesses the unenrolled interviewer is Chris Swanson too.
+    def llm_fn(segs, maps):
+        return {"SPEAKER_00": SpeakerMapping(
+            speaker_label="SPEAKER_00", speaker_name="Chris Swanson",
+            confidence=0.75, id_method="llm")}
+
+    mappings = identify_speakers(
+        segments=segments,
+        speaker_embeddings=embeddings,
+        stored_profiles=stored,
+        llm_identify_fn=llm_fn,
+        profile_db=db,
+    )
+
+    # SPEAKER_01 (voice profile, ~1.0) keeps the identity.
+    assert mappings["SPEAKER_01"].speaker_name == "Chris Swanson"
+    assert mappings["SPEAKER_01"].politician_id == "uuid-chris"
+    # SPEAKER_00 (llm, 0.75) must NOT also be Chris Swanson.
+    assert mappings["SPEAKER_00"].speaker_name != "Chris Swanson"
+    assert mappings["SPEAKER_00"].politician_id is None
+    assert mappings["SPEAKER_00"].needs_review is True
+
+
+def test_identify_speakers_dedupes_shared_politician_id_across_labels():
+    """Collision by politician_id (different name spellings, same person) is
+    also caught: only one label keeps the link."""
+    import numpy as np
+    from src.enroll import ProfileDB, StoredProfile, EmbeddingRecord
+
+    v_chris = np.array([1.0, 0.0, 0.0])
+    v_other = np.array([0.0, 1.0, 0.0])
+    prof = StoredProfile(
+        speaker_id="essentials:chris-swanson",
+        display_name="Chris Swanson",
+        embeddings=[EmbeddingRecord(v_chris, "m0")],
+        centroid=v_chris,
+        meetings_seen=["m0"],
+        politician_slug="chris-swanson",
+        politician_id="uuid-chris",
+    )
+    db = ProfileDB(profiles={prof.speaker_id: prof})
+    stored = {"essentials:chris-swanson": v_chris}
+    embeddings = {"SPEAKER_00": v_other, "SPEAKER_01": v_chris}
+    segments = [
+        Segment(segment_id=0, start_time=0.0, end_time=5.0,
+                speaker_label="SPEAKER_00", text="Question."),
+        Segment(segment_id=1, start_time=5.0, end_time=10.0,
+                speaker_label="SPEAKER_01", text="Answer."),
+    ]
+
+    # LLM returns a different spelling but pre-linked to the same politician_id.
+    def llm_fn(segs, maps):
+        return {"SPEAKER_00": SpeakerMapping(
+            speaker_label="SPEAKER_00", speaker_name="C. Swanson",
+            confidence=0.75, id_method="llm",
+            politician_slug="chris-swanson", politician_id="uuid-chris")}
+
+    mappings = identify_speakers(
+        segments=segments,
+        speaker_embeddings=embeddings,
+        stored_profiles=stored,
+        llm_identify_fn=llm_fn,
+        profile_db=db,
+    )
+
+    linked = [l for l, m in mappings.items() if m.politician_id == "uuid-chris"]
+    assert linked == ["SPEAKER_01"]
+    assert mappings["SPEAKER_00"].politician_id is None
+    assert mappings["SPEAKER_00"].needs_review is True

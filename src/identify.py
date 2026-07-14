@@ -338,6 +338,48 @@ def _carry_link(prior: Optional[SpeakerMapping], new: SpeakerMapping) -> Speaker
     return new
 
 
+def _dedupe_identities(mappings: dict[str, SpeakerMapping]) -> None:
+    """Enforce that no two labels resolve to the same person (mutates in place).
+
+    Distinct diarized voices are distinct people; a shared identity across labels
+    is a mis-identification (typically an LLM guess reusing a name a voice match
+    already claimed), never a merge. Groups by resolved name, then by
+    politician_id; within each group of 2+ the single highest-confidence mapping
+    survives and the rest are demoted — un-named, unlinked, and flagged for
+    review — so a human resolves them rather than the pipeline silently
+    double-assigning (and then merging away) two speakers.
+    """
+    def _dedupe(key_fn) -> None:
+        groups: dict[object, list[str]] = {}
+        for label, m in mappings.items():
+            if m.speaker_status in ("non_speaker", "unidentified"):
+                continue
+            key = key_fn(m)
+            if key is None:
+                continue
+            groups.setdefault(key, []).append(label)
+
+        for labels in groups.values():
+            if len(labels) < 2:
+                continue
+            winner = max(labels, key=lambda l: mappings[l].confidence or 0.0)
+            for label in labels:
+                if label == winner:
+                    continue
+                m = mappings[label]
+                m.speaker_name = None
+                m.politician_slug = None
+                m.politician_id = None
+                m.confidence = 0.0
+                m.id_method = "collision"
+                m.needs_review = True
+
+    # Name first (a voice match and an LLM guess usually collide on the display
+    # name), then politician_id (catches different spellings of the same link).
+    _dedupe(lambda m: ("name", m.speaker_name.strip().lower()) if m.speaker_name else None)
+    _dedupe(lambda m: ("id", m.politician_id) if m.politician_id else None)
+
+
 def identify_speakers(
     segments: list[Segment],
     speaker_embeddings: dict[str, np.ndarray],
@@ -388,6 +430,10 @@ def identify_speakers(
     if roster:
         from .roster import correct_mappings
         correct_mappings(mappings, roster)
+
+    # Identity-collision guard: two distinct diarized labels can't be the same
+    # person. Runs after every layer so it sees final names/links.
+    _dedupe_identities(mappings)
 
     # Flag low-confidence speakers for review
     all_labels = {seg.speaker_label for seg in segments}
@@ -444,12 +490,15 @@ def merge_adjacent_segments(
 
     for seg in segments[1:]:
         prev = merged[-1]
-        # Use speaker_name if available, fall back to speaker_label
-        prev_speaker = prev.speaker_name or prev.speaker_label
-        curr_speaker = seg.speaker_name or seg.speaker_label
+        # Merge on diarization identity (speaker_label), never on display name.
+        # A name can be duplicated across distinct labels by a mis-ID (e.g. an
+        # LLM guess reusing a voice-matched name); keying on the name let two
+        # different people collapse into one segment. The human "merge speakers"
+        # action in review reassigns the source label to the target first, so
+        # legitimately-merged speakers already share a label here.
         gap = seg.start_time - prev.end_time
 
-        if prev_speaker == curr_speaker and gap < gap_threshold:
+        if prev.speaker_label == seg.speaker_label and gap < gap_threshold:
             # Merge: extend the previous segment
             prev.end_time = max(prev.end_time, seg.end_time)
             if seg.text:
