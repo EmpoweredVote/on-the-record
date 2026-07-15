@@ -126,3 +126,58 @@ def test_resolve_podcast_episode_none_when_episode_unmatched():
     show_url = "https://show.buzzsprout.com/1414123/"
     fetch = _fetch_map({show_url: _PAGE, "https://feeds.x/f.rss": _FEED})
     assert resolve_podcast_episode(show_url, fetch=fetch) is None
+
+
+def test_resolve_podcast_episode_none_when_page_fetch_raises():
+    def _boom(url):
+        raise RuntimeError("network down")
+    assert resolve_podcast_episode("https://x/ep", fetch=_boom) is None
+
+
+def test_resolve_podcast_episode_none_when_feed_fetch_raises():
+    page_url = "https://show.buzzsprout.com/1414123/ep-1-housing"
+
+    def _fetch(url):
+        if url == page_url:
+            return _PAGE
+        raise RuntimeError("feed 500")
+
+    assert resolve_podcast_episode(page_url, fetch=_fetch) is None
+
+
+_FEED_NO_AUDIO = """<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Show</title>
+<item><title>Ep</title>
+<link>https://show.buzzsprout.com/1414123/ep-1-housing</link>
+<guid>https://show.buzzsprout.com/1414123/ep-1-housing</guid>
+</item></channel></rss>"""
+
+
+def test_resolve_podcast_episode_none_when_entry_has_no_audio():
+    page_url = "https://show.buzzsprout.com/1414123/ep-1-housing"
+    fetch = _fetch_map({page_url: _PAGE, "https://feeds.x/f.rss": _FEED_NO_AUDIO})
+    assert resolve_podcast_episode(page_url, fetch=fetch) is None
+
+
+_FEED_FALLBACKS = """<?xml version="1.0"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+<channel>
+  <itunes:author>Author Only Show</itunes:author>
+  <itunes:image href="https://img/show-fallback.jpg"/>
+  <item>
+    <title>Ep</title>
+    <link>https://show.buzzsprout.com/1414123/ep-1-housing</link>
+    <guid>https://show.buzzsprout.com/1414123/ep-1-housing</guid>
+    <pubDate>Tue, 03 Jun 2026 10:00:00 -0700</pubDate>
+    <enclosure url="https://cdn/ep1.mp3" type="audio/mpeg" length="1"/>
+  </item>
+</channel></rss>"""
+
+
+def test_resolve_podcast_episode_outlet_and_image_fallbacks():
+    page_url = "https://show.buzzsprout.com/1414123/ep-1-housing"
+    fetch = _fetch_map({page_url: _PAGE, "https://feeds.x/f.rss": _FEED_FALLBACKS})
+    rs = resolve_podcast_episode(page_url, fetch=fetch)
+    assert rs is not None
+    assert rs.outlet == "Author Only Show"
+    assert rs.image_url == "https://img/show-fallback.jpg"
