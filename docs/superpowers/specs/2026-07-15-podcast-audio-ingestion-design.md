@@ -10,10 +10,13 @@ Candidates increasingly appear on podcasts and local public-radio interview
 shows. These are audio-only (not YouTube videos), and each host publishes them
 differently:
 
-- **Buzzsprout** and similar podcast hosts expose episodes via RSS feeds
-  (e.g. `https://feeds.buzzsprout.com/1414123.rss`,
+- **Buzzsprout**, **Omny Studio** (`omny.fm`), and similar podcast hosts expose
+  episodes via RSS feeds (e.g. `https://feeds.buzzsprout.com/1414123.rss`,
   `https://whatsnextlosangeles.buzzsprout.com`). Episode pages advertise their
-  feed via standard RSS autodiscovery.
+  feed via standard RSS autodiscovery. Note: a host's *show landing page* (e.g.
+  `kslpodcasts.com/podcast/let-me-speak-to-the-governor/`) is a whole-show page,
+  not a single episode, and its autodiscovery may point at a site-wide feed
+  rather than the show feed — see detection robustness below.
 - **Public-radio station CMSes** (e.g. Indiana Public Media, `ipm.org`; KUER,
   `kuer.org` — both on NPR's Brightspot platform shared by many stations)
   publish an episode as an article page with structured JSON-LD metadata, a
@@ -91,7 +94,7 @@ the existing generic download path.
 
 | Resolver | Sources | Metadata from | Transcript? |
 |---|---|---|---|
-| **Podcast RSS** (`src/podcast.py`) | Buzzsprout, Libsyn, Simplecast, Megaphone, and any host with RSS autodiscovery | episode page → autodiscovered RSS feed → matched `<item>` | No — audio only |
+| **Podcast RSS** (`src/podcast.py`) | Buzzsprout, Omny (`omny.fm`), Libsyn, Simplecast, Megaphone, and any host with RSS autodiscovery | episode page → autodiscovered RSS feed → matched `<item>` | No — audio only |
 | **Brightspot/NPR CMS** (`src/brightspot.py`) | `ipm.org`, `kuer.org`, and other public-radio stations on NPR's Brightspot platform | JSON-LD (episode `@type` varies: `RadioEpisode` / `PodcastEpisode` / `AudioObject`; date from `NewsArticle.datePublished`) + `og:` tags + direct `cpa.ds.npr.org` MP3 | **Yes, when present** — article-body `<p>` paragraphs |
 
 New sources later = one new resolver returning `ResolvedSource`. No pipeline
@@ -111,6 +114,12 @@ changes.
    `xml.etree`).
 4. **Match the episode** — find the `<item>` whose `link` or `guid` matches the
    pasted page URL (normalized comparison; fall back to enclosure host + slug).
+   **Do not trust autodiscovery blindly:** a page may advertise a site-wide feed
+   (e.g. a WordPress `/feed/`) rather than the show feed. The resolver only
+   claims success if the discovered feed actually contains a single `<item>`
+   matching the pasted episode. If the pasted URL is a whole-show landing page
+   (no single episode identifiable), that is the deferred "pick from feed list"
+   case — fail with a clear message rather than guessing an episode.
 5. **Map** feed fields → `ResolvedSource`: enclosure → `audio_url`, item title →
    `title`, `pubDate` → `date`, channel/show `<title>` (or `<itunes:author>`) →
    `outlet`, item `<description>`/`content:encoded` → `description`, item
@@ -230,6 +239,10 @@ existing pipeline: normalize_audio → diarize → transcribe (+ reconcile if re
 - **No feed discovered** (podcast resolver): fall through to the next resolver /
   generic download path; surface a clear message rather than silently producing
   wrong metadata.
+- **Feed found but no matching episode** (e.g. a site-wide feed, or a pasted
+  whole-show landing page): do not guess an episode. Report that the URL looks
+  like a show page and ask for a specific episode URL — the deferred
+  "pick from feed list" flow, out of scope here.
 - **Episode not matched in feed**: fall back to enclosure host + slug match; if
   still unmatched, use page-level metadata (og tags) and continue.
 - **No MP3 found** (either resolver): hard error with the page URL — there's
