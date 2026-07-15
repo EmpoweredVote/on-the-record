@@ -60,3 +60,29 @@ def test_parse_feed_entries_maps_fields():
     assert e["date"] == "2026-06-03"
     assert e["image"] == "https://img/ep1.jpg"
     assert "housing" in e["description"].lower()
+
+
+# add to tests/test_podcast.py
+from src.podcast import match_entry
+
+_ENTRIES = [
+    {"link": "https://show.buzzsprout.com/1414123/ep-1-housing",
+     "guid": "guid-1", "audio_url": "https://cdn/ep1.mp3"},
+    {"link": "https://show.buzzsprout.com/1414123/ep-2-transit",
+     "guid": "guid-2", "audio_url": "https://cdn/ep2.mp3"},
+]
+
+
+def test_match_entry_by_link_ignoring_trailing_slash_and_query():
+    page = "https://show.buzzsprout.com/1414123/ep-2-transit/?utm=x"
+    assert match_entry(_ENTRIES, page)["audio_url"] == "https://cdn/ep2.mp3"
+
+
+def test_match_entry_by_guid():
+    assert match_entry(_ENTRIES, "guid-1")["audio_url"] == "https://cdn/ep1.mp3"
+
+
+def test_match_entry_none_when_no_match():
+    # A whole-show / site-wide feed page matches nothing -> None (deferred
+    # "pick from feed list" case).
+    assert match_entry(_ENTRIES, "https://show.buzzsprout.com/1414123/") is None

@@ -6,7 +6,7 @@ returns a transcript. Parsing is pure; network lives behind an injected fetch.
 """
 from __future__ import annotations
 
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 
 def discover_feed_url(html: str, base_url: str) -> str | None:
@@ -79,3 +79,28 @@ def parse_feed_entries(feed_text: str):
             "image": _entry_image(e),
         })
     return show, entries
+
+
+def _norm(u: str | None) -> str:
+    """Normalize a URL/guid for comparison: drop scheme, query, trailing slash."""
+    if not u:
+        return ""
+    s = u.strip()
+    try:
+        p = urlparse(s)
+    except ValueError:
+        return s.rstrip("/")
+    if p.scheme in ("http", "https"):
+        return f"{p.netloc.lower()}{p.path.rstrip('/')}"
+    return s.rstrip("/")
+
+
+def match_entry(entries, page_url: str):
+    """Return the entry whose link or guid matches page_url, else None."""
+    target = _norm(page_url)
+    if not target:
+        return None
+    for e in entries:
+        if _norm(e.get("link")) == target or _norm(e.get("guid")) == target:
+            return e
+    return None
