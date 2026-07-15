@@ -88,6 +88,32 @@ def test_match_entry_none_when_no_match():
     assert match_entry(_ENTRIES, "https://show.buzzsprout.com/1414123/") is None
 
 
+# Real Buzzsprout feed shape: items have no <link> and a synthetic guid
+# ("Buzzsprout-<id>"); the episode slug only appears in the enclosure URL, and
+# the pasted page URL lives on a different host than the enclosure.
+_BUZZSPROUT_ENTRIES = [
+    {"link": None, "guid": "Buzzsprout-18052144",
+     "audio_url": "https://www.buzzsprout.com/1414123/episodes/18052144-mayor-karen-bass-on-the-record.mp3"},
+    {"link": None, "guid": "Buzzsprout-18988424",
+     "audio_url": "https://www.buzzsprout.com/1414123/episodes/18988424-nithya-raman-mayoral-candidate-spotlight.mp3"},
+]
+
+
+def test_match_entry_enclosure_slug_fallback():
+    # No usable link/guid match; the episode slug in the page URL appears only in
+    # the enclosure URL -> the fallback must find the right item.
+    page = ("https://whatsnextlosangeles.buzzsprout.com/1414123/episodes/"
+            "18988424-nithya-raman-mayoral-candidate-spotlight")
+    assert match_entry(_BUZZSPROUT_ENTRIES, page)["guid"] == "Buzzsprout-18988424"
+
+
+def test_match_entry_show_page_not_false_matched_by_numeric_id():
+    # A whole-show landing page's last segment is the bare numeric show id, which
+    # appears in EVERY episode enclosure URL -> must NOT match (returns None).
+    assert match_entry(_BUZZSPROUT_ENTRIES, "https://show.buzzsprout.com/1414123/") is None
+    assert match_entry(_BUZZSPROUT_ENTRIES, "https://show.buzzsprout.com/1414123") is None
+
+
 # add to tests/test_podcast.py
 from src.resolve import ResolvedSource
 from src.podcast import resolve_podcast_episode

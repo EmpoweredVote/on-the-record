@@ -95,14 +95,44 @@ def _norm(u: str | None) -> str:
     return s.rstrip("/")
 
 
+def _last_path_segment(url: str) -> str:
+    """Last non-empty path segment of a URL, lowercased (the episode slug)."""
+    try:
+        segs = [s for s in urlparse(url).path.split("/") if s]
+    except ValueError:
+        return ""
+    return segs[-1].lower() if segs else ""
+
+
 def match_entry(entries, page_url: str):
-    """Return the entry whose link or guid matches page_url, else None."""
+    """Return the feed entry for the pasted episode page URL, else None.
+
+    Matching is two-tier:
+
+    1. Exact link/guid match (works when the feed's item link == the page URL).
+    2. Enclosure-slug fallback: many hosts (e.g. Buzzsprout) give feed items a
+       synthetic guid (``Buzzsprout-<id>``) and no usable ``<link>``, but the
+       episode's slug (the ``<id>-<title-slug>`` last path segment of the page
+       URL) appears verbatim in the enclosure/guid/link. A *whole-show* landing
+       page's last segment is a bare numeric show id (no slug), which appears in
+       every episode's URL — so the fallback is skipped for purely-numeric
+       segments to avoid falsely matching the first episode.
+    """
     target = _norm(page_url)
-    if not target:
-        return None
-    for e in entries:
-        if _norm(e.get("link")) == target or _norm(e.get("guid")) == target:
-            return e
+    if target:
+        for e in entries:
+            if _norm(e.get("link")) == target or _norm(e.get("guid")) == target:
+                return e
+
+    slug = _last_path_segment(page_url)
+    if slug and not slug.isdigit():
+        for e in entries:
+            hay = (
+                f"{e.get('audio_url') or ''} {e.get('guid') or ''} "
+                f"{e.get('link') or ''}"
+            ).lower()
+            if slug in hay:
+                return e
     return None
 
 
