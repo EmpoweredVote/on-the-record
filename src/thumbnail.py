@@ -11,6 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 EXTRACT_TIMEOUT_SECONDS = 120
@@ -69,6 +71,18 @@ def extract_thumbnail(
     return None
 
 
+def download_image(url: str, out_path: Path) -> Optional[Path]:
+    """Download an image to out_path; return it, or None on failure."""
+    try:
+        resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        Path(out_path).write_bytes(resp.content)
+    except Exception as exc:
+        logger.warning("artwork download failed: %s", exc)
+        return None
+    return Path(out_path) if Path(out_path).exists() else None
+
+
 VIDEO_EXTENSIONS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
 
 
@@ -102,9 +116,19 @@ def attach_thumbnail(meeting, meeting_dir) -> None:
         from src.storage import upload_thumbnail
 
         video_path = find_video_file(meeting_dir, meeting.audio_source)
-        if not video_path:
-            return
         out = Path(meeting_dir) / "thumbnail.jpg"
+        if not video_path:
+            # Audio-only source: use the resolver-provided artwork, if any.
+            processing_metadata = getattr(meeting, "processing_metadata", None)
+            image_url = getattr(processing_metadata, "source_image_url", None)
+            if not image_url:
+                return
+            if download_image(image_url, out):
+                url = upload_thumbnail(out, meeting.meeting_id)
+                if url:
+                    meeting.thumbnail_url = url
+                    logger.info("Thumbnail (artwork): %s", url)
+            return
         if extract_thumbnail(
             video_path, meeting.clip_start_seconds, meeting.duration_seconds, out
         ):
