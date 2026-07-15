@@ -1,4 +1,4 @@
-from src.models import Meeting, MeetingSummary, Segment, SpeakerMapping
+from src.models import Meeting, MeetingSummary, ProcessingMetadata, Segment, SpeakerMapping
 
 
 def test_segment_to_dict_coerces_numpy_confidence_to_native_float():
@@ -110,3 +110,22 @@ def test_processing_metadata_omits_unset_new_fields():
     d = ProcessingMetadata().to_dict()
     assert "source_channel" not in d
     assert "source_chapters" not in d
+
+
+def test_processing_metadata_roundtrips_source_image_and_description():
+    pm = ProcessingMetadata(
+        source_image_url="https://cdn/art.jpg",
+        source_description="Guest talks housing.",
+    )
+    d = pm.to_dict()
+    assert d["source_image_url"] == "https://cdn/art.jpg"
+    assert d["source_description"] == "Guest talks housing."
+    back = ProcessingMetadata.from_dict(d)
+    assert back.source_image_url == "https://cdn/art.jpg"
+    assert back.source_description == "Guest talks housing."
+
+
+def test_processing_metadata_omits_absent_source_fields():
+    d = ProcessingMetadata().to_dict()
+    assert "source_image_url" not in d
+    assert "source_description" not in d

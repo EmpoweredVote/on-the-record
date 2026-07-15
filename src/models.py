@@ -208,6 +208,8 @@ class ProcessingMetadata:
     source_title: Optional[str] = None
     source_channel: Optional[str] = None
     source_chapters: Optional[list] = None
+    source_image_url: Optional[str] = None
+    source_description: Optional[str] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -224,6 +226,10 @@ class ProcessingMetadata:
             d["source_channel"] = self.source_channel
         if self.source_chapters is not None:
             d["source_chapters"] = self.source_chapters
+        if self.source_image_url is not None:
+            d["source_image_url"] = self.source_image_url
+        if self.source_description is not None:
+            d["source_description"] = self.source_description
         return d
 
     @classmethod
@@ -237,6 +243,8 @@ class ProcessingMetadata:
             source_title=d.get("source_title"),
             source_channel=d.get("source_channel"),
             source_chapters=d.get("source_chapters"),
+            source_image_url=d.get("source_image_url"),
+            source_description=d.get("source_description"),
         )
 
 
