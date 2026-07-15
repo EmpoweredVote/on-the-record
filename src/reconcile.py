@@ -67,13 +67,19 @@ def reconcile_segments(segments, reference_text: str, *, call_llm, min_overlap: 
             raw = call_llm(_build_prompt(chunk, reference))
             match = re.search(r"\{[\s\S]*\}", raw)
             corrections = json.loads(match.group()) if match else {}
+            if not isinstance(corrections, dict):
+                corrections = {}
         except Exception:
             corrections = {}
+        chunk_ids = {s.segment_id for s in chunk}
         for sid, text in corrections.items():
             try:
-                seg = by_id.get(int(sid))
+                key = int(sid)
             except (TypeError, ValueError):
-                seg = None
+                continue
+            if key not in chunk_ids:
+                continue
+            seg = by_id.get(key)
             if seg is not None and isinstance(text, str) and text.strip():
                 seg.text = text.strip()
 
