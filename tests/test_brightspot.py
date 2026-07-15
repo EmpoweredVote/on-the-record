@@ -102,3 +102,35 @@ def test_resolve_brightspot_episode_happy_path():
 
 def test_resolve_brightspot_episode_none_without_mp3():
     assert resolve_brightspot_episode("https://x/y", fetch=lambda u: _HTML) is None
+
+
+def test_parse_jsonld_meta_prefers_episode_name_regardless_of_block_order():
+    html = """<html><head>
+    <meta property="og:site_name" content="KUER">
+    <script type="application/ld+json">
+    {"@type":"NewsArticle","headline":"HEADLINE VERSION","datePublished":"2026-06-03T02:00:00Z"}
+    </script>
+    <script type="application/ld+json">
+    {"@type":"PodcastEpisode","name":"EPISODE NAME VERSION"}
+    </script>
+    </head><body></body></html>"""
+    assert parse_jsonld_meta(html)["title"] == "EPISODE NAME VERSION"
+
+
+def test_og_unescapes_html_entities():
+    html = ('<meta property="og:description" content="&quot;Seminary Pointe&quot; &#x27;quote&#x27;">'
+            '<meta property="og:image" content="https://cdn/i.jpg?a=1&amp;b=2">')
+    meta = parse_jsonld_meta(html)
+    assert meta["description"] == '"Seminary Pointe" \'quote\''
+    assert meta["image"] == "https://cdn/i.jpg?a=1&b=2"
+
+
+def test_resolve_brightspot_episode_none_when_fetch_returns_non_html():
+    # fetch returns None (bad data, no exception) -> must return None, not raise
+    assert resolve_brightspot_episode("https://x/y", fetch=lambda u: None) is None
+
+
+def test_parse_jsonld_meta_rejects_short_date():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","headline":"h","datePublished":"2026"}</script>')
+    assert parse_jsonld_meta(html)["date"] is None

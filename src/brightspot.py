@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from html import unescape as _html_unescape
 
 # Episode @type varies by station: RadioEpisode (IPM), PodcastEpisode (KUER),
 # or a generic AudioObject. Date is read from the NewsArticle block.
@@ -35,7 +36,7 @@ def _og(html: str, prop: str) -> str | None:
         rf'<meta[^>]*property=["\']og:{prop}["\'][^>]*content=["\']([^"\']*)["\']',
         html, re.I,
     )
-    return m.group(1) if m else None
+    return _html_unescape(m.group(1)) if m else None
 
 
 def parse_jsonld_meta(html: str) -> dict:
@@ -45,16 +46,19 @@ def parse_jsonld_meta(html: str) -> dict:
     title from any episode block or the NewsArticle headline; outlet, image and
     description from og tags.
     """
-    title = None
+    episode_title = None
+    headline = None
     date = None
     for obj in _iter_jsonld(html):
         t = obj.get("@type")
         types = t if isinstance(t, list) else [t]
         if any(x in _EPISODE_TYPES for x in types) and obj.get("name"):
-            title = title or obj["name"]
+            episode_title = episode_title or obj["name"]
         if "NewsArticle" in types:
-            date = date or (obj.get("datePublished") or "")[:10] or None
-            title = title or obj.get("headline")
+            raw_date = obj.get("datePublished") or ""
+            date = date or (raw_date[:10] if len(raw_date) >= 10 else None)
+            headline = headline or obj.get("headline")
+    title = episode_title or headline
     return {
         "date": date,
         "title": title,
@@ -134,21 +138,21 @@ def resolve_brightspot_episode(page_url: str, *, fetch):
 
     try:
         html = fetch(page_url)
+
+        meta = parse_jsonld_meta(html)
+        audio_url = select_episode_mp3(html, meta.get("title"))
+        if not audio_url:
+            return None
+
+        return ResolvedSource(
+            audio_url=audio_url,
+            title=meta.get("title"),
+            date=meta.get("date"),
+            outlet=meta.get("outlet"),
+            description=meta.get("description"),
+            image_url=meta.get("image"),
+            transcript=extract_transcript(html),
+            resolver="brightspot",
+        )
     except Exception:
         return None
-
-    meta = parse_jsonld_meta(html)
-    audio_url = select_episode_mp3(html, meta.get("title"))
-    if not audio_url:
-        return None
-
-    return ResolvedSource(
-        audio_url=audio_url,
-        title=meta.get("title"),
-        date=meta.get("date"),
-        outlet=meta.get("outlet"),
-        description=meta.get("description"),
-        image_url=meta.get("image"),
-        transcript=extract_transcript(html),
-        resolver="brightspot",
-    )
