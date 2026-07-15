@@ -61,3 +61,13 @@ def test_resolve_source_routes_to_podcast():
 
 def test_resolve_source_none_when_nothing_applies():
     assert resolve_source("https://example.com/article", fetch=lambda u: "<html></html>") is None
+
+
+def test_resolve_source_short_circuits_ytdlp_without_fetch():
+    calls = []
+    def _fetch(u):
+        calls.append(u)
+        return ""
+    # A YouTube URL must return None WITHOUT any network fetch.
+    assert resolve_source("https://www.youtube.com/watch?v=abc123", fetch=_fetch) is None
+    assert calls == []   # resolvers never invoked -> fetch never called

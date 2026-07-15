@@ -48,6 +48,16 @@ def resolve_source(
     if not (url or "").startswith(("http://", "https://")):
         return None
 
+    # YouTube/Facebook are handled by yt-dlp; skip the resolvers entirely so we
+    # never do a wasted (and potentially slow) page fetch on the common path.
+    try:
+        from .download import is_ytdlp_url
+
+        if is_ytdlp_url(url):
+            return None
+    except Exception:
+        pass
+
     from .brightspot import resolve_brightspot_episode
     from .podcast import resolve_podcast_episode
 
