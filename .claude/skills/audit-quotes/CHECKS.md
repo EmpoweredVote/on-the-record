@@ -78,7 +78,8 @@ not pattern-matching. A Claude agent applies them per race (or race×topic) usin
 |---|---|---|---|
 | `not-forward` | The quote's operative clause is record ("I did X") or an attack, not a forward-looking position ("here's how I'd approach X"). Scaffolding by a little record or a glancing opponent mention is fine — judge the *main assertion*. | high | decision-required |
 | `is-attack` | The operative clause targets a *person* (character, family, fitness) rather than a policy, law, or institution. Policy/institution critique is allowed even when combative (the carve-out). | high | guided (if it can be trimmed down to the surviving position) or decision-required (if the attack is the whole quote) |
-| `off-question` | The quote doesn't genuinely answer the topic's framed `question_text` — it touches the subject but engages a different axis, or answers an adjacent question entirely. Comparability is the precondition for a valid ranking; this is a gate, not a preference. | high | decision-required |
+| `off-question` | The quote doesn't genuinely answer the topic's **ranking question** (`stance.question_text` — the per-race override if one exists, else the Compass question) — it touches the subject but engages a different axis, or answers an adjacent question entirely. Comparability is the precondition for a valid ranking; this is a gate, not a preference. | high | decision-required |
+| `question-override` | A per-race ranking-question override (`stance.override_active` is true) has drifted from its Compass topic: it shifts the **axis/dimension** away from `stance.compass_question_text` (should be a Compass fix or re-home, not an override), or it names/leaks a candidate (not blind), or it is not derived from the race's actual question. Axis-invariance is what keeps responsiveness and coupling valid (QUOTE-CURATION-PRINCIPLES §7.3). | high | decision-required |
 | `deid-dishonest` | `deidentified_text` was produced by paraphrasing/summarizing instead of marking (`…`, `[brackets]`), or it still leaks a self-identifying clause ("as governor," "in my district") or a named third person that should have been depersonalized. | high | guided |
 | `note-not-self-contained` | `editor_note` doesn't state how the quote aligns with the candidate's current Compass stance on the topic, or a skeptical reader who hasn't read the principles doc couldn't follow it without outside context. | medium | guided |
 | `source-summary` | A written / tier-4 source (op-ed, platform page) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
@@ -108,10 +109,12 @@ each topic has a `quotes` array. Each quote has:
     or null if none exists yet
   - `editor_note` — the curator's justification for the quote and its edits
   - `source_name`, `source_url` — provenance
-  - `stance` — `{question_text, value, chairs}` for this candidate+topic: the topic's
-    framed question, the candidate's numeric Compass value on this topic's spectrum
-    (may be null), and `chairs` (the spectrum's labeled anchor points, roughly 1-5,
-    from one pole to the other)
+  - `stance` — `{question_text, compass_question_text, override_active, value, chairs}` for this
+    candidate+topic. `question_text` is the **ranking question** you gate responsiveness against
+    (the per-race override if `override_active`, else the Compass question). `compass_question_text`
+    is the canonical Compass question. `value` is the candidate's numeric Compass value on this
+    topic's spectrum (may be null), and `chairs` are the spectrum's labeled anchor points
+    (roughly 1-5, from one pole to the other)
 
 ## The rules (summarized — the full principles live in QUOTE-CURATION-PRINCIPLES.md)
 
@@ -125,9 +128,14 @@ each topic has a `quotes` array. Each quote has:
   even when combative. The line is the target: attacking a *policy or office* stays;
   attacking a *person* (character, family, fitness) does not belong in Read & Rank.
 - **Responsiveness — a hard gate, not a preference.** The quote must genuinely answer the
-  topic's framed `question_text` — engage the axis/dimension the question sets, not merely
-  touch the subject. If it answers a different question (even a related one), it is not a
+  topic's **ranking question** (`stance.question_text` — the per-race override if
+  `stance.override_active`, else the Compass question) — engage the axis/dimension it sets, not
+  merely touch the subject. If it answers a different question (even a related one), it is not a
   valid comparison point for this topic, no matter how well-written or distinctive it is.
+- **Override must stay on-axis.** When `stance.override_active` is true, the override
+  (`stance.question_text`) must engage the *same* axis as `stance.compass_question_text`, be blind
+  (name no candidate), and read as the race's real question tightened — not a different question.
+  If it shifts the axis, flag `question-override` (that's a Compass fix or re-home, not an override).
 - **De-identification honesty.** `deidentified_text` should be the canonical quote with
   identity leaks removed via honest marking (`…` for cut spans, `[brackets]` for inserted
   or substituted words) — never a paraphrase or summary. It must not still contain the
@@ -165,7 +173,8 @@ For every quote in the bundle, apply these judgment checks:
 - `not-forward` — quote is record/attack, no forward position (severity high, decision-required)
 - `is-attack` — attacks a person, not a policy/institution (severity high; guided if it
   can be trimmed to a surviving position, decision-required if the attack is the whole quote)
-- `off-question` — doesn't answer the topic's framed question (severity high, decision-required)
+- `off-question` — doesn't answer the topic's ranking question (override ?? Compass) (severity high, decision-required)
+- `question-override` — an active override shifts the axis / isn't blind / isn't the race's real question (severity high, decision-required)
 - `deid-dishonest` — blind text paraphrased instead of marked, or still leaks a self-ID
   or named person (severity high, guided)
 - `note-not-self-contained` — note doesn't state Compass-stance alignment / needs the
