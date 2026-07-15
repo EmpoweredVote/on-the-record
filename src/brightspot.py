@@ -96,3 +96,59 @@ def select_episode_mp3(html: str, headline: str | None) -> str | None:
             if any(w in fname for w in words):
                 return u
     return urls[0]
+
+
+_MIN_PARA_CHARS = 20  # a real transcript turn is longer than nav/label chrome
+
+
+def extract_transcript(html: str) -> str | None:
+    """Join the article body's substantive <p> paragraphs, or None.
+
+    Prefers an <article> container; falls back to <body>. Paragraphs shorter than
+    _MIN_PARA_CHARS are treated as chrome and dropped. Returns None if nothing
+    substantive remains.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    container = soup.find("article") or soup.body
+    if not container:
+        return None
+    paras = []
+    for p in container.find_all("p"):
+        text = p.get_text(" ", strip=True)
+        if len(text) >= _MIN_PARA_CHARS:
+            paras.append(text)
+    if not paras:
+        return None
+    return "\n\n".join(paras)
+
+
+def resolve_brightspot_episode(page_url: str, *, fetch):
+    """Resolve an NPR/Brightspot article page to a ResolvedSource, or None.
+
+    Returns None if the page has no NPR-CDN MP3 (i.e. it is not a Brightspot
+    audio episode page).
+    """
+    from .resolve import ResolvedSource
+
+    try:
+        html = fetch(page_url)
+    except Exception:
+        return None
+
+    meta = parse_jsonld_meta(html)
+    audio_url = select_episode_mp3(html, meta.get("title"))
+    if not audio_url:
+        return None
+
+    return ResolvedSource(
+        audio_url=audio_url,
+        title=meta.get("title"),
+        date=meta.get("date"),
+        outlet=meta.get("outlet"),
+        description=meta.get("description"),
+        image_url=meta.get("image"),
+        transcript=extract_transcript(html),
+        resolver="brightspot",
+    )
