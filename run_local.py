@@ -1253,6 +1253,39 @@ def run_pipeline(args: argparse.Namespace) -> None:
         state.mark_complete(PipelineStage.TRANSCRIBED)
         print(f"  Done in {elapsed:.1f}s")
 
+    # ------------------------------------------------------------------
+    # Stage 3.5: Reconcile transcript against a source-provided reference
+    # ------------------------------------------------------------------
+    reference_path = meeting_dir / "reference_transcript.txt"
+    reconciled_marker = meeting_dir / "reconciled.done"
+    if reference_path.exists() and not reconciled_marker.exists() and segments:
+        try:
+            import anthropic
+
+            from src import config as _cfg
+            from src.reconcile import reconcile_segments
+
+            client = anthropic.Anthropic()
+
+            def _call_llm(prompt: str) -> str:
+                msg = client.messages.create(
+                    model=_cfg.SUMMARY_CLASSIFY_MODEL,
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return msg.content[0].text
+
+            reference_text = reference_path.read_text(encoding="utf-8")
+            _, applied = reconcile_segments(segments, reference_text, call_llm=_call_llm)
+            if applied:
+                save_raw_transcript(segments, transcript_path)
+                print("  Reconciled transcript against source reference.")
+            else:
+                print("  Reference transcript overlap too low; kept Whisper text.")
+            reconciled_marker.write_text("done", encoding="utf-8")
+        except Exception as exc:  # never fatal — timestamps/segments are intact
+            print(f"  Transcript reconciliation skipped ({exc}).")
+
     # Show sample
     print("\n  Sample transcript:")
     for seg in segments[:5]:
