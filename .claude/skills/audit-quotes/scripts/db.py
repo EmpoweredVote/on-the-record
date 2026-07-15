@@ -43,17 +43,26 @@ def fetch_rows(conn, ids=None, candidate=None, topic=None, race=None, include_dr
         cur.execute(SCOPE_SQL, dict(ids=ids, candidate=candidate, topic=topic, race=race, drafts=include_drafts))
         return [dict(r) for r in cur.fetchall()]
 
-def fetch_stance(conn, politician_id, topic_key):
-    """Returns {'question_text':..., 'value': float|None, 'chairs': [{'v','text'}...]} or None.
-    Keyed on politician_id (not full_name) — names collide across the national race set."""
+def fetch_stance(conn, politician_id, topic_key, race_id=None):
+    """Returns the candidate+topic stance, or None.
+
+    `question_text` is the RESOLVED ranking question (per-race override ?? Compass), which is what
+    Read & Rank gates responsiveness against. `compass_question_text` is the canonical Compass
+    question and `override_active` says whether an override applied — both let the audit check an
+    override for axis-drift. Keyed on politician_id (names collide across the national race set)."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute("""
-          SELECT t.question_text,
+          SELECT t.question_text AS compass_question_text,
+                 COALESCE(rtq.question_text, t.question_text) AS question_text,
+                 (rtq.question_text IS NOT NULL) AS override_active,
                  (SELECT a.value FROM inform.politician_answers a
                   WHERE a.topic_id=t.id AND a.politician_id=%s::uuid) AS value,
                  (SELECT json_agg(json_build_object('v', s.value, 'text', s.text) ORDER BY s.value)
                   FROM inform.compass_stances s WHERE s.topic_id=t.id) AS chairs
-          FROM inform.compass_topics t WHERE t.topic_key=%s
-        """, (politician_id, topic_key))
+          FROM inform.compass_topics t
+          LEFT JOIN essentials.readrank_race_topic_questions rtq
+            ON rtq.race_id = %s::uuid AND rtq.topic_key = t.topic_key
+          WHERE t.topic_key=%s
+        """, (politician_id, race_id, topic_key))
         row = cur.fetchone()
         return dict(row) if row else None

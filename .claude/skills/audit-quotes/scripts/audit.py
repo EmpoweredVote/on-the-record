@@ -45,9 +45,11 @@ def main():
     for race, rrows in by_race.items():
         bundle = {"race_id": race, "topics": {}}
         for r in rrows:
-            key = (r["politician_id"], r["topic_key"])
+            key = (r["race_id"], r["politician_id"], r["topic_key"])
             if key not in stance_cache:
-                stance_cache[key] = fetch_stance(conn, r["politician_id"], r["topic_key"])
+                stance_cache[key] = fetch_stance(
+                    conn, r["politician_id"], r["topic_key"], race_id=r["race_id"]
+                )
             t = bundle["topics"].setdefault(r["topic_key"], {"topic_key": r["topic_key"], "quotes": []})
             t["quotes"].append({**r, "stance": stance_cache[key]})
         safe = str(race).replace("/", "_")
