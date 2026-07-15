@@ -227,7 +227,9 @@ def normalize_audio(
             ffmpeg_input = str(actual_path)
             source_title = resolved.title
             source_channel = resolved.outlet
-            source_chapters = parse_description_chapters(resolved.description)
+            source_chapters = _drop_intro_chapters(
+                parse_description_chapters(resolved.description)
+            )
             source_upload_date = resolved.date
             source_image_url = resolved.image_url
             source_description = resolved.description
