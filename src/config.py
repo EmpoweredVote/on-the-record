@@ -119,5 +119,6 @@ GATE_THRESHOLDS = {
     "community_meeting":{"high": 0.70, "low": 0.40},
     "news_clip":        {"high": 0.90, "low": 0.50},
     "press_conference": {"high": 0.90, "low": 0.50},
+    "podcast":          {"high": 0.90, "low": 0.50},
     "other":            {"high": 0.90, "low": 0.50},
 }

@@ -11,6 +11,7 @@ EVENT_KIND_HELP = {
     "community_meeting": "A civic or community meeting.",
     "news_clip": "A journalist interviewing a subject.",
     "press_conference": "A subject making a statement and taking questions.",
+    "podcast": "A podcast or radio interview episode (audio-only).",
     "other": "Anything else.",
 }
 
@@ -41,5 +42,6 @@ MEETING_TYPE_DEFAULTS = {
     "community_meeting": "Community Meeting",
     "news_clip": "Interview",
     "press_conference": "Press Conference",
+    "podcast": "Podcast",
     "other": "Recording",
 }

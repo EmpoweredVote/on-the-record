@@ -17,7 +17,7 @@ import anthropic as anthropic
 from . import config
 from .models import Meeting, MeetingSummary, Segment, SummarySection
 
-_INTERVIEW_KINDS = {"news_clip", "press_conference"}
+_INTERVIEW_KINDS = {"news_clip", "press_conference", "podcast"}
 
 
 def _format_ts(seconds: float) -> str:

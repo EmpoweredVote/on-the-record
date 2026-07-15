@@ -3,8 +3,10 @@ from types import SimpleNamespace
 import pytest
 
 import run_local
+from src import event_kinds
 from src.event_kinds import EVENT_KINDS, validate_event_kind
 from src.models import Meeting
+from src.summarize import _INTERVIEW_KINDS
 
 
 def test_meeting_round_trip_preserves_title_event_kind_and_null_city():
@@ -102,3 +104,12 @@ def test_parser_rejects_unknown_event_kind():
             "--input", "meeting.mp4",
             "--event-kind", "town_hall",
         ])
+
+
+def test_podcast_is_a_valid_event_kind():
+    assert "podcast" in event_kinds.EVENT_KINDS
+    assert event_kinds.validate_event_kind("podcast") == "podcast"
+
+
+def test_podcast_uses_interview_summarization_path():
+    assert "podcast" in _INTERVIEW_KINDS
