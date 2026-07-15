@@ -138,3 +138,23 @@ def test_interview_constants_defined():
     assert "topic" in _INTERVIEW_CLASSIFY_SYSTEM.lower()
     assert "interview" in _INTERVIEW_SUMMARIZE_SYSTEM.lower()
     assert "interview" in _INTERVIEW_EXECUTIVE_SYSTEM.lower()
+
+
+def test_show_notes_hint_present():
+    from src.summarize import _show_notes_hint
+    from src.models import ProcessingMetadata
+
+    m = Meeting(meeting_id="x", city=None, date="2026-06-16")
+    m.processing_metadata = ProcessingMetadata(
+        source_description="Guest: Mayor Kerry Thomson on housing."
+    )
+    hint = _show_notes_hint(m)
+    assert "Show notes" in hint
+    assert "Kerry Thomson" in hint
+
+
+def test_show_notes_hint_empty_when_absent():
+    from src.summarize import _show_notes_hint
+
+    m = Meeting(meeting_id="x", city=None, date="2026-06-16")
+    assert _show_notes_hint(m) == ""
