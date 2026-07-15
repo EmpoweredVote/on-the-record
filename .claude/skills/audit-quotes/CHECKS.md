@@ -203,7 +203,7 @@ the whole bundle warrants a finding. Each object must have exactly these fields:
   are authorized to execute.
 - Do **not** include a `fix_op` field.
 - Do not rewrite `quote_text` or `deidentified_text` yourself, and do not invent findings
-  outside the eight check ids above.
+  outside the nine check ids above.
 
 Context bundle:
 {context_bundle_json}

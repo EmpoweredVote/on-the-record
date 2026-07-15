@@ -17,7 +17,7 @@ what's already there.
 
 - [ ] **Read principles + catalog first.** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` (the
       *why*) and this skill's [CHECKS.md](CHECKS.md) (the *mechanics* — findings schema, the nine
-      mechanical checks, the eight judgment checks, the judgment-agent prompt template, and the
+      mechanical checks, the nine judgment checks, the judgment-agent prompt template, and the
       portfolio instructions). If the two ever disagree, the principles doc wins.
 - [ ] **Resolve scope + confirm.** Run `scripts/audit.py` with the user's scope (default: no
       flags, all races). It prints a `SCOPE:` line and `MECHANICAL FINDINGS: N`, and writes
