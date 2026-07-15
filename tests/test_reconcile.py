@@ -63,20 +63,25 @@ def test_reconcile_noop_when_no_reference():
 
 
 def test_reconcile_isolation_blocks_foreign_only_correction(monkeypatch):
+    # One segment per chunk. When segment 0's chunk is processed, the LLM
+    # hallucinates a correction for segment 1 (a FOREIGN id not in that chunk).
+    # Segment 1's own chunk returns nothing. Without per-chunk isolation, seg0's
+    # chunk would corrupt seg1 via the global id map; with isolation, it can't.
     monkeypatch.setattr(reconcile, "_CHUNK_SEGMENTS", 1)
     reference = "Welcome to Ask the Mayor. Glad to be here."
 
     def llm(prompt):
-        # Only ever returns a correction for id 1, never id 0.
-        # When processing chunk [seg0], id 1 is out-of-chunk -> must be ignored.
-        # When processing chunk [seg1], id 1 is in-chunk -> applied.
-        return '{"1": "ONLY ONE CORRECTED"}'
+        # seg0's chunk prompt contains seg0's whisper text; only then hallucinate id 1.
+        if "welcome to ask the mare" in prompt:
+            return '{"1": "HALLUCINATED BY CHUNK 0"}'
+        # seg1's own chunk: no correction.
+        return "{}"
 
     segs = _segs()
     out, applied = reconcile.reconcile_segments(segs, reference, call_llm=llm)
     assert applied is True
-    assert out[0].text == "welcome to ask the mare"   # seg0 untouched (no id 0 correction)
-    assert out[1].text == "ONLY ONE CORRECTED"        # seg1 corrected by its own chunk
+    assert out[0].text == "welcome to ask the mare"   # seg0: no id-0 correction returned
+    assert out[1].text == "glad to be here"           # seg1: foreign correction from chunk 0 rejected
 
 
 def test_reconcile_applied_true_even_if_llm_raises():
