@@ -62,3 +62,37 @@ def parse_jsonld_meta(html: str) -> dict:
         "image": _og(html, "image"),
         "description": _og(html, "description"),
     }
+
+
+_MP3_RE = re.compile(r'https?://[^"\'\s]*cpa\.ds\.npr\.org[^"\'\s]*\.mp3', re.I)
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def _mp3_urls(html: str) -> list[str]:
+    seen, out = set(), []
+    for u in _MP3_RE.findall(html):
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def select_episode_mp3(html: str, headline: str | None) -> str | None:
+    """Pick the current episode's MP3 from the NPR CDN links on the page.
+
+    The current episode's file is typically the first cpa.ds.npr.org MP3 and its
+    filename usually echoes the headline (e.g. '...-thomson-web.mp3'). Prefer a
+    filename that shares a distinctive headline word; else fall back to the first
+    MP3 (related-episode links follow it on the page).
+    """
+    urls = _mp3_urls(html)
+    if not urls:
+        return None
+    if headline:
+        # Distinctive headline words (skip short stopword-ish tokens).
+        words = [w for w in _WORD_RE.findall(headline.lower()) if len(w) >= 5]
+        for u in urls:
+            fname = u.rsplit("/", 1)[-1].lower()
+            if any(w in fname for w in words):
+                return u
+    return urls[0]
