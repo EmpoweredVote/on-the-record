@@ -39,6 +39,23 @@ def resolve_source(
     *,
     fetch: Callable[[str], str] = _default_fetch,
 ) -> Optional[ResolvedSource]:
-    """Try each resolver; return the first ResolvedSource, or None."""
-    # Resolvers are registered in Task 10. For now, nothing applies.
+    """Try each resolver; return the first ResolvedSource, or None.
+
+    Brightspot is tried before the generic podcast resolver because it is more
+    specific (NPR-CDN MP3 + JSON-LD). Each resolver returns None when it does not
+    apply, so the caller falls back to the existing yt-dlp / direct path.
+    """
+    if not (url or "").startswith(("http://", "https://")):
+        return None
+
+    from .brightspot import resolve_brightspot_episode
+    from .podcast import resolve_podcast_episode
+
+    for resolver in (resolve_brightspot_episode, resolve_podcast_episode):
+        try:
+            resolved = resolver(url, fetch=fetch)
+        except Exception:
+            resolved = None
+        if resolved is not None:
+            return resolved
     return None
