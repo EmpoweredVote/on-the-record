@@ -880,6 +880,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
             meeting.processing_metadata.source_channel = metadata["source_channel"]
         if metadata.get("source_chapters"):
             meeting.processing_metadata.source_chapters = metadata["source_chapters"]
+        if metadata.get("source_image_url"):
+            meeting.processing_metadata.source_image_url = metadata["source_image_url"]
+        if metadata.get("source_description"):
+            meeting.processing_metadata.source_description = metadata["source_description"]
         state.mark_complete(PipelineStage.INGESTED)
         print(f"  Done in {elapsed:.1f}s")
 
