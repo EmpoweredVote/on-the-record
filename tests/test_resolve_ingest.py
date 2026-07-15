@@ -106,3 +106,24 @@ def test_normalize_audio_fallback_path_preserves_cookies_and_ytdlp_meta(
     assert meta["source_upload_date"] == "2026-01-02"
     assert meta["source_image_url"] is None                        # resolver-only fields stay None
     assert meta["source_description"] is None
+
+
+def test_normalize_audio_surfaces_resolved_enclosure_url(monkeypatch, tmp_path, _stub_ffmpeg):
+    from src.resolve import ResolvedSource
+    resolved = ResolvedSource(audio_url="https://cdn/ep.mp3", resolver="podcast")
+    monkeypatch.setattr(ingest, "_resolve_source_safe", lambda url: resolved)
+    import src.download as dl
+    monkeypatch.setattr(dl, "download_from_url",
+                        lambda url, out, cookies_file=None, progress=True: (Path(out).write_bytes(b"x"), Path(out))[1])
+    meta = ingest.normalize_audio("https://show/ep", tmp_path / "audio.wav")
+    assert meta["source_audio_url"] == "https://cdn/ep.mp3"
+
+
+def test_normalize_audio_no_resolved_enclosure_for_plain_url(monkeypatch, tmp_path, _stub_ffmpeg):
+    monkeypatch.setattr(ingest, "_resolve_source_safe", lambda url: None)
+    import src.download as dl
+    monkeypatch.setattr(dl, "download_from_url",
+                        lambda url, out, cookies_file=None, progress=True: (Path(out).write_bytes(b"x"), Path(out))[1])
+    monkeypatch.setattr(dl, "is_ytdlp_url", lambda u: False)
+    meta = ingest.normalize_audio("https://example.com/x.mp4", tmp_path / "audio.wav")
+    assert meta["source_audio_url"] is None

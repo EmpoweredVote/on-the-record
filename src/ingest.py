@@ -215,6 +215,7 @@ def normalize_audio(
     source_upload_date = None
     source_image_url = None
     source_description = None
+    source_audio_url = None
     if _is_url(source_str):
         from .download import download_from_url, is_ytdlp_url
 
@@ -233,6 +234,7 @@ def normalize_audio(
             source_upload_date = resolved.date
             source_image_url = resolved.image_url
             source_description = resolved.description
+            source_audio_url = resolved.audio_url
             if resolved.transcript:
                 (output_path.parent / "reference_transcript.txt").write_text(
                     resolved.transcript, encoding="utf-8"
@@ -282,4 +284,5 @@ def normalize_audio(
         "source_upload_date": source_upload_date,
         "source_image_url": source_image_url,
         "source_description": source_description,
+        "source_audio_url": source_audio_url,
     }

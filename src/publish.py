@@ -93,6 +93,18 @@ def resolve_playback(audio_source: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
+def playback_for_meeting(meeting) -> tuple[Optional[str], Optional[str]]:
+    """(playback_kind, playback_url) for a meeting.
+
+    Prefers a resolved enclosure URL (podcast/CMS audio file) over the citation
+    audio_source, which for those sources is the human-facing episode page URL
+    (kept as the citation source_url, not a playable media URL).
+    """
+    pm = getattr(meeting, "processing_metadata", None)
+    enclosure = getattr(pm, "source_audio_url", None) if pm else None
+    return resolve_playback(enclosure or (meeting.audio_source or ""))
+
+
 @dataclass
 class PublishResult:
     meeting_id: str
@@ -217,7 +229,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
 
     source = (meeting.audio_source or "").strip()
     is_url = source.startswith(("http://", "https://"))
-    kind, playback_url = resolve_playback(source)
+    kind, playback_url = playback_for_meeting(meeting)
     date = _validate_date(meeting.date)
     summary = meeting.summary.to_dict() if meeting.summary else None
     proc_meta = (

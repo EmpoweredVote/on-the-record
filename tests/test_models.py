@@ -129,3 +129,11 @@ def test_processing_metadata_omits_absent_source_fields():
     d = ProcessingMetadata().to_dict()
     assert "source_image_url" not in d
     assert "source_description" not in d
+
+
+def test_processing_metadata_roundtrips_source_audio_url():
+    pm = ProcessingMetadata(source_audio_url="https://cdn/ep.mp3")
+    d = pm.to_dict()
+    assert d["source_audio_url"] == "https://cdn/ep.mp3"
+    assert ProcessingMetadata.from_dict(d).source_audio_url == "https://cdn/ep.mp3"
+    assert "source_audio_url" not in ProcessingMetadata().to_dict()
