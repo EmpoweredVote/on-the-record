@@ -14,10 +14,13 @@ differently:
   (e.g. `https://feeds.buzzsprout.com/1414123.rss`,
   `https://whatsnextlosangeles.buzzsprout.com`). Episode pages advertise their
   feed via standard RSS autodiscovery.
-- **Public-radio station CMSes** (e.g. Indiana Public Media, `ipm.org`, which
-  runs on NPR's Brightspot platform shared by many stations) publish an episode
-  as an article page with structured JSON-LD metadata, a direct MP3 on NPR's
-  distribution CDN, **and an already-cleaned transcript** in the article body.
+- **Public-radio station CMSes** (e.g. Indiana Public Media, `ipm.org`; KUER,
+  `kuer.org` — both on NPR's Brightspot platform shared by many stations)
+  publish an episode as an article page with structured JSON-LD metadata, a
+  direct MP3 on NPR's distribution CDN, **and (often) an already-cleaned
+  transcript** in the article body. Validated against two independent stations
+  (IPM `cpa.ds.npr.org/s385/...`, KUER `.../s213/...`); the shape is
+  consistent.
 
 Today the pipeline ingests content through `fetch_source_metadata()`
 (`src/ingest.py`), which only knows how to ask **yt-dlp**. yt-dlp does not
@@ -54,6 +57,13 @@ transcription.
 - **Feed subscriptions / auto-pull.** No monitoring feeds for new episodes and
   no relevance filtering. One episode at a time, initiated by a human.
 - **A "pick from feed list" UI.** Not in this spec.
+- **Text-only civic communications** (e.g. a mayor's newsletter / municipal
+  topic page like `cityoflinton.in.gov`). These have no audio and no interview,
+  so nothing in the audio-resolver pipeline applies. They are a separate future
+  source class — a "text source" that could feed the quotes pipeline directly —
+  with their own open questions (is a newsletter a first-person on-the-record
+  statement? how is authorship/attribution established?). Deliberately **not**
+  in scope here; captured so the idea isn't lost.
 
 ## Architecture: pluggable source resolvers
 
@@ -82,7 +92,7 @@ the existing generic download path.
 | Resolver | Sources | Metadata from | Transcript? |
 |---|---|---|---|
 | **Podcast RSS** (`src/podcast.py`) | Buzzsprout, Libsyn, Simplecast, Megaphone, and any host with RSS autodiscovery | episode page → autodiscovered RSS feed → matched `<item>` | No — audio only |
-| **Brightspot/NPR CMS** (`src/brightspot.py`) | `ipm.org` and other public-radio stations on NPR's Brightspot platform | JSON-LD (`RadioEpisode` / `NewsArticle`) + `og:` tags + direct `cpa.ds.npr.org` MP3 | **Yes** — article-body `<p>` paragraphs |
+| **Brightspot/NPR CMS** (`src/brightspot.py`) | `ipm.org`, `kuer.org`, and other public-radio stations on NPR's Brightspot platform | JSON-LD (episode `@type` varies: `RadioEpisode` / `PodcastEpisode` / `AudioObject`; date from `NewsArticle.datePublished`) + `og:` tags + direct `cpa.ds.npr.org` MP3 | **Yes, when present** — article-body `<p>` paragraphs |
 
 New sources later = one new resolver returning `ResolvedSource`. No pipeline
 changes.
@@ -111,9 +121,11 @@ changes.
 `resolve_brightspot_episode(url) -> ResolvedSource`:
 
 1. **Fetch the page.**
-2. **Parse JSON-LD** blocks: `NewsArticle.datePublished` → `date`,
-   `headline`/`RadioEpisode.name` → `title`, `author[].name` → contributor,
-   `og:site_name` → `outlet` (e.g. "Indiana Public Media").
+2. **Parse JSON-LD** blocks: `NewsArticle.datePublished` → `date` (the episode
+   block's date is often absent), `headline` / episode `name` → `title`,
+   `author[].name` → contributor, `og:site_name` → `outlet` (e.g. "Indiana
+   Public Media", "KUER"). Accept any episode `@type` (`RadioEpisode`,
+   `PodcastEpisode`, `AudioObject`) — the type varies by station.
 3. **Find the MP3** — the episode's direct enclosure on the NPR distribution
    CDN (`cpa.ds.npr.org/...mp3`), disambiguating the current episode's file from
    sidebar/related episodes (match against the page's canonical `og:url` /
@@ -266,5 +278,8 @@ existing pipeline: normalize_audio → diarize → transcribe (+ reconcile if re
   `PipelineStage` model (sub-step of `TRANSCRIBED` vs. its own checkpoint).
 - Reconciliation prompt/algorithm details and the overlap threshold below which
   it is skipped — prototype first.
-- Brightspot MP3 disambiguation heuristic robustness across more than the one
-  `ipm.org` sample (validate against a second station on the same platform).
+- Brightspot MP3 disambiguation heuristic: validated against two stations
+  (IPM `s385`, KUER `s213`) — current episode is the first `cpa.ds.npr.org` MP3,
+  followed by related-episode links; match the current episode against the
+  canonical `og:url` / date / headline slug. Confirm the heuristic holds on a
+  third station before treating it as settled.
