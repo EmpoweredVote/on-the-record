@@ -2636,7 +2636,7 @@ MEETING_TYPE_DEFAULT = "Regular Session"
 EVENT_KIND_DEFAULT = "council"
 
 
-_INTERVIEW_KINDS = {"news_clip", "press_conference"}
+_INTERVIEW_KINDS = {"news_clip", "press_conference", "podcast"}
 
 
 def _resolve_metadata(args, *, allow_prompt: bool = True) -> None:

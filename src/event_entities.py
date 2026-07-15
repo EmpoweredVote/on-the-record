@@ -13,7 +13,7 @@ def _validate_uuid(name: str, value: Optional[str]) -> Optional[str]:
         raise ValueError(f"{name} must be a UUID") from exc
 
 
-_INTERVIEW_KINDS = {"news_clip", "press_conference"}
+_INTERVIEW_KINDS = {"news_clip", "press_conference", "podcast"}
 
 
 def validate_event_entities(

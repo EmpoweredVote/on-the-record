@@ -113,3 +113,15 @@ def test_podcast_is_a_valid_event_kind():
 
 def test_podcast_uses_interview_summarization_path():
     assert "podcast" in _INTERVIEW_KINDS
+
+
+def test_interview_kinds_consistent_across_modules():
+    import importlib
+
+    summarize = importlib.import_module("src.summarize")
+    event_entities = importlib.import_module("src.event_entities")
+    run_local = importlib.import_module("run_local")
+
+    assert summarize._INTERVIEW_KINDS == event_entities._INTERVIEW_KINDS
+    assert summarize._INTERVIEW_KINDS == run_local._INTERVIEW_KINDS
+    assert "podcast" in summarize._INTERVIEW_KINDS
