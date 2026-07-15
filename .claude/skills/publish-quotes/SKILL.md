@@ -41,6 +41,16 @@ Two distinct jobs, do them in order:
       launder record into a pseudo-position. See `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.1.
       Among on-question candidates, prefer the quote that shows *how* the candidate would act, not
       just an agreeable goal no one would contest (`QUOTE-CURATION-PRINCIPLES.md` §4.6).
+      Responsiveness is judged against the topic's **ranking question** — the per-race override if
+      one exists, else the Compass question (`QUOTE-CURATION-PRINCIPLES.md` §7.1 "the two questions").
+- [ ] **Confirm the ranking question for this race-topic.** Check whether the Compass
+      `question_text` actually fits how *this* race framed the topic. If the debate/interview asked a
+      race-specific question the Compass one misses, set a per-race override in
+      `essentials.readrank_race_topic_questions` (`(race_id, topic_key)` → `question_text`): derive
+      it from the real question, tighten for clarity, keep it **on the same Compass axis** and
+      **blind** (§7.3). If the Compass question is systemically wrong (not just race-specific),
+      escalate to `compass-topic-builder` instead — don't override. Leave it unset to fall back to
+      the Compass question.
 - [ ] **Reconcile curation labels → topic keys.** A curation-page publish export uses free-text
       `topic_label`s. Map each to a canonical `inform.compass_topics` key and set it as the quote's
       `topic_key`. Confirm the mapping with the user.
