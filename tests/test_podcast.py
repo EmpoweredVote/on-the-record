@@ -23,3 +23,40 @@ def test_discover_feed_url_resolves_relative_href():
 
 def test_discover_feed_url_none_when_absent():
     assert discover_feed_url("<html><head></head></html>", "https://x/") is None
+
+
+# add to tests/test_podcast.py
+from src.podcast import parse_feed_entries
+
+_FEED = """<?xml version="1.0"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>What's Next Los Angeles</title>
+    <itunes:author>WNLA</itunes:author>
+    <itunes:image href="https://img/show.jpg"/>
+    <item>
+      <title>Ep 1: Housing</title>
+      <link>https://show.buzzsprout.com/1414123/ep-1-housing</link>
+      <guid>https://show.buzzsprout.com/1414123/ep-1-housing</guid>
+      <pubDate>Tue, 03 Jun 2026 10:00:00 -0700</pubDate>
+      <description>Guest talks &lt;b&gt;housing&lt;/b&gt;. 00:30 Intro 02:10 Zoning</description>
+      <enclosure url="https://cdn/ep1.mp3" type="audio/mpeg" length="1"/>
+      <itunes:image href="https://img/ep1.jpg"/>
+    </item>
+  </channel>
+</rss>"""
+
+
+def test_parse_feed_entries_maps_fields():
+    show, entries = parse_feed_entries(_FEED)
+    assert show["title"] == "What's Next Los Angeles"
+    assert show["image"] == "https://img/show.jpg"
+    assert len(entries) == 1
+    e = entries[0]
+    assert e["title"] == "Ep 1: Housing"
+    assert e["link"] == "https://show.buzzsprout.com/1414123/ep-1-housing"
+    assert e["guid"] == "https://show.buzzsprout.com/1414123/ep-1-housing"
+    assert e["audio_url"] == "https://cdn/ep1.mp3"
+    assert e["date"] == "2026-06-03"
+    assert e["image"] == "https://img/ep1.jpg"
+    assert "housing" in e["description"].lower()
