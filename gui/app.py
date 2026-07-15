@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from src import config
 from src import ingest
+from src import resolve
 from src.download import is_ytdlp_url
 
 from gui import publish_api
@@ -137,8 +138,19 @@ def create_app() -> FastAPI:
 
     @app.get("/api/source-meta")
     def source_meta(url: str = "") -> JSONResponse:
-        # Only video URLs carry fetchable metadata; local paths / other URLs
-        # return an empty payload the client treats as "nothing to fill".
+        # Podcast / public-radio CMS episode pages: resolve for real metadata.
+        # Looked up at call time so tests can monkeypatch resolve.resolve_source.
+        try:
+            resolved = resolve.resolve_source(url) if url else None
+        except Exception:
+            resolved = None
+        if resolved is not None:
+            return JSONResponse({
+                "date": resolved.date,
+                "title": resolved.title,
+                "event_org": resolved.outlet,
+            })
+        # yt-dlp URLs (YouTube/Facebook): fetchable video metadata.
         if not is_ytdlp_url(url):
             return JSONResponse({"date": None, "title": None, "event_org": None})
         # Look up ingest.fetch_source_metadata at call time so tests can
