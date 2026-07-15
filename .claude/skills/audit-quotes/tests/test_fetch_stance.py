@@ -45,4 +45,5 @@ def test_fetch_stance_resolves_override_and_passes_race_id():
 
     sql, params = conn.cur.executed
     assert "readrank_race_topic_questions" in sql
-    assert "race-1" in params
+    # Lock param order: politician_id (value subquery), race_id (join), topic_key (where).
+    assert params == ("pol-1", "race-1", "fossil-fuels")
