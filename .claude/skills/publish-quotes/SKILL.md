@@ -39,6 +39,8 @@ Two distinct jobs, do them in order:
       answers, or leave the candidate absent. Don't rank an off-question quote for distinctiveness.
       A candidate who only spoke in record/attacks (no forward position) is **absent** — don't
       launder record into a pseudo-position. See `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.1.
+      Among on-question candidates, prefer the quote that shows *how* the candidate would act, not
+      just an agreeable goal no one would contest (`QUOTE-CURATION-PRINCIPLES.md` §4.6).
 - [ ] **Reconcile curation labels → topic keys.** A curation-page publish export uses free-text
       `topic_label`s. Map each to a canonical `inform.compass_topics` key and set it as the quote's
       `topic_key`. Confirm the mapping with the user.
