@@ -86,3 +86,43 @@ def test_match_entry_none_when_no_match():
     # A whole-show / site-wide feed page matches nothing -> None (deferred
     # "pick from feed list" case).
     assert match_entry(_ENTRIES, "https://show.buzzsprout.com/1414123/") is None
+
+
+# add to tests/test_podcast.py
+from src.resolve import ResolvedSource
+from src.podcast import resolve_podcast_episode
+
+_PAGE = """<html><head>
+  <link rel="alternate" type="application/rss+xml" href="https://feeds.x/f.rss">
+</head></html>"""
+
+
+def _fetch_map(mapping):
+    def _fetch(url):
+        return mapping[url]
+    return _fetch
+
+
+def test_resolve_podcast_episode_happy_path():
+    page_url = "https://show.buzzsprout.com/1414123/ep-1-housing"
+    fetch = _fetch_map({page_url: _PAGE, "https://feeds.x/f.rss": _FEED})
+    rs = resolve_podcast_episode(page_url, fetch=fetch)
+    assert isinstance(rs, ResolvedSource)
+    assert rs.audio_url == "https://cdn/ep1.mp3"
+    assert rs.outlet == "What's Next Los Angeles"
+    assert rs.date == "2026-06-03"
+    assert rs.image_url == "https://img/ep1.jpg"
+    assert rs.transcript is None
+    assert rs.resolver == "podcast"
+
+
+def test_resolve_podcast_episode_none_when_no_feed():
+    fetch = _fetch_map({"https://x/ep": "<html><head></head></html>"})
+    assert resolve_podcast_episode("https://x/ep", fetch=fetch) is None
+
+
+def test_resolve_podcast_episode_none_when_episode_unmatched():
+    # Feed found, but URL is a whole-show page -> no matching item -> None.
+    show_url = "https://show.buzzsprout.com/1414123/"
+    fetch = _fetch_map({show_url: _PAGE, "https://feeds.x/f.rss": _FEED})
+    assert resolve_podcast_episode(show_url, fetch=fetch) is None

@@ -104,3 +104,44 @@ def match_entry(entries, page_url: str):
         if _norm(e.get("link")) == target or _norm(e.get("guid")) == target:
             return e
     return None
+
+
+def resolve_podcast_episode(page_url: str, *, fetch):
+    """Resolve an episode page URL to a ResolvedSource, or None if not a podcast.
+
+    Returns None when no feed is discovered, or when the feed contains no item
+    matching the pasted URL (e.g. a site-wide feed or a whole-show landing
+    page — the deferred 'pick from feed list' case). Never trusts autodiscovery
+    blindly: success requires a matching <item> with an audio enclosure.
+    """
+    from .resolve import ResolvedSource
+
+    try:
+        page_html = fetch(page_url)
+    except Exception:
+        return None
+
+    feed_url = discover_feed_url(page_html, page_url)
+    if not feed_url:
+        return None
+
+    try:
+        feed_text = fetch(feed_url)
+    except Exception:
+        return None
+
+    show, entries = parse_feed_entries(feed_text)
+    entry = match_entry(entries, page_url)
+    if not entry or not entry.get("audio_url"):
+        return None
+
+    return ResolvedSource(
+        audio_url=entry["audio_url"],
+        title=entry.get("title"),
+        date=entry.get("date"),
+        outlet=show.get("title") or show.get("author"),
+        description=entry.get("description"),
+        image_url=entry.get("image") or show.get("image"),
+        transcript=None,
+        resolver="podcast",
+    )
