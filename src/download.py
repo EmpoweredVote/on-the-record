@@ -133,7 +133,14 @@ def download_from_url(
     # If it's a CATS TV page URL, resolve to the blob URL
     resolved = _resolve_video_url(url)
 
-    resp = requests.get(resolved, stream=True, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+    # Send a browser User-Agent: podcast CDNs (e.g. Buzzsprout enclosures) return
+    # 403 to header-less clients. Matches the resolver's own fetch.
+    resp = requests.get(
+        resolved,
+        stream=True,
+        timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
     resp.raise_for_status()
 
     total = int(resp.headers.get("content-length", 0))
