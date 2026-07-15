@@ -39,3 +39,16 @@ def test_source_key_is_total_on_malformed_url():
     # a few more junk inputs must not raise:
     for junk in ("http://[::1", "https://exa mple.com/x", "://nope", "ht!tp://x"):
         assert isinstance(source_key(junk), str)
+
+
+def test_source_key_stable_for_episode_page_with_tracking_params():
+    a = source_key("https://show.buzzsprout.com/1414123/ep-1-housing")
+    b = source_key("https://show.buzzsprout.com/1414123/ep-1-housing/?utm_source=x&si=y")
+    assert a == b
+    assert a.startswith("url:show.buzzsprout.com/1414123/ep-1-housing")
+
+
+def test_source_key_distinct_for_different_episodes():
+    a = source_key("https://www.ipm.org/show/askthemayor/2026-07-15/a")
+    b = source_key("https://www.ipm.org/show/askthemayor/2026-07-15/b")
+    assert a != b
