@@ -24,6 +24,21 @@ on-the-record `.venv/bin/python` (psycopg2) can reach it.
 | `readrank_selected` | boolean, NOT NULL default false — the "live" switch |
 | `created_at` / `updated_at` | timestamptz |
 
+## `essentials.readrank_race_topic_questions` — per-race ranking question
+
+The **ranking question** Read & Rank shows for a topic is `COALESCE(override, inform.compass_topics.question_text)`.
+The override lives here (one row per `(race_id, topic_key)`); leave it unset to use the Compass question.
+
+| column | notes |
+|---|---|
+| `race_id` | uuid → `essentials.races` (NOT NULL), part of PK |
+| `topic_key` | text, lowercase (`CHECK topic_key = lower(topic_key)`), part of PK |
+| `question_text` | text, NOT NULL, non-empty — the race-local ranking question |
+| `updated_at` / `updated_by` | timestamptz / text provenance |
+
+Axis-invariant by policy (`QUOTE-CURATION-PRINCIPLES.md` §7.3): the override reframes wording only,
+never the topic/axis. It's a Read & Rank concern — Compass/Essentials still show the Compass question.
+
 ## The two flags that matter
 
 **`readrank_selected` — the live switch.** A unique index allows **at most one `true` per
