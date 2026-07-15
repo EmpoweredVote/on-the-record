@@ -130,6 +130,16 @@ def fetch_source_metadata(url: str) -> dict:
     }
 
 
+def _resolve_source_safe(url: str):
+    """resolve_source that never raises — returns None on any failure."""
+    try:
+        from .resolve import resolve_source
+
+        return resolve_source(url)
+    except Exception:
+        return None
+
+
 def _is_url(path: str) -> bool:
     """Check if a string looks like a URL."""
     try:
@@ -202,20 +212,45 @@ def normalize_audio(
     source_title = None
     source_channel = None
     source_chapters: list[dict] = []
+    source_upload_date = None
+    source_image_url = None
+    source_description = None
+    source_audio_url = None
     if _is_url(source_str):
         from .download import download_from_url, is_ytdlp_url
 
         # Use a placeholder stem; yt-dlp may change the extension
         download_path = output_path.parent / "source.mp4"
-        print(f"  Downloading from URL...")
-        actual_path = download_from_url(source_str, download_path, cookies_file=cookies_file)
-        ffmpeg_input = str(actual_path)
-
-        if is_ytdlp_url(source_str):
-            meta = fetch_source_metadata(source_str)
-            source_title = meta["title"]
-            source_channel = meta["channel"]
-            source_chapters = meta["chapters"]
+        resolved = _resolve_source_safe(source_str)
+        if resolved is not None:
+            print(f"  Resolved {resolved.resolver} source; downloading audio...")
+            actual_path = download_from_url(resolved.audio_url, download_path)
+            ffmpeg_input = str(actual_path)
+            source_title = resolved.title
+            source_channel = resolved.outlet
+            source_chapters = _drop_intro_chapters(
+                parse_description_chapters(resolved.description)
+            )
+            source_upload_date = resolved.date
+            source_image_url = resolved.image_url
+            source_description = resolved.description
+            source_audio_url = resolved.audio_url
+            if resolved.transcript:
+                (output_path.parent / "reference_transcript.txt").write_text(
+                    resolved.transcript, encoding="utf-8"
+                )
+        else:
+            print(f"  Downloading from URL...")
+            actual_path = download_from_url(
+                source_str, download_path, cookies_file=cookies_file
+            )
+            ffmpeg_input = str(actual_path)
+            if is_ytdlp_url(source_str):
+                meta = fetch_source_metadata(source_str)
+                source_title = meta["title"]
+                source_channel = meta["channel"]
+                source_chapters = meta["chapters"]
+                source_upload_date = meta["upload_date"]
     else:
         ffmpeg_input = str(Path(input_path))
 
@@ -246,4 +281,8 @@ def normalize_audio(
         "source_title": source_title,
         "source_channel": source_channel,
         "source_chapters": source_chapters,
+        "source_upload_date": source_upload_date,
+        "source_image_url": source_image_url,
+        "source_description": source_description,
+        "source_audio_url": source_audio_url,
     }

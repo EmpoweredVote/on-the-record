@@ -110,3 +110,42 @@ def test_extract_thumbnail_no_ffmpeg_returns_none(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("src.thumbnail.shutil.which", lambda _: None)
     out = tmp_path / "thumbnail.jpg"
     assert extract_thumbnail("whatever.mp4", None, 10.0, out) is None
+
+
+# add to tests/test_thumbnail.py
+from src.thumbnail import download_image
+
+
+def test_download_image_writes_file(tmp_path, monkeypatch):
+    import src.thumbnail as th
+
+    class _Resp:
+        content = b"\xff\xd8jpegbytes"
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(th, "requests", type("R", (), {"get": staticmethod(lambda *a, **k: _Resp())}))
+    out = tmp_path / "art.jpg"
+    assert download_image("https://cdn/art.jpg", out) == out
+    assert out.read_bytes() == b"\xff\xd8jpegbytes"
+
+
+def test_attach_thumbnail_uses_artwork_when_no_video(tmp_path, monkeypatch):
+    import src.thumbnail as th
+
+    # No video file present.
+    monkeypatch.setattr(th, "find_video_file", lambda d, s: None)
+    monkeypatch.setattr(th, "download_image", lambda url, out: Path(out).write_bytes(b"x") or Path(out))
+    monkeypatch.setattr("src.storage.upload_thumbnail", lambda path, mid: "https://bucket/thumb.jpg")
+
+    class _M:
+        audio_source = "https://show/ep"
+        clip_start_seconds = None
+        duration_seconds = 60.0
+        meeting_id = "2026-07-15-podcast"
+        thumbnail_url = None
+        class processing_metadata:
+            source_image_url = "https://cdn/art.jpg"
+
+    m = _M()
+    th.attach_thumbnail(m, tmp_path)
+    assert m.thumbnail_url == "https://bucket/thumb.jpg"

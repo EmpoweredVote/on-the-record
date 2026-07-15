@@ -8,6 +8,7 @@ EVENT_KINDS = (
     "community_meeting",
     "news_clip",
     "press_conference",
+    "podcast",
     "other",
 )
 
@@ -34,6 +35,7 @@ LOCAL_ROLE_SETS = {
     "school_board": _CIVIC_ROLES,
     "community_meeting": _CIVIC_ROLES,
     "press_conference": ("official", "staff", "presenter", "public_comment"),
+    "podcast": _CAMPAIGN_ROLES,
     "forum": _CAMPAIGN_ROLES,
     "debate": _CAMPAIGN_ROLES,
 }

@@ -28,6 +28,7 @@ from .models import Meeting
 SEGMENT_BATCH_SIZE = 500
 
 _DIRECT_FILE_EXTENSIONS = (".mp4", ".m4v", ".mov", ".webm")
+_AUDIO_EXTENSIONS = (".mp3", ".m4a", ".aac", ".ogg", ".wav")
 
 _YOUTUBE_PATH_PREFIXES = ("/embed/", "/shorts/", "/live/", "/v/")
 
@@ -57,8 +58,9 @@ def resolve_playback(audio_source: str) -> tuple[Optional[str], Optional[str]]:
     """Map an audio_source to a (playback_kind, playback_url) pair for the site.
 
     Kinds: 'youtube' (url is the video id), 'file' (direct media URL),
-    'hls' (.m3u8). Unknown providers return (None, None); the site renders
-    transcript-only with a plain source link.
+    'audio' (direct MP3/M4A/etc. podcast or radio enclosure), 'hls' (.m3u8).
+    Unknown providers return (None, None); the site renders transcript-only
+    with a plain source link.
     """
     source = (audio_source or "").strip()
     if not source.startswith(("http://", "https://")):
@@ -82,10 +84,25 @@ def resolve_playback(audio_source: str) -> tuple[Optional[str], Optional[str]]:
     if path.endswith(_DIRECT_FILE_EXTENSIONS):
         return "file", source
 
+    if path.endswith(_AUDIO_EXTENSIONS):
+        return "audio", source
+
     if path.endswith(".m3u8"):
         return "hls", source
 
     return None, None
+
+
+def playback_for_meeting(meeting) -> tuple[Optional[str], Optional[str]]:
+    """(playback_kind, playback_url) for a meeting.
+
+    Prefers a resolved enclosure URL (podcast/CMS audio file) over the citation
+    audio_source, which for those sources is the human-facing episode page URL
+    (kept as the citation source_url, not a playable media URL).
+    """
+    pm = getattr(meeting, "processing_metadata", None)
+    enclosure = getattr(pm, "source_audio_url", None) if pm else None
+    return resolve_playback(enclosure or (meeting.audio_source or ""))
 
 
 @dataclass
@@ -212,7 +229,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
 
     source = (meeting.audio_source or "").strip()
     is_url = source.startswith(("http://", "https://"))
-    kind, playback_url = resolve_playback(source)
+    kind, playback_url = playback_for_meeting(meeting)
     date = _validate_date(meeting.date)
     summary = meeting.summary.to_dict() if meeting.summary else None
     proc_meta = (

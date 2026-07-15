@@ -9,10 +9,10 @@ helpers below survived the refactor unchanged and remain worth covering.
 
 import pytest
 
-from src.models import Meeting, SpeakerMapping
+from src.models import Meeting, ProcessingMetadata, SpeakerMapping
 from src.publish import _resolve_chamber_id, _upsert_event_orgs, _upsert_meeting
 from src.publish import _upsert_local_people, _upsert_speakers
-from src.publish import extract_youtube_id, resolve_playback
+from src.publish import extract_youtube_id, resolve_playback, playback_for_meeting
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +70,16 @@ def test_resolve_playback_local_path():
     assert resolve_playback("") == (None, None)
 
 
+def test_resolve_playback_audio_mp3():
+    url = "https://cpa.ds.npr.org/s385/audio/2026/07/ep.mp3"
+    assert resolve_playback(url) == ("audio", url)
+
+
+def test_resolve_playback_audio_m4a():
+    url = "https://cdn/ep.m4a"
+    assert resolve_playback(url) == ("audio", url)
+
+
 def test_resolve_playback_catstv_page_falls_back_on_error(monkeypatch):
     """A catstv.net page URL that can't be scraped degrades to (None, None)."""
     import src.download as download
@@ -79,6 +89,19 @@ def test_resolve_playback_catstv_page_falls_back_on_error(monkeypatch):
 
     monkeypatch.setattr(download, "_extract_blob_url_from_page", boom)
     assert resolve_playback("https://catstv.net/government.php?id=99") == (None, None)
+
+
+def test_playback_for_meeting_prefers_resolved_enclosure():
+    m = Meeting(meeting_id="x", city=None, date="2026-06-03",
+                audio_source="https://www.ipm.org/show/askthemayor/2026-07-15/ep")
+    m.processing_metadata = ProcessingMetadata(source_audio_url="https://cpa.ds.npr.org/s385/audio/ep.mp3")
+    assert playback_for_meeting(m) == ("audio", "https://cpa.ds.npr.org/s385/audio/ep.mp3")
+
+
+def test_playback_for_meeting_falls_back_to_audio_source():
+    m = Meeting(meeting_id="x", city=None, date="2026-06-03",
+                audio_source="https://www.youtube.com/watch?v=AbC12345xyz")
+    assert playback_for_meeting(m)[0] == "youtube"
 
 
 RACE_ID = "22222222-2222-4222-8222-222222222222"

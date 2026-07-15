@@ -363,8 +363,10 @@ def test_source_meta_non_ytdlp_returns_empty(tmp_meetings_dir):
 
 
 def test_source_meta_ytdlp_returns_mapped_json(tmp_meetings_dir, monkeypatch):
-    from src import ingest
+    from src import ingest, resolve
 
+    # No podcast/CMS resolver match -> falls back to the yt-dlp path.
+    monkeypatch.setattr(resolve, "resolve_source", lambda url: None)
     monkeypatch.setattr(ingest, "fetch_source_metadata", lambda url: {
         "title": "City Council Feb 10", "channel": "WFYI",
         "upload_date": "2026-02-10", "duration": 3600, "chapters": [],
@@ -376,3 +378,23 @@ def test_source_meta_ytdlp_returns_mapped_json(tmp_meetings_dir, monkeypatch):
     assert resp.json() == {
         "date": "2026-02-10", "title": "City Council Feb 10", "event_org": "WFYI",
     }
+
+
+def test_source_meta_prefers_resolver(tmp_meetings_dir, monkeypatch):
+    from src import ingest, resolve
+    from src.resolve import ResolvedSource
+
+    monkeypatch.setattr(resolve, "resolve_source", lambda url: ResolvedSource(
+        audio_url="https://cdn.example/ep1.mp3", title="Ep 1",
+        date="2026-06-03", outlet="WNLA",
+    ))
+
+    def _boom(url):
+        raise AssertionError("should not call yt-dlp when the resolver matched")
+
+    monkeypatch.setattr(ingest, "fetch_source_metadata", _boom)
+    client = TestClient(create_app())
+    resp = client.get("/api/source-meta",
+                      params={"url": "https://show.buzzsprout.com/1/ep"})
+    assert resp.status_code == 200
+    assert resp.json() == {"date": "2026-06-03", "title": "Ep 1", "event_org": "WNLA"}

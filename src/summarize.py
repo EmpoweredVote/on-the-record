@@ -17,7 +17,7 @@ import anthropic as anthropic
 from . import config
 from .models import Meeting, MeetingSummary, Segment, SummarySection
 
-_INTERVIEW_KINDS = {"news_clip", "press_conference"}
+_INTERVIEW_KINDS = {"news_clip", "press_conference", "podcast"}
 
 
 def _format_ts(seconds: float) -> str:
@@ -507,6 +507,18 @@ def _classify_sections_interview(
         return []
 
 
+def _show_notes_hint(meeting: Meeting) -> str:
+    """A short 'Show notes:' block for interview classification prompts.
+
+    Podcast/radio notes often name the guest and topics, improving section
+    classification. Empty string when there are no notes.
+    """
+    notes = (meeting.processing_metadata.source_description or "").strip()
+    if not notes:
+        return ""
+    return f"\n\nShow notes (context, may name the guest/topics):\n{notes[:2000]}"
+
+
 def _resolve_outlet(meeting: Meeting) -> str:
     """Interviewer/outlet for the exec summary.
 
@@ -610,7 +622,9 @@ def generate_summary(
         )
     )
     if is_interview:
-        raw_sections = _classify_sections_interview(client, segments, chapter_hint=chapter_hint)
+        raw_sections = _classify_sections_interview(
+            client, segments, chapter_hint=chapter_hint + _show_notes_hint(meeting)
+        )
     else:
         raw_sections = classify_sections(client, segments, chapter_hint=chapter_hint)
 
