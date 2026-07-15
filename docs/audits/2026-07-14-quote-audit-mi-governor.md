@@ -1,0 +1,128 @@
+# Quote Audit — MI Governor new
+
+**39 findings** — 14 high, 25 medium, 0 low
+
+## Summary by race
+- **race 85ca8364-c1ec-408a-a7a6-327b08b7624e** — 22 findings (10 high, 12 med, 0 low)
+- **race cf5cc5a0-6854-4e38-bbca-c6090f084aca** — 17 findings (4 high, 13 med, 0 low)
+
+## race 85ca8364-c1ec-408a-a7a6-327b08b7624e
+- `high` · `decision-required` · **source-unverified** (quote) — Perry Johnson / ai-regulation [b08a2cc1-2f99-4fab-8497-8f4abc774325]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `high` · `decision-required` · **off-question** (quote) — Perry Johnson / ai-regulation [b08a2cc1-2f99-4fab-8497-8f4abc774325]
+    - The framed question asks how much government should oversee AI development/deployment (a regulatory-intensity axis from free-market to strict approval). The quote instead describes AI as a security/cyber threat ('China, Russia ... they are hacking everything. Every hospital ... has been hacked') and closes with a vague disposition ('be particularly cautious right now [because] AI is dangerous') without stating any position on government's regulatory role.
+    - fix: Consider whether this genuinely answers the government-oversight axis or merely voices alarm about AI threats. A human should decide if 'be cautious' is enough to count as engaging the oversight question, or if this belongs to a cybersecurity/national-security frame instead.
+- `high` · `decision-required` · **source-speaker-mismatch** (quote) — Mike Cox / climate-change [de0c21bc-a206-4623-9bc4-83a8dfdd16b2]
+    - Quote phrase found in the cited video but not attributed to Mike Cox.
+    - fix: Confirm the speaker; the quote may belong to another person.
+- `high` · `decision-required` · **source-unverified** (quote) — Perry Johnson / data-centers [7ec224cf-a0a6-45b3-8e89-b83d5bb2c858]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `high` · `decision-required` · **source-unverified** (quote) — Mike Cox / data-centers [a2e32777-e92a-4d8d-a281-93873308626b]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `high` · `decision-required` · **source-speaker-mismatch** (quote) — Mike Cox / healthcare [ba72d518-abcd-4fd7-9896-d8315b641f40]
+    - Quote phrase found in the cited video but not attributed to Mike Cox.
+    - fix: Confirm the speaker; the quote may belong to another person.
+- `high` · `decision-required` · **off-question** (quote) — Mike Cox / healthcare [ba72d518-abcd-4fd7-9896-d8315b641f40]
+    - The framed question asks what role government should play in healthcare access, and the chairs run along a coverage-provision spectrum (universal public coverage to fully private markets). The quote answers on a different axis: market competition and antitrust ('More competition ... too many consolidated hospitals ... going after Blue Cross, which created monopolies'), which speaks to market structure rather than who gets coverage or access.
+    - fix: A human should decide whether an antitrust/competition answer counts as engaging the coverage-access axis (it could be read as leaning toward the market end) or whether it addresses an adjacent question and shouldn't be used as a blind comparison point on access.
+- `high` · `decision-required` · **off-question** (quote) — John James / public-safety-approach [bf0a9a4f-53ac-4b51-a07d-ef7a0873cd56]
+    - The framed question asks how the jurisdiction should fund and operate public safety services, with chairs about police budget, staffing, and crisis-response allocation. The quote is a tough-on-crime statement about incarceration and accountability for releases ('put criminals in jail, and we hold those accountable who continue to let them back out') and never addresses funding levels or how police services are operated.
+    - fix: A human should decide whether this incarceration/accountability stance engages the public-safety funding-and-operations axis or answers a distinct criminal-justice question, in which case it may not be a valid comparison point for this topic.
+- `high` · `decision-required` · **source-unverified** (quote) — Mike Cox / taxes [13e37034-bb07-4e8f-863f-47b68492bff1]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `high` · `decision-required` · **source-unverified** (quote) — Mike Cox / transportation-priorities [8327ffef-b1d8-4254-aa7e-c3da2cf5664e]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / ai-regulation [ai-regulation]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / climate-change [climate-change]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / data-centers [data-centers]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / economic-development [economic-development]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / fossil-fuels [fossil-fuels]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / healthcare [healthcare]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / housing [housing]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / immigration [immigration]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / public-safety-approach [public-safety-approach]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / school-vouchers [school-vouchers]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / taxes [taxes]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / transportation-priorities [transportation-priorities]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+
+## race cf5cc5a0-6854-4e38-bbca-c6090f084aca
+- `high` · `decision-required` · **source-speaker-mismatch** (quote) — Chris Swanson / abortion [cf056bc3-c8cf-4965-ab4e-346190ce8dde]
+    - Quote phrase found in the cited video but not attributed to Chris Swanson.
+    - fix: Confirm the speaker; the quote may belong to another person.
+- `high` · `decision-required` · **source-unverified** (quote) — Chris Swanson / campaign-finance [382d2145-603b-4cef-b68f-af4a6570aed8]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `high` · `decision-required` · **source-unverified** (quote) — Jocelyn Benson / economic-development [2b014b3e-9580-46cd-9256-0c6c5d32b581]
+    - No distinctive phrase from the quote appears in the cited video's transcript — likely mis-sourced.
+    - fix: Find the true source (search other transcripts) and correct source_url, or remove the quote.
+- `high` · `guided` · **deid-dishonest** (quote) — Chris Swanson / campaign-finance [382d2145-603b-4cef-b68f-af4a6570aed8]
+    - The blind card substitutes "as a governor" with "in office" but leaves it unmarked: the canonical text ends "I'm not taking it as a governor" while deidentified_text reads "I'm not taking it in office." A substituted span must be shown in [brackets]; the editor_note also asserts "the refusal itself is verbatim," which this silent substitution contradicts.
+    - fix: Mark the change as "[in office]" (or cut the clause with an ellipsis) so the substitution is honestly flagged, and reconcile the editor_note's "verbatim" claim with the actual edit.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / abortion [abortion]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / ai-regulation [ai-regulation]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / campaign-finance [campaign-finance]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / childcare [childcare]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / climate-change [climate-change]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / data-centers [data-centers]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / economic-development [economic-development]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / growth-and-development [growth-and-development]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / healthcare [healthcare]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / immigration [immigration]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / public-safety-approach [public-safety-approach]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / taxes [taxes]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / transportation-priorities [transportation-priorities]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
