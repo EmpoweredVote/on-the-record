@@ -70,6 +70,16 @@ def test_resolve_playback_local_path():
     assert resolve_playback("") == (None, None)
 
 
+def test_resolve_playback_audio_mp3():
+    url = "https://cpa.ds.npr.org/s385/audio/2026/07/ep.mp3"
+    assert resolve_playback(url) == ("audio", url)
+
+
+def test_resolve_playback_audio_m4a():
+    url = "https://cdn/ep.m4a"
+    assert resolve_playback(url) == ("audio", url)
+
+
 def test_resolve_playback_catstv_page_falls_back_on_error(monkeypatch):
     """A catstv.net page URL that can't be scraped degrades to (None, None)."""
     import src.download as download

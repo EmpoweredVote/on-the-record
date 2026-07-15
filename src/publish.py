@@ -28,6 +28,7 @@ from .models import Meeting
 SEGMENT_BATCH_SIZE = 500
 
 _DIRECT_FILE_EXTENSIONS = (".mp4", ".m4v", ".mov", ".webm")
+_AUDIO_EXTENSIONS = (".mp3", ".m4a", ".aac", ".ogg", ".wav")
 
 _YOUTUBE_PATH_PREFIXES = ("/embed/", "/shorts/", "/live/", "/v/")
 
@@ -57,8 +58,9 @@ def resolve_playback(audio_source: str) -> tuple[Optional[str], Optional[str]]:
     """Map an audio_source to a (playback_kind, playback_url) pair for the site.
 
     Kinds: 'youtube' (url is the video id), 'file' (direct media URL),
-    'hls' (.m3u8). Unknown providers return (None, None); the site renders
-    transcript-only with a plain source link.
+    'audio' (direct MP3/M4A/etc. podcast or radio enclosure), 'hls' (.m3u8).
+    Unknown providers return (None, None); the site renders transcript-only
+    with a plain source link.
     """
     source = (audio_source or "").strip()
     if not source.startswith(("http://", "https://")):
@@ -81,6 +83,9 @@ def resolve_playback(audio_source: str) -> tuple[Optional[str], Optional[str]]:
 
     if path.endswith(_DIRECT_FILE_EXTENSIONS):
         return "file", source
+
+    if path.endswith(_AUDIO_EXTENSIONS):
+        return "audio", source
 
     if path.endswith(".m3u8"):
         return "hls", source
