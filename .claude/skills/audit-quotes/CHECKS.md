@@ -83,6 +83,7 @@ not pattern-matching. A Claude agent applies them per race (or race×topic) usin
 | `note-not-self-contained` | `editor_note` doesn't state how the quote aligns with the candidate's current Compass stance on the topic, or a skeptical reader who hasn't read the principles doc couldn't follow it without outside context. | medium | guided |
 | `source-summary` | A written / tier-4 source (op-ed, platform page) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
 | `coupling-in-tension` | The quote pulls against the direction of the candidate's synthesized Compass `value` for this topic (as opposed to reinforcing it or elaborating on a different sub-dimension). This doesn't mean the quote is wrong — it means the tension needs resolving before the quote is surfaced next to the value. | medium | decision-required |
+| `non-differentiating-goal` | The quote clears responsiveness but states only an **agreeable goal no candidate in the race would contest** ("who wouldn't want safe streets?") **and names no mechanism/approach/means** — the HOW. Both conditions required: a contested/directional goal without a mechanism is fine and does not trip this. A preference, not a gate. | medium | decision-required |
 
 ## 4. Judgment-agent prompt template
 
@@ -148,6 +149,14 @@ each topic has a `quotes` array. Each quote has:
   valid), or in tension (pulls against the synthesized value — needs a flag, not a silent
   pass). Use `stance.chairs` to understand what each end of the spectrum means before
   judging reinforcing vs. in-tension.
+- **Prefer the HOW.** Among quotes that pass the responsiveness gate, prefer the one that
+  shows *how* the candidate would pursue the goal — the mechanism, approach, or means — not
+  merely that the goal is desirable. Flag a quote **only** when BOTH hold: (1) it is
+  *non-differentiating* — no candidate in this race would plausibly disagree with the goal
+  ("who wouldn't want safe, beautiful streets?"), and (2) it is *mechanism-free* — it names no
+  approach or means. A contested/directional goal without a mechanism is fine (it is still
+  rankable contrast). This is a preference, never a gate; do not use it to reject positions you
+  find thin.
 
 ## Your task
 
@@ -165,6 +174,8 @@ For every quote in the bundle, apply these judgment checks:
   sentence (severity high, decision-required)
 - `coupling-in-tension` — quote pulls against the candidate's Compass value (severity
   medium, decision-required)
+- `non-differentiating-goal` — on-question quote states an agreeable goal no one would
+  contest AND names no mechanism/HOW (severity medium, decision-required)
 
 ## Output
 
@@ -183,7 +194,7 @@ the whole bundle warrants a finding. Each object must have exactly these fields:
   are authorized to execute.
 - Do **not** include a `fix_op` field.
 - Do not rewrite `quote_text` or `deidentified_text` yourself, and do not invent findings
-  outside the seven check ids above.
+  outside the eight check ids above.
 
 Context bundle:
 {context_bundle_json}
