@@ -139,3 +139,81 @@ def parse_granule_turns(text: str, granule_id: str, start_order: int) -> list[Cr
         ))
         order += 1
     return turns
+
+
+def _granules_url(package_id: str, offset_mark: str, api_key: str, page_size: int = 100) -> str:
+    return (f"{_API_ROOT}/packages/{package_id}/granules"
+            f"?offsetMark={offset_mark}&pageSize={page_size}&api_key={api_key}")
+
+
+def _granule_text_url(package_id: str, granule_id: str, api_key: str) -> str:
+    return f"{_API_ROOT}/packages/{package_id}/granules/{granule_id}/htm?api_key={api_key}"
+
+
+def _default_fetch(url: str) -> str:
+    import requests
+    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    return resp.text
+
+
+def _list_matching_granule_ids(package_id, chamber, api_key, fetch) -> Optional[list[str]]:
+    """All chamber granule ids across every page, or None if the first page fails
+    (a recess day / missing package is normal, not an error)."""
+    url = _granules_url(package_id, "*", api_key)
+    ids: list[str] = []
+    first = True
+    while url:
+        try:
+            page = fetch(url)
+        except Exception:
+            if first:
+                return None      # no Record for this day
+            break                # partial pagination: stop, keep what we have
+        first = False
+        ids.extend(parse_granule_list(page, chamber))
+        url = _next_offset_mark(page)
+    return ids
+
+
+def fetch_congressional_record_turns(
+    date: str,
+    chamber: str,
+    *,
+    fetch: Callable[[str], str] = _default_fetch,
+    api_key: Optional[str] = None,
+    max_granules: Optional[int] = None,
+) -> Optional[list[CrecTurn]]:
+    """Ordered speaker turns of the Congressional Record for a chamber on a day.
+
+    Returns None when there is no Record (recess), no matching granules, or every
+    granule text fetch fails. Never returns a silently-partial Record as if
+    complete. `max_granules` caps requests (rate-limit / demo guard) and logs
+    when it truncates.
+    """
+    key = _resolve_api_key(api_key)
+    package_id = _package_id(date)
+
+    ids = _list_matching_granule_ids(package_id, chamber, key, fetch)
+    if not ids:
+        return None
+
+    if max_granules is not None and len(ids) > max_granules:
+        print(f"  govinfo: truncating {len(ids)} granules to first {max_granules} "
+              f"(max_granules guard).")
+        ids = ids[:max_granules]
+
+    turns: list[CrecTurn] = []
+    any_ok = False
+    for gid in ids:
+        try:
+            htm = fetch(_granule_text_url(package_id, gid, key))
+        except Exception:
+            print(f"  govinfo: skipping granule {gid} (text fetch failed).")
+            continue
+        any_ok = True
+        turns.extend(parse_granule_turns(html_to_text(htm), gid, start_order=len(turns)))
+
+    if not any_ok:
+        return None
+    return turns

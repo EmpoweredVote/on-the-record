@@ -109,3 +109,104 @@ def test_parse_granule_turns_empty_when_no_designations():
     turns = parse_granule_turns("just some floor boilerplate\nwith no speakers",
                                 "CREC-x", start_order=0)
     assert turns == []
+
+
+import pytest
+
+from src.govinfo import (
+    fetch_congressional_record_turns,
+    _granules_url,
+    _granule_text_url,
+)
+
+
+def test_granules_url_shape():
+    url = _granules_url("CREC-2018-10-10", "*", "KEY")
+    assert url == (
+        "https://api.govinfo.gov/packages/CREC-2018-10-10/granules"
+        "?offsetMark=*&pageSize=100&api_key=KEY"
+    )
+
+
+def test_granule_text_url_shape():
+    url = _granule_text_url("CREC-2018-10-10", "CREC-2018-10-10-pt1-PgH1-1", "KEY")
+    assert url == (
+        "https://api.govinfo.gov/packages/CREC-2018-10-10/granules/"
+        "CREC-2018-10-10-pt1-PgH1-1/htm?api_key=KEY"
+    )
+
+
+def _fake_fetch_factory():
+    """URL -> fixture text, following the real two-page + htm topology."""
+    page1 = _read("granules_page1.json")
+    page2 = _read("granules_page2.json")
+    debate = _read("granule_debate.htm")
+
+    def fetch(url: str) -> str:
+        if "/granules/" in url and url.endswith("/htm?api_key=KEY"):
+            return debate  # every granule returns the multi-speaker fixture
+        if "offsetMark=PAGE2" in url:
+            return page2
+        if "/granules?" in url:
+            return page1
+        raise AssertionError(f"unexpected url {url}")
+    return fetch
+
+
+def test_fetch_house_turns_paginates_and_orders():
+    turns = fetch_congressional_record_turns(
+        "2018-10-10", "house", fetch=_fake_fetch_factory(), api_key="KEY"
+    )
+    # page1 has one HOUSE granule, page2 has one -> both fetched (pagination works).
+    # Each granule fixture yields 2 turns, so the granule ids repeat per turn;
+    # dedup-in-order shows both granules (from both pages) were fetched, in order.
+    assert turns is not None
+    seen_granule_ids = list(dict.fromkeys(t.granule_id for t in turns))
+    assert seen_granule_ids == [
+        "CREC-2018-10-10-pt1-PgH1-1", "CREC-2018-10-10-pt1-PgH2-1",
+    ]
+    # each granule fixture yields 2 turns; order is continuous across granules
+    assert [t.order for t in turns] == [0, 1, 2, 3]
+    assert turns[0].speaker_raw == "Mr. SMITH of Michigan"
+
+
+def test_fetch_excludes_other_chamber():
+    turns = fetch_congressional_record_turns(
+        "2018-10-10", "senate", fetch=_fake_fetch_factory(), api_key="KEY"
+    )
+    # the SENATE granule also returns the debate fixture (2 turns), House excluded
+    assert turns is not None
+    assert all(t.granule_id == "CREC-2018-10-10-pt1-PgS6735-6" for t in turns)
+
+
+def test_fetch_returns_none_on_missing_package():
+    def fetch(url: str) -> str:
+        raise RuntimeError("404")
+    assert fetch_congressional_record_turns(
+        "1900-01-01", "house", fetch=fetch, api_key="KEY") is None
+
+
+def test_fetch_returns_none_when_all_granule_texts_fail():
+    page1 = _read("granules_page1.json")
+    page2 = _read("granules_page2.json")
+
+    def fetch(url: str) -> str:
+        if "/granules/" in url and url.endswith("/htm?api_key=KEY"):
+            raise RuntimeError("granule text 500")
+        if "offsetMark=PAGE2" in url:
+            return page2
+        return page1
+    assert fetch_congressional_record_turns(
+        "2018-10-10", "house", fetch=fetch, api_key="KEY") is None
+
+
+def test_fetch_max_granules_truncates(capsys):
+    turns = fetch_congressional_record_turns(
+        "2018-10-10", "house", fetch=_fake_fetch_factory(), api_key="KEY",
+        max_granules=1,
+    )
+    # only the first HOUSE granule is fetched
+    assert turns is not None
+    assert {t.granule_id for t in turns} == {"CREC-2018-10-10-pt1-PgH1-1"}
+    # truncation is logged, never silent
+    assert "truncat" in capsys.readouterr().out.lower()
