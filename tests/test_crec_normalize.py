@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.congress_roster import build_roster
+from src.congress_roster import CongressRoster, build_roster
 from src.crec_normalize import ResolvedSpeaker, _resolve_surname, _role_slug
 
 _FIX = Path(__file__).parent / "fixtures" / "congress" / "legislators-current.sample.json"
@@ -123,3 +123,25 @@ def test_annotate_turns_pairs_each_turn_with_resolution():
     assert pairs[0][1].member.bioguide == "M000355"
     assert pairs[1][1].role == "presiding_officer"
     assert pairs[2][1].member.bioguide == "B001230"
+
+
+def test_normalize_presiding_parenthetical_ambiguous_needs_review():
+    # An ambiguous parenthetical surname must not masquerade as a confident,
+    # no-review-needed role — the ambiguity has to survive (identity-collision guard).
+    res = normalize_designation("The PRESIDING OFFICER (Mr. Smith)", _roster("house"))
+    assert res.member is None
+    assert res.role == "presiding_officer"
+    assert res.method == "ambiguous"
+    assert res.needs_review is True
+
+
+def test_normalize_empty_roster_degrades_to_unresolved_and_roles():
+    empty = CongressRoster(chamber="senate", members=[], _by_surname={})
+    # member form with no roster → unresolved, never a crash
+    assert normalize_designation("Mr. McCONNELL", empty).method == "unresolved"
+    # bare role still resolves (role detection is roster-independent)
+    assert normalize_designation("The PRESIDING OFFICER", empty).role == "presiding_officer"
+    # parenthetical whose surname can't be resolved → bare role, not a crash
+    res = normalize_designation("The PRESIDING OFFICER (Mrs. Ernst)", empty)
+    assert res.role == "presiding_officer"
+    assert res.method == "role"

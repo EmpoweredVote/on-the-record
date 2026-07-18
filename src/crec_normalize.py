@@ -128,6 +128,12 @@ def normalize_designation(speaker_raw: str, roster: CongressRoster) -> ResolvedS
         if res.member is not None:
             res.method = "presiding_parenthetical"
             return res
+        # Ambiguous parenthetical surname: keep the presiding-officer role but
+        # surface the ambiguity for review — never a confident, no-review role.
+        if res.method == "ambiguous":
+            return ResolvedSpeaker(
+                role="presiding_officer", method="ambiguous", needs_review=True)
+        # Unknown surname: a plain bare-role fallback.
         return ResolvedSpeaker(role="presiding_officer", method="role", confidence=1.0)
 
     m = _ROLE_RE.match(s)
