@@ -105,3 +105,21 @@ def test_normalize_presiding_parenthetical_unknown_falls_back_to_role():
     assert res.member is None
     assert res.role == "presiding_officer"
     assert res.method == "role"
+
+
+# add to tests/test_crec_normalize.py
+from src.govinfo import CrecTurn
+from src.crec_normalize import annotate_turns
+
+
+def test_annotate_turns_pairs_each_turn_with_resolution():
+    turns = [
+        CrecTurn("Mr. McCONNELL", "I move to proceed.", "g1", 0),
+        CrecTurn("The PRESIDING OFFICER", "Without objection.", "g1", 1),
+        CrecTurn("Ms. BALDWIN of Wisconsin", "I rise in support.", "g1", 2),
+    ]
+    pairs = annotate_turns(turns, _roster("senate"))
+    assert [t.order for t, _ in pairs] == [0, 1, 2]
+    assert pairs[0][1].member.bioguide == "M000355"
+    assert pairs[1][1].role == "presiding_officer"
+    assert pairs[2][1].member.bioguide == "B001230"

@@ -139,3 +139,12 @@ def normalize_designation(speaker_raw: str, roster: CongressRoster) -> ResolvedS
         return _resolve_surname(m.group("surname"), m.group("state"), roster)
 
     return ResolvedSpeaker(method="unresolved")
+
+
+def annotate_turns(turns, roster: CongressRoster) -> list[tuple]:
+    """Pair each CrecTurn (from src/govinfo.py) with its ResolvedSpeaker.
+
+    This is the hand-off to Phase 3 alignment: `[(turn, resolved), ...]` in the
+    same order as the input turns.
+    """
+    return [(t, normalize_designation(t.speaker_raw, roster)) for t in turns]
