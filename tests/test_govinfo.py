@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.govinfo import CrecTurn, _package_id, _resolve_api_key, parse_granule_list, _next_offset_mark
+from src.govinfo import html_to_text
 
 _FIX = Path(__file__).parent / "fixtures" / "govinfo"
 
@@ -66,3 +67,14 @@ def test_next_offset_mark_returns_url_then_none():
     assert _next_offset_mark(_read("granules_page1.json")) == \
         "https://api.govinfo.gov/packages/CREC-2018-10-10/granules?offsetMark=PAGE2&pageSize=100"
     assert _next_offset_mark(_read("granules_page2.json")) is None
+
+
+def test_html_to_text_extracts_pre_and_unescapes():
+    text = html_to_text(_read("granule_presiding.htm"))
+    assert "RECOGNITION OF THE MAJORITY LEADER" in text
+    assert "The PRESIDING OFFICER (Mr. Cotton)." in text
+    # the <a> tag around the gpo.gov link is stripped, its text kept
+    assert "<a" not in text
+    assert "www.gpo.gov" in text
+    # header bracket lines survive as text (stripped later by the turn parser)
+    assert "[Senate]" in text

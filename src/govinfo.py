@@ -57,3 +57,17 @@ def parse_granule_list(json_text: str, chamber: str) -> list[str]:
 def _next_offset_mark(json_text: str) -> Optional[str]:
     """Absolute URL of the next granules page, or None when exhausted."""
     return json.loads(json_text).get("nextPage") or None
+
+
+def html_to_text(htm: str) -> str:
+    """Readable text from a CREC granule htm.
+
+    The content is a single <pre> block; BeautifulSoup keeps its text (dropping
+    the inline <a> tag) and unescapes entities. Falls back to whole-document text
+    if no <pre> is present.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(htm, "html.parser")
+    pre = soup.find("pre")
+    return (pre.get_text() if pre else soup.get_text())
