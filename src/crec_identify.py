@@ -2,9 +2,10 @@
 """Phase 4: bridge CREC alignment to Stage-4 SpeakerMappings + CLI orchestration.
 
 Converts Phase-3 LabelResolutions into SpeakerMappings and orchestrates Phases
-1-3 (fetch -> roster -> annotate -> align -> convert) for a floor session. The
-essentials politician_id link is intentionally deferred: a resolved member gets
-its name + bioguide (stashed in local_slug), not a politician_id.
+1-3 (fetch -> roster -> annotate -> align -> convert) for a floor session. A
+resolved member always gets its name + bioguide (stashed in local_slug); when a
+single unambiguous essentials match is found (see crec_essentials), it is also
+enriched with a politician_id/politician_slug.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from .crec_align import LabelResolution, align_crec_to_diarization
 from .govinfo import fetch_congressional_record_turns
 from .congress_roster import load_current_roster
 from .crec_normalize import annotate_turns
+from .crec_essentials import resolve_politician_id
 
 _ROLE_DISPLAY = {
     "presiding_officer": "The Presiding Officer",
@@ -88,13 +90,17 @@ def crec_speaker_mappings(
     fetch=None,
     min_confidence: float = 0.5,
     cache_path=None,
+    search=None,
 ) -> dict:
     """Resolve diarized speaker labels via the Congressional Record for a session.
 
     Orchestrates Phases 1-3: fetch CREC turns -> load the current-Congress roster
     -> annotate turns with identities -> align onto the diarized segments ->
     convert to SpeakerMappings. `fetch` (injectable) and `cache_path` are threaded
-    to the network/cache layers for testing. Returns {} when there is no Record.
+    to the network/cache layers for testing. Confident member mappings are then
+    bridged to an essentials politician_id via `resolve_politician_id` (`search`
+    is injectable for testing; when omitted, the real essentials search is used).
+    Returns {} when there is no Record.
     """
     fkw = {"fetch": fetch} if fetch is not None else {}
     turns = fetch_congressional_record_turns(date, chamber, **fkw)
@@ -107,6 +113,14 @@ def crec_speaker_mappings(
     mappings: dict = {}
     for label, res in resolutions.items():
         m = label_resolution_to_mapping(res)
-        if m is not None:
-            mappings[label] = m
+        if m is None:
+            continue
+        if res.member is not None:
+            link = resolve_politician_id(
+                res.member,
+                **({"search": search} if search is not None else {}),
+            )
+            if link:
+                m.politician_id, m.politician_slug = link
+        mappings[label] = m
     return mappings
