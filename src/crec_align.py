@@ -166,3 +166,29 @@ def _aggregate(d_turns, matches, min_confidence: float) -> dict:
                 speaker_label=label, method="unresolved",
                 matched_turns=0, total_turns=total)
     return out
+
+
+def align_crec_to_diarization(
+    segments,
+    annotated_turns,
+    *,
+    min_confidence: float = 0.5,
+) -> dict:
+    """Resolve each diarized speaker_label to a CREC identity.
+
+    `segments`: diarized, time-ordered Segments (speaker_label + ASR/caption text).
+    `annotated_turns`: [(CrecTurn, ResolvedSpeaker), ...] from Phase 2 annotate_turns.
+    Returns {speaker_label: LabelResolution}. Attaches identity only.
+    """
+    d_turns = _build_diarized_turns(segments)
+    d_tokens = [_content_tokens(t.text) for t in d_turns]
+    c_tokens = [_content_tokens(ct.text) for ct, _ in annotated_turns]
+
+    pairs = _align(d_tokens, c_tokens)
+    matches = []
+    for d_idx, c_idx in pairs:
+        label = d_turns[d_idx].speaker_label
+        resolved = annotated_turns[c_idx][1]
+        matches.append((label, resolved, _overlap(d_tokens[d_idx], c_tokens[c_idx])))
+
+    return _aggregate(d_turns, matches, min_confidence)

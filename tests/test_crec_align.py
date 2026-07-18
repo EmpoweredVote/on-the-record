@@ -168,3 +168,80 @@ def test_aggregate_unresolved_when_no_matches():
     assert out["S0"].method == "unresolved"
     assert out["S0"].member is None
     assert out["S0"].total_turns == 1
+
+
+# add to tests/test_crec_align.py
+import json
+from pathlib import Path
+
+from src.congress_roster import build_roster
+from src.govinfo import CrecTurn
+from src.crec_normalize import annotate_turns
+from src.crec_align import align_crec_to_diarization
+
+_FIX = Path(__file__).parent / "fixtures" / "congress" / "legislators-current.sample.json"
+
+
+def _senate_roster():
+    return build_roster(json.loads(_FIX.read_text(encoding="utf-8")), "senate")
+
+
+def test_align_clean_two_members():
+    annotated = annotate_turns([
+        CrecTurn("Mr. McCONNELL", "I move to proceed to the healthcare funding bill", "g", 0),
+        CrecTurn("Ms. BALDWIN of Wisconsin", "I rise in strong support of the healthcare measure", "g", 1),
+    ], _senate_roster())
+    segs = [
+        _seg(0, "SPEAKER_00", "I move to proceed to the healthcare funding bill today"),
+        _seg(1, "SPEAKER_01", "I rise in strong support of this healthcare measure"),
+    ]
+    out = align_crec_to_diarization(segs, annotated, min_confidence=0.4)
+    assert out["SPEAKER_00"].member.last_name == "McConnell"
+    assert out["SPEAKER_00"].method == "congressional_record"
+    assert out["SPEAKER_01"].member.last_name == "Baldwin"
+
+
+def test_align_role_interjection():
+    annotated = annotate_turns([
+        CrecTurn("Mr. McCONNELL", "I move to proceed to the healthcare funding bill", "g", 0),
+        CrecTurn("The PRESIDING OFFICER", "Without objection it is so ordered", "g", 1),
+        CrecTurn("Ms. BALDWIN of Wisconsin", "I rise in strong support of the healthcare measure", "g", 2),
+    ], _senate_roster())
+    segs = [
+        _seg(0, "SPEAKER_00", "I move to proceed to the healthcare funding bill"),
+        _seg(1, "SPEAKER_09", "without objection it is so ordered"),
+        _seg(2, "SPEAKER_01", "I rise in strong support of the healthcare measure"),
+    ]
+    out = align_crec_to_diarization(segs, annotated, min_confidence=0.4)
+    assert out["SPEAKER_00"].member.last_name == "McConnell"
+    assert out["SPEAKER_09"].role == "presiding_officer"
+    assert out["SPEAKER_01"].member.last_name == "Baldwin"
+
+
+def test_align_revise_and_extend_gap_does_not_break_others():
+    annotated = annotate_turns([
+        CrecTurn("Mr. McCONNELL", "I move to proceed to the healthcare funding bill", "g", 0),
+        CrecTurn("Ms. BALDWIN of Wisconsin", "submitted remarks about unrelated agriculture policy subsidies", "g", 1),
+        CrecTurn("Mr. McCONNELL", "I yield the floor on the healthcare funding bill", "g", 2),
+    ], _senate_roster())
+    segs = [
+        _seg(0, "SPEAKER_00", "I move to proceed to the healthcare funding bill"),
+        _seg(1, "SPEAKER_00", "I yield the floor on the healthcare funding bill"),
+    ]
+    out = align_crec_to_diarization(segs, annotated, min_confidence=0.4)
+    # the Baldwin "revise and extend" CREC turn was never spoken -> free gap;
+    # SPEAKER_00 still resolves to McConnell.
+    assert out["SPEAKER_00"].member.last_name == "McConnell"
+
+
+def test_align_unresolved_when_no_overlap():
+    annotated = annotate_turns([
+        CrecTurn("Mr. McCONNELL", "healthcare funding appropriations markup", "g", 0),
+    ], _senate_roster())
+    segs = [_seg(0, "SPEAKER_00", "completely unrelated words about weather sports music")]
+    out = align_crec_to_diarization(segs, annotated, min_confidence=0.4)
+    assert out["SPEAKER_00"].method == "unresolved"
+
+
+def test_align_empty_inputs():
+    assert align_crec_to_diarization([], [], min_confidence=0.4) == {}
