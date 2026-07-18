@@ -60,3 +60,35 @@ def _build_diarized_turns(segments) -> list[DiarizedTurn]:
         else:
             turns.append(DiarizedTurn(speaker_label=seg.speaker_label, text=txt, index=len(turns)))
     return turns
+
+
+def _align(d_tokens: list[set], c_tokens: list[set]) -> list[tuple[int, int]]:
+    """Monotonic LCS-style alignment of two token-set sequences.
+
+    Maximizes total matched overlap, order-preserving and non-crossing, with free
+    gaps on both sides. Returns matched (d_index, c_index) pairs whose overlap
+    exceeds `_MATCH_FLOOR`.
+    """
+    m, n = len(d_tokens), len(c_tokens)
+    dp = [[0.0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            diag = dp[i - 1][j - 1] + _overlap(d_tokens[i - 1], c_tokens[j - 1])
+            dp[i][j] = max(dp[i - 1][j], dp[i][j - 1], diag)
+
+    pairs: list[tuple[int, int]] = []
+    i, j = m, n
+    while i > 0 and j > 0:
+        sim = _overlap(d_tokens[i - 1], c_tokens[j - 1])
+        diag = dp[i - 1][j - 1] + sim
+        if diag >= dp[i - 1][j] and diag >= dp[i][j - 1]:
+            if sim > _MATCH_FLOOR:
+                pairs.append((i - 1, j - 1))
+            i -= 1
+            j -= 1
+        elif dp[i - 1][j] >= dp[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
+    pairs.reverse()
+    return pairs
