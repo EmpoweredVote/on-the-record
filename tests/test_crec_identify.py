@@ -125,7 +125,8 @@ def test_crec_speaker_mappings_resolves_members(tmp_path):
     ]
     out = crec_speaker_mappings(
         "2025-01-10", "senate", segs,
-        fetch=_fake_fetch, cache_path=tmp_path / "leg.json", min_confidence=0.4)
+        fetch=_fake_fetch, cache_path=tmp_path / "leg.json", min_confidence=0.4,
+        search=lambda q, **kw: [])
     assert out["SPEAKER_00"].speaker_name == "Mitch McConnell"
     assert out["SPEAKER_00"].id_method == "congressional_record"
     assert out["SPEAKER_00"].local_slug == "congress-M000355"
@@ -139,3 +140,36 @@ def test_crec_speaker_mappings_empty_when_no_record(tmp_path):
         "1900-01-01", "senate", [_seg(0, "SPEAKER_00", "hello")],
         fetch=no_record, cache_path=tmp_path / "leg.json")
     assert out == {}
+
+
+def _fed_senator_search(q, **kw):
+    # a federal-Senator match for any surname queried
+    return [{"politician_id": f"pid-{q}", "politician_slug": None, "full_name": q,
+             "office_title": "Senator", "district_label": "", "is_incumbent": True,
+             "government_name": "United States Federal Government"}]
+
+
+def test_crec_speaker_mappings_attaches_politician_id(tmp_path):
+    segs = [
+        _seg(0, "SPEAKER_00", "I move to proceed to the healthcare funding bill today"),
+        _seg(1, "SPEAKER_01", "I rise in strong support of this healthcare measure"),
+    ]
+    out = crec_speaker_mappings(
+        "2025-01-10", "senate", segs,
+        fetch=_fake_fetch, cache_path=tmp_path / "leg.json", min_confidence=0.4,
+        search=_fed_senator_search)
+    assert out["SPEAKER_00"].speaker_name == "Mitch McConnell"
+    assert out["SPEAKER_00"].politician_id == "pid-McConnell"
+    assert out["SPEAKER_00"].local_slug == "congress-M000355"
+    assert out["SPEAKER_01"].politician_id == "pid-Baldwin"
+
+
+def test_crec_speaker_mappings_no_essentials_match_stays_name_only(tmp_path):
+    segs = [_seg(0, "SPEAKER_00", "I move to proceed to the healthcare funding bill today")]
+    out = crec_speaker_mappings(
+        "2025-01-10", "senate", segs,
+        fetch=_fake_fetch, cache_path=tmp_path / "leg.json", min_confidence=0.4,
+        search=lambda q, **kw: [])
+    assert out["SPEAKER_00"].speaker_name == "Mitch McConnell"
+    assert out["SPEAKER_00"].politician_id is None
+    assert out["SPEAKER_00"].local_slug == "congress-M000355"
