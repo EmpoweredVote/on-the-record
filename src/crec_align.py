@@ -92,3 +92,77 @@ def _align(d_tokens: list[set], c_tokens: list[set]) -> list[tuple[int, int]]:
             j -= 1
     pairs.reverse()
     return pairs
+
+
+@dataclass
+class LabelResolution:
+    speaker_label: str
+    member: Optional[CongressMember] = None
+    role: Optional[str] = None
+    confidence: float = 0.0
+    method: str = "unresolved"   # congressional_record | ambiguous | unresolved
+    needs_review: bool = False
+    matched_turns: int = 0
+    total_turns: int = 0
+
+
+def _confidence(match_fraction: float, vote_fraction: float, mean_overlap: float) -> float:
+    """Product of the three 0..1 support factors.
+
+    Isolated on purpose: this formula is expected to be retuned after real-data
+    testing, without touching the alignment logic.
+    """
+    return match_fraction * vote_fraction * mean_overlap
+
+
+def _aggregate(d_turns, matches, min_confidence: float) -> dict:
+    """Aggregate per-label from matched (label, ResolvedSpeaker, overlap) records.
+
+    `matches` is a list of (speaker_label, ResolvedSpeaker, overlap). Majority-vote
+    among member identities per label; role-only labels resolve to a role; no
+    matches -> unresolved. A tie or sub-gate confidence -> ambiguous/needs_review
+    with member=None (member is set only when confident).
+    """
+    total_by_label = Counter(t.speaker_label for t in d_turns)
+    by_label: dict[str, list] = defaultdict(list)
+    for label, resolved, ov in matches:
+        by_label[label].append((resolved, ov))
+
+    out: dict[str, LabelResolution] = {}
+    for label, total in total_by_label.items():
+        recs = by_label.get(label, [])
+        member_recs = [(r, ov) for r, ov in recs if r.member is not None]
+        role_recs = [(r, ov) for r, ov in recs if r.member is None and r.role is not None]
+
+        if member_recs:
+            votes = Counter(r.member.bioguide for r, _ in member_recs)
+            ranked = votes.most_common()
+            winner_bio, winner_votes = ranked[0]
+            tie = len(ranked) > 1 and ranked[1][1] == winner_votes
+            winner_ovs = [ov for r, ov in member_recs if r.member.bioguide == winner_bio]
+            mean_ov = sum(winner_ovs) / len(winner_ovs)
+            matched = len(member_recs)
+            conf = _confidence(matched / total, winner_votes / matched, mean_ov)
+            if not tie and conf >= min_confidence:
+                winner_member = next(
+                    r.member for r, _ in member_recs if r.member.bioguide == winner_bio)
+                out[label] = LabelResolution(
+                    speaker_label=label, member=winner_member, confidence=conf,
+                    method="congressional_record", needs_review=False,
+                    matched_turns=matched, total_turns=total)
+            else:
+                out[label] = LabelResolution(
+                    speaker_label=label, member=None, confidence=conf,
+                    method="ambiguous", needs_review=True,
+                    matched_turns=matched, total_turns=total)
+        elif role_recs:
+            role = Counter(r.role for r, _ in role_recs).most_common(1)[0][0]
+            out[label] = LabelResolution(
+                speaker_label=label, role=role, confidence=len(role_recs) / total,
+                method="congressional_record", needs_review=False,
+                matched_turns=len(role_recs), total_turns=total)
+        else:
+            out[label] = LabelResolution(
+                speaker_label=label, method="unresolved",
+                matched_turns=0, total_turns=total)
+    return out

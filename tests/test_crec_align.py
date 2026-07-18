@@ -84,3 +84,87 @@ def test_align_below_floor_not_matched():
 def test_align_empty():
     assert _align([], [{"a"}]) == []
     assert _align([{"a"}], []) == []
+
+
+# add to tests/test_crec_align.py
+from src.crec_align import LabelResolution, _confidence, _aggregate
+from src.congress_roster import CongressMember
+from src.crec_normalize import ResolvedSpeaker
+
+
+def _member(bio, last):
+    return CongressMember(bio, f"First {last}", last, "XX", None, "senate", "Democrat")
+
+
+def _rs_member(bio, last):
+    return ResolvedSpeaker(member=_member(bio, last), method="surname", confidence=1.0)
+
+
+def _rs_role(role):
+    return ResolvedSpeaker(role=role, method="role", confidence=1.0)
+
+
+def _dturn(label, idx):
+    return DiarizedTurn(speaker_label=label, text="", index=idx)
+
+
+def test_confidence_is_product_of_factors():
+    assert _confidence(1.0, 1.0, 1.0) == 1.0
+    assert _confidence(0.5, 1.0, 0.8) == 0.4
+    assert _confidence(1.0, 0.5, 0.5) == 0.25
+
+
+def test_aggregate_confident_member():
+    d_turns = [_dturn("S0", 0), _dturn("S1", 1)]
+    matches = [
+        ("S0", _rs_member("B1", "Baldwin"), 0.9),
+        ("S1", _rs_member("M1", "McConnell"), 0.8),
+    ]
+    out = _aggregate(d_turns, matches, min_confidence=0.5)
+    assert out["S0"].member.bioguide == "B1"
+    assert out["S0"].method == "congressional_record"
+    assert out["S0"].needs_review is False
+    assert out["S1"].member.bioguide == "M1"
+
+
+def test_aggregate_split_vote_is_ambiguous():
+    # one label's two runs match two different members -> tie -> ambiguous
+    d_turns = [_dturn("S0", 0), _dturn("S0", 1)]
+    matches = [
+        ("S0", _rs_member("B1", "Baldwin"), 0.9),
+        ("S0", _rs_member("M1", "McConnell"), 0.9),
+    ]
+    out = _aggregate(d_turns, matches, min_confidence=0.5)
+    assert out["S0"].member is None
+    assert out["S0"].method == "ambiguous"
+    assert out["S0"].needs_review is True
+
+
+def test_aggregate_below_gate_is_ambiguous_member_none():
+    # a member surfaced but confidence below the gate
+    d_turns = [_dturn("S0", 0), _dturn("S0", 1), _dturn("S0", 2), _dturn("S0", 3)]
+    matches = [("S0", _rs_member("B1", "Baldwin"), 0.6)]   # match_fraction 1/4 -> conf 0.15
+    out = _aggregate(d_turns, matches, min_confidence=0.5)
+    assert out["S0"].member is None
+    assert out["S0"].method == "ambiguous"
+    assert out["S0"].needs_review is True
+    assert out["S0"].matched_turns == 1
+    assert out["S0"].total_turns == 4
+
+
+def test_aggregate_role_dominant():
+    d_turns = [_dturn("S0", 0)]
+    matches = [("S0", _rs_role("presiding_officer"), 0.4)]
+    out = _aggregate(d_turns, matches, min_confidence=0.5)
+    assert out["S0"].member is None
+    assert out["S0"].role == "presiding_officer"
+    assert out["S0"].method == "congressional_record"
+    assert out["S0"].needs_review is False
+
+
+def test_aggregate_unresolved_when_no_matches():
+    d_turns = [_dturn("S0", 0)]
+    out = _aggregate(d_turns, [], min_confidence=0.5)
+    assert out["S0"].method == "unresolved"
+    assert out["S0"].member is None
+    assert out["S0"].total_turns == 1
