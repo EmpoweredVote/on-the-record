@@ -261,3 +261,32 @@ def test_parse_granule_list_falls_back_to_docclass():
 
 def test_html_to_text_falls_back_without_pre():
     assert html_to_text("<html><body>Plain body text</body></html>") == "Plain body text"
+
+
+def test_parse_granule_turns_rejects_non_role_the_sentences():
+    # Real false positives observed against live CREC data (2018-10-10 Senate):
+    # prose paragraphs beginning "The <Capitalized clause>." are NOT presiding-role
+    # designations and must not be parsed as speaker turns.
+    text = (
+        "  The House was not in session today. Its next meeting will be Friday.\n"
+        "  The Trump administration has expanded junk insurance plans. It did so.\n"
+        "  The Brandon Road project is integral. It protects the Great Lakes.\n"
+        "  The Army Corps was also able to use the program. It restored habitat.\n"
+    )
+    assert parse_granule_turns(text, "g", start_order=0) == []
+
+
+def test_parse_granule_turns_matches_presiding_roles():
+    # Genuine presiding-role designations (incl. parenthetical and pro-tempore /
+    # acting variants) must still parse.
+    text = (
+        "  The PRESIDING OFFICER. The clerk will report.\n"
+        "  The PRESIDING OFFICER (Mr. Sullivan). Without objection.\n"
+        "  The ACTING PRESIDENT pro tempore. The Senator is recognized.\n"
+    )
+    turns = parse_granule_turns(text, "g", start_order=0)
+    assert [t.speaker_raw for t in turns] == [
+        "The PRESIDING OFFICER",
+        "The PRESIDING OFFICER (Mr. Sullivan)",
+        "The ACTING PRESIDENT pro tempore",
+    ]

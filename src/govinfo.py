@@ -75,11 +75,17 @@ def html_to_text(htm: str) -> str:
 
 
 # A paragraph-initial speaker designation, up to the period that ends it.
-# Handles: "Mr./Mrs./Ms./Miss <Name>[ of <State>]" and "The <ROLE>[ (Mr. <Name>)]".
+# Handles: "Mr./Mrs./Ms./Miss <Name>[ of <State>]" and "The <PRESIDING ROLE>
+# [ pro tempore][ (Mr. <Name>)]". The role is a CLOSED whitelist of real presiding
+# roles — an earlier "The <any capitalized words>" form falsely matched prose
+# paragraphs beginning "The" (e.g. "The Trump administration has expanded...").
 _DESIGNATION_RE = re.compile(
     r"^(?P<desig>"
     r"(?:Mr|Mrs|Ms|Miss)\.?\s+[A-Z][A-Za-z.'\-]+(?:\s+of\s+[A-Z][A-Za-z ]+?)?"
-    r"|The\s+[A-Z][A-Za-z]+(?:\s+[A-Za-z]+)*?(?:\s+\(Mr\.\s+[A-Z][A-Za-z]+\)|\s+pro\s+tempore)?"
+    r"|The\s+(?:(?i:acting)\s+)?"
+    r"(?i:presiding\s+officer|speaker|vice\s+president|president|chief\s+justice|chair|clerk)"
+    r"(?:\s+pro\s+tempore)?"
+    r"(?:\s+\((?:Mr|Mrs|Ms|Miss)\.\s+[A-Z][A-Za-z]+\))?"
     r")\.\s+(?P<rest>.+)$",
     re.S,
 )
