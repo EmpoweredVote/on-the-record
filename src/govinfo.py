@@ -169,6 +169,8 @@ def _list_matching_granule_ids(package_id, chamber, api_key, fetch) -> Optional[
         except Exception:
             if first:
                 return None      # no Record for this day
+            print("  govinfo: granules-list pagination failed mid-way; "
+                  "returning a partial granule list (results may be incomplete).")
             break                # partial pagination: stop, keep what we have
         first = False
         ids.extend(parse_granule_list(page, chamber))

@@ -225,3 +225,39 @@ def test_format_turns_text():
         "Mr. SMITH of Michigan: I rise in support.\n\n"
         "Mr. JONES: I yield myself time."
     )
+
+
+def test_fetch_partial_when_later_page_fails_is_logged(capsys):
+    page1 = _read("granules_page1.json")  # has PgH1-1 (HOUSE) + nextPage -> PAGE2
+    debate = _read("granule_debate.htm")
+
+    def fetch(url: str) -> str:
+        if "/granules/" in url and url.endswith("/htm?api_key=KEY"):
+            return debate
+        if "offsetMark=PAGE2" in url:
+            raise RuntimeError("page 2 fetch failed")
+        if "/granules?" in url:
+            return page1
+        raise AssertionError(f"unexpected url {url}")
+
+    turns = fetch_congressional_record_turns(
+        "2018-10-10", "house", fetch=fetch, api_key="KEY")
+    # page-1 HOUSE granule still processed (partial, not None)
+    assert turns is not None
+    assert {t.granule_id for t in turns} == {"CREC-2018-10-10-pt1-PgH1-1"}
+    # the partial-pagination warning was logged, not silent
+    out = capsys.readouterr().out.lower()
+    assert "partial" in out
+
+
+def test_parse_granule_list_falls_back_to_docclass():
+    payload = (
+        '{"granules": ['
+        '{"granuleId": "CREC-x-PgH9-1", "docClass": "HOUSE", "title": "OLD PAYLOAD"}'
+        ']}'
+    )
+    assert parse_granule_list(payload, "house") == ["CREC-x-PgH9-1"]
+
+
+def test_html_to_text_falls_back_without_pre():
+    assert html_to_text("<html><body>Plain body text</body></html>") == "Plain body text"
