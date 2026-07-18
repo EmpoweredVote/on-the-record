@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.congress_roster import CongressMember, CongressRoster, _member_from_raw
+from src.congress_roster import CongressMember, CongressRoster, _member_from_raw, build_roster
 
 _FIX = Path(__file__).parent / "fixtures" / "congress" / "legislators-current.sample.json"
 
@@ -39,3 +39,23 @@ def test_congress_roster_by_surname_accessor():
     roster = CongressRoster(chamber="senate", members=[m], _by_surname={"doe": [m]})
     assert roster.by_surname("DOE") == [m]      # case-insensitive
     assert roster.by_surname("nope") == []
+
+
+def test_build_roster_senate_filters_and_indexes():
+    roster = build_roster(_raw(), "senate")
+    assert roster.chamber == "senate"
+    assert sorted(m.last_name for m in roster.members) == ["Baldwin", "Ernst", "McConnell"]
+    assert [m.bioguide for m in roster.by_surname("mcconnell")] == ["M000355"]
+
+
+def test_build_roster_house_keeps_same_surname_pair():
+    roster = build_roster(_raw(), "house")
+    smiths = roster.by_surname("smith")
+    assert {m.state for m in smiths} == {"WA", "NE"}   # both House Smiths indexed together
+    assert len(roster.members) == 2
+
+
+def test_build_roster_excludes_other_chamber():
+    senate = build_roster(_raw(), "senate")
+    assert all(m.chamber == "senate" for m in senate.members)
+    assert "smith" not in senate._by_surname   # House Smiths excluded from senate roster

@@ -67,3 +67,21 @@ def _member_from_raw(entry: dict, chamber: str) -> Optional[CongressMember]:
         chamber=chamber.lower(),
         party=term.get("party"),
     )
+
+
+def build_roster(raw: list[dict], chamber: str) -> CongressRoster:
+    """Chamber-scoped roster from a parsed legislators-current list.
+
+    Keeps members whose latest term matches the chamber, indexed by lowercased
+    last name (a list per surname, so same-surname collisions are preserved for
+    the normalizer to disambiguate).
+    """
+    members: list[CongressMember] = []
+    by_surname: dict[str, list[CongressMember]] = {}
+    for entry in raw:
+        m = _member_from_raw(entry, chamber)
+        if m is None:
+            continue
+        members.append(m)
+        by_surname.setdefault(m.last_name.lower(), []).append(m)
+    return CongressRoster(chamber=chamber.lower(), members=members, _by_surname=by_surname)
