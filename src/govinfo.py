@@ -163,6 +163,15 @@ def _default_fetch(url: str) -> str:
     return resp.text
 
 
+def _with_api_key(url: Optional[str], api_key: str) -> Optional[str]:
+    """Ensure `url` carries the api_key. GovInfo's `nextPage` value omits it, so
+    following it verbatim 401s and truncates every day to its first page."""
+    if not url or "api_key=" in url:
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}api_key={api_key}"
+
+
 def _list_matching_granule_ids(package_id, chamber, api_key, fetch) -> Optional[list[str]]:
     """All chamber granule ids across every page, or None if the first page fails
     (a recess day / missing package is normal, not an error)."""
@@ -180,7 +189,7 @@ def _list_matching_granule_ids(package_id, chamber, api_key, fetch) -> Optional[
             break                # partial pagination: stop, keep what we have
         first = False
         ids.extend(parse_granule_list(page, chamber))
-        url = _next_offset_mark(page)
+        url = _with_api_key(_next_offset_mark(page), api_key)
     return ids
 
 
