@@ -108,10 +108,15 @@ def _dturn(label, idx):
     return DiarizedTurn(speaker_label=label, text="", index=idx)
 
 
-def test_confidence_is_product_of_factors():
-    assert _confidence(1.0, 1.0, 1.0) == 1.0
-    assert _confidence(0.5, 1.0, 0.8) == 0.4
-    assert _confidence(1.0, 0.5, 0.5) == 0.25
+def test_confidence_is_match_times_vote():
+    # mean_overlap is NOT multiplied in: it's already the alignment match-gate
+    # (_MATCH_FLOOR), and non-verbatim CREC caps overlap ~0.3-0.5, so multiplying
+    # it double-penalized real matches (live House run: correct members scored
+    # <0.5 and were all dropped to ambiguous).
+    assert _confidence(1.0, 1.0, 0.3) == 1.0     # mean_overlap ignored
+    assert _confidence(0.5, 1.0, 0.9) == 0.5
+    assert _confidence(0.8, 1.0, 0.25) == 0.8    # 4/5 support resolves confidently
+    assert _confidence(1.0, 0.5, 0.9) == 0.5
 
 
 def test_aggregate_confident_member():

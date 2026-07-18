@@ -107,12 +107,18 @@ class LabelResolution:
 
 
 def _confidence(match_fraction: float, vote_fraction: float, mean_overlap: float) -> float:
-    """Product of the three 0..1 support factors.
+    """Per-label confidence = match_fraction * vote_fraction.
 
-    Isolated on purpose: this formula is expected to be retuned after real-data
-    testing, without touching the alignment logic.
+    `mean_overlap` is intentionally NOT multiplied in. It already serves as the
+    alignment match-gate (_MATCH_FLOOR), and against real data — auto-generated
+    captions vs. non-verbatim CREC text — overlap caps around 0.3-0.5, so folding
+    it into the product double-penalized correct matches (the first live House run
+    scored the right members 0.07-0.47, all below the 0.5 gate, and dropped every
+    one to ambiguous). It stays in the signature as a retuning knob; the two
+    support factors (how many of a label's runs matched, and how unanimous the
+    member vote was) are what gate identity here.
     """
-    return match_fraction * vote_fraction * mean_overlap
+    return match_fraction * vote_fraction
 
 
 def _aggregate(d_turns, matches, min_confidence: float) -> dict:
