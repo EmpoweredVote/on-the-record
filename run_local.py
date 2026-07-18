@@ -41,6 +41,7 @@ if _env_file.exists():
 
 from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
 from src.event_kinds import EVENT_KINDS, validate_event_kind
+from src.crec_identify import parse_crec_arg
 
 
 def _validate_diarizer_compute(args) -> None:
@@ -1385,6 +1386,14 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 roster_hint=roster_hint,
             )
 
+        crec_mappings = None
+        _crec = parse_crec_arg(getattr(args, "congressional_record", None))
+        if _crec:
+            from src.crec_identify import crec_speaker_mappings
+            _crec_date, _crec_chamber = _crec
+            crec_mappings = crec_speaker_mappings(_crec_date, _crec_chamber, segments)
+            print(f"  Congressional Record: resolved {len(crec_mappings)} speaker label(s)")
+
         t0 = time.time()
         mappings = identify_speakers(
             segments, speaker_embeddings,
@@ -1392,6 +1401,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             llm_identify_fn=llm_fn,
             roster=roster,
             profile_db=profile_db,
+            crec_mappings=crec_mappings,
         )
         elapsed = time.time() - t0
 
@@ -3635,6 +3645,10 @@ Environment Variables:
                              "installed and authenticated (modal token new). "
                              "Has no effect when --diarizer api is used (pyannote.ai "
                              "is always remote).")
+    parser.add_argument(
+        "--congressional-record", nargs=2, metavar=("DATE", "CHAMBER"), default=None,
+        help="Resolve speakers from the Congressional Record for a floor session: "
+             "DATE (YYYY-MM-DD) and CHAMBER (house|senate).")
     parser.add_argument("--default", action="store_true",
                         help="Skip metadata prompts and use civic defaults "
                              f"({CITY_DEFAULT} / {MEETING_TYPE_DEFAULT} / "
