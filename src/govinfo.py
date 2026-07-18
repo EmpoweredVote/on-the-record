@@ -217,3 +217,42 @@ def fetch_congressional_record_turns(
     if not any_ok:
         return None
     return turns
+
+
+def format_turns_text(turns: list[CrecTurn]) -> str:
+    """Render turns as 'Speaker: text' blocks, blank-line separated."""
+    return "\n\n".join(f"{t.speaker_raw}: {t.text}" for t in turns)
+
+
+def _main(argv: Optional[list[str]] = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Fetch the Congressional Record's speaker turns for a "
+                    "chamber on a date (needs GOVINFO_API_KEY for real use).")
+    parser.add_argument("date", help="YYYY-MM-DD")
+    parser.add_argument("chamber", choices=["house", "senate"])
+    parser.add_argument("--max-granules", type=int, default=None)
+    parser.add_argument("--out", default=None,
+                        help="write transcript text to this path instead of stdout")
+    args = parser.parse_args(argv)
+
+    turns = fetch_congressional_record_turns(
+        args.date, args.chamber, max_granules=args.max_granules)
+    if turns is None:
+        print("No Congressional Record found for that date/chamber "
+              "(recess day, not yet published, or rate-limited).")
+        return 1
+
+    text = format_turns_text(turns)
+    if args.out:
+        from pathlib import Path
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"Wrote {len(turns)} turns to {args.out}")
+    else:
+        print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

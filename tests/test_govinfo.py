@@ -210,3 +210,18 @@ def test_fetch_max_granules_truncates(capsys):
     assert {t.granule_id for t in turns} == {"CREC-2018-10-10-pt1-PgH1-1"}
     # truncation is logged, never silent
     assert "truncat" in capsys.readouterr().out.lower()
+
+
+from src.govinfo import format_turns_text
+
+
+def test_format_turns_text():
+    turns = [
+        CrecTurn("Mr. SMITH of Michigan", "I rise in support.", "g1", 0),
+        CrecTurn("Mr. JONES", "I yield myself time.", "g1", 1),
+    ]
+    out = format_turns_text(turns)
+    assert out == (
+        "Mr. SMITH of Michigan: I rise in support.\n\n"
+        "Mr. JONES: I yield myself time."
+    )
