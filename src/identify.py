@@ -387,6 +387,7 @@ def identify_speakers(
     llm_identify_fn=None,
     roster=None,
     profile_db=None,
+    crec_mappings: Optional[dict] = None,
 ) -> dict[str, SpeakerMapping]:
     """Orchestrate all identification layers. Higher confidence wins.
 
@@ -398,6 +399,8 @@ def identify_speakers(
             Signature: (segments, current_mappings) -> dict[str, SpeakerMapping]
         roster: Optional Roster for post-identification name correction.
         profile_db: Optional ProfileDB for confidence escalation on returning speakers.
+        crec_mappings: Optional speaker_label -> SpeakerMapping from the
+            Congressional Record (authoritative when confident).
 
     Returns:
         Final speaker_label -> SpeakerMapping dict.
@@ -425,6 +428,17 @@ def identify_speakers(
         for label, mapping in llm_results.items():
             if label not in mappings or mapping.confidence > mappings[label].confidence:
                 mappings[label] = _carry_link(mappings.get(label), mapping)
+
+    # CREC layer: the Congressional Record is authoritative for WHO spoke.
+    # A confident CREC mapping overrides other layers for that label; an
+    # ambiguous one is recorded only where nothing else identified the speaker.
+    # Placed before _dedupe_identities so the collision guard sees it too.
+    if crec_mappings:
+        for label, cm in crec_mappings.items():
+            if cm.speaker_name and not cm.needs_review:
+                mappings[label] = cm
+            elif label not in mappings:
+                mappings[label] = cm
 
     # Roster correction: fix misspelled/mistranscribed names
     if roster:
