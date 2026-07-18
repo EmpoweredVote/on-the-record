@@ -46,3 +46,62 @@ def test_resolve_surname_unknown():
     res = _resolve_surname("Nonesuch", None, _roster("senate"))
     assert res.member is None
     assert res.method == "unresolved"
+
+
+# add to tests/test_crec_normalize.py
+from src.crec_normalize import normalize_designation
+
+
+def test_normalize_plain_member_uppercase():
+    res = normalize_designation("Mr. McCONNELL", _roster("senate"))
+    assert res.member.bioguide == "M000355"
+    assert res.method == "surname"
+
+
+def test_normalize_member_of_state():
+    res = normalize_designation("Ms. BALDWIN of Wisconsin", _roster("senate"))
+    assert res.member.bioguide == "B001230"
+    assert res.method == "surname_state"
+
+
+def test_normalize_house_ambiguous_needs_review():
+    res = normalize_designation("Mr. SMITH", _roster("house"))
+    assert res.member is None
+    assert res.needs_review is True
+    assert res.method == "ambiguous"
+
+
+def test_normalize_house_of_state_resolves():
+    res = normalize_designation("Mr. SMITH of Washington", _roster("house"))
+    assert res.member.bioguide == "S000510"
+
+
+def test_normalize_presiding_parenthetical():
+    res = normalize_designation("The PRESIDING OFFICER (Mrs. Ernst)", _roster("senate"))
+    assert res.member.bioguide == "E000295"
+    assert res.method == "presiding_parenthetical"
+
+
+def test_normalize_bare_presiding_officer_is_role():
+    res = normalize_designation("The PRESIDING OFFICER", _roster("senate"))
+    assert res.member is None
+    assert res.role == "presiding_officer"
+    assert res.method == "role"
+
+
+def test_normalize_bare_speaker_is_role():
+    res = normalize_designation("The SPEAKER", _roster("house"))
+    assert res.role == "speaker"
+    assert res.method == "role"
+
+
+def test_normalize_unknown_surname_unresolved():
+    res = normalize_designation("Mr. NONESUCH", _roster("senate"))
+    assert res.method == "unresolved"
+
+
+def test_normalize_presiding_parenthetical_unknown_falls_back_to_role():
+    res = normalize_designation("The PRESIDING OFFICER (Mr. Nonesuch)", _roster("senate"))
+    assert res.member is None
+    assert res.role == "presiding_officer"
+    assert res.method == "role"

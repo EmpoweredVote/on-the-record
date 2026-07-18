@@ -89,3 +89,53 @@ class ResolvedSpeaker:
     method: str = "unresolved"   # surname|surname_state|presiding_parenthetical|role|ambiguous|unresolved
     confidence: float = 0.0
     needs_review: bool = False
+
+
+# Member designation: "Mr./Mrs./Ms./Miss <surname>[ of <State>]".
+# surname is non-greedy so a trailing " of <State>" is split off; it still
+# captures compound surnames ("Van Hollen", "Cortez Masto").
+_MEMBER_RE = re.compile(
+    r"^(?:Mr|Mrs|Ms|Miss)\.?\s+(?P<surname>.+?)(?:\s+of\s+(?P<state>[A-Za-z .]+?))?$"
+)
+
+# "The PRESIDING OFFICER (Mr. <surname>)" — presiding officer named in a paren.
+_PRESIDING_PAREN_RE = re.compile(
+    r"^The\s+PRESIDING\s+OFFICER\s+\((?:Mr|Mrs|Ms|Miss)\.\s+(?P<surname>.+?)\)$",
+    re.I,
+)
+
+# Bare procedural roles (no member named).
+_ROLE_RE = re.compile(
+    r"^The\s+(?P<role>PRESIDING\s+OFFICER|SPEAKER(?:\s+pro\s+tempore)?"
+    r"|(?:ACTING\s+)?PRESIDENT\s+pro\s+tempore|VICE\s+PRESIDENT"
+    r"|CHIEF\s+JUSTICE|CHAIR|CLERK)$",
+    re.I,
+)
+
+
+def normalize_designation(speaker_raw: str, roster: CongressRoster) -> ResolvedSpeaker:
+    """Resolve a CREC speaker designation against a chamber-scoped roster.
+
+    Order matters: a parenthetical presiding officer is tried before the bare
+    role, and member forms last. Roster is already chamber-scoped, so no chamber
+    argument is needed.
+    """
+    s = (speaker_raw or "").strip()
+
+    m = _PRESIDING_PAREN_RE.match(s)
+    if m:
+        res = _resolve_surname(m.group("surname"), None, roster)
+        if res.member is not None:
+            res.method = "presiding_parenthetical"
+            return res
+        return ResolvedSpeaker(role="presiding_officer", method="role", confidence=1.0)
+
+    m = _ROLE_RE.match(s)
+    if m:
+        return ResolvedSpeaker(role=_role_slug(m.group("role")), method="role", confidence=1.0)
+
+    m = _MEMBER_RE.match(s)
+    if m:
+        return _resolve_surname(m.group("surname"), m.group("state"), roster)
+
+    return ResolvedSpeaker(method="unresolved")
