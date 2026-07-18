@@ -85,3 +85,47 @@ def build_roster(raw: list[dict], chamber: str) -> CongressRoster:
         members.append(m)
         by_surname.setdefault(m.last_name.lower(), []).append(m)
     return CongressRoster(chamber=chamber.lower(), members=members, _by_surname=by_surname)
+
+
+def _default_fetch(url: str) -> str:
+    import requests
+
+    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    return resp.text
+
+
+def _default_cache_path():
+    return config.CONFIG_DIR / "congress" / "legislators-current.json"
+
+
+def fetch_current_legislators(
+    *, fetch: Callable[[str], str] = _default_fetch, cache_path=None
+) -> list[dict]:
+    """Fetch and parse legislators-current.json; write it to cache (best-effort)."""
+    text = fetch(_LEGISLATORS_URL)
+    data = json.loads(text)
+    path = cache_path or _default_cache_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except Exception:
+        pass   # cache is an optimization; never fail the fetch on a write error
+    return data
+
+
+def load_current_roster(
+    chamber: str, *, fetch: Callable[[str], str] = _default_fetch, cache_path=None
+) -> CongressRoster:
+    """Chamber roster: read a non-empty cache if present, else fetch + cache."""
+    path = cache_path or _default_cache_path()
+    raw = None
+    try:
+        if path.exists():
+            txt = path.read_text(encoding="utf-8")
+            raw = json.loads(txt) if txt.strip() else None
+    except Exception:
+        raw = None
+    if not raw:
+        raw = fetch_current_legislators(fetch=fetch, cache_path=path)
+    return build_roster(raw, chamber)

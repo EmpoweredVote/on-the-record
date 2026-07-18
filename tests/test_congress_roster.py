@@ -4,7 +4,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.congress_roster import CongressMember, CongressRoster, _member_from_raw, build_roster
+from src.congress_roster import (
+    CongressMember,
+    CongressRoster,
+    _member_from_raw,
+    build_roster,
+    fetch_current_legislators,
+    load_current_roster,
+)
 
 _FIX = Path(__file__).parent / "fixtures" / "congress" / "legislators-current.sample.json"
 
@@ -59,3 +66,32 @@ def test_build_roster_excludes_other_chamber():
     senate = build_roster(_raw(), "senate")
     assert all(m.chamber == "senate" for m in senate.members)
     assert "smith" not in senate._by_surname   # House Smiths excluded from senate roster
+
+
+def test_fetch_current_legislators_writes_cache(tmp_path):
+    text = _FIX.read_text(encoding="utf-8")
+    cache = tmp_path / "congress" / "legislators-current.json"
+    data = fetch_current_legislators(fetch=lambda url: text, cache_path=cache)
+    assert len(data) == 5
+    assert cache.exists()
+    assert json.loads(cache.read_text(encoding="utf-8"))[0]["id"]["bioguide"] == "E000295"
+
+
+def test_load_current_roster_uses_cache_without_fetching(tmp_path):
+    cache = tmp_path / "congress" / "legislators-current.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(_FIX.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def boom(url):
+        raise AssertionError("should not fetch when cache is present")
+
+    roster = load_current_roster("senate", fetch=boom, cache_path=cache)
+    assert sorted(m.last_name for m in roster.members) == ["Baldwin", "Ernst", "McConnell"]
+
+
+def test_load_current_roster_fetches_when_cache_absent(tmp_path):
+    cache = tmp_path / "congress" / "legislators-current.json"
+    text = _FIX.read_text(encoding="utf-8")
+    roster = load_current_roster("house", fetch=lambda url: text, cache_path=cache)
+    assert len(roster.members) == 2
+    assert cache.exists()   # fetch populated the cache
