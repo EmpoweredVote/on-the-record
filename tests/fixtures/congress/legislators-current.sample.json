@@ -1,0 +1,7 @@
+[
+  {"id":{"bioguide":"E000295"},"name":{"first":"Joni","last":"Ernst","official_full":"Joni Ernst"},"terms":[{"type":"sen","state":"IA","district":null,"party":"Republican","start":"2021-01-03","end":"2027-01-03"}]},
+  {"id":{"bioguide":"B001230"},"name":{"first":"Tammy","last":"Baldwin","official_full":"Tammy Baldwin"},"terms":[{"type":"sen","state":"WI","district":null,"party":"Democrat","start":"2025-01-03","end":"2031-01-03"}]},
+  {"id":{"bioguide":"M000355"},"name":{"first":"Mitch","last":"McConnell","official_full":"Mitch McConnell"},"terms":[{"type":"sen","state":"KY","district":null,"party":"Republican","start":"2021-01-03","end":"2027-01-03"}]},
+  {"id":{"bioguide":"S000510"},"name":{"first":"Adam","last":"Smith","official_full":"Adam Smith"},"terms":[{"type":"rep","state":"WA","district":9,"party":"Democrat","start":"2025-01-03","end":"2027-01-03"}]},
+  {"id":{"bioguide":"S001172"},"name":{"first":"Adrian","last":"Smith","official_full":"Adrian Smith"},"terms":[{"type":"rep","state":"NE","district":3,"party":"Republican","start":"2025-01-03","end":"2027-01-03"}]}
+]
