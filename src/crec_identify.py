@@ -13,6 +13,9 @@ from typing import Optional
 
 from .models import SpeakerMapping
 from .crec_align import LabelResolution, align_crec_to_diarization
+from .govinfo import fetch_congressional_record_turns
+from .congress_roster import load_current_roster
+from .crec_normalize import annotate_turns
 
 _ROLE_DISPLAY = {
     "presiding_officer": "The Presiding Officer",
@@ -75,3 +78,35 @@ def parse_crec_arg(value) -> Optional[tuple[str, str]]:
         raise SystemExit(
             f"--congressional-record CHAMBER must be 'house' or 'senate', got {chamber!r}")
     return (date, ch)
+
+
+def crec_speaker_mappings(
+    date: str,
+    chamber: str,
+    segments,
+    *,
+    fetch=None,
+    min_confidence: float = 0.5,
+    cache_path=None,
+) -> dict:
+    """Resolve diarized speaker labels via the Congressional Record for a session.
+
+    Orchestrates Phases 1-3: fetch CREC turns -> load the current-Congress roster
+    -> annotate turns with identities -> align onto the diarized segments ->
+    convert to SpeakerMappings. `fetch` (injectable) and `cache_path` are threaded
+    to the network/cache layers for testing. Returns {} when there is no Record.
+    """
+    fkw = {"fetch": fetch} if fetch is not None else {}
+    turns = fetch_congressional_record_turns(date, chamber, **fkw)
+    if not turns:
+        return {}
+    roster = load_current_roster(chamber, cache_path=cache_path, **fkw)
+    annotated = annotate_turns(turns, roster)
+    resolutions = align_crec_to_diarization(segments, annotated, min_confidence=min_confidence)
+
+    mappings: dict = {}
+    for label, res in resolutions.items():
+        m = label_resolution_to_mapping(res)
+        if m is not None:
+            mappings[label] = m
+    return mappings
