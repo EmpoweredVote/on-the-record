@@ -64,6 +64,20 @@ def test_resolve_chamber_filter_excludes_wrong_house():
     assert resolve_politician_id(_mem("Smith", "senate"), search=search) is None
 
 
+def test_resolve_excludes_non_incumbent_challenger():
+    # essentials shares one ID space for incumbents AND challengers; the CREC
+    # oracle only ever resolves a SITTING member, so a same-district challenger
+    # must be excluded (else false ambiguity, or worse, the wrong link).
+    search = lambda q, **kw: [
+        _rec("Bryan Steil", "U.S. Representative",
+             district_label="Congressional District 1", pid="INC"),   # is_incumbent True
+        {"politician_id": "CHAL", "politician_slug": None, "full_name": "Chad Steil",
+         "office_title": "U.S. Representative", "district_label": "Congressional District 1",
+         "is_incumbent": False, "government_name": "United States Federal Government"},
+    ]
+    assert resolve_politician_id(_mem("Steil", "house", 1), search=search) == ("INC", None)
+
+
 def test_resolve_ambiguous_returns_none():
     search = lambda q, **kw: [
         _rec("A Smith", "U.S. Representative", district_label="Congressional District 5", pid="X"),

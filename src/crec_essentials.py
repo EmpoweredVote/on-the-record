@@ -47,7 +47,11 @@ def resolve_politician_id(
     except Exception:
         return None
 
-    matches = [c for c in cands if _is_federal(c) and _chamber_matches(c, member.chamber)]
+    # The CREC oracle only resolves SITTING members (from legislators-current);
+    # essentials shares one ID space for incumbents and challengers, so require
+    # is_incumbent to avoid linking a same-district challenger.
+    matches = [c for c in cands
+               if c.get("is_incumbent") and _is_federal(c) and _chamber_matches(c, member.chamber)]
     if member.chamber == "house" and member.district is not None:
         matches = [c for c in matches
                    if _district_number(c.get("district_label")) == member.district]
