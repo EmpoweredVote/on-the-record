@@ -735,3 +735,54 @@ def test_identify_speakers_dedupes_shared_politician_id_across_labels():
     assert linked == ["SPEAKER_01"]
     assert mappings["SPEAKER_00"].politician_id is None
     assert mappings["SPEAKER_00"].needs_review is True
+
+
+# ---------------------------------------------------------------------------
+# CREC layer: the Congressional Record is authoritative for WHO spoke.
+# ---------------------------------------------------------------------------
+
+
+def _two_segments():
+    return [
+        Segment(segment_id=0, start_time=0.0, end_time=5.0, speaker_label="SPEAKER_00",
+                text="I move to proceed to the healthcare funding bill"),
+        Segment(segment_id=1, start_time=5.0, end_time=10.0, speaker_label="SPEAKER_01",
+                text="I rise in strong support of the healthcare measure"),
+    ]
+
+
+def test_crec_layer_confident_overrides_and_sets_mapping():
+    crec = {
+        "SPEAKER_00": SpeakerMapping(
+            speaker_label="SPEAKER_00", speaker_name="Mitch McConnell", confidence=0.9,
+            id_method="congressional_record", local_slug="congress-M000355"),
+    }
+    out = identify_speakers(_two_segments(), {}, crec_mappings=crec)
+    assert out["SPEAKER_00"].speaker_name == "Mitch McConnell"
+    assert out["SPEAKER_00"].id_method == "congressional_record"
+    # SPEAKER_01 had no CREC mapping and no other layer identified it -> review
+    assert out["SPEAKER_01"].needs_review is True
+
+
+def test_crec_layer_ambiguous_flags_review():
+    crec = {
+        "SPEAKER_00": SpeakerMapping(
+            speaker_label="SPEAKER_00", needs_review=True, speaker_status="unidentified"),
+    }
+    out = identify_speakers(_two_segments(), {}, crec_mappings=crec)
+    assert out["SPEAKER_00"].needs_review is True
+    assert out["SPEAKER_00"].speaker_name is None
+
+
+def test_crec_layer_dedupe_guards_two_labels_same_member():
+    crec = {
+        "SPEAKER_00": SpeakerMapping(
+            speaker_label="SPEAKER_00", speaker_name="Mitch McConnell", confidence=0.9,
+            id_method="congressional_record", local_slug="congress-M000355"),
+        "SPEAKER_01": SpeakerMapping(
+            speaker_label="SPEAKER_01", speaker_name="Mitch McConnell", confidence=0.7,
+            id_method="congressional_record", local_slug="congress-M000355"),
+    }
+    out = identify_speakers(_two_segments(), {}, crec_mappings=crec)
+    named = [lbl for lbl, m in out.items() if m.speaker_name == "Mitch McConnell"]
+    assert named == ["SPEAKER_00"]   # higher-confidence label keeps the name; dedupe blanks the other
