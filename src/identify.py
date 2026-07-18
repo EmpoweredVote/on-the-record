@@ -362,10 +362,20 @@ def _dedupe_identities(mappings: dict[str, SpeakerMapping]) -> None:
         for labels in groups.values():
             if len(labels) < 2:
                 continue
-            winner = max(labels, key=lambda l: mappings[l].confidence or 0.0)
-            for label in labels:
-                if label == winner:
-                    continue
+            # The Congressional Record is authoritative for who spoke: a shared
+            # CREC identity across labels is a legitimate diarization split of one
+            # talkative member (e.g. a floor manager), not a mis-ID. Keep every
+            # CREC-sourced label in the group and demote only the non-CREC ones (an
+            # LLM/voice guess colliding with a Record-verified member is exactly the
+            # mis-ID this guard exists to catch). With no CREC label, fall back to
+            # the original rule: the single highest-confidence mapping survives.
+            crec = [l for l in labels if mappings[l].id_method == "congressional_record"]
+            if crec:
+                losers = [l for l in labels if l not in crec]
+            else:
+                winner = max(labels, key=lambda l: mappings[l].confidence or 0.0)
+                losers = [l for l in labels if l != winner]
+            for label in losers:
                 m = mappings[label]
                 m.speaker_name = None
                 m.politician_slug = None

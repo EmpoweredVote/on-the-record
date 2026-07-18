@@ -774,7 +774,10 @@ def test_crec_layer_ambiguous_flags_review():
     assert out["SPEAKER_00"].speaker_name is None
 
 
-def test_crec_layer_dedupe_guards_two_labels_same_member():
+def test_crec_layer_same_member_across_labels_kept_as_split():
+    # Two labels that the Record confidently resolves to the SAME member are a
+    # legitimate diarization split of one talkative speaker (e.g. a floor manager),
+    # not a mis-ID — both must keep the name, not get deduped away.
     crec = {
         "SPEAKER_00": SpeakerMapping(
             speaker_label="SPEAKER_00", speaker_name="Mitch McConnell", confidence=0.9,
@@ -784,5 +787,52 @@ def test_crec_layer_dedupe_guards_two_labels_same_member():
             id_method="congressional_record", local_slug="congress-M000355"),
     }
     out = identify_speakers(_two_segments(), {}, crec_mappings=crec)
-    named = [lbl for lbl, m in out.items() if m.speaker_name == "Mitch McConnell"]
-    assert named == ["SPEAKER_00"]   # higher-confidence label keeps the name; dedupe blanks the other
+    named = sorted(lbl for lbl, m in out.items() if m.speaker_name == "Mitch McConnell")
+    assert named == ["SPEAKER_00", "SPEAKER_01"]   # both kept (diarization split)
+
+
+from src.identify import _dedupe_identities
+
+
+def test_dedupe_crec_wins_over_llm_collision_regardless_of_confidence():
+    # A Record-verified member colliding with an LLM guess of the same name is the
+    # exact mis-ID the guard exists to catch: keep CREC (even at lower confidence),
+    # demote the LLM guess.
+    mappings = {
+        "A": SpeakerMapping(speaker_label="A", speaker_name="Jane Doe", confidence=0.5,
+                            id_method="congressional_record", local_slug="congress-D000001"),
+        "B": SpeakerMapping(speaker_label="B", speaker_name="Jane Doe", confidence=0.75,
+                            id_method="llm"),
+    }
+    _dedupe_identities(mappings)
+    assert mappings["A"].speaker_name == "Jane Doe"      # CREC survives despite lower conf
+    assert mappings["A"].id_method == "congressional_record"
+    assert mappings["B"].speaker_name is None            # LLM guess demoted
+    assert mappings["B"].id_method == "collision"
+    assert mappings["B"].needs_review is True
+
+
+def test_dedupe_still_guards_non_crec_collision():
+    # No CREC involved -> original guard intact: highest-confidence wins, rest demoted.
+    mappings = {
+        "A": SpeakerMapping(speaker_label="A", speaker_name="Jane Doe", confidence=0.8, id_method="llm"),
+        "B": SpeakerMapping(speaker_label="B", speaker_name="Jane Doe", confidence=0.6, id_method="voice"),
+    }
+    _dedupe_identities(mappings)
+    assert mappings["A"].speaker_name == "Jane Doe"
+    assert mappings["B"].speaker_name is None
+    assert mappings["B"].id_method == "collision"
+
+
+def test_dedupe_keeps_all_crec_and_drops_llm_in_three_way_group():
+    mappings = {
+        "A": SpeakerMapping(speaker_label="A", speaker_name="Jane Doe", confidence=0.9,
+                            id_method="congressional_record", local_slug="congress-D000001"),
+        "B": SpeakerMapping(speaker_label="B", speaker_name="Jane Doe", confidence=0.6,
+                            id_method="congressional_record", local_slug="congress-D000001"),
+        "C": SpeakerMapping(speaker_label="C", speaker_name="Jane Doe", confidence=0.99, id_method="llm"),
+    }
+    _dedupe_identities(mappings)
+    kept = sorted(l for l, m in mappings.items() if m.speaker_name == "Jane Doe")
+    assert kept == ["A", "B"]                 # both CREC labels kept
+    assert mappings["C"].id_method == "collision"   # LLM demoted even at 0.99 conf
