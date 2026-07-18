@@ -111,6 +111,37 @@ def test_parse_granule_turns_empty_when_no_designations():
     assert turns == []
 
 
+def test_parse_granule_turns_appends_multi_paragraph_speech():
+    # CREC tags only the FIRST paragraph of a speech; later paragraphs of the
+    # SAME speaker are flush-indented with no designation and must append, not drop.
+    text = (
+        "                          A BILL TO DO THINGS\n\n"
+        "  Mr. SMITH of Michigan. Madam Speaker, I rise in support of this measure.\n"
+        "  It will help my constituents in countless ways across the district.\n"
+        "  Mr. JONES. Madam Speaker, I yield myself such time as I may consume.\n"
+    )
+    turns = parse_granule_turns(text, "g", start_order=0)
+    assert [t.speaker_raw for t in turns] == ["Mr. SMITH of Michigan", "Mr. JONES"]
+    assert turns[0].text == (
+        "Madam Speaker, I rise in support of this measure. "
+        "It will help my constituents in countless ways across the district."
+    )
+    assert turns[1].text == "Madam Speaker, I yield myself such time as I may consume."
+
+
+def test_parse_granule_turns_does_not_append_allcaps_heading():
+    # An ALL-CAPS section heading (e.g. after a section break) must NOT append to
+    # the prior speaker's turn — only lowercase-bearing prose continuations do.
+    text = (
+        "  Mr. SMITH. I yield back the balance of my time.\n"
+        "                          ANOTHER SECTION HEADING\n"
+        "  Mr. JONES. I claim the time in opposition.\n"
+    )
+    turns = parse_granule_turns(text, "g", start_order=0)
+    assert [t.speaker_raw for t in turns] == ["Mr. SMITH", "Mr. JONES"]
+    assert turns[0].text == "I yield back the balance of my time."
+
+
 import pytest
 
 from src.govinfo import (
