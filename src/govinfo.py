@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -71,3 +72,70 @@ def html_to_text(htm: str) -> str:
     soup = BeautifulSoup(htm, "html.parser")
     pre = soup.find("pre")
     return (pre.get_text() if pre else soup.get_text())
+
+
+# A paragraph-initial speaker designation, up to the period that ends it.
+# Handles: "Mr./Mrs./Ms./Miss <Name>[ of <State>]" and "The <ROLE>[ (Mr. <Name>)]".
+_DESIGNATION_RE = re.compile(
+    r"^(?P<desig>"
+    r"(?:Mr|Mrs|Ms|Miss)\.?\s+[A-Z][A-Za-z.'\-]+(?:\s+of\s+[A-Z][A-Za-z ]+?)?"
+    r"|The\s+[A-Z][A-Za-z]+(?:\s+[A-Za-z]+)*?(?:\s+\(Mr\.\s+[A-Z][A-Za-z]+\)|\s+pro\s+tempore)?"
+    r")\.\s+(?P<rest>.+)$",
+    re.S,
+)
+
+# Lines that are pure page/header furniture, dropped before paragraph assembly.
+_FURNITURE_RE = re.compile(
+    r"^\s*(\[.*\]|From the Congressional Record Online.*|_{5,})\s*$"
+)
+
+
+def _paragraphs(text: str) -> list[str]:
+    """Reflow CREC body text into paragraphs.
+
+    A new paragraph starts on a line indented >=2 spaces; flush-left lines are
+    wrapped continuations and join onto the current paragraph with a single
+    space. Furniture lines and blank lines flush the current paragraph.
+    """
+    paras: list[str] = []
+    cur: list[str] = []
+
+    def flush():
+        if cur:
+            paras.append(" ".join(w.strip() for w in cur).strip())
+            cur.clear()
+
+    for line in text.splitlines():
+        if not line.strip() or _FURNITURE_RE.match(line):
+            flush()
+            continue
+        if re.match(r"^ {2,}\S", line):   # indented -> new paragraph
+            flush()
+            cur.append(line)
+        else:                              # flush-left -> continuation
+            cur.append(line)
+    flush()
+    return paras
+
+
+def parse_granule_turns(text: str, granule_id: str, start_order: int) -> list[CrecTurn]:
+    """Ordered speaker turns in one granule's text.
+
+    Paragraphs that begin with a speaker designation start a new turn; the
+    centered title and any non-designation paragraphs are skipped. `start_order`
+    offsets `order` so ids stay unique across a day's granules.
+    """
+    turns: list[CrecTurn] = []
+    order = start_order
+    for para in _paragraphs(text):
+        m = _DESIGNATION_RE.match(para)
+        if not m:
+            continue
+        turns.append(CrecTurn(
+            speaker_raw=m.group("desig").strip(),
+            text=m.group("rest").strip(),
+            granule_id=granule_id,
+            order=order,
+        ))
+        order += 1
+    return turns

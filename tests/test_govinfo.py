@@ -5,6 +5,7 @@ from pathlib import Path
 
 from src.govinfo import CrecTurn, _package_id, _resolve_api_key, parse_granule_list, _next_offset_mark
 from src.govinfo import html_to_text
+from src.govinfo import parse_granule_turns
 
 _FIX = Path(__file__).parent / "fixtures" / "govinfo"
 
@@ -78,3 +79,33 @@ def test_html_to_text_extracts_pre_and_unescapes():
     assert "www.gpo.gov" in text
     # header bracket lines survive as text (stripped later by the turn parser)
     assert "[Senate]" in text
+
+
+def test_parse_granule_turns_single_procedural():
+    text = html_to_text(_read("granule_presiding.htm"))
+    turns = parse_granule_turns(text, "CREC-2018-10-10-pt1-PgS6735-6", start_order=0)
+    assert len(turns) == 1
+    assert turns[0].speaker_raw == "The PRESIDING OFFICER (Mr. Cotton)"
+    assert turns[0].text == "The majority leader is recognized."
+    assert turns[0].granule_id == "CREC-2018-10-10-pt1-PgS6735-6"
+    assert turns[0].order == 0
+
+
+def test_parse_granule_turns_multi_speaker_reflows_continuations():
+    text = html_to_text(_read("granule_debate.htm"))
+    turns = parse_granule_turns(text, "CREC-2018-10-10-pt1-PgH1-1", start_order=5)
+    assert [t.speaker_raw for t in turns] == ["Mr. SMITH of Michigan", "Mr. JONES"]
+    # wrapped continuation line is joined into one space-separated string
+    assert turns[0].text == (
+        "Madam Speaker, I rise today in strong support of this measure, "
+        "which will help my constituents."
+    )
+    assert turns[1].text.startswith("Madam Speaker, I thank the gentleman")
+    # start_order offsets the sequence
+    assert [t.order for t in turns] == [5, 6]
+
+
+def test_parse_granule_turns_empty_when_no_designations():
+    turns = parse_granule_turns("just some floor boilerplate\nwith no speakers",
+                                "CREC-x", start_order=0)
+    assert turns == []
