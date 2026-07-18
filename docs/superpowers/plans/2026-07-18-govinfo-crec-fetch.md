@@ -577,7 +577,8 @@ def test_fetch_house_turns_paginates_and_orders():
     )
     # page1 has one HOUSE granule, page2 has one -> both fetched (pagination works)
     assert turns is not None
-    assert [t.granule_id for t in turns] == [
+    # both HOUSE granules were fetched (dedup: each yields 2 turns from the shared fixture)
+    assert list(dict.fromkeys(t.granule_id for t in turns)) == [
         "CREC-2018-10-10-pt1-PgH1-1", "CREC-2018-10-10-pt1-PgH2-1",
     ]
     # each granule fixture yields 2 turns; order is continuous across granules
