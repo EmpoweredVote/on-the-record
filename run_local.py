@@ -817,6 +817,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # Phase 109 D-07: fail fast if tagged meeting has no cached roster.
     # Must run before Stage 1 ingestion so operators don't burn GPU on a bad run.
     ensure_body_roster_cached(effective_body_slug)
+    # Same fail-fast rationale: validate --congressional-record before Stage 1 so a
+    # bad DATE/CHAMBER doesn't waste ingest/diarize/transcribe. Reused at Stage 4.
+    crec_request = parse_crec_arg(getattr(args, "congressional_record", None))
     effective_race_id = _resolve_race_id(
         state,
         getattr(args, "race_id", None),
@@ -1387,10 +1390,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
             )
 
         crec_mappings = None
-        _crec = parse_crec_arg(getattr(args, "congressional_record", None))
-        if _crec:
+        if crec_request:
             from src.crec_identify import crec_speaker_mappings
-            _crec_date, _crec_chamber = _crec
+            _crec_date, _crec_chamber = crec_request
             crec_mappings = crec_speaker_mappings(_crec_date, _crec_chamber, segments)
             print(f"  Congressional Record: resolved {len(crec_mappings)} speaker label(s)")
 
