@@ -170,6 +170,20 @@ def test_aggregate_unresolved_when_no_matches():
     assert out["S0"].total_turns == 1
 
 
+def test_aggregate_conflicting_roles_is_ambiguous():
+    # a label whose runs match two DIFFERENT procedural roles must not emit a
+    # confident role — mirror the member-vote tie guard.
+    d_turns = [_dturn("S0", 0), _dturn("S0", 1)]
+    matches = [
+        ("S0", _rs_role("presiding_officer"), 0.5),
+        ("S0", _rs_role("speaker"), 0.5),
+    ]
+    out = _aggregate(d_turns, matches, min_confidence=0.5)
+    assert out["S0"].role is None
+    assert out["S0"].method == "ambiguous"
+    assert out["S0"].needs_review is True
+
+
 # add to tests/test_crec_align.py
 import json
 from pathlib import Path

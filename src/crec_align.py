@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .congress_roster import CongressMember
@@ -156,11 +156,20 @@ def _aggregate(d_turns, matches, min_confidence: float) -> dict:
                     method="ambiguous", needs_review=True,
                     matched_turns=matched, total_turns=total)
         elif role_recs:
-            role = Counter(r.role for r, _ in role_recs).most_common(1)[0][0]
-            out[label] = LabelResolution(
-                speaker_label=label, role=role, confidence=len(role_recs) / total,
-                method="congressional_record", needs_review=False,
-                matched_turns=len(role_recs), total_turns=total)
+            role_votes = Counter(r.role for r, _ in role_recs).most_common()
+            winner_role, winner_votes = role_votes[0]
+            role_tie = len(role_votes) > 1 and role_votes[1][1] == winner_votes
+            if role_tie:
+                # conflicting roles on one label -> flag, mirror the member guard
+                out[label] = LabelResolution(
+                    speaker_label=label, confidence=len(role_recs) / total,
+                    method="ambiguous", needs_review=True,
+                    matched_turns=len(role_recs), total_turns=total)
+            else:
+                out[label] = LabelResolution(
+                    speaker_label=label, role=winner_role, confidence=len(role_recs) / total,
+                    method="congressional_record", needs_review=False,
+                    matched_turns=len(role_recs), total_turns=total)
         else:
             out[label] = LabelResolution(
                 speaker_label=label, method="unresolved",
