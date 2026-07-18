@@ -290,3 +290,28 @@ def test_parse_granule_turns_matches_presiding_roles():
         "The PRESIDING OFFICER (Mr. Sullivan)",
         "The ACTING PRESIDENT pro tempore",
     ]
+
+
+def test_fetch_appends_api_key_to_nextpage_url():
+    # GovInfo's `nextPage` URL omits the api_key; following it verbatim returns
+    # 401 and truncates every CREC day to its first page. The fetcher must append
+    # the key so pagination continues. This fetch rejects any URL missing it.
+    page1 = _read("granules_page1.json")   # nextPage -> ...offsetMark=PAGE2... (no api_key)
+    page2 = _read("granules_page2.json")   # contains HOUSE granule PgH2-1
+
+    def fetch(url: str) -> str:
+        if "api_key=KEY" not in url:
+            raise RuntimeError("401 Unauthorized (missing api_key)")
+        if "/granules/" in url and url.endswith("/htm?api_key=KEY"):
+            return _read("granule_debate.htm")
+        if "offsetMark=PAGE2" in url:
+            return page2
+        if "/granules?" in url:
+            return page1
+        raise AssertionError(f"unexpected url {url}")
+
+    turns = fetch_congressional_record_turns(
+        "2018-10-10", "house", fetch=fetch, api_key="KEY")
+    # page 2's HOUSE granule is only reached if the nextPage fetch carried the key
+    assert turns is not None
+    assert any(t.granule_id == "CREC-2018-10-10-pt1-PgH2-1" for t in turns)
