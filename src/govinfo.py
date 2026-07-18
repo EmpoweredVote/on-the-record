@@ -127,23 +127,28 @@ def _paragraphs(text: str) -> list[str]:
 def parse_granule_turns(text: str, granule_id: str, start_order: int) -> list[CrecTurn]:
     """Ordered speaker turns in one granule's text.
 
-    Paragraphs that begin with a speaker designation start a new turn; the
-    centered title and any non-designation paragraphs are skipped. `start_order`
-    offsets `order` so ids stay unique across a day's granules.
+    A paragraph beginning with a speaker designation starts a new turn. A
+    subsequent non-designation paragraph is a continuation of the current
+    speaker's speech (CREC tags only the first paragraph) and is appended — but
+    only when it contains lowercase prose, so an ALL-CAPS section heading (or a
+    title before the first speaker) never pollutes a turn. `start_order` offsets
+    `order` so ids stay unique across a day's granules.
     """
     turns: list[CrecTurn] = []
     order = start_order
     for para in _paragraphs(text):
         m = _DESIGNATION_RE.match(para)
-        if not m:
-            continue
-        turns.append(CrecTurn(
-            speaker_raw=m.group("desig").strip(),
-            text=m.group("rest").strip(),
-            granule_id=granule_id,
-            order=order,
-        ))
-        order += 1
+        if m:
+            turns.append(CrecTurn(
+                speaker_raw=m.group("desig").strip(),
+                text=m.group("rest").strip(),
+                granule_id=granule_id,
+                order=order,
+            ))
+            order += 1
+        elif turns and any(c.islower() for c in para):
+            # continuation paragraph of the current speech (headings are ALL-CAPS)
+            turns[-1].text = f"{turns[-1].text} {para}".strip()
     return turns
 
 
