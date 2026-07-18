@@ -37,3 +37,26 @@ def _overlap(a: set, b: set) -> float:
     if not a or not b:
         return 0.0
     return len(a & b) / min(len(a), len(b))
+
+
+@dataclass
+class DiarizedTurn:
+    speaker_label: str
+    text: str
+    index: int
+
+
+def _build_diarized_turns(segments) -> list[DiarizedTurn]:
+    """Group consecutive segments sharing a speaker_label into maximal runs.
+
+    Each run's text is its segments' text joined with spaces. Segment timestamps
+    are intentionally not carried — Phase 3 attaches identity only.
+    """
+    turns: list[DiarizedTurn] = []
+    for seg in segments:
+        txt = (seg.text or "").strip()
+        if turns and turns[-1].speaker_label == seg.speaker_label:
+            turns[-1].text = f"{turns[-1].text} {txt}".strip()
+        else:
+            turns.append(DiarizedTurn(speaker_label=seg.speaker_label, text=txt, index=len(turns)))
+    return turns
