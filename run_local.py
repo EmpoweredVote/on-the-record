@@ -44,6 +44,17 @@ from src.event_kinds import EVENT_KINDS, validate_event_kind
 from src.crec_identify import parse_crec_arg
 
 
+def should_run_llm(skip_llm: bool, crec_request) -> bool:
+    """Whether to run Layer-3 LLM speaker identification.
+
+    Off when --skip-llm is set, and off on a Congressional Record run
+    (``crec_request`` truthy): CREC is authoritative for who spoke, and the local
+    LLM hallucinates congressional names, so an unresolved floor speaker should go
+    to review as 'unidentified' rather than get a garbage guess.
+    """
+    return (not skip_llm) and (crec_request is None)
+
+
 def _validate_diarizer_compute(args) -> None:
     if args.diarizer == "vibevoice" and args.compute != "modal":
         raise ValueError("--diarizer vibevoice requires --compute modal")
@@ -1376,10 +1387,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 new_dim = next(iter(speaker_embeddings.values())).shape[0]
                 print(f"  Re-extracted {len(speaker_embeddings)} embeddings ({new_dim}-dim)")
 
-        # Layer 3: LLM (optional)
+        # Layer 3: LLM (optional; skipped on Congressional Record runs)
         llm_fn = None
         llm = None
-        if not args.skip_llm:
+        if should_run_llm(args.skip_llm, crec_request):
             print("  Loading LLM for speaker identification...")
             from src.llm_utils import llm_identify_speakers, load_llm, unload_llm
 
@@ -1388,6 +1399,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 llm, segs, maps, partial_results_path=llm_partial_path,
                 roster_hint=roster_hint,
             )
+        elif crec_request and not args.skip_llm:
+            print("  Skipping LLM speaker ID (Congressional Record run — CREC is "
+                  "authoritative; unresolved speakers go to review).")
 
         crec_mappings = None
         if crec_request:
