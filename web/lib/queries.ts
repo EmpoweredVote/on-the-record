@@ -208,6 +208,7 @@ export async function fetchSegments(meetingId: string): Promise<Segment[]> {
 // Meeting roll-call votes. Empty for meetings without a published vote record;
 // unmatched votes carry a null timestamp (not click-to-seekable).
 export async function fetchVotes(meetingId: string): Promise<Vote[]> {
+  if (!base()) return [];
   const res = await fetch(`${base()}/api/meetings/${meetingId}/votes`, FETCH_INIT);
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`votes fetch failed: ${res.status}`);
