@@ -50,3 +50,39 @@ def test_no_record_returns_none():
         raise RuntimeError("no package")
 
     assert extract_floor_structure("2018-10-13", "house", fetch=fake_fetch, api_key="k") is None
+
+
+def test_floorvote_and_meeting_roundtrip():
+    from src.models import FloorVote, Meeting
+    fv = FloorVote(roll_number=438, question="On the Smith amendment", yea=236, nay=193,
+                   present=0, not_voting=9, timestamp=102.6, tally_delta=0, matched=True)
+    assert FloorVote.from_dict(fv.to_dict()) == fv
+    m = Meeting(meeting_id="m1", city=None, date="2019-07-11", floor_votes=[fv])
+    m2 = Meeting.from_dict(m.to_dict())
+    assert m2.floor_votes == [fv]
+    assert Meeting.from_dict({"meeting_id": "m2", "date": "2019-07-11"}).floor_votes == []
+
+
+def test_build_floor_votes_projects_and_timestamps():
+    import json
+    from pathlib import Path
+    from src.crec_votes import RollCallVote
+    from src.crec_structure import CrecGranule
+    from src.crec_floor import GranuleVotes, build_floor_votes
+
+    FIX = Path(__file__).parent / "fixtures" / "timing"
+    segs = json.loads((FIX / "house_vote_announcements.json").read_text())
+    r438 = RollCallVote(438, "Smith amdt", {"YEA": ["x"] * 236, "NAY": ["y"] * 193})
+    r439 = RollCallVote(439, "Speier amdt", {"YEA": ["x"] * 242, "NAY": ["y"] * 187})
+    r440 = RollCallVote(440, "Speier amdt", {"YEA": ["x"] * 231, "NAY": ["y"] * 199})
+    gv = GranuleVotes(granule=CrecGranule("g", "HOUSE", "NDAA", ""),
+                      votes=[r438, r439, r440], members=[])
+
+    class _FS:
+        votes = [gv]
+
+    fvs = build_floor_votes(_FS(), segs)
+    assert [v.roll_number for v in fvs] == [438, 439, 440]
+    assert (fvs[0].yea, fvs[0].nay) == (236, 193)
+    assert fvs[0].timestamp == 102.64 and fvs[0].matched is True
+    assert fvs[2].timestamp == 732.28 and fvs[2].tally_delta == 1

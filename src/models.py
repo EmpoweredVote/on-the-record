@@ -253,6 +253,40 @@ class ProcessingMetadata:
 
 
 @dataclass
+class FloorVote:
+    """A slim, published projection of a CREC roll-call vote with its transcript
+    timing. No member lists — meant to ride in the meeting artifact (and later the
+    published summary JSON). `timestamp` is clip-local; absolutized at publish."""
+    roll_number: int
+    question: str
+    yea: int
+    nay: int
+    present: int
+    not_voting: int
+    timestamp: Optional[float]
+    tally_delta: Optional[int]
+    matched: bool
+
+    def to_dict(self) -> dict:
+        return {
+            "roll_number": self.roll_number, "question": self.question,
+            "yea": self.yea, "nay": self.nay, "present": self.present,
+            "not_voting": self.not_voting, "timestamp": self.timestamp,
+            "tally_delta": self.tally_delta, "matched": self.matched,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "FloorVote":
+        return cls(
+            roll_number=d["roll_number"], question=d.get("question", ""),
+            yea=d.get("yea", 0), nay=d.get("nay", 0),
+            present=d.get("present", 0), not_voting=d.get("not_voting", 0),
+            timestamp=d.get("timestamp"), tally_delta=d.get("tally_delta"),
+            matched=d.get("matched", False),
+        )
+
+
+@dataclass
 class Meeting:
     meeting_id: str
     city: Optional[str]
@@ -272,6 +306,7 @@ class Meeting:
     clip_start_seconds: Optional[float] = None
     clip_end_seconds: Optional[float] = None
     thumbnail_url: Optional[str] = None
+    floor_votes: list[FloorVote] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = {
@@ -295,6 +330,8 @@ class Meeting:
             d["clip_end_seconds"] = self.clip_end_seconds
         if self.thumbnail_url is not None:
             d["thumbnail_url"] = self.thumbnail_url
+        if self.floor_votes:
+            d["floor_votes"] = [v.to_dict() for v in self.floor_votes]
         if self.summary is not None:
             d["summary"] = self.summary.to_dict()
         return d
@@ -325,4 +362,5 @@ class Meeting:
             clip_start_seconds=d.get("clip_start_seconds"),
             clip_end_seconds=d.get("clip_end_seconds"),
             thumbnail_url=d.get("thumbnail_url"),
+            floor_votes=[FloorVote.from_dict(v) for v in d.get("floor_votes", [])],
         )

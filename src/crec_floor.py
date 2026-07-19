@@ -71,3 +71,33 @@ def extract_floor_structure(
         else:
             out.discarded += 1
     return out
+
+
+def build_floor_votes(floor_structure, transcript_segments):
+    """Project a FloorStructure's roll-call votes into slim, timestamped FloorVote
+    records (models.FloorVote) for persistence/publish. Attaches clip-local
+    transcript timestamps via crec_timing.attach_vote_timestamps.
+
+    `transcript_segments` is a list of segment dicts (Segment.to_dict): each has
+    `text`, `start_time`, and `words` [{word, start}].
+    """
+    from .models import FloorVote
+    from .crec_timing import attach_vote_timestamps
+
+    rolls = [rc for gv in floor_structure.votes for rc in gv.votes]
+    timings = attach_vote_timestamps(rolls, transcript_segments)
+    out = []
+    for rc, timing in zip(rolls, timings):
+        p = rc.positions
+        out.append(FloorVote(
+            roll_number=rc.roll_number,
+            question=rc.question,
+            yea=len(p.get("YEA", [])),
+            nay=len(p.get("NAY", [])),
+            present=len(p.get("PRESENT", [])),
+            not_voting=len(p.get("NOT_VOTING", [])),
+            timestamp=rc.timestamp,
+            tally_delta=timing.tally_delta,
+            matched=timing.matched,
+        ))
+    return out
