@@ -9,6 +9,7 @@ import type {
   Segment,
   TopicDetail,
   TopicListEntry,
+  Vote,
 } from "./types";
 
 // Read at call time (not import time) so it's testable and still inlined by Next.
@@ -202,6 +203,23 @@ export async function fetchSegments(meetingId: string): Promise<Segment[]> {
     if (all.length >= totalCount) break;
   }
   return all;
+}
+
+// Meeting roll-call votes. Empty for meetings without a published vote record;
+// unmatched votes carry a null timestamp (not click-to-seekable).
+export async function fetchVotes(meetingId: string): Promise<Vote[]> {
+  const res = await fetch(`${base()}/api/meetings/${meetingId}/votes`, FETCH_INIT);
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`votes fetch failed: ${res.status}`);
+  const raw = (await res.json()) as any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  return raw.map((v) => ({
+    id: v.id,
+    resolution: v.resolution ?? null,
+    description: v.description ?? null,
+    result: v.result ?? "",
+    voteType: v.voteType ?? null,
+    timestamp: v.timestamp ?? null,
+  }));
 }
 
 export async function fetchSummary(meetingId: string): Promise<MeetingSummary | null> {

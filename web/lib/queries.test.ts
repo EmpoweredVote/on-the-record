@@ -45,4 +45,28 @@ describe("queries data layer", () => {
     const { fetchMeeting } = await load();
     await expect(fetchMeeting("x")).rejects.toThrow();
   });
+
+  it("fetchVotes hits the votes API and preserves null timestamps", async () => {
+    const f = mockFetch(200, [
+      { id: "v1", resolution: "Roll No. 438", description: "On the Smith amendment",
+        result: "Yea 236, Nay 193", voteType: "recorded", timestamp: 14702.64 },
+      { id: "v2", resolution: "Roll No. 443", description: "On the Connolly amendment",
+        result: "Yea 247, Nay 182", voteType: "recorded", timestamp: null },
+    ]);
+    vi.stubGlobal("fetch", f);
+    const { fetchVotes } = await load();
+    const out = await fetchVotes("m1");
+    const [url] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe(`${API}/api/meetings/m1/votes`);
+    expect(out).toHaveLength(2);
+    expect(out[0].resolution).toBe("Roll No. 438");
+    expect(out[0].timestamp).toBe(14702.64);
+    expect(out[1].timestamp).toBeNull();
+  });
+
+  it("fetchVotes returns [] on 404 (meeting has no votes)", async () => {
+    vi.stubGlobal("fetch", mockFetch(404, {}));
+    const { fetchVotes } = await load();
+    expect(await fetchVotes("m1")).toEqual([]);
+  });
 });

@@ -161,6 +161,15 @@ export interface TopicDetail {
   items: TopicItem[];
 }
 
+export interface Vote {
+  id: string;
+  resolution: string | null;
+  description: string | null;
+  result: string;
+  voteType: string | null;
+  timestamp: number | null;
+}
+
 // A grabbed quote candidate, held client-side (localStorage) per politician.
 // The tool stays read-only against ev-accounts; candidates never touch the
 // compass taxonomy — `label` is a free-text personal tag reconciled to a real
