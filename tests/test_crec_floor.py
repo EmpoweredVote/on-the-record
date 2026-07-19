@@ -50,3 +50,14 @@ def test_no_record_returns_none():
         raise RuntimeError("no package")
 
     assert extract_floor_structure("2018-10-13", "house", fetch=fake_fetch, api_key="k") is None
+
+
+def test_floorvote_and_meeting_roundtrip():
+    from src.models import FloorVote, Meeting
+    fv = FloorVote(roll_number=438, question="On the Smith amendment", yea=236, nay=193,
+                   present=0, not_voting=9, timestamp=102.6, tally_delta=0, matched=True)
+    assert FloorVote.from_dict(fv.to_dict()) == fv
+    m = Meeting(meeting_id="m1", city=None, date="2019-07-11", floor_votes=[fv])
+    m2 = Meeting.from_dict(m.to_dict())
+    assert m2.floor_votes == [fv]
+    assert Meeting.from_dict({"meeting_id": "m2", "date": "2019-07-11"}).floor_votes == []
