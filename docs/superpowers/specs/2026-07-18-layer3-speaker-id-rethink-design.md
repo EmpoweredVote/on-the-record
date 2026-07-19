@@ -234,3 +234,34 @@ comparison table that sets `SPEAKER_ID_ACTIVE`.
   Noted as a separate future concern.
 - Changing the `min_confidence` gate or the CREC formula (settled: keep 0.5).
 - Two-pass / production-seeded eval (approved to test with all speakers unknown).
+
+## Eval results (2026-07-19) — production model confirmed: `haiku`
+
+Ran `scripts/eval_speaker_id.py --models haiku sonnet` over the 27 human-labeled
+interview meetings (65 gold labels: 61 named + 4 null), all speakers unknown.
+`sonnet` here = `claude-sonnet-4-5` (the registry's current entry); `haiku` =
+`claude-haiku-4-5-20251001`.
+
+| model  | correct | safe_null | hallucination | miss | wrong | accuracy | seconds |
+|--------|---------|-----------|---------------|------|-------|----------|---------|
+| haiku  | 9       | 4/4       | **0**         | 50   | 2     | 0.20     | 214     |
+| sonnet | 11      | 3/4       | 1             | 43   | 7     | 0.215    | 421     |
+
+**Decision: keep `SPEAKER_ID_ACTIVE = "haiku"`** (no code change; it was already the
+default). Rationale:
+
+- **Hallucination is the safety-critical metric, and haiku scored 0** (sonnet 1). The
+  old-llama "Mr. Bean" failure mode is gone — the anchoring guardrail works.
+- **Name precision (correct / total names emitted): haiku 9/11 = 82%; sonnet
+  11/19 = 58%.** Sonnet ventures more names (fewer misses) but is wrong far more
+  often. For a civic-data product where a wrong name is worse than "unidentified,"
+  that trade is unfavorable.
+- Haiku is ~2× faster and ~5× cheaper. Whole two-model run cost < $1.
+
+**Caveat / future lever:** recall is low for both (miss-dominated) because this is a
+raw all-unknown test *and* the transcript-anchor deliberately abstains when a guest's
+surname never appears in the transcript. Layer-3 is a fallback (voice profiles +
+pattern-matching resolve most speakers first), so the conservative bias is acceptable.
+If recall becomes a priority, the next investigation is whether the transcript-anchor
+rejects names that *are* spoken (vs. genuinely absent) — a tuning pass, not a model
+change. Full per-meeting trace was captured in the eval run log.
