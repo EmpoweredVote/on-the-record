@@ -40,7 +40,7 @@ if _env_file.exists():
                 os.environ.setdefault(_key.strip(), _val.strip())
 
 from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
-from src.event_kinds import EVENT_KINDS, validate_event_kind
+from src.event_kinds import EVENT_KINDS, INTERVIEW_KINDS, validate_event_kind
 from src.crec_identify import parse_crec_arg
 
 
@@ -1389,15 +1389,17 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
         # Layer 3: LLM (optional; skipped on Congressional Record runs)
         llm_fn = None
-        llm = None
         if should_run_llm(args.skip_llm, crec_request):
-            print("  Loading LLM for speaker identification...")
-            from src.llm_utils import llm_identify_speakers, load_llm, unload_llm
+            from src.llm_providers import get_provider
+            from src.llm_utils import llm_identify_speakers
 
-            llm = load_llm()
+            provider = get_provider(config.SPEAKER_ID_ACTIVE)
+            print(f"  LLM speaker ID via {config.SPEAKER_ID_ACTIVE} ({provider.model})")
+            _llm_event_kind = state.event_kind
             llm_fn = lambda segs, maps: llm_identify_speakers(
-                llm, segs, maps, partial_results_path=llm_partial_path,
-                roster_hint=roster_hint,
+                provider, segs, maps,
+                event_kind=_llm_event_kind, roster=roster, roster_hint=roster_hint,
+                partial_results_path=llm_partial_path,
             )
         elif crec_request and not args.skip_llm:
             print("  Skipping LLM speaker ID (Congressional Record run — CREC is "
@@ -1421,9 +1423,6 @@ def run_pipeline(args: argparse.Namespace) -> None:
         )
         elapsed = time.time() - t0
 
-        if llm is not None:
-            unload_llm(llm)
-            del llm
         if llm_partial_path.exists():
             llm_partial_path.unlink()
 
@@ -2662,9 +2661,6 @@ MEETING_TYPE_DEFAULT = "Regular Session"
 EVENT_KIND_DEFAULT = "council"
 
 
-_INTERVIEW_KINDS = {"news_clip", "press_conference", "podcast"}
-
-
 def _resolve_metadata(args, *, allow_prompt: bool = True) -> None:
     """Fill args.city/date/meeting_type/event_kind for a new run.
 
@@ -2742,7 +2738,7 @@ def _resolve_metadata(args, *, allow_prompt: bool = True) -> None:
             "(--date is always required)."
         )
 
-    if args.event_kind in _INTERVIEW_KINDS and not args.title and interactive:
+    if args.event_kind in INTERVIEW_KINDS and not args.title and interactive:
         ans = input("  Title (required for interview/media events): ").strip()
         args.title = ans or None
 

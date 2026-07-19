@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
+from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
+
 
 def _validate_uuid(name: str, value: Optional[str]) -> Optional[str]:
     if value is None:
@@ -11,9 +13,6 @@ def _validate_uuid(name: str, value: Optional[str]) -> Optional[str]:
         return str(UUID(value))
     except (ValueError, AttributeError) as exc:
         raise ValueError(f"{name} must be a UUID") from exc
-
-
-_INTERVIEW_KINDS = {"news_clip", "press_conference", "podcast"}
 
 
 def validate_event_entities(

@@ -74,3 +74,37 @@ def resolve_local_role(raw, event_kind):
         return roles[n - 1] if 1 <= n <= len(roles) else roles[0]
     norm = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
     return norm or roles[0]
+
+
+# --- Interview-style event kinds (host + guest formats) --------------------
+# Single source of truth; imported by summarize.py and event_entities.py.
+INTERVIEW_KINDS = frozenset({"news_clip", "press_conference", "podcast"})
+
+
+# --- Layer-3 speaker-ID prompt framing per event kind ----------------------
+_CIVIC_FRAMING = (
+    "You are analyzing a transcript of a local government meeting (city council, "
+    "school board, or community meeting). Speakers are typically elected officials, "
+    "government staff, and members of the public giving comment."
+)
+_INTERVIEW_FRAMING = (
+    "You are analyzing an interview or podcast transcript. Typically a host or "
+    "interviewer speaks with one or more guests. The host or interviewer is "
+    "frequently never named on air."
+)
+_DEBATE_FRAMING = (
+    "You are analyzing a candidate debate or forum transcript. Speakers are "
+    "candidates and a moderator, who are usually named near the beginning."
+)
+_DEFAULT_FRAMING = "You are analyzing a meeting transcript."
+
+
+def speaker_id_framing(event_kind) -> str:
+    """One- or two-sentence framing for the Layer-3 speaker-ID prompt."""
+    if event_kind in INTERVIEW_KINDS:
+        return _INTERVIEW_FRAMING
+    if event_kind in ("council", "school_board", "community_meeting"):
+        return _CIVIC_FRAMING
+    if event_kind in ("debate", "forum"):
+        return _DEBATE_FRAMING
+    return _DEFAULT_FRAMING

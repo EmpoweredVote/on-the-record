@@ -5,8 +5,9 @@ import pytest
 import run_local
 from src import event_kinds
 from src.event_kinds import EVENT_KINDS, validate_event_kind
+from src.event_kinds import INTERVIEW_KINDS, speaker_id_framing
+from src.event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
 from src.models import Meeting
-from src.summarize import _INTERVIEW_KINDS
 
 
 def test_meeting_round_trip_preserves_title_event_kind_and_null_city():
@@ -123,5 +124,27 @@ def test_interview_kinds_consistent_across_modules():
     run_local = importlib.import_module("run_local")
 
     assert summarize._INTERVIEW_KINDS == event_entities._INTERVIEW_KINDS
-    assert summarize._INTERVIEW_KINDS == run_local._INTERVIEW_KINDS
+    assert summarize._INTERVIEW_KINDS == run_local.INTERVIEW_KINDS
     assert "podcast" in summarize._INTERVIEW_KINDS
+
+
+def test_interview_kinds_matches_legacy_set():
+    assert INTERVIEW_KINDS == {"news_clip", "press_conference", "podcast"}
+
+
+def test_framing_interview_mentions_host_and_null():
+    framing = speaker_id_framing("podcast")
+    assert "host" in framing.lower() or "interview" in framing.lower()
+
+
+def test_framing_civic_mentions_officials():
+    framing = speaker_id_framing("council")
+    assert "official" in framing.lower() or "government" in framing.lower()
+
+
+def test_framing_debate_mentions_candidates():
+    assert "candidate" in speaker_id_framing("debate").lower()
+
+
+def test_framing_none_is_generic_nonempty():
+    assert speaker_id_framing(None).strip() != ""

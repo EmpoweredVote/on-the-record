@@ -38,17 +38,34 @@ WHISPER_MODEL_CPU = "medium"
 WHISPER_COMPUTE_GPU = "float16"
 WHISPER_COMPUTE_CPU = "int8"
 
-# --- LLM (Layer 3 speaker identification) ---
-LLM_REPO = "bartowski/Qwen2.5-7B-Instruct-GGUF"
-LLM_FILENAME = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
-LLM_CONTEXT_TOKENS = 8192
-
 # --- Summary generation (Anthropic API) ---
 SUMMARY_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"    # Section classification
 SUMMARY_SYNTHESIZE_MODEL = "claude-sonnet-4-5"  # Discussion summaries & executive summary
 SUMMARY_MAX_TOKENS_CLASSIFY = 4096
 SUMMARY_MAX_TOKENS_SYNTHESIZE = 4096
 SUMMARY_CHUNK_SIZE = 150  # Max segments per classification chunk
+
+# --- Layer-3 speaker identification (LLM) ---
+# Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
+# final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
+SPEAKER_ID_ACTIVE = "haiku"
+SPEAKER_ID_MAX_TOKENS = 150
+SPEAKER_ID_MODELS = {
+    "haiku":  {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"},
+    "sonnet": {"provider": "anthropic", "model": "claude-sonnet-4-5"},
+    # OpenAI-compatible endpoints. Model ids / base_urls are placeholders to be
+    # verified against each provider's current docs before first use; they are
+    # only reachable when their api_key_env is set (the eval skips the rest).
+    "gemini-flash": {"provider": "openai_compat", "model": "gemini-2.5-flash",
+                     "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                     "api_key_env": "GEMINI_API_KEY"},
+    "deepseek": {"provider": "openai_compat", "model": "deepseek-chat",
+                 "base_url": "https://api.deepseek.com", "api_key_env": "DEEPSEEK_API_KEY"},
+    "kimi": {"provider": "openai_compat", "model": "moonshot-v1-8k",
+             "base_url": "https://api.moonshot.ai/v1", "api_key_env": "MOONSHOT_API_KEY"},
+    "glm": {"provider": "openai_compat", "model": "glm-4-flash",
+            "base_url": "https://open.bigmodel.cn/api/paas/v4", "api_key_env": "ZHIPU_API_KEY"},
+}
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID
