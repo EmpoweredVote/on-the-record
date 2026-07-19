@@ -38,11 +38,6 @@ WHISPER_MODEL_CPU = "medium"
 WHISPER_COMPUTE_GPU = "float16"
 WHISPER_COMPUTE_CPU = "int8"
 
-# --- LLM (Layer 3 speaker identification) ---
-LLM_REPO = "bartowski/Qwen2.5-7B-Instruct-GGUF"
-LLM_FILENAME = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
-LLM_CONTEXT_TOKENS = 8192
-
 # --- Summary generation (Anthropic API) ---
 SUMMARY_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"    # Section classification
 SUMMARY_SYNTHESIZE_MODEL = "claude-sonnet-4-5"  # Discussion summaries & executive summary

@@ -16,11 +16,7 @@ from typing import Optional
 from . import config
 from .event_kinds import speaker_id_framing
 from .models import Segment, SpeakerMapping
-from .name_matching import (
-    HONORIFICS as _HONORIFICS,
-    normalize as _norm,
-    significant_tokens as _significant_tokens,
-)
+from .name_matching import normalize as _norm, significant_tokens as _significant_tokens
 
 
 def _ratio(a: str, b: str) -> float:
