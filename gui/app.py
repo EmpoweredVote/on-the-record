@@ -236,6 +236,7 @@ def create_app() -> FastAPI:
         clip_end: str = Form(""),
         event_orgs: str = Form(""),
         body_slug: str = Form(""),
+        crec_chamber: str = Form(""),
         confirm: str = Form(""),
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
@@ -264,6 +265,7 @@ def create_app() -> FastAPI:
                             "compute": compute, "diarizer": diarizer,
                             "clip_start": clip_start, "clip_end": clip_end,
                             "event_orgs": event_orgs, "body_slug": body_slug,
+                            "crec_chamber": crec_chamber,
                         },
                     },
                 )
@@ -274,6 +276,7 @@ def create_app() -> FastAPI:
             clip_start=clip_start.strip() or None, clip_end=clip_end.strip() or None,
             event_orgs=[o.strip() for o in event_orgs.split(",") if o.strip()],
             body_slug=body_slug.strip() or None,
+            crec_chamber=crec_chamber.strip() or None,
         )
         try:
             meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)

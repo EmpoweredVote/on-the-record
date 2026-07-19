@@ -47,8 +47,18 @@ def test_build_run_command_core_and_optional_flags():
 def test_build_run_command_omits_absent_optionals():
     p = RunParams(input="x", date="2026-02-10", meeting_type="Regular", event_kind="council")
     cmd = build_run_command("py", "s", p, "2026-02-10-regular")
-    for flag in ("--title", "--clip", "--city", "--num-speakers"):
+    for flag in ("--title", "--clip", "--city", "--num-speakers", "--congressional-record"):
         assert flag not in cmd
+
+
+def test_build_run_command_congressional_record_reuses_meeting_date():
+    # picking a chamber emits --congressional-record DATE CHAMBER, using the
+    # meeting date as the CREC date (a floor session's date IS its CREC date).
+    p = RunParams(input="https://youtu.be/x", date="2026-03-27", meeting_type="House Floor",
+                  event_kind="other", crec_chamber="house")
+    cmd = build_run_command("py", "s", p, "2026-03-27-house-floor")
+    ci = cmd.index("--congressional-record")
+    assert cmd[ci + 1] == "2026-03-27" and cmd[ci + 2] == "house"
     # compute/diarizer default through to the flags (explicit is fine)
     assert cmd[cmd.index("--compute") + 1] == "local"
 
