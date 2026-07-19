@@ -6,6 +6,16 @@ transcript carries word-level timestamps. We extract those announcements (tally 
 timestamp) and monotonically match them to the Slice-1 RollCallVote objects by
 tally. ASR mis-hears a digit occasionally (observed: 230 vs the true 231), so the
 match tolerates a small delta and relies on chronological order. Pure; no network.
+
+CAVEAT — the tolerance that absorbs ASR mis-hears can also MISBIND. Matching is
+correct only when announcements are complete and in order. If the transcript
+DROPS a roll's announcement (ASR failure) or two rolls have near-identical tallies
+(common on party-line days), a roll can bind to an adjacent roll's announcement
+within `tol` and report a confident-looking but WRONG timestamp. Treat a
+VoteTiming with tally_delta == 0 as high-confidence and tally_delta > 0 as fuzzy
+(worth downstream verification); do not treat matched=True alone as ground truth.
+Hardening this (lowest-delta-in-window matching, announcement-vs-roll count
+reconciliation) is a follow-on for when timing is wired into published output.
 """
 from __future__ import annotations
 
