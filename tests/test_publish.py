@@ -375,3 +375,52 @@ def test_publish_meeting_never_calls_deploy_hook(monkeypatch):
     assert calls["deploy"] == 0
     publish.publish_meeting(m, None)  # trigger_deploy=True (default) — hook still not called
     assert calls["deploy"] == 0
+
+
+def test_replace_votes_builds_rows(monkeypatch):
+    from src import publish
+    from src.models import Meeting, FloorVote
+
+    captured = {}
+    def fake_execute_values(cur, sql, rows):
+        captured["sql"] = sql
+        captured["rows"] = rows
+    monkeypatch.setattr(publish.psycopg2.extras, "execute_values", fake_execute_values)
+
+    class _Cur:
+        def __init__(self):
+            self.executes = []
+        def execute(self, sql, params=None):
+            self.executes.append((sql, params))
+
+    m = Meeting(meeting_id="m", city=None, date="2019-07-11", floor_votes=[
+        FloorVote(438, "On the Smith amendment", 236, 193, 0, 9, 102.6, 0, True),
+        FloorVote(500, "On the Jones amendment", 300, 100, 0, 5, None, None, False),
+    ])
+    cur = _Cur()
+    n = publish._replace_votes(cur, m, "uuid-1")
+
+    assert n == 2
+    assert any("DELETE FROM meetings.votes" in s for s, _ in cur.executes)
+    assert captured["rows"][0] == (
+        "uuid-1", "Roll No. 438", "On the Smith amendment", "Yea 236, Nay 193", "recorded", 102.6)
+    assert captured["rows"][1][5] is None
+
+
+def test_replace_votes_empty_deletes_and_inserts_nothing(monkeypatch):
+    from src import publish
+    from src.models import Meeting
+
+    called = {"execute_values": False}
+    monkeypatch.setattr(publish.psycopg2.extras, "execute_values",
+                        lambda *a, **k: called.__setitem__("execute_values", True))
+
+    class _Cur:
+        def __init__(self): self.executes = []
+        def execute(self, sql, params=None): self.executes.append((sql, params))
+
+    m = Meeting(meeting_id="m", city=None, date="d")
+    cur = _Cur()
+    assert publish._replace_votes(cur, m, "uuid-1") == 0
+    assert any("DELETE FROM meetings.votes" in s for s, _ in cur.executes)
+    assert called["execute_values"] is False

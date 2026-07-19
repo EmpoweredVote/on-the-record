@@ -501,6 +501,41 @@ def _replace_segments(
     return len(rows)
 
 
+def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
+    """Delete then insert this meeting's recorded floor votes into meetings.votes.
+
+    Federal floor votes carry only the vote event (roll, tally, timestamp) — the
+    400+ voters are not meeting speakers and their per-member positions already
+    live in essentials.legislative_votes, so meetings.vote_records is deliberately
+    NOT populated here. On-the-record owns meetings.votes for meetings it publishes
+    (delete-then-insert, mirroring _replace_segments). `result` is NOT NULL; we
+    store the tally string (the official pass/fail outcome is a later follow-on).
+    Timestamps are expected to already be source-absolute (absolutize_meeting_times).
+    """
+    cur.execute("DELETE FROM meetings.votes WHERE meeting_id = %s", (meeting_uuid,))
+    rows = []
+    for fv in meeting.floor_votes:
+        rows.append((
+            meeting_uuid,
+            f"Roll No. {fv.roll_number}",        # resolution
+            fv.question,                          # description
+            f"Yea {fv.yea}, Nay {fv.nay}",        # result (NOT NULL)
+            "recorded",                           # vote_type
+            fv.timestamp,                         # numeric seconds (absolutized), NULL if unmatched
+        ))
+    if rows:
+        psycopg2.extras.execute_values(
+            cur,
+            """
+            INSERT INTO meetings.votes
+              (meeting_id, resolution, description, result, vote_type, timestamp)
+            VALUES %s
+            """,
+            rows,
+        )
+    return len(rows)
+
+
 def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
     """Delete-then-insert meeting_topics rows from meeting.section_topics.
 
@@ -596,6 +631,9 @@ def publish_meeting(
                     cur, meeting, meeting_uuid, label_to_uuid
                 )
                 _replace_topics(cur, meeting_uuid, meeting)
+                vote_count = _replace_votes(cur, meeting, meeting_uuid)
+                if vote_count:
+                    print(f"  Published {vote_count} floor vote(s) to meetings.votes")
                 speaker_count = len(label_to_uuid)
 
                 cur.execute(
