@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import type { Meeting, Segment, SummarySection } from "@/lib/types";
+import type { Meeting, Segment, SummarySection, Vote } from "@/lib/types";
 import type { PlayerAdapter } from "./players/adapter";
 import YouTubePlayer from "./players/YouTubePlayer";
 import FilePlayer from "./players/FilePlayer";
@@ -51,10 +51,12 @@ export default function MeetingView({
   meeting,
   segments,
   outline = [],
+  votes = [],
 }: {
   meeting: Meeting;
   segments: Segment[];
   outline?: SummarySection[];
+  votes?: Vote[];
 }) {
   const adapterRef = useRef<PlayerAdapter | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -302,6 +304,34 @@ export default function MeetingView({
                       ))}
                     </span>
                   )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {votes.length > 0 && (
+          <section className="outline votes">
+            <h2>Votes</h2>
+            <ul>
+              {votes.map((v) => (
+                <li key={v.id} className="outlineItem">
+                  {v.timestamp != null ? (
+                    <button
+                      type="button"
+                      className="outlineLink"
+                      title={v.description ?? undefined}
+                      onClick={() => seekToTime(Math.floor(v.timestamp as number))}
+                    >
+                      <span className="outlineTitle">{v.resolution ?? "Vote"}</span>
+                      <span className="outlineTime">{formatTime(v.timestamp as number)}</span>
+                    </button>
+                  ) : (
+                    <span className="outlineLink voteNoSeek" title={v.description ?? undefined}>
+                      <span className="outlineTitle">{v.resolution ?? "Vote"}</span>
+                    </span>
+                  )}
+                  <span className="voteResult">{v.result}</span>
                 </li>
               ))}
             </ul>

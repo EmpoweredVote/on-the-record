@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchMeeting, fetchSegments, fetchSummary } from "@/lib/queries";
+import { fetchMeeting, fetchSegments, fetchSummary, fetchVotes } from "@/lib/queries";
 import { eventKindLabel, formatMeetingDate, meetingTitle } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 import { usePathParam } from "@/lib/usePathParam";
@@ -17,6 +17,7 @@ export default function MeetingDetailClient() {
 
   const meetingQ = useApi(() => (ready ? fetchMeeting(id) : Promise.resolve(null)), [id]);
   const segmentsQ = useApi(() => (ready ? fetchSegments(id) : Promise.resolve([])), [id]);
+  const votesQ = useApi(() => (ready ? fetchVotes(id).catch(() => []) : Promise.resolve([])), [id]);
   const summaryQ = useApi(() => (ready ? fetchSummary(id).catch(() => null) : Promise.resolve(null)), [id]);
 
   if (!ready || meetingQ.loading) return <main className="meetingPage"><Loading label="Loading meeting…" /></main>;
@@ -25,6 +26,7 @@ export default function MeetingDetailClient() {
 
   const meeting = meetingQ.data;
   const segments = segmentsQ.data ?? [];
+  const votes = votesQ.data ?? [];
   const summary = summaryQ.data ?? null;
   const outline = buildOutline(summary?.sections);
 
@@ -62,7 +64,7 @@ export default function MeetingDetailClient() {
         </section>
       )}
 
-      <MeetingView meeting={meeting} segments={segments} outline={outline} />
+      <MeetingView meeting={meeting} segments={segments} outline={outline} votes={votes} />
     </main>
   );
 }

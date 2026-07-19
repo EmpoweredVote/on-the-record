@@ -1921,3 +1921,14 @@ a.skimTs:hover {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* Roll-call votes list (reuses .outline / .outlineItem / .outlineLink layout) */
+.voteResult {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin-top: 0.15rem;
+}
+.voteNoSeek {
+  cursor: default;
+}
