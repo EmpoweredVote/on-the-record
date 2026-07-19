@@ -38,3 +38,10 @@ def test_parse_two_votes_splits_on_roll_markers():
 
 def test_no_votes_returns_empty():
     assert parse_votes("Mr. SMITH. Mr. Speaker, I yield back.") == []
+
+
+def test_rollcallvote_timestamp_defaults_none_and_is_settable():
+    v = RollCallVote(438, "q", {"YEA": ["Adams"]})
+    assert v.timestamp is None
+    v.timestamp = 102.64
+    assert v.timestamp == 102.64

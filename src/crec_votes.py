@@ -34,6 +34,7 @@ class RollCallVote:
     roll_number: int
     question: str
     positions: dict = field(default_factory=dict)  # "YEA"/"NAY"/"PRESENT"/"NOT_VOTING" -> [surname]
+    timestamp: Optional[float] = None               # transcript-relative time of the result announcement (Slice 2)
 
 
 def _position_of(label: str) -> Optional[str]:
