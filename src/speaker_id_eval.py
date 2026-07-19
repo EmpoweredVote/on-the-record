@@ -6,22 +6,13 @@ without touching the filesystem or any model API.
 from __future__ import annotations
 
 import difflib
-import re
 from typing import Optional
 
-_HONORIFICS = {
-    "mr", "mrs", "ms", "dr", "rep", "sen", "senator", "representative",
-    "president", "chair", "chairman", "chairwoman", "councilmember", "mayor",
-    "the", "hon", "gov", "governor", "speaker",
-}
-
-
-def _norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+from .name_matching import significant_tokens
 
 
 def _surname(name: str) -> str:
-    toks = [t for t in _norm(name).split() if len(t) >= 2 and t not in _HONORIFICS]
+    toks = significant_tokens(name)
     return toks[-1] if toks else ""
 
 

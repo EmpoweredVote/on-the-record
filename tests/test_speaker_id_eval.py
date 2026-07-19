@@ -32,6 +32,11 @@ def test_classify_miss():
     assert classify("Jeff Merkley", None) == "miss"
 
 
+def test_classify_fuzzy_surname_match():
+    assert classify("Jeff Merkley", "Jeff Merkely") == "correct"  # transposed letters
+    assert classify("Jeff Merkley", "Jeff Bilirakis") == "wrong"
+
+
 def test_summarize_counts_and_rates():
     outcomes = ["correct", "correct", "miss", "safe_null", "hallucination", "wrong"]
     row = summarize("haiku", outcomes)
@@ -40,3 +45,9 @@ def test_summarize_counts_and_rates():
     assert row["correct"] == 2
     assert row["hallucination"] == 1
     assert 0.0 <= row["accuracy"] <= 1.0
+
+
+def test_summarize_empty_is_zero():
+    row = summarize("x", [])
+    assert row["n"] == 0
+    assert row["accuracy"] == 0.0

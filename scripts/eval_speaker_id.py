@@ -32,8 +32,12 @@ def _gold_labels(meeting_json: dict) -> dict[str, str]:
     """label -> gold name, for human_review labels only (deduped by first seen)."""
     gold: dict[str, str] = {}
     for s in meeting_json.get("segments", []):
-        if s.get("id_method") == "human_review":
-            gold.setdefault(s["speaker_label"], s.get("speaker_name"))
+        if s.get("id_method") != "human_review":
+            continue
+        label = s.get("speaker_label")
+        if not label:
+            continue
+        gold.setdefault(label, s.get("speaker_name"))
     return gold
 
 
@@ -45,7 +49,8 @@ def _load_meetings(meetings_dir: Path) -> list[tuple[str, dict]]:
     out = []
     for path in sorted(glob.glob(str(meetings_dir / "*" / "transcript_named.json"))):
         try:
-            data = json.load(open(path))
+            with open(path) as f:
+                data = json.load(f)
         except (json.JSONDecodeError, OSError):
             continue
         if data.get("event_kind") not in INTERVIEW_KINDS:
@@ -60,7 +65,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+", default=["haiku", "sonnet"],
                     help="keys from config.SPEAKER_ID_MODELS")
-    ap.add_argument("--meetings-dir", default=os.path.expanduser("~/CouncilScribe/meetings"))
+    ap.add_argument("--meetings-dir", default=os.path.expanduser("~/CouncilScribe/meetings"),
+                    help="directory of <meeting>/transcript_named.json files to score")
     args = ap.parse_args()
 
     meetings = _load_meetings(Path(args.meetings_dir))
@@ -79,12 +85,18 @@ def main() -> None:
         for name, data in meetings:
             gold = _gold_labels(data)
             segments = _segments(data)
-            preds = llm_identify_speakers(
-                provider, segments, {}, event_kind=data.get("event_kind"),
-            )
+            try:
+                preds = llm_identify_speakers(
+                    provider, segments, {}, event_kind=data.get("event_kind"),
+                )
+            except Exception as e:  # keep the run alive over flaky API calls
+                print(f"    ! {model}/{name}: {e} — skipping meeting")
+                continue
             for label, gold_name in gold.items():
                 pred = preds.get(label)
                 outcomes.append(classify(gold_name, pred.speaker_name if pred else None))
+        # n reflects only scored labels: meetings skipped above (flaky API)
+        # contribute no outcomes, so the row still completes for the table.
         row = summarize(model, outcomes)
         row["seconds"] = round(time.time() - t0, 1)
         rows.append(row)

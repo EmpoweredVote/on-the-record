@@ -16,23 +16,11 @@ from typing import Optional
 from . import config
 from .event_kinds import speaker_id_framing
 from .models import Segment, SpeakerMapping
-
-_HONORIFICS = {
-    "mr", "mrs", "ms", "dr", "rep", "sen", "senator", "representative",
-    "president", "chair", "chairman", "chairwoman", "chairperson",
-    "councilmember", "council", "member", "mayor", "the", "hon", "honorable",
-    "gov", "governor", "speaker",
-}
-
-
-def _norm(text: str) -> str:
-    """Lowercase, non-alphanumerics -> spaces, collapse whitespace."""
-    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
-
-
-def _significant_tokens(name: str) -> list[str]:
-    """Name tokens minus honorifics and tokens shorter than 2 chars."""
-    return [t for t in _norm(name).split() if len(t) >= 2 and t not in _HONORIFICS]
+from .name_matching import (
+    HONORIFICS as _HONORIFICS,
+    normalize as _norm,
+    significant_tokens as _significant_tokens,
+)
 
 
 def _ratio(a: str, b: str) -> float:
