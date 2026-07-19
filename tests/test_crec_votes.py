@@ -13,7 +13,8 @@ def test_parse_single_vote_block():
     assert v.roll_number == 438
     assert v.positions["YEA"] == ["Adams", "Aguilar", "Allred", "Amash", "Axne"]
     assert v.positions["NAY"] == ["Abraham", "Aderholt", "Allen", "Amodei", "Armstrong"]
-    assert v.positions["NOT_VOTING"] == ["Fudge", "Gabbard", "Higgins (LA)", "McNerney", "Norton"]
+    assert v.positions["PRESENT"] == ["Gohmert"]        # bug 1: ANSWERED ``PRESENT'' now parsed
+    assert v.positions["NOT_VOTING"] == ["Fudge", "Gabbard", "Higgins (LA)", "McNerney", "Norton"]  # bug 2: junk rejected
     assert "Smith" in v.question
 
 

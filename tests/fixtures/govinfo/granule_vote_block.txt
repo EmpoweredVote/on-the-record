@@ -8,7 +8,9 @@ recorded vote on the amendment offered by the gentleman from Washington
 
   The Acting CHAIR. A recorded vote has been demanded.
   The vote was taken by electronic device, and there were--ayes 5,
-noes 5, not voting 5, as follows:
+noes 5, answered ``present'' 1, not voting 5, as follows:
+
+[[Page H5607]]
 
                              [Roll No. 438]
 
@@ -28,6 +30,10 @@ noes 5, not voting 5, as follows:
      Amodei
      Armstrong
 
+                          ANSWERED ``PRESENT''--1
+
+     Gohmert
+
                              NOT VOTING--5
 
      Fudge
@@ -36,4 +42,8 @@ noes 5, not voting 5, as follows:
      McNerney
      Norton
 
+{time}  1358
+  Messrs. HERN and BAIRD changed their vote from
+``aye'' to ``no.''
+  So the amendment was agreed to.
   The result of the vote was announced as above recorded.

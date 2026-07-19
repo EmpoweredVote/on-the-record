@@ -59,6 +59,7 @@ def fetch_granules(
         except Exception:
             if first:
                 return None
+            print("  crec_structure: granules-list pagination failed mid-way; partial list may be incomplete.")
             break
         first = False
         records.extend(parse_granule_records(page, chamber))
@@ -74,6 +75,7 @@ def fetch_granules(
         try:
             htm = fetch(govinfo._granule_text_url(pkg, gid, key))
         except Exception:
+            print(f"  crec_structure: skipping granule {gid} (text fetch failed).")
             continue
         granules.append(CrecGranule(gid, klass, title, govinfo.html_to_text(htm)))
     return granules or None
