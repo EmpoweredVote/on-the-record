@@ -86,3 +86,33 @@ def test_build_floor_votes_projects_and_timestamps():
     assert (fvs[0].yea, fvs[0].nay) == (236, 193)
     assert fvs[0].timestamp == 102.64 and fvs[0].matched is True
     assert fvs[2].timestamp == 732.28 and fvs[2].tally_delta == 1
+
+
+def test_floorvote_outcome_roundtrips():
+    from src.models import FloorVote
+    fv = FloorVote(438, "q", 236, 193, 0, 9, 102.6, 0, True,
+                   outcome="Agreed to", passed=True)
+    d = fv.to_dict()
+    assert d["outcome"] == "Agreed to" and d["passed"] is True
+    back = FloorVote.from_dict(d)
+    assert back.outcome == "Agreed to" and back.passed is True
+
+
+def test_floorvote_outcome_defaults_none_for_positional_construction():
+    from src.models import FloorVote
+    fv = FloorVote(1, "q", 1, 0, 0, 0, None, None, False)  # 9 positional, no outcome
+    assert fv.outcome is None and fv.passed is None
+    assert FloorVote.from_dict(fv.to_dict()).outcome is None
+
+
+def test_build_floor_votes_carries_outcome():
+    from types import SimpleNamespace
+    from src.crec_votes import RollCallVote
+    from src.crec_floor import build_floor_votes, FloorStructure, GranuleVotes
+    rc = RollCallVote(438, "On the Smith amendment",
+                      {"YEA": ["Adams"], "NAY": []},
+                      outcome="Agreed to", passed=True)
+    fs = FloorStructure(date="2019-07-11", chamber="house")
+    fs.votes = [GranuleVotes(granule=SimpleNamespace(text=""), votes=[rc], members=[])]
+    out = build_floor_votes(fs, [])  # no segments -> no timestamp, outcome still carried
+    assert out[0].outcome == "Agreed to" and out[0].passed is True

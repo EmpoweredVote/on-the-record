@@ -424,3 +424,26 @@ def test_replace_votes_empty_deletes_and_inserts_nothing(monkeypatch):
     assert publish._replace_votes(cur, m, "uuid-1") == 0
     assert any("DELETE FROM meetings.votes" in s for s, _ in cur.executes)
     assert called["execute_values"] is False
+
+
+def test_replace_votes_result_uses_outcome_when_present(monkeypatch):
+    from src import publish
+    from src.models import Meeting, FloorVote
+
+    captured = {}
+    def fake_execute_values(cur, sql, rows):
+        captured["rows"] = rows
+    monkeypatch.setattr(publish.psycopg2.extras, "execute_values", fake_execute_values)
+
+    class _Cur:
+        def __init__(self): self.executes = []
+        def execute(self, sql, params=None): self.executes.append((sql, params))
+
+    m = Meeting(meeting_id="m", city=None, date="2019-07-11", floor_votes=[
+        FloorVote(438, "On the Smith amendment", 236, 193, 0, 9, 102.6, 0, True,
+                  outcome="Agreed to", passed=True),
+        FloorVote(500, "On the Jones amendment", 300, 100, 0, 5, None, None, False),  # no outcome
+    ])
+    publish._replace_votes(_Cur(), m, "uuid-1")
+    assert captured["rows"][0][3] == "Agreed to · 236–193"   # outcome · yea–nay
+    assert captured["rows"][1][3] == "Yea 300, Nay 100"                # fallback tally
