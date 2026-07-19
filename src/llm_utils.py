@@ -1,75 +1,110 @@
-"""Layer 3: LLM-assisted speaker identification via llama-cpp-python."""
+"""Layer 3: LLM-assisted speaker identification.
+
+Sends a transcript window around each unresolved speaker to a configured model
+(see src/llm_providers.py), then rejects any returned name that is not anchored
+to the roster (civic runs) or the transcript (interviews). Floor runs skip this
+layer entirely (see run_local.should_run_llm).
+"""
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from typing import Optional
 
-from . import config
+from .event_kinds import speaker_id_framing
 from .models import Segment, SpeakerMapping
 
+_HONORIFICS = {
+    "mr", "mrs", "ms", "dr", "rep", "sen", "senator", "representative",
+    "president", "chair", "chairman", "chairwoman", "chairperson",
+    "councilmember", "council", "member", "mayor", "the", "hon", "honorable",
+    "gov", "governor", "speaker",
+}
 
-def load_llm(n_gpu_layers: int = -1):
-    """Download and load a small GGUF model for speaker identification.
 
-    Uses llama-cpp-python with GPU offloading when available.
-    n_gpu_layers=-1 means offload all layers to GPU.
+def _norm(text: str) -> str:
+    """Lowercase, non-alphanumerics -> spaces, collapse whitespace."""
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+def _significant_tokens(name: str) -> list[str]:
+    """Name tokens minus honorifics and tokens shorter than 3 chars."""
+    return [t for t in _norm(name).split() if len(t) >= 3 and t not in _HONORIFICS]
+
+
+def _ratio(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def _matches_roster(surname: str, roster) -> bool:
+    for m in roster.members:
+        candidates = _significant_tokens(m.name)
+        for alias in (getattr(m, "aliases", None) or []):
+            candidates += _significant_tokens(alias)
+        for c in candidates:
+            if surname == c or _ratio(surname, c) >= 0.85:
+                return True
+    return False
+
+
+def _name_is_anchored(name: str, roster, segments: list[Segment]) -> bool:
+    """A returned name must be anchored, or it is a hallucination.
+
+    Civic runs with a roster: anchor is the roster (blocks non-roster invention).
+    Interviews (no roster): anchor is the transcript (blocks "Mr. Bean").
     """
-    from huggingface_hub import hf_hub_download
-    from llama_cpp import Llama
-
-    model_path = hf_hub_download(
-        repo_id=config.LLM_REPO,
-        filename=config.LLM_FILENAME,
-    )
-
-    llm = Llama(
-        model_path=model_path,
-        n_ctx=config.LLM_CONTEXT_TOKENS,
-        n_gpu_layers=n_gpu_layers,
-        verbose=False,
-    )
-    return llm
+    tokens = _significant_tokens(name)
+    if not tokens:
+        return False
+    surname = tokens[-1]
+    if roster is not None and getattr(roster, "members", None):
+        return _matches_roster(surname, roster)
+    transcript = " ".join(_norm(s.text) for s in segments if s.text)
+    if surname and surname in transcript:
+        return True
+    return any(_ratio(surname, t) >= 0.85 for t in set(transcript.split()))
 
 
-def unload_llm(llm) -> None:
-    """Explicitly free LLM memory."""
-    import gc
-
-    import torch
-
-    del llm
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        torch.mps.empty_cache()
+def _parse_name(text: str) -> Optional[str]:
+    """Extract the candidate name from the model's JSON, or None to abstain."""
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group())
+    except json.JSONDecodeError:
+        return None
+    name = data.get("name")
+    if not name or str(name).strip().lower() in ("null", "unknown", "none"):
+        return None
+    return str(name).strip()
 
 
 def prompt_for_speaker_id(
-    llm,
+    provider,
     segments: list[Segment],
     current_mappings: dict[str, SpeakerMapping],
     unknown_label: str,
+    *,
+    event_kind=None,
     window_size: int = 20,
+    roster=None,
     roster_hint: str = "",
 ) -> Optional[SpeakerMapping]:
-    """Ask the LLM to identify a single unknown speaker from context.
+    """Ask the configured model to identify one unknown speaker from context.
 
-    Sends a ~2000-token transcript window around the unknown speaker's
-    segments, with known identities annotated.
+    Returns a SpeakerMapping (id_method='llm', confidence=0.75) only when the
+    returned name is anchored to the roster or transcript; otherwise None.
     """
-    # Find segments from the unknown speaker
     unknown_indices = [
         i for i, s in enumerate(segments) if s.speaker_label == unknown_label
     ]
     if not unknown_indices:
         return None
 
-    # Pick a center point that maximizes surrounding context.
-    # Prefer an occurrence near the middle of the transcript over the first one,
-    # since early segments (e.g. roll call) often lack identifying context.
+    # Center on an occurrence away from the very start (roll call lacks context).
     if len(unknown_indices) >= 3:
         center = unknown_indices[len(unknown_indices) // 3]
     else:
@@ -78,7 +113,6 @@ def prompt_for_speaker_id(
     end = min(len(segments), center + window_size // 2)
     window = segments[start:end]
 
-    # Format transcript excerpt
     lines = []
     for seg in window:
         mapping = current_mappings.get(seg.speaker_label)
@@ -89,19 +123,15 @@ def prompt_for_speaker_id(
         else:
             speaker = seg.speaker_label
         lines.append(f"{speaker}: {seg.text}")
-
     transcript_excerpt = "\n".join(lines)
 
-    known_speakers = []
-    for label, m in current_mappings.items():
-        if m.speaker_name:
-            known_speakers.append(f"  - {label} = {m.speaker_name}")
+    known_speakers = [
+        f"  - {label} = {m.speaker_name}"
+        for label, m in current_mappings.items()
+        if m.speaker_name
+    ]
     known_section = "\n".join(known_speakers) if known_speakers else "  (none identified yet)"
-    # These names are already claimed by OTHER, distinct voices. The unknown
-    # speaker is a different voice, so it cannot be any of them — reusing one
-    # would collapse two people into one. This matters most in interviews, where
-    # the interviewer is often never named and the transcript is dominated by the
-    # interviewee; the safe answer there is null, not the interviewee's name.
+
     claimed_note = ""
     if any(m.speaker_name for m in current_mappings.values()):
         claimed_note = (
@@ -114,9 +144,12 @@ def prompt_for_speaker_id(
 
     roster_section = ""
     if roster_hint:
-        roster_section = f"\n{roster_hint}\nIMPORTANT: Use the exact names from this roster when identifying speakers. Transcription may misspell names.\n"
+        roster_section = (
+            f"\n{roster_hint}\nIMPORTANT: Use the exact names from this roster when "
+            "identifying speakers. Transcription may misspell names.\n"
+        )
 
-    prompt = f"""You are analyzing a city council meeting transcript to identify speakers.
+    prompt = f"""{speaker_id_framing(event_kind)} Your job is to identify one speaker.
 {roster_section}
 Known speakers:
 {known_section}
@@ -133,71 +166,49 @@ Based on the context, who is {unknown_label}? Consider:
 - What topics they discuss and their role
 - Conversational patterns and turn-taking
 
+If the transcript does not contain enough information to name this speaker,
+answer with null rather than guessing.
+
 Respond with ONLY a JSON object:
 {{"name": "Speaker Name or null", "reasoning": "brief explanation"}}"""
 
-    # Truncate prompt if it would exceed context window (leave room for response)
-    max_prompt_tokens = config.LLM_CONTEXT_TOKENS - 200
-    estimated_tokens = len(prompt) // 3  # rough estimate: ~3 chars per token
-    if estimated_tokens > max_prompt_tokens:
-        # Trim the transcript excerpt to fit
-        allowed_chars = max_prompt_tokens * 3
-        prompt = prompt[:allowed_chars] + '\n---\n\nRespond with ONLY a JSON object:\n{"name": "Speaker Name or null", "reasoning": "brief explanation"}'
+    from . import config
 
-    response = llm(
+    text = provider.complete(
         prompt,
-        max_tokens=150,
-        temperature=0.1,
-        stop=["}\n"],  # stop after closing brace of JSON
+        max_tokens=config.SPEAKER_ID_MAX_TOKENS,
+        temperature=0.0,
     )
-
-    text = response["choices"][0]["text"].strip()
-    # Ensure we have a complete JSON object
     if text and "{" in text and "}" not in text:
         text += "}"
-    return _parse_llm_response(text, unknown_label)
 
-
-def _parse_llm_response(
-    text: str, speaker_label: str
-) -> Optional[SpeakerMapping]:
-    """Parse LLM JSON response into a SpeakerMapping."""
-    # Try to extract JSON from the response
-    json_match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not json_match:
+    candidate = _parse_name(text)
+    if not candidate:
         return None
-
-    try:
-        data = json.loads(json_match.group())
-    except json.JSONDecodeError:
+    if not _name_is_anchored(candidate, roster, segments):
         return None
-
-    name = data.get("name")
-    if not name or name.lower() == "null" or name.lower() == "unknown":
-        return None
-
     return SpeakerMapping(
-        speaker_label=speaker_label,
-        speaker_name=name,
+        speaker_label=unknown_label,
+        speaker_name=candidate,
         confidence=0.75,
         id_method="llm",
     )
 
 
 def llm_identify_speakers(
-    llm,
+    provider,
     segments: list[Segment],
     current_mappings: dict[str, SpeakerMapping],
-    partial_results_path=None,
+    *,
+    event_kind=None,
+    roster=None,
     roster_hint: str = "",
+    partial_results_path=None,
 ) -> dict[str, SpeakerMapping]:
-    """Identify all unresolved speakers using the LLM.
+    """Identify all unresolved speakers using the configured model.
 
-    This function is designed to be passed as llm_identify_fn to
-    identify.identify_speakers().
-
-    If partial_results_path is provided, saves results after each speaker
-    so progress survives errors or session timeouts.
+    Passed as llm_identify_fn to identify.identify_speakers(). Saves partial
+    results after each speaker when partial_results_path is given.
     """
     all_labels = sorted({seg.speaker_label for seg in segments})
     unresolved = [
@@ -205,7 +216,6 @@ def llm_identify_speakers(
         if label not in current_mappings or not current_mappings[label].speaker_name
     ]
 
-    # Load any partial results from a previous run
     results: dict[str, SpeakerMapping] = {}
     already_done: set[str] = set()
     if partial_results_path:
@@ -232,23 +242,23 @@ def llm_identify_speakers(
     for i, label in enumerate(remaining):
         print(f"    [{i+1}/{total}] Analyzing {label}...", end=" ", flush=True)
         try:
-            mapping = prompt_for_speaker_id(llm, segments, current_mappings, label, roster_hint=roster_hint)
+            mapping = prompt_for_speaker_id(
+                provider, segments, current_mappings, label,
+                event_kind=event_kind, roster=roster, roster_hint=roster_hint,
+            )
             if mapping:
                 results[label] = mapping
-                # Update current_mappings so subsequent prompts have context
                 current_mappings[label] = mapping
                 print(f"-> {mapping.speaker_name}")
             else:
                 print("-> (unresolved)")
         except Exception as e:
             print(f"-> error: {e}")
-            # Save what we have so far and re-raise
             if partial_results_path:
                 _save_partial_results(results, partial_results_path)
                 print(f"    Partial results saved ({len(results)} speakers). Re-run to continue.")
             raise
 
-        # Save after each successful identification
         if partial_results_path:
             _save_partial_results(results, partial_results_path)
 
@@ -256,13 +266,13 @@ def llm_identify_speakers(
 
 
 def _save_partial_results(results: dict[str, SpeakerMapping], path) -> None:
-    """Save partial LLM results to disk."""
-    data = {}
-    for label, m in results.items():
-        data[label] = {
+    data = {
+        label: {
             "speaker_name": m.speaker_name,
             "confidence": m.confidence,
             "id_method": m.id_method,
         }
+        for label, m in results.items()
+    }
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
