@@ -266,6 +266,8 @@ class FloorVote:
     timestamp: Optional[float]
     tally_delta: Optional[int]
     matched: bool
+    outcome: Optional[str] = None   # display phrase, e.g. "Agreed to"; None if unparsed
+    passed: Optional[bool] = None   # normalized pass/fail; None if unparsed
 
     def to_dict(self) -> dict:
         return {
@@ -273,6 +275,7 @@ class FloorVote:
             "yea": self.yea, "nay": self.nay, "present": self.present,
             "not_voting": self.not_voting, "timestamp": self.timestamp,
             "tally_delta": self.tally_delta, "matched": self.matched,
+            "outcome": self.outcome, "passed": self.passed,
         }
 
     @classmethod
@@ -283,6 +286,7 @@ class FloorVote:
             present=d.get("present", 0), not_voting=d.get("not_voting", 0),
             timestamp=d.get("timestamp"), tally_delta=d.get("tally_delta"),
             matched=d.get("matched", False),
+            outcome=d.get("outcome"), passed=d.get("passed"),
         )
 
 

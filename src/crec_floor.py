@@ -99,5 +99,7 @@ def build_floor_votes(floor_structure, transcript_segments):
             timestamp=rc.timestamp,
             tally_delta=timing.tally_delta,
             matched=timing.matched,
+            outcome=rc.outcome,
+            passed=rc.passed,
         ))
     return out
