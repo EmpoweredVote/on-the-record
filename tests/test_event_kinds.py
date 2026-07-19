@@ -124,7 +124,7 @@ def test_interview_kinds_consistent_across_modules():
     run_local = importlib.import_module("run_local")
 
     assert summarize._INTERVIEW_KINDS == event_entities._INTERVIEW_KINDS
-    assert summarize._INTERVIEW_KINDS == run_local._INTERVIEW_KINDS
+    assert summarize._INTERVIEW_KINDS == run_local.INTERVIEW_KINDS
     assert "podcast" in summarize._INTERVIEW_KINDS
 
 
