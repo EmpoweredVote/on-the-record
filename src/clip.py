@@ -78,4 +78,7 @@ def absolutize_meeting_times(meeting: Meeting) -> Meeting:
         for sec in out.summary.sections:
             sec.start_time += offset
             sec.end_time += offset
+    for fv in out.floor_votes:
+        if fv.timestamp is not None:
+            fv.timestamp += offset
     return out

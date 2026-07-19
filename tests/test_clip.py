@@ -85,3 +85,25 @@ def test_absolutize_shifts_word_timestamps():
     assert [(w.start, w.end) for w in out.segments[0].words] == [(1380.0, 1381.0), (1381.0, 1382.0)]
     # original untouched
     assert m.segments[0].words[0].start == 0.0
+
+
+def test_absolutize_shifts_floor_votes():
+    from src.clip import absolutize_meeting_times
+    from src.models import Meeting, FloorVote
+    m = Meeting(meeting_id="m", city=None, date="2019-07-11", clip_start_seconds=14600.0,
+                floor_votes=[
+                    FloorVote(438, "Q", 236, 193, 0, 9, 102.6, 0, True),
+                    FloorVote(500, "Q2", 1, 1, 0, 0, None, None, False),
+                ])
+    out = absolutize_meeting_times(m)
+    assert out.floor_votes[0].timestamp == 14702.6
+    assert out.floor_votes[1].timestamp is None
+    assert m.floor_votes[0].timestamp == 102.6
+
+
+def test_absolutize_no_offset_leaves_floor_votes():
+    from src.clip import absolutize_meeting_times
+    from src.models import Meeting, FloorVote
+    m = Meeting(meeting_id="m", city=None, date="d",
+                floor_votes=[FloorVote(438, "Q", 236, 193, 0, 9, 102.6, 0, True)])
+    assert absolutize_meeting_times(m).floor_votes[0].timestamp == 102.6
