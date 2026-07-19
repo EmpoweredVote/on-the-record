@@ -6,7 +6,7 @@ guardrail, and parsing live in src/llm_utils.py — providers only call the mode
 from __future__ import annotations
 
 import os
-from typing import Optional, Protocol
+from typing import Protocol
 
 import anthropic
 
