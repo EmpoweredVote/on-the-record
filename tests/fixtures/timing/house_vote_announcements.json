@@ -1,0 +1,36 @@
+[
+  {
+    "speaker_label": "SPEAKER_00", "start_time": 102.16, "end_time": 123.57,
+    "text": "this vote, the yeas are 236, the nays are 193. The amendment is adopted.",
+    "words": [
+      {"word": "this", "start": 102.12}, {"word": "vote,", "start": 102.28},
+      {"word": "the", "start": 102.58}, {"word": "yeas", "start": 102.64},
+      {"word": "are", "start": 102.94}, {"word": "236,", "start": 103.06},
+      {"word": "the", "start": 104.06}, {"word": "nays", "start": 104.22},
+      {"word": "are", "start": 104.54}, {"word": "193.", "start": 104.84}
+    ]
+  },
+  {
+    "speaker_label": "SPEAKER_00", "start_time": 451.81, "end_time": 456.30,
+    "text": "On this vote, the yeas are 242, the nays are 187. The amendment is adopted.",
+    "words": [
+      {"word": "On", "start": 451.42}, {"word": "this", "start": 451.82},
+      {"word": "vote,", "start": 452.00}, {"word": "the", "start": 452.36},
+      {"word": "yeas", "start": 452.46}, {"word": "are", "start": 452.84},
+      {"word": "242,", "start": 452.96}, {"word": "the", "start": 453.82},
+      {"word": "nays", "start": 453.92}, {"word": "are", "start": 454.16},
+      {"word": "187.", "start": 454.30}
+    ]
+  },
+  {
+    "speaker_label": "SPEAKER_00", "start_time": 731.70, "end_time": 735.00,
+    "text": "this vote, the yeas are 230, the nays are 199, the amendment is adopted.",
+    "words": [
+      {"word": "this", "start": 731.50}, {"word": "vote,", "start": 731.92},
+      {"word": "the", "start": 732.22}, {"word": "yeas", "start": 732.28},
+      {"word": "are", "start": 732.52}, {"word": "230,", "start": 732.62},
+      {"word": "the", "start": 733.24}, {"word": "nays", "start": 733.36},
+      {"word": "are", "start": 733.54}, {"word": "199,", "start": 733.68}
+    ]
+  }
+]
