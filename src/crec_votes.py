@@ -81,23 +81,42 @@ _OUTCOME_RE = re.compile(
     re.I)
 _PASS_VERBS = {"agreed to", "passed", "adopted", "confirmed", "ordered", "sustained"}
 _FAIL_VERBS = {"rejected", "failed", "lost"}
+# Fail loud if the regex verb list and the pass/fail sets ever drift apart (so a new
+# verb can't be added to one without classifying it in the other).
+assert _PASS_VERBS | _FAIL_VERBS == {
+    "agreed to", "rejected", "passed", "adopted", "confirmed",
+    "ordered", "sustained", "failed", "lost",
+}
+_SO_RE = re.compile(r"\bSo\b")
 
 
 def _outcome_of(block: str):
-    """(display_phrase, passed) from a roll block, or (None, None). Prefers the
-    canonical line beginning 'So '; among matches on that line, the last verb wins
-    (handles 'the rules were suspended and the bill was passed')."""
-    best = None  # (is_so_line, match) — prefer 'So …' lines; otherwise latest match wins
-    for line in block.splitlines():
-        s = line.strip()
-        is_so = s.startswith("So ")
-        for m in _OUTCOME_RE.finditer(s):
-            if best is None or is_so >= best[0]:  # never let a non-'So' line override a 'So' line
-                best = (is_so, m)
-    if best is None:
-        return None, None
-    negated = bool(best[1].group(1))
-    verb = best[1].group(2).lower()
+    """(display_phrase, passed) from a roll block, or (None, None).
+
+    Matches over whitespace-flattened block text because CREC hard-wraps the body at
+    ~66 columns, so the outcome sentence — even "was\\nagreed to" — routinely spans
+    physical lines. Prefers a verb anchored to the canonical "So … was <verb>"
+    announcement over a bare procedural phrase elsewhere in the block (e.g. "the yeas
+    and nays were ordered"); among preferred matches the latest wins (handles "the
+    rules were suspended and the bill was passed"). The block is roll-bounded, so
+    flattening cannot pull in a neighboring vote's outcome."""
+    flat = re.sub(r"\s+", " ", block)
+    # The announcement is "So … was <verb>": take the first outcome verb after a "So"
+    # ("suspended" isn't a verb, so "… were suspended and the bill was passed" → passed).
+    # A later "So" overrides an earlier one. Fall back to the last bare outcome verb
+    # (a rare outcome phrased without "So", e.g. "The motion was agreed to").
+    m = None
+    for so in _SO_RE.finditer(flat):
+        after = _OUTCOME_RE.search(flat, so.end())
+        if after:
+            m = after
+    if m is None:
+        bare = list(_OUTCOME_RE.finditer(flat))
+        if not bare:
+            return None, None
+        m = bare[-1]
+    negated = bool(m.group(1))
+    verb = m.group(2).lower()
     passed = (verb in _PASS_VERBS) != negated  # XOR: negation flips pass/fail
     phrase = ("not " + verb) if negated else verb
     return phrase[0].upper() + phrase[1:], passed

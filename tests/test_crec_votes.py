@@ -105,3 +105,40 @@ def test_parse_outcome_absent_is_none():
 def test_rollcallvote_outcome_defaults_none():
     v = RollCallVote(1, "q", {"YEA": ["Adams"]})
     assert v.outcome is None and v.passed is None
+
+
+def test_parse_outcome_wrapped_verb_across_lines():
+    # CREC hard-wraps body text; the outcome sentence (and even was/verb) can split.
+    v = parse_votes(_block("So the amendment was\nagreed to."))[0]
+    assert v.outcome == "Agreed to"
+    assert v.passed is True
+
+
+def test_parse_outcome_long_subject_wrapped():
+    line = ("So the amendment offered by the gentlewoman from California was\n"
+            "agreed to.")
+    v = parse_votes(_block(line))[0]
+    assert v.outcome == "Agreed to"
+    assert v.passed is True
+
+
+def test_parse_outcome_prefers_so_line_over_procedural_ordered():
+    # A bare procedural "were ordered" AFTER the real outcome must not win: plain
+    # "latest match" would pick "Ordered", but the "So …" anchor picks "Agreed to".
+    block = (
+        "                             [Roll No. 201]\n"
+        "                               AYES--1\n"
+        "     Adams\n"
+        "  So the amendment was agreed to.\n"
+        "  The result of the vote was announced as above recorded.\n"
+        "  On the next amendment, the yeas and nays were ordered.\n"
+    )
+    v = parse_votes(block)[0]
+    assert v.outcome == "Agreed to"
+    assert v.passed is True
+
+
+def test_parse_outcome_previous_question_ordered():
+    v = parse_votes(_block("So the previous question was ordered."))[0]
+    assert v.outcome == "Ordered"
+    assert v.passed is True
