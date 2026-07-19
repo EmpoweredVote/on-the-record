@@ -19,6 +19,7 @@ reconciliation) is a follow-on for when timing is wired into published output.
 """
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -115,3 +116,21 @@ def attach_vote_timestamps(rolls: list, transcript_segments: list, *, tol: int =
     for rc, timing in zip(rolls, timings):
         rc.timestamp = timing.timestamp
     return timings
+
+
+def absolutize_vote_timestamps(rolls: list, clip_start_seconds) -> list:
+    """Return deep copies of `rolls` with each clip-local RollCallVote.timestamp
+    shifted into the full source's timeline by `clip_start_seconds`.
+
+    The vote analog of clip.absolutize_meeting_times (ADR-0001): the pipeline runs
+    clip-local internally and converts to source-absolute time only at the publish
+    boundary. A falsy offset (None or 0) or a None timestamp is left unchanged;
+    the input is never mutated.
+    """
+    out = copy.deepcopy(rolls)
+    if not clip_start_seconds:
+        return out
+    for rc in out:
+        if rc.timestamp is not None:
+            rc.timestamp += clip_start_seconds
+    return out

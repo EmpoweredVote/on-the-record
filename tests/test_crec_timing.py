@@ -86,3 +86,25 @@ def test_attach_sets_timestamp_on_matched_rolls():
     assert rolls[0].timestamp == 102.64
     assert rolls[1].timestamp == 452.46
     assert rolls[2].timestamp == 732.28
+
+
+def test_absolutize_shifts_timestamps_by_offset():
+    from src.crec_timing import absolutize_vote_timestamps
+    rolls = [_roll(438, 236, 193), _roll(439, 242, 187)]
+    rolls[0].timestamp = 102.6
+    rolls[1].timestamp = 452.5
+    out = absolutize_vote_timestamps(rolls, 14600.0)
+    assert [round(r.timestamp, 1) for r in out] == [14702.6, 15052.5]
+    # input not mutated (deep copy, mirrors clip.absolutize_meeting_times)
+    assert rolls[0].timestamp == 102.6
+
+
+def test_absolutize_no_offset_and_none_timestamp_unchanged():
+    from src.crec_timing import absolutize_vote_timestamps
+    r = _roll(500, 300, 100)          # timestamp defaults None (unmatched roll)
+    matched = _roll(438, 236, 193); matched.timestamp = 102.6
+    # None/0 offset -> returned unchanged (copy)
+    assert absolutize_vote_timestamps([matched], None)[0].timestamp == 102.6
+    assert absolutize_vote_timestamps([matched], 0)[0].timestamp == 102.6
+    # None timestamp stays None even with an offset
+    assert absolutize_vote_timestamps([r], 14600.0)[0].timestamp is None
