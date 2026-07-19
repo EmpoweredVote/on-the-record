@@ -13,6 +13,7 @@ import json
 import re
 from typing import Optional
 
+from . import config
 from .event_kinds import speaker_id_framing
 from .models import Segment, SpeakerMapping
 
@@ -30,8 +31,8 @@ def _norm(text: str) -> str:
 
 
 def _significant_tokens(name: str) -> list[str]:
-    """Name tokens minus honorifics and tokens shorter than 3 chars."""
-    return [t for t in _norm(name).split() if len(t) >= 3 and t not in _HONORIFICS]
+    """Name tokens minus honorifics and tokens shorter than 2 chars."""
+    return [t for t in _norm(name).split() if len(t) >= 2 and t not in _HONORIFICS]
 
 
 def _ratio(a: str, b: str) -> float:
@@ -171,8 +172,6 @@ answer with null rather than guessing.
 
 Respond with ONLY a JSON object:
 {{"name": "Speaker Name or null", "reasoning": "brief explanation"}}"""
-
-    from . import config
 
     text = provider.complete(
         prompt,
