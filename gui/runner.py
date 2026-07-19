@@ -35,6 +35,7 @@ class RunParams:
     num_speakers: int = 0
     event_orgs: list = field(default_factory=list)
     body_slug: Optional[str] = None
+    crec_chamber: Optional[str] = None   # 'house'|'senate' -> --congressional-record
 
 
 def _slug(text: str) -> str:
@@ -77,6 +78,9 @@ def build_run_command(python_exe: str, script: str, p: RunParams, meeting_id: st
             cmd += ["--event-org", org]
     if p.body_slug:
         cmd += ["--body", p.body_slug]
+    if p.crec_chamber:
+        # CREC package date == the floor session's meeting date
+        cmd += ["--congressional-record", p.date, p.crec_chamber]
     return cmd
 
 
