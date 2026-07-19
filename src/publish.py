@@ -509,17 +509,20 @@ def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
     live in essentials.legislative_votes, so meetings.vote_records is deliberately
     NOT populated here. On-the-record owns meetings.votes for meetings it publishes
     (delete-then-insert, mirroring _replace_segments). `result` is NOT NULL; we
-    store the tally string (the official pass/fail outcome is a later follow-on).
+    store the parsed outcome + tally ("Agreed to · 236–193"), falling back to the
+    bare tally ("Yea X, Nay Y") when CREC has no parseable outcome line.
     Timestamps are expected to already be source-absolute (absolutize_meeting_times).
     """
     cur.execute("DELETE FROM meetings.votes WHERE meeting_id = %s", (meeting_uuid,))
     rows = []
     for fv in meeting.floor_votes:
+        result = (f"{fv.outcome} · {fv.yea}–{fv.nay}"   # "Agreed to · 236–193"
+                  if fv.outcome else f"Yea {fv.yea}, Nay {fv.nay}")
         rows.append((
             meeting_uuid,
             f"Roll No. {fv.roll_number}",        # resolution
             fv.question,                          # description
-            f"Yea {fv.yea}, Nay {fv.nay}",        # result (NOT NULL)
+            result,                               # result (NOT NULL): outcome+tally, else tally
             "recorded",                           # vote_type
             fv.timestamp,                         # numeric seconds (absolutized), NULL if unmatched
         ))
