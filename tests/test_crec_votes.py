@@ -45,3 +45,63 @@ def test_rollcallvote_timestamp_defaults_none_and_is_settable():
     assert v.timestamp is None
     v.timestamp = 102.64
     assert v.timestamp == 102.64
+
+
+def test_parse_outcome_agreed_to_from_fixture():
+    text = (FIX / "granule_vote_block.txt").read_text()
+    v = parse_votes(text)[0]
+    assert v.outcome == "Agreed to"
+    assert v.passed is True
+
+
+def _block(outcome_line: str) -> str:
+    return (
+        "The question is on agreeing to the amendment.\n"
+        "                             [Roll No. 200]\n"
+        "                               AYES--1\n"
+        "     Adams\n"
+        f"  {outcome_line}\n"
+        "  The result of the vote was announced as above recorded.\n"
+    )
+
+
+def test_parse_outcome_rejected():
+    v = parse_votes(_block("So the amendment was rejected."))[0]
+    assert v.outcome == "Rejected"
+    assert v.passed is False
+
+
+def test_parse_outcome_passed():
+    v = parse_votes(_block("So the bill was passed."))[0]
+    assert v.outcome == "Passed"
+    assert v.passed is True
+
+
+def test_parse_outcome_negated_is_fail():
+    v = parse_votes(_block("So the motion was not agreed to."))[0]
+    assert v.outcome == "Not agreed to"
+    assert v.passed is False
+
+
+def test_parse_outcome_plural_were_agreed_to():
+    v = parse_votes(_block("So the amendments were agreed to."))[0]
+    assert v.outcome == "Agreed to"
+    assert v.passed is True
+
+
+def test_parse_outcome_suspend_and_pass_takes_final_verb():
+    line = "So (two-thirds being in the affirmative) the rules were suspended and the bill was passed."
+    v = parse_votes(_block(line))[0]
+    assert v.outcome == "Passed"
+    assert v.passed is True
+
+
+def test_parse_outcome_absent_is_none():
+    v = parse_votes(_block("The Clerk announced the tally."))[0]
+    assert v.outcome is None
+    assert v.passed is None
+
+
+def test_rollcallvote_outcome_defaults_none():
+    v = RollCallVote(1, "q", {"YEA": ["Adams"]})
+    assert v.outcome is None and v.passed is None

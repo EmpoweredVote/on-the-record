@@ -35,6 +35,8 @@ class RollCallVote:
     question: str
     positions: dict = field(default_factory=dict)  # "YEA"/"NAY"/"PRESENT"/"NOT_VOTING" -> [surname]
     timestamp: Optional[float] = None               # transcript-relative time of the result announcement (Slice 2)
+    outcome: Optional[str] = None                   # display phrase, e.g. "Agreed to"/"Rejected"/"Not agreed to"
+    passed: Optional[bool] = None                   # normalized pass/fail; None when no outcome line parses
 
 
 def _position_of(label: str) -> Optional[str]:
@@ -70,14 +72,46 @@ def _question_before(text: str, idx: int) -> str:
     return hits[-1].group(1).strip().replace("\n", " ") if hits else ""
 
 
+# CREC announces each roll's outcome as "So the <subject> was/were [not] <verb>."
+# The subject varies (amendment/bill/motion/resolution/…) so we anchor on the verb.
+# "So (two-thirds …) the rules were suspended and the bill was passed." → final verb.
+_OUTCOME_RE = re.compile(
+    r"\b(?:was|were)\s+(not\s+)?"
+    r"(agreed to|rejected|passed|adopted|confirmed|ordered|sustained|failed|lost)\b",
+    re.I)
+_PASS_VERBS = {"agreed to", "passed", "adopted", "confirmed", "ordered", "sustained"}
+_FAIL_VERBS = {"rejected", "failed", "lost"}
+
+
+def _outcome_of(block: str):
+    """(display_phrase, passed) from a roll block, or (None, None). Prefers the
+    canonical line beginning 'So '; among matches on that line, the last verb wins
+    (handles 'the rules were suspended and the bill was passed')."""
+    best = None  # (is_so_line, match) — prefer 'So …' lines; otherwise latest match wins
+    for line in block.splitlines():
+        s = line.strip()
+        is_so = s.startswith("So ")
+        for m in _OUTCOME_RE.finditer(s):
+            if best is None or is_so >= best[0]:  # never let a non-'So' line override a 'So' line
+                best = (is_so, m)
+    if best is None:
+        return None, None
+    negated = bool(best[1].group(1))
+    verb = best[1].group(2).lower()
+    passed = (verb in _PASS_VERBS) != negated  # XOR: negation flips pass/fail
+    phrase = ("not " + verb) if negated else verb
+    return phrase[0].upper() + phrase[1:], passed
+
+
 def parse_votes(text: str) -> list[RollCallVote]:
     marks = [(m.start(), int(m.group(1))) for m in _ROLL_RE.finditer(text)]
     votes: list[RollCallVote] = []
     for i, (start, roll) in enumerate(marks):
         end = marks[i + 1][0] if i + 1 < len(marks) else len(text)
+        block = text[start:end]
         positions: dict = {}
         current: Optional[str] = None
-        for line in text[start:end].splitlines():
+        for line in block.splitlines():
             tm = _TALLY_RE.match(line)
             if tm and _position_of(tm.group(1)):
                 current = _position_of(tm.group(1))
@@ -89,5 +123,8 @@ def parse_votes(text: str) -> list[RollCallVote]:
                 continue
             if current and _is_name_line(stripped):
                 positions[current].append(stripped)
-        votes.append(RollCallVote(roll, _question_before(text, start), positions))
+        outcome, passed = _outcome_of(block)
+        votes.append(RollCallVote(
+            roll, _question_before(text, start), positions,
+            outcome=outcome, passed=passed))
     return votes
