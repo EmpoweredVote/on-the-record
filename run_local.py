@@ -1487,6 +1487,19 @@ def run_pipeline(args: argparse.Namespace) -> None:
         from src.identify import merge_adjacent_segments
         meeting.segments = merge_adjacent_segments(meeting.segments)
 
+        # Federal floor structure: derive recorded votes + transcript timestamps
+        # from the Congressional Record and persist them on the meeting artifact.
+        # (Timestamps stay clip-local; absolutized at publish — a later slice.)
+        if crec_request:
+            from src.crec_floor import extract_floor_structure, build_floor_votes
+            _floor = extract_floor_structure(_crec_date, _crec_chamber)
+            if _floor:
+                meeting.floor_votes = build_floor_votes(
+                    _floor, [s.to_dict() for s in meeting.segments])
+                _stamped = sum(1 for v in meeting.floor_votes if v.matched)
+                print(f"  Floor structure: {len(meeting.floor_votes)} recorded vote(s), "
+                      f"{_stamped} timestamped from the transcript")
+
         with open(named_transcript_path, "w") as f:
             json.dump(meeting.to_dict(), f, indent=2)
         state.mark_complete(PipelineStage.IDENTIFIED)
