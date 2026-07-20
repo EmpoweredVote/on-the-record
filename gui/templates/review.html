@@ -13,7 +13,7 @@
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/edit">Edit metadata ✎</a>
     <a class="back runlink" href="/meetings/{{ page.meeting_id }}/publish">Publish →</a>
     <form method="post" action="/meetings/{{ page.meeting_id }}/cleanup" class="cleanup-media"
-          onsubmit="return confirm('Delete the local video and WAV for this meeting? A compressed audio copy is kept, and (for YouTube sources) the video streams from the source.');">
+          onsubmit="return confirm('Delete the local video and WAV for this meeting? A compressed audio copy is kept, and (for streamed sources) the video streams from the source.');">
       <button type="submit" class="cleanup-btn">🧹 Clean up media</button>
     </form>
     <h1>{{ page.display_name }}</h1>
@@ -26,6 +26,9 @@
               title="source video" frameborder="0"
               allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
               allowfullscreen></iframe>
+    {% elif page.hls_url %}
+      <video id="player" class="player" data-hls="{{ page.hls_url }}"
+             controls preload="metadata"></video>
     {% elif page.media_kind == "video" %}
       <video id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></video>
     {% elif page.media_kind == "audio" %}

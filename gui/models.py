@@ -195,6 +195,7 @@ class ReviewPageData:
     display_name: str
     media_kind: Optional[str]  # "video" | "audio" | None
     youtube_id: Optional[str] = None  # set when the source is a YouTube URL: review streams the embed
+    hls_url: Optional[str] = None  # set when the source is an HLS .m3u8 (e.g. House Clerk CDN): review streams it via hls.js
     needs_attention: list[SpeakerCard] = field(default_factory=list)
     confirmed: list[SpeakerCard] = field(default_factory=list)
 
