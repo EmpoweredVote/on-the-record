@@ -2,6 +2,7 @@ import argparse
 import pytest
 import run_local
 from src.house_cdn import HouseFloorSource
+from src.crec_identify import parse_crec_arg
 
 SRC = HouseFloorSource(
     date="2026-07-16",
@@ -30,7 +31,9 @@ def test_expand_house_floor_populates_args(monkeypatch):
     assert args.meeting_type == "House Floor"
     assert args.date == "2026-07-16"
     assert args.title == SRC.title
-    assert args.congressional_record == "house:2026-07-16"
+    # nargs=2 [DATE, CHAMBER] so parse_crec_arg (which does `date, chamber = value`) accepts it
+    assert args.congressional_record == ["2026-07-16", "house"]
+    assert parse_crec_arg(args.congressional_record) == ("2026-07-16", "house")
     assert args._house_source is SRC
 
 

@@ -680,7 +680,7 @@ def _expand_house_floor(args) -> None:
     args.date = date
     if not getattr(args, "title", None):
         args.title = source.title
-    args.congressional_record = f"house:{date}"
+    args.congressional_record = [date, "house"]  # matches --congressional-record nargs=2 (DATE CHAMBER)
     args._house_source = source
 
 
