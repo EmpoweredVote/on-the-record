@@ -42,6 +42,7 @@ if _env_file.exists():
 from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
 from src.event_kinds import EVENT_KINDS, INTERVIEW_KINDS, validate_event_kind
 from src.crec_identify import parse_crec_arg
+from src.house_cdn import resolve_session
 
 
 def should_run_llm(skip_llm: bool, crec_request) -> bool:
@@ -662,8 +663,30 @@ def free_gpu_memory():
         torch.mps.empty_cache()
 
 
+def _expand_house_floor(args) -> None:
+    """Resolve --house-floor DATE into the standard pipeline args + stash the source."""
+    date = getattr(args, "house_floor", None)
+    if not date:
+        return
+    source = resolve_session(date)
+    if source is None:
+        raise SystemExit(
+            f"No House floor session resolvable for {date} "
+            f"(not in session, or CDN has no HLS stream)."
+        )
+    args.input = source.manifest_url
+    args.event_kind = "floor"
+    args.meeting_type = "House Floor"
+    args.date = date
+    if not getattr(args, "title", None):
+        args.title = source.title
+    args.congressional_record = f"house:{date}"
+    args._house_source = source
+
+
 def run_pipeline(args: argparse.Namespace) -> None:
     """Execute the full 6-stage pipeline."""
+    _expand_house_floor(args)
     import numpy as np
     import torch
 
@@ -849,6 +872,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
         clip_start_seconds=clip_start,
         clip_end_seconds=clip_end,
     )
+
+    _house_source = getattr(args, "_house_source", None)
+    if _house_source is not None:
+        meeting.audio_source = _house_source.citation_url            # DB source_url = live.house.gov page
+        meeting.processing_metadata.source_audio_url = _house_source.manifest_url  # playback = HLS
 
     display_title = meeting.title or " ".join(
         part for part in (meeting.city, meeting.meeting_type) if part
@@ -3600,6 +3628,10 @@ Environment Variables:
         "--resume",
         metavar="MEETING_ID",
         help="Resume a previous meeting by its ID",
+    )
+    source.add_argument(
+        "--house-floor", metavar="YYYY-MM-DD",
+        help="Ingest a US House floor session by date from the House Clerk CDN",
     )
 
     # Meeting metadata
