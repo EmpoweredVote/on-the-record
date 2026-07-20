@@ -665,6 +665,8 @@ def free_gpu_memory():
 
 def _expand_house_floor(args) -> None:
     """Resolve --house-floor DATE into the standard pipeline args + stash the source."""
+    if getattr(args, "_house_source", None) is not None:
+        return  # already expanded — idempotent across the main() and run_pipeline calls
     date = getattr(args, "house_floor", None)
     if not date:
         return
@@ -4079,6 +4081,10 @@ def main():
     if args.batch:
         _run_batch(args)
         return
+
+    # --- House floor: resolve the CDN source into --input BEFORE the source-required
+    # validation below (populates args.input/event_kind/date/CREC from the date). ---
+    _expand_house_floor(args)
 
     # --- CATS TV browser ---
     if args.browse_catstv:
