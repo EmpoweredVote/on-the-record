@@ -6,6 +6,7 @@ EVENT_KINDS = (
     "debate",
     "forum",
     "community_meeting",
+    "floor",
     "news_clip",
     "press_conference",
     "podcast",
@@ -34,6 +35,7 @@ LOCAL_ROLE_SETS = {
     "council": _CIVIC_ROLES,
     "school_board": _CIVIC_ROLES,
     "community_meeting": _CIVIC_ROLES,
+    "floor": _CIVIC_ROLES,
     "press_conference": ("official", "staff", "presenter", "public_comment"),
     "podcast": _CAMPAIGN_ROLES,
     "forum": _CAMPAIGN_ROLES,
@@ -103,7 +105,7 @@ def speaker_id_framing(event_kind) -> str:
     """One- or two-sentence framing for the Layer-3 speaker-ID prompt."""
     if event_kind in INTERVIEW_KINDS:
         return _INTERVIEW_FRAMING
-    if event_kind in ("council", "school_board", "community_meeting"):
+    if event_kind in ("council", "school_board", "community_meeting", "floor"):
         return _CIVIC_FRAMING
     if event_kind in ("debate", "forum"):
         return _DEBATE_FRAMING

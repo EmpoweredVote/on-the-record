@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -32,6 +33,25 @@ def _is_ytdlp_url(url: str) -> bool:
 
 # Public alias used by run_local.py caption download logic.
 is_ytdlp_url = _is_ytdlp_url
+
+
+def is_hls_url(url: str) -> bool:
+    """A raw HLS manifest (…/manifest.m3u8). Extract audio with ffmpeg, not requests."""
+    return url.split("?", 1)[0].lower().endswith(".m3u8")
+
+
+def download_audio_via_ffmpeg(url: str, output_path: str) -> str:
+    """Extract mono 16 kHz WAV audio from an HLS/DASH manifest URL via ffmpeg.
+
+    ffmpeg reads the CDN's range-seekable, CORS-open HLS natively. Returns the
+    wav path (extension forced to .wav)."""
+    out = str(Path(output_path).with_suffix(".wav"))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    cmd = ["ffmpeg", "-y", "-i", url, "-vn", "-ac", "1", "-ar", "16000", out]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0 or not Path(out).exists():
+        raise RuntimeError(f"ffmpeg HLS extraction failed ({result.returncode}): {result.stderr[-500:]}")
+    return out
 
 
 def _ytdlp_format() -> str:
@@ -126,6 +146,9 @@ def download_from_url(
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if is_hls_url(url):
+        return Path(download_audio_via_ffmpeg(url, str(output_path)))
 
     if _is_ytdlp_url(url):
         return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
