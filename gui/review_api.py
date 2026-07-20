@@ -353,14 +353,18 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True
     )
 
-    from src.publish import extract_youtube_id
+    from src.publish import extract_youtube_id, playback_for_meeting
 
     youtube_id = extract_youtube_id(meeting.audio_source or "")
+    # HLS video source (e.g. House Clerk CDN, stored as source_audio_url). Reuse
+    # the site's playback resolver so review and the live site agree on "the video".
+    kind, url = playback_for_meeting(meeting)
+    hls_url = url if kind == "hls" else None
     media = find_meeting_media(meeting_dir)
     media_kind = media[0] if media else None
-    # Full-source playback (add clip_offset to seeks): a YouTube stream, or a local
-    # full-source video. Local audio (opus/wav) is clip-local, so no offset.
-    is_full_source = bool(youtube_id) or (media_kind == "video")
+    # Full-source playback (add clip_offset to seeks): a YouTube stream, an HLS
+    # stream, or a local full-source video. Local audio (opus/wav) is clip-local.
+    is_full_source = bool(youtube_id) or bool(hls_url) or (media_kind == "video")
     clip_offset = meeting.clip_start_seconds or 0.0
 
     confirmed: list[SpeakerCard] = []
@@ -415,6 +419,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         display_name=display_name,
         media_kind=media_kind,
         youtube_id=youtube_id,
+        hls_url=hls_url,
         needs_attention=needs,
         confirmed=confirmed,
     )
