@@ -21,17 +21,29 @@ export default function FilePlayer({
     if (!video) return;
     let hls: { destroy(): void } | null = null;
 
-    if (kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {
+    if (kind === "hls") {
+      // Prefer hls.js wherever MSE is available (Chrome, Firefox, Edge, desktop
+      // Safari) and use native HLS only as a fallback (iOS / older Safari).
+      // Order matters: Chrome reports
+      // canPlayType("application/vnd.apple.mpegurl") === "maybe" (truthy) but
+      // CANNOT actually play HLS natively — pointing <video>.src at the manifest
+      // stalls with MEDIA_ERR_SRC_NOT_SUPPORTED on seek. So native must never be
+      // the first choice.
       import("hls.js").then(({ default: Hls }) => {
-        if (Hls.isSupported() && videoRef.current) {
+        const el = videoRef.current;
+        if (!el) return;
+        if (Hls.isSupported()) {
           const instance = new Hls();
           instance.loadSource(src);
-          instance.attachMedia(videoRef.current);
+          instance.attachMedia(el);
           hls = instance;
+        } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
+          el.src = src; // iOS / older Safari: real native HLS
         }
+        // else: no HLS support at all; leave the empty <video>.
       });
     } else {
-      video.src = src;
+      video.src = src; // direct mp4/webm/blob
     }
 
     onAdapter({
