@@ -69,3 +69,31 @@ const LINK_ROUTE_SUFFIX = "/link";
     }, DEBOUNCE);
   });
 })();
+
+// HLS attach: a House Clerk (or other .m3u8) source renders as
+// <video id="player" data-hls="..."> with no src. Safari plays HLS natively;
+// elsewhere we lazy-load the vendored hls.js and attach the stream. The clip
+// seek handler above is unchanged — it seeks #player once media is attached.
+(function () {
+  const video = document.getElementById("player");
+  if (!video) return;
+  const src = video.getAttribute("data-hls");
+  if (!src) return;
+
+  if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    video.src = src; // Safari: native HLS
+    return;
+  }
+
+  const script = document.createElement("script");
+  script.src = "/static/hls.min.js";
+  script.onload = function () {
+    if (window.Hls && window.Hls.isSupported()) {
+      const hls = new window.Hls();
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    }
+    // No MSE + non-Safari: leave the empty <video>; transcript/review still work.
+  };
+  document.head.appendChild(script);
+})();
