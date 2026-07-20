@@ -4,6 +4,7 @@ export type EventKind =
   | "debate"
   | "forum"
   | "community_meeting"
+  | "floor"
   | "news_clip"
   | "press_conference"
   | "other";

@@ -134,6 +134,7 @@ GATE_THRESHOLDS = {
     "debate":           {"high": 0.95, "low": 0.60},
     "forum":            {"high": 0.90, "low": 0.55},
     "community_meeting":{"high": 0.70, "low": 0.40},
+    "floor":            {"high": 0.70, "low": 0.40},
     "news_clip":        {"high": 0.90, "low": 0.50},
     "press_conference": {"high": 0.90, "low": 0.50},
     "podcast":          {"high": 0.90, "low": 0.50},

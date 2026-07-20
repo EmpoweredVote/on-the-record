@@ -4,10 +4,11 @@ import pytest
 
 import run_local
 from src import event_kinds
-from src.event_kinds import EVENT_KINDS, validate_event_kind
+from src.event_kinds import EVENT_KINDS, validate_event_kind, LOCAL_ROLE_SETS
 from src.event_kinds import INTERVIEW_KINDS, speaker_id_framing
 from src.event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
 from src.models import Meeting
+from src import config
 
 
 def test_meeting_round_trip_preserves_title_event_kind_and_null_city():
@@ -148,3 +149,18 @@ def test_framing_debate_mentions_candidates():
 
 def test_framing_none_is_generic_nonempty():
     assert speaker_id_framing(None).strip() != ""
+
+
+def test_floor_is_valid_event_kind():
+    assert "floor" in EVENT_KINDS
+    assert validate_event_kind("floor") == "floor"
+
+
+def test_floor_has_gate_thresholds():
+    t = config.GATE_THRESHOLDS["floor"]
+    assert t["high"] == 0.70 and t["low"] == 0.40
+
+
+def test_floor_has_local_roles():
+    # floor uses the civic role vocabulary (legislative body)
+    assert "floor" in LOCAL_ROLE_SETS

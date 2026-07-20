@@ -44,6 +44,7 @@ const EVENT_KIND_LABELS: Record<EventKind, string> = {
   debate: "Debate",
   forum: "Forum",
   community_meeting: "Community meeting",
+  floor: "Floor",
   news_clip: "News clip",
   press_conference: "Press conference",
   other: "Other",
