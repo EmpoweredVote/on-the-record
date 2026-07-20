@@ -47,3 +47,20 @@ def test_expand_house_floor_aborts_when_unresolved(monkeypatch):
     monkeypatch.setattr(run_local, "resolve_session", lambda d: None)
     with pytest.raises(SystemExit):
         run_local._expand_house_floor(_args())
+
+
+def test_main_house_floor_passes_source_required_validation(monkeypatch):
+    """--house-floor must satisfy the 'a source is required' gate in main() and reach
+    run_pipeline — the expansion runs BEFORE that validation, not only inside
+    run_pipeline. Regression for the source-required abort."""
+    monkeypatch.setattr(run_local, "resolve_session", lambda d: SRC)
+    monkeypatch.setattr(run_local, "_resolve_metadata", lambda *a, **k: None)
+    reached = {}
+    monkeypatch.setattr(run_local, "run_pipeline",
+                        lambda args: reached.update(input=args.input, kind=args.event_kind))
+    monkeypatch.setattr(run_local.sys, "argv",
+                        ["run_local.py", "--house-floor", "2026-07-16",
+                         "--diarizer", "oss", "--compute", "modal", "--no-publish"])
+    run_local.main()  # must NOT sys.exit on the source-required check
+    assert reached["input"] == SRC.manifest_url
+    assert reached["kind"] == "floor"
