@@ -71,19 +71,28 @@ const LINK_ROUTE_SUFFIX = "/link";
 })();
 
 // HLS attach: a House Clerk (or other .m3u8) source renders as
-// <video id="player" data-hls="..."> with no src. Safari plays HLS natively;
-// elsewhere we lazy-load the vendored hls.js and attach the stream. The clip
-// seek handler above is unchanged — it seeks #player once media is attached.
+// <video id="player" data-hls="..."> with no src. The clip seek handler above is
+// unchanged — it seeks #player once media is attached.
+//
+// Prefer hls.js wherever MSE is available (Chrome, Firefox, Edge, desktop Safari)
+// and use native HLS only as a fallback (iOS / older Safari). Order matters:
+// Chrome reports canPlayType("application/vnd.apple.mpegurl") === "maybe" (truthy)
+// but CANNOT actually play HLS natively — pointing <video>.src at the manifest
+// stalls with MEDIA_ERR_SRC_NOT_SUPPORTED on seek. So native must never be the
+// first choice.
 (function () {
   const video = document.getElementById("player");
   if (!video) return;
   const src = video.getAttribute("data-hls");
   if (!src) return;
 
-  if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    video.src = src; // Safari: native HLS
-    return;
-  }
+  const useNative = function () {
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = src; // iOS / older Safari: real native HLS
+    }
+    // else: no HLS support at all; leave the empty <video>. Transcript/review
+    // still work — degraded, never broken.
+  };
 
   const script = document.createElement("script");
   script.src = "/static/hls.min.js";
@@ -92,8 +101,10 @@ const LINK_ROUTE_SUFFIX = "/link";
       const hls = new window.Hls();
       hls.loadSource(src);
       hls.attachMedia(video);
+    } else {
+      useNative();
     }
-    // No MSE + non-Safari: leave the empty <video>; transcript/review still work.
   };
+  script.onerror = useNative; // vendored hls.js missing: fall back to native
   document.head.appendChild(script);
 })();
