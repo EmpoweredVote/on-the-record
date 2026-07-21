@@ -318,6 +318,18 @@ def create_app() -> FastAPI:
                         },
                     },
                 )
+        from gui.formmeta import FIELDS_BY_KIND
+        _allowed = set(FIELDS_BY_KIND.get(event_kind, ()))
+        if "city" not in _allowed:
+            city = ""
+        if "body" not in _allowed:
+            body_slug = ""
+        if "guest" not in _allowed:
+            guest = ""
+        if "race" not in _allowed:
+            race_id = race_slug = ""
+        if "crec_chamber" not in _allowed:
+            crec_chamber = ""
         p = RunParams(
             input=input.strip(), date=date.strip(), meeting_type=meeting_type.strip(),
             event_kind=event_kind, city=city.strip() or None, title=title.strip() or None,

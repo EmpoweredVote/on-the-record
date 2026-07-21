@@ -462,6 +462,27 @@ def test_post_new_passes_guest_and_race(monkeypatch, tmp_meetings_dir):
     assert captured["p"].race_slug == "ca-governor"
 
 
+def test_post_new_gates_fields_not_allowed_for_kind(monkeypatch, tmp_meetings_dir):
+    from gui import runner
+    captured = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: captured.setdefault("p", p) or "2026-05-01-x")
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    # council kind, but a stray race_id/race_slug (as if picked then kind-switched)
+    resp = TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-05-01", "meeting_type": "Regular Session",
+        "event_kind": "council", "city": "Bloomington",
+        "race_id": "uuid-stray", "race_slug": "ca-governor", "guest": "Nobody",
+        "compute": "modal", "diarizer": "oss",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    p = captured["p"]
+    assert p.race_id is None and p.race_slug is None   # gated out for council
+    assert p.guest is None                              # gated out for council
+    assert p.city == "Bloomington"                      # city IS allowed for council -> kept
+
+
 def test_new_form_renders_kind_fields_and_modal_default(tmp_meetings_dir):
     from fastapi.testclient import TestClient
     from gui.app import create_app
