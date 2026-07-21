@@ -104,9 +104,12 @@ def create_app() -> FastAPI:
         st = runner.run_status(meeting_id)
         if st is None:
             raise HTTPException(status_code=404)
-        header = workspace.header_context(
-            meeting_id, is_live=(publish_api.meeting_published_id(meeting_id) is not None),
+        # is_live changes only on an explicit publish (never mid-run), so skip the
+        # remote DB round-trip while the pipeline is running to keep the poll cheap.
+        is_live = None if st.get("running") else (
+            publish_api.meeting_published_id(meeting_id) is not None
         )
+        header = workspace.header_context(meeting_id, is_live=is_live)
         st["review_status"] = header["review_status"] if header else None
         st["is_live"] = header["is_live"] if header else None
         st["attention_count"] = header["attention_count"] if header else 0

@@ -188,3 +188,12 @@ def test_status_endpoint_augments_run_status(tagged_meeting_dir, tmp_meetings_di
     assert st["completed_stage"] == 4
     assert st["attention_count"] == 1
     assert "review_status" in st and "is_live" in st
+
+
+def test_workspace_shell_bad_tab_falls_back(tagged_meeting_dir, tmp_meetings_dir):
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    r = TestClient(create_app()).get("/meetings/2026-02-04-council?tab=bogus")
+    assert r.status_code == 200
+    assert 'data-active-tab="review"' in r.text   # fell back to the stage-4 default
