@@ -131,3 +131,5 @@ section.continue { margin-top: 1rem; }
 table.library .ctx { font-size: 0.8rem; color: #667; margin: 0.1rem 0; }
 .lib-empty-filter { color: #888; padding: 1rem 0; }
 .cleanup-all { margin: 0; }
+.flash { margin: 0.75rem 0; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.9rem; border: 1px solid #cfe3cf; background: #eef7ee; color: #1b5e20; }
+.flash-pending { border-color: #e6d59a; background: #fbf3dd; color: #7a5b00; }

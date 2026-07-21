@@ -20,21 +20,21 @@ def test_static_assets_send_no_cache(tmp_meetings_dir):
 
 
 def test_post_new_launches_and_redirects(tmp_meetings_dir, monkeypatch):
-    from gui import runner
+    import gui.batch as batch
     launched = {}
 
-    def fake_launch(p, **kw):
+    def fake_launch(p):
         launched["params"] = p
-        return "2026-02-10-regular"
+        return ("started", "2026-02-10-regular")
 
-    monkeypatch.setattr(runner, "launch_run", fake_launch)
+    monkeypatch.setattr(batch, "launch_or_enqueue", fake_launch)
     client = TestClient(create_app())
     resp = client.post("/new", data={
         "input": "https://x/v", "date": "2026-02-10", "meeting_type": "Regular",
         "event_kind": "council", "city": "Bloomington", "compute": "local", "diarizer": "oss",
     }, follow_redirects=False)
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/meetings/2026-02-10-regular?tab=progress"
+    assert resp.headers["location"].startswith("/new?flash=started")
     assert launched["params"].input == "https://x/v"
 
 
@@ -122,8 +122,8 @@ def test_post_new_council_requires_city(tmp_meetings_dir):
 
 
 def test_post_new_council_with_city_launches(tmp_meetings_dir, monkeypatch):
-    from gui import runner
-    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-02-10-regular")
+    import gui.batch as batch
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda p: ("started", "2026-02-10-regular"))
     client = TestClient(create_app())
     resp = client.post("/new", data={
         "input": "https://x/v", "date": "2026-02-10", "meeting_type": "Regular",
@@ -133,8 +133,8 @@ def test_post_new_council_with_city_launches(tmp_meetings_dir, monkeypatch):
 
 
 def test_post_new_other_kind_needs_no_city(tmp_meetings_dir, monkeypatch):
-    from gui import runner
-    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-02-10-clip")
+    import gui.batch as batch
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda p: ("started", "2026-02-10-clip"))
     client = TestClient(create_app())
     resp = client.post("/new", data={
         "input": "https://x/v", "date": "2026-02-10", "meeting_type": "Clip",
@@ -185,10 +185,10 @@ def test_post_new_warns_on_duplicate_source(tagged_meeting_dir, tmp_meetings_dir
 
 def test_post_new_confirm_bypasses_dedup(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
     from src.checkpoint import PipelineState
-    from gui import runner
+    import gui.batch as batch
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-10-regular", completed_stage=4)
     st = PipelineState(mdir); st.source_key = "youtube:dup123"; st.save()
-    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-05-05-regular")
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda p: ("started", "2026-05-05-regular"))
 
     client = TestClient(create_app())
     resp = client.post("/new", data={
@@ -199,8 +199,8 @@ def test_post_new_confirm_bypasses_dedup(tagged_meeting_dir, tmp_meetings_dir, m
 
 
 def test_post_new_no_duplicate_launches(tmp_meetings_dir, monkeypatch):
-    from gui import runner
-    monkeypatch.setattr(runner, "launch_run", lambda p, **kw: "2026-05-05-regular")
+    import gui.batch as batch
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda p: ("started", "2026-05-05-regular"))
     client = TestClient(create_app())
     resp = client.post("/new", data={
         "input": "https://youtu.be/brandnew", "date": "2026-05-05", "meeting_type": "Regular",
@@ -327,10 +327,10 @@ def test_run_page_has_continue_button(tagged_meeting_dir, tmp_meetings_dir):
 
 
 def test_post_new_parses_event_orgs(tmp_meetings_dir, monkeypatch):
-    from gui import runner
+    import gui.batch as batch
     seen = {}
-    monkeypatch.setattr(runner, "launch_run",
-                        lambda p, **kw: seen.setdefault("orgs", p.event_orgs) or "2026-05-15-interview")
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: seen.update({"orgs": p.event_orgs}) or ("started", "2026-05-15-interview"))
     client = TestClient(create_app())
     resp = client.post("/new", data={
         "input": "https://x/v", "date": "2026-05-15", "meeting_type": "Interview",
@@ -358,10 +358,10 @@ def test_new_form_has_body_picker(tmp_config_dir, tmp_meetings_dir):
 
 
 def test_post_new_threads_body_slug(tmp_config_dir, tmp_meetings_dir, monkeypatch):
-    from gui import runner
+    import gui.batch as batch
     seen = {}
-    monkeypatch.setattr(runner, "launch_run",
-                        lambda p, **kw: seen.setdefault("body", p.body_slug) or "2026-02-04-regular")
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: seen.update({"body": p.body_slug}) or ("started", "2026-02-04-regular"))
     client = TestClient(create_app())
     resp = client.post("/new", data={
         "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Regular Session",
@@ -373,10 +373,10 @@ def test_post_new_threads_body_slug(tmp_config_dir, tmp_meetings_dir, monkeypatc
 
 
 def test_post_new_blank_body_is_none(tmp_config_dir, tmp_meetings_dir, monkeypatch):
-    from gui import runner
+    import gui.batch as batch
     seen = {}
-    monkeypatch.setattr(runner, "launch_run",
-                        lambda p, **kw: seen.setdefault("body", p.body_slug) or "2026-02-04-clip")
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: seen.update({"body": p.body_slug}) or ("started", "2026-02-04-clip"))
     TestClient(create_app()).post("/new", data={
         "input": "https://x/v", "date": "2026-02-04", "meeting_type": "Clip",
         "event_kind": "news_clip", "body_slug": ""}, follow_redirects=False)
@@ -444,10 +444,10 @@ def test_races_search_route_returns_json(monkeypatch, tmp_meetings_dir):
 
 
 def test_post_new_passes_guest_and_race(monkeypatch, tmp_meetings_dir):
-    from gui import runner
+    import gui.batch as batch
     captured = {}
-    monkeypatch.setattr(runner, "launch_run",
-                        lambda p, **kw: captured.setdefault("p", p) or "2026-05-01-x")
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: captured.update({"p": p}) or ("started", "2026-05-01-x"))
     from fastapi.testclient import TestClient
     from gui.app import create_app
     resp = TestClient(create_app()).post("/new", data={
@@ -463,10 +463,10 @@ def test_post_new_passes_guest_and_race(monkeypatch, tmp_meetings_dir):
 
 
 def test_post_new_gates_fields_not_allowed_for_kind(monkeypatch, tmp_meetings_dir):
-    from gui import runner
+    import gui.batch as batch
     captured = {}
-    monkeypatch.setattr(runner, "launch_run",
-                        lambda p, **kw: captured.setdefault("p", p) or "2026-05-01-x")
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: captured.update({"p": p}) or ("started", "2026-05-01-x"))
     from fastapi.testclient import TestClient
     from gui.app import create_app
     # council kind, but a stray race_id/race_slug (as if picked then kind-switched)
@@ -504,3 +504,50 @@ def test_new_meeting_js_wires_race_search_and_field_gating(tmp_meetings_dir):
     assert "/api/races/search" in js
     assert "data-field" in js
     assert "race_id" in js and "f-race-slug" in js
+
+
+def test_post_new_routes_through_batch_started(tmp_meetings_dir, monkeypatch):
+    import gui.batch as batch
+    seen = {}
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: seen.update({"p": p}) or ("started", "2026-05-01-x"))
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    resp = TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-05-01", "meeting_type": "Interview",
+        "event_kind": "news_clip", "compute": "modal", "diarizer": "oss",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/new?flash=started")
+    assert seen["p"].input == "https://x/v"
+
+
+def test_post_new_routes_through_batch_pending(tmp_meetings_dir, monkeypatch):
+    import gui.batch as batch
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda p: ("pending", None))
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    resp = TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-05-01", "meeting_type": "Interview",
+        "event_kind": "news_clip",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/new?flash=pending")
+
+
+def test_new_form_renders_flash_banner(tmp_meetings_dir, monkeypatch):
+    import gui.batch as batch
+    monkeypatch.setattr(batch, "status",
+                        lambda: {"counts": {"running": 3, "pending": 1, "max": 8},
+                                 "running": [], "pending": []})
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/new?flash=started&label=Becerra").text
+    assert "Becerra" in body and "3 running" in body and "1 pending" in body
+
+
+def test_new_form_add_and_start_button(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/new").text
+    assert "Add &amp; start" in body or "Add & start" in body

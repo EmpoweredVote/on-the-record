@@ -4,6 +4,13 @@
 <title>New meeting</title><link rel="stylesheet" href="/static/style.css"></head>
 <body>
   <header><a class="back" href="/">← Library</a><h1>Process a new meeting</h1></header>
+  {% if flash %}
+  <div class="flash flash-{{ flash }}">
+    {% if flash == "started" %}✓ Started: {{ flash_label }}{% else %}⏳ Queued (pool full): {{ flash_label }}{% endif %}
+    · {{ batch_counts.running }} running · {{ batch_counts.pending }} pending ·
+    <a href="/">View library →</a>
+  </div>
+  {% endif %}
   <main class="review newpage" data-city-required="{{ city_required_kinds|join(',') }}">
     <form method="post" action="/new" class="newform" id="newform">
       <label>Source URL or file path
@@ -98,7 +105,7 @@
         </label>
         <p class="mid">Meeting ID (auto-derived): <span id="derived-id">—</span></p>
       </details>
-      <button type="submit" class="enroll">Start processing</button>
+      <button type="submit" class="enroll">Add &amp; start</button>
     </form>
 
     <aside class="previewcard">

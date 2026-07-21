@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -264,12 +265,13 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.get("/new", response_class=HTMLResponse)
-    def new_meeting_form(request: Request) -> HTMLResponse:
+    def new_meeting_form(request: Request, flash: str = "", label: str = "") -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
                                    CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS,
                                    FIELDS_BY_KIND, DEFAULT_COMPUTE, DEFAULT_DIARIZER)
         from gui.rosters import list_cached_rosters
+        from gui import batch
         return _templates.TemplateResponse(
             request, "new_meeting.html",
             {
@@ -283,6 +285,9 @@ def create_app() -> FastAPI:
                 "fields_by_kind": FIELDS_BY_KIND,
                 "default_compute": DEFAULT_COMPUTE,
                 "default_diarizer": DEFAULT_DIARIZER,
+                "flash": flash,
+                "flash_label": label,
+                "batch_counts": batch.status()["counts"],
             },
         )
 
@@ -362,11 +367,14 @@ def create_app() -> FastAPI:
             race_id=race_id.strip() or None,
             race_slug=race_slug.strip() or None,
         )
+        from gui import batch
         try:
-            meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)
+            outcome, meeting_id = batch.launch_or_enqueue(p)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=progress", status_code=303)
+        label = (p.title or p.input or "").strip()
+        return RedirectResponse(
+            url=f"/new?flash={outcome}&label={quote(label)}", status_code=303)
 
     @app.get("/meetings/{meeting_id}/run")
     def run_page(meeting_id: str) -> RedirectResponse:
