@@ -562,3 +562,31 @@ def test_library_renders_processed_column(tagged_meeting_dir, tmp_meetings_dir):
     tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     body = TestClient(create_app()).get("/").text
     assert "<th>Processed</th>" in body
+
+
+def test_library_renders_batch_header_and_pending(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.batch as batch
+    monkeypatch.setattr(batch, "status",
+                        lambda: {"counts": {"running": 2, "pending": 1, "max": 8},
+                                 "running": [],
+                                 "pending": [{"pending_id": 9, "label": "Ken Paxton",
+                                              "event_kind": "news_clip", "derived_id": "d"}]})
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/").text
+    assert 'id="batch-running-count"' in body
+    assert "Ken Paxton" in body                                  # pending chip
+    assert 'action="/batch/pending/9/remove"' in body            # remove form
+    assert 'action="/batch/max"' in body                         # max-concurrent control
+
+
+def test_library_rows_have_meeting_id_hook(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/").text
+    assert 'data-meeting-id="2026-02-04-council"' in body
+    assert 'class="status-cell"' in body
+
+
+def test_library_js_polls_batch_status(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "/batch/status" in js and "status-cell" in js

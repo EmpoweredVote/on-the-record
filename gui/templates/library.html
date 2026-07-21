@@ -9,6 +9,30 @@
 <body>
   <header><h1>Meeting Library</h1></header>
   <main>
+    <div class="batch-header" id="batch-header">
+      <span class="batch-counts">
+        <i class="batch-dot"></i>
+        <b id="batch-running-count">{{ batch_counts.running }}</b> running ·
+        <b id="batch-pending-count">{{ batch_counts.pending }}</b> pending
+      </span>
+      <form method="post" action="/batch/max" class="batch-max">
+        <label>Max concurrent
+          <select name="n" onchange="this.form.submit()">
+            {% for v in range(1, 11) %}<option value="{{ v }}"{% if v == batch_counts.max %} selected{% endif %}>{{ v }}</option>{% endfor %}
+          </select>
+        </label>
+      </form>
+    </div>
+    <div class="pending-strip" id="pending-strip">
+      {% for pitem in batch_pending %}
+      <span class="pending-chip">
+        {{ pitem.label }}
+        <form method="post" action="/batch/pending/{{ pitem.pending_id }}/remove">
+          <button type="submit" title="Remove from queue">✕</button>
+        </form>
+      </span>
+      {% endfor %}
+    </div>
     <div class="lib-toolbar">
       <input type="search" id="lib-search" class="lib-search" placeholder="🔍  Search name, city, org, id…" autocomplete="off">
       <select id="lib-kind" class="lib-sel">
@@ -36,7 +60,7 @@
       </thead>
       <tbody>
         {% for m in meetings %}
-        <tr data-kind="{{ m.event_kind or '' }}" data-status="{{ m.status_key }}"
+        <tr data-meeting-id="{{ m.meeting_id }}" data-kind="{{ m.event_kind or '' }}" data-status="{{ m.status_key }}"
             data-search="{{ [m.display_name, m.meeting_id, m.context_line, m.event_kind]|select|join(' ')|lower }}">
           <td class="name">
             {% if m.has_thumbnail %}
@@ -57,7 +81,7 @@
             {% set level, text = m.gate_badge %}
             <span class="gate gate-{{ level }}">{{ text }}</span>
           </td>
-          <td><span class="stage stage-{{ m.completed_stage }}">{{ m.stage_label }}</span></td>
+          <td class="status-cell"><span class="stage stage-{{ m.completed_stage }}">{{ m.stage_label }}</span></td>
           <td>
             {% set live = m.live_badge %}
             {% if live %}<span class="live-badge live-{{ live[0] }}">{{ live[1] }}</span>{% else %}<span class="live-unknown">—</span>{% endif %}

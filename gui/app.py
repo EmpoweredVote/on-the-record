@@ -67,8 +67,12 @@ def create_app() -> FastAPI:
             if m.race_id:
                 m.race_label = labels.get(m.race_id)
         from src.event_kinds import EVENT_KINDS
+        from gui import batch
+        bs = batch.status()
         return _templates.TemplateResponse(
-            request, "library.html", {"meetings": meetings, "event_kinds": list(EVENT_KINDS)},
+            request, "library.html",
+            {"meetings": meetings, "event_kinds": list(EVENT_KINDS),
+             "batch_counts": bs["counts"], "batch_pending": bs["pending"]},
         )
 
     @app.get("/meetings/{meeting_id}/thumbnail")
