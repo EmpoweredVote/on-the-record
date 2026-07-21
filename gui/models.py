@@ -73,10 +73,28 @@ class MeetingSummary:
     race_id: Optional[str] = None
     race_label: Optional[str] = None
     guest: Optional[str] = None
+    processed_at: Optional[float] = None   # pipeline_state.json mtime (epoch); library sort key
 
     @property
     def stage_label(self) -> str:
         return stage_label(self.completed_stage)
+
+    @property
+    def processed_label(self) -> str:
+        """Relative 'when last processed', from processed_at: 'just now' / '5m ago'
+        / '3h ago' / a date for older. '—' when unknown."""
+        if not self.processed_at:
+            return "—"
+        import time
+        delta = time.time() - self.processed_at
+        if delta < 60:
+            return "just now"
+        if delta < 3600:
+            return f"{int(delta // 60)}m ago"
+        if delta < 86400:
+            return f"{int(delta // 3600)}h ago"
+        import datetime
+        return datetime.date.fromtimestamp(self.processed_at).isoformat()
 
     @property
     def live_badge(self) -> Optional[tuple[str, str]]:

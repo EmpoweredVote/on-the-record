@@ -131,3 +131,14 @@ section.continue { margin-top: 1rem; }
 table.library .ctx { font-size: 0.8rem; color: #667; margin: 0.1rem 0; }
 .lib-empty-filter { color: #888; padding: 1rem 0; }
 .cleanup-all { margin: 0; }
+.flash { margin: 0.75rem 0; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.9rem; border: 1px solid #cfe3cf; background: #eef7ee; color: #1b5e20; }
+.flash-pending { border-color: #e6d59a; background: #fbf3dd; color: #7a5b00; }
+
+.batch-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; font-size: 0.9rem; }
+.batch-counts { color: #444; }
+.batch-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2a7de1; margin-right: 4px; vertical-align: middle; }
+.batch-max form, .batch-max { margin: 0; }
+.pending-strip { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.pending-chip { display: inline-flex; align-items: center; gap: 0.3rem; background: #f1f1f4; border-radius: 0.5rem; padding: 0.15rem 0.5rem; font-size: 0.82rem; }
+.pending-chip form { margin: 0; }
+.pending-chip button { border: none; background: none; cursor: pointer; color: #999; font-size: 0.8rem; padding: 0; }

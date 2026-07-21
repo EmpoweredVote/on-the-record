@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -66,8 +67,12 @@ def create_app() -> FastAPI:
             if m.race_id:
                 m.race_label = labels.get(m.race_id)
         from src.event_kinds import EVENT_KINDS
+        from gui import batch
+        bs = batch.status()
         return _templates.TemplateResponse(
-            request, "library.html", {"meetings": meetings, "event_kinds": list(EVENT_KINDS)},
+            request, "library.html",
+            {"meetings": meetings, "event_kinds": list(EVENT_KINDS),
+             "batch_counts": bs["counts"], "batch_pending": bs["pending"]},
         )
 
     @app.get("/meetings/{meeting_id}/thumbnail")
@@ -192,6 +197,26 @@ def create_app() -> FastAPI:
     def politician_search(q: str = "") -> JSONResponse:
         return JSONResponse(review_api.search_politicians_safe(q))
 
+    @app.get("/batch/status")
+    def batch_status() -> JSONResponse:
+        from gui import batch
+        return JSONResponse(batch.status())
+
+    @app.post("/batch/max")
+    def batch_set_max(n: str = Form("")):
+        from gui import batch
+        try:
+            batch.set_max_concurrent(int(n))
+        except (TypeError, ValueError):
+            pass
+        return RedirectResponse(url="/", status_code=303)
+
+    @app.post("/batch/pending/{pending_id}/remove")
+    def batch_remove_pending(pending_id: int):
+        from gui import batch
+        batch.remove_pending(pending_id)
+        return RedirectResponse(url="/", status_code=303)
+
     @app.get("/api/races/search")
     def race_search(q: str = "") -> JSONResponse:
         from gui import races
@@ -264,12 +289,13 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.get("/new", response_class=HTMLResponse)
-    def new_meeting_form(request: Request) -> HTMLResponse:
+    def new_meeting_form(request: Request, flash: str = "", label: str = "") -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
                                    CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS,
                                    FIELDS_BY_KIND, DEFAULT_COMPUTE, DEFAULT_DIARIZER)
         from gui.rosters import list_cached_rosters
+        from gui import batch
         return _templates.TemplateResponse(
             request, "new_meeting.html",
             {
@@ -283,6 +309,9 @@ def create_app() -> FastAPI:
                 "fields_by_kind": FIELDS_BY_KIND,
                 "default_compute": DEFAULT_COMPUTE,
                 "default_diarizer": DEFAULT_DIARIZER,
+                "flash": flash,
+                "flash_label": label,
+                "batch_counts": batch.status()["counts"],
             },
         )
 
@@ -362,11 +391,14 @@ def create_app() -> FastAPI:
             race_id=race_id.strip() or None,
             race_slug=race_slug.strip() or None,
         )
+        from gui import batch
         try:
-            meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)
+            outcome, meeting_id = batch.launch_or_enqueue(p)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=progress", status_code=303)
+        label = (p.title or p.input or "").strip()
+        return RedirectResponse(
+            url=f"/new?flash={outcome}&label={quote(label)}", status_code=303)
 
     @app.get("/meetings/{meeting_id}/run")
     def run_page(meeting_id: str) -> RedirectResponse:
