@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ header.display_name }} — CouncilScribe</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="ws-header" data-meeting-id="{{ header.meeting_id }}" data-active-tab="{{ active_tab }}">
+    <a class="back" href="/">← Library</a>
+    <div class="ws-titlebar">
+      <h1>{{ header.display_name }}</h1>
+      <span class="ws-pills">
+        {% if header.date %}<span class="pill">{{ header.date }}</span>{% endif %}
+        {% if header.event_kind %}<span class="pill">{{ header.event_kind }}</span>{% endif %}
+        {% set level, text = header.gate_badge %}
+        <span id="gate-pill" class="gate gate-{{ level }}">{{ text }}</span>
+        {% if header.is_live is not none %}
+          <span id="live-pill" class="live-badge live-{{ 'live' if header.is_live else 'notlive' }}">{{ 'Live' if header.is_live else 'Not live' }}</span>
+        {% else %}<span id="live-pill" class="live-unknown">—</span>{% endif %}
+      </span>
+      <details class="kebab">
+        <summary>⋯</summary>
+        <div class="kebab-menu">
+          <form method="post" action="/meetings/{{ header.meeting_id }}/cleanup" data-navigate
+                onsubmit="return confirm('Delete the local video and WAV for this meeting? A compressed audio copy is kept, and (for streamed sources) the video streams from the source.');">
+            <button type="submit" class="cleanup-btn">🧹 Clean up media</button>
+          </form>
+          <form method="post" action="/meetings/{{ header.meeting_id }}/delete" data-navigate
+                onsubmit="return confirm('Permanently delete {{ header.meeting_id }}? This cannot be undone.');">
+            <input type="text" name="confirm_slug" autocomplete="off" placeholder="Type the meeting id to confirm">
+            <button type="submit" class="delete-btn">Delete meeting</button>
+          </form>
+        </div>
+      </details>
+    </div>
+    <nav class="tabstrip">
+      {% for tab, label in [("progress","Progress"),("review","Review"),("details","Details"),("publish","Publish")] %}
+      <a class="tab{% if tab == active_tab %} active{% endif %}"
+         data-tab="{{ tab }}" href="/meetings/{{ header.meeting_id }}?tab={{ tab }}">{{ label }}{% if tab == "review" and header.attention_count %} <span class="dot" id="attn-dot">●</span>{% endif %}</a>
+      {% endfor %}
+    </nav>
+  </header>
+  <main class="review ws-main" id="panel">
+    {% include "panels/" ~ active_tab ~ ".html" %}
+  </main>
+  <script src="/static/workspace.js"></script>
+</body>
+</html>
