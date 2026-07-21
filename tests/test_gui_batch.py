@@ -53,3 +53,62 @@ def test_running_count_prunes_finished(tmp_meetings_dir, monkeypatch):
     monkeypatch.setattr(batch.runner, "launch_run", lambda p, **kw: "mB")
     outcome, mid = batch.launch_or_enqueue(_params(input="https://x/v2"))
     assert outcome == "started" and mid == "mB"                     # mA pruned, slot free
+
+
+# tests/test_gui_batch.py  (append; reuses _params/_running/_finished)
+def test_tick_promotes_pending_when_slot_frees(tmp_meetings_dir, monkeypatch):
+    batch.set_max_concurrent(1)
+    monkeypatch.setattr(batch.runner, "launch_run", lambda p, **kw: "m1")
+    monkeypatch.setattr(batch.runner, "run_status", lambda mid: _running(mid))
+    batch.launch_or_enqueue(_params())                       # m1 running (slot full)
+    batch.launch_or_enqueue(_params(input="https://x/v2"))   # pending
+    batch._tick()                                            # slot still full -> no launch
+    assert batch.status()["counts"]["pending"] == 1
+    # m1 finishes -> tick promotes the pending item
+    monkeypatch.setattr(batch.runner, "run_status",
+                        lambda mid: _finished(mid) if mid == "m1" else _running(mid))
+    launched = []
+    monkeypatch.setattr(batch.runner, "launch_run", lambda p, **kw: launched.append(p) or "m2")
+    batch._tick()
+    assert launched and batch.status()["counts"]["pending"] == 0
+
+
+def test_tick_skip_and_continue_on_launch_error(tmp_meetings_dir, monkeypatch):
+    batch.set_max_concurrent(1)
+    monkeypatch.setattr(batch.runner, "run_status", lambda mid: _running(mid))
+    monkeypatch.setattr(batch.runner, "launch_run", lambda p, **kw: "m1")
+    batch.launch_or_enqueue(_params())                       # m1 running (cap full)
+    batch.launch_or_enqueue(_params(input="bad"))            # pending #1
+    batch.launch_or_enqueue(_params(input="good"))           # pending #2
+    monkeypatch.setattr(batch.runner, "run_status", lambda mid: _finished(mid))  # all free
+    calls = []
+    def flaky(p, **kw):
+        calls.append(p.input)
+        if p.input == "bad":
+            raise RuntimeError("bad source")
+        return "mgood"
+    monkeypatch.setattr(batch.runner, "launch_run", flaky)
+    batch._tick()
+    assert "bad" in calls and "good" in calls                # both tried (skip-and-continue)
+    assert batch.status()["counts"]["pending"] == 0          # both drained
+
+
+def test_remove_pending_and_clamp(tmp_meetings_dir, monkeypatch):
+    batch.set_max_concurrent(1)
+    monkeypatch.setattr(batch.runner, "launch_run", lambda p, **kw: "m1")
+    monkeypatch.setattr(batch.runner, "run_status", lambda mid: _running(mid))
+    batch.launch_or_enqueue(_params())
+    batch.launch_or_enqueue(_params(input="https://x/v2"))   # pending
+    pid = batch.status()["pending"][0]["pending_id"]
+    assert batch.remove_pending(pid) is True
+    assert batch.status()["counts"]["pending"] == 0
+    assert batch.remove_pending(pid) is False                # already gone
+    batch.set_max_concurrent(99)
+    assert batch._load()["max_concurrent"] == 10             # clamped to _MAX_CAP
+
+
+def test_start_scheduler_idempotent(tmp_meetings_dir):
+    import threading
+    batch.start_scheduler(interval=999)
+    batch.start_scheduler(interval=999)                      # second call is a no-op
+    assert [t.name for t in threading.enumerate()].count("batch-scheduler") == 1

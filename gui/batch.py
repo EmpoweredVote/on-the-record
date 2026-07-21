@@ -133,3 +133,55 @@ def status() -> dict:
         return {"counts": {"running": len(running), "pending": len(pending),
                            "max": data["max_concurrent"]},
                 "running": running, "pending": pending}
+
+
+def remove_pending(pending_id) -> bool:
+    """Drop a pending item by its stable id. True if something was removed."""
+    with _lock:
+        data = _load()
+        before = len(data["pending"])
+        data["pending"] = [i for i in data["pending"]
+                           if i.get("pending_id") != int(pending_id)]
+        _save(data)
+        return len(data["pending"]) < before
+
+
+def _tick() -> None:
+    """Promote pending items into free pool slots. A launch that raises drops
+    that item (skip-and-continue) so one bad source never blocks the pool."""
+    with _lock:
+        data = _load()
+        while _running_count(data) < data["max_concurrent"] and data["pending"]:
+            item = data["pending"].pop(0)
+            try:
+                mid = runner.launch_run(_params_from_dict(item["params"]),
+                                        python_exe=_PYTHON_EXE, script=_RUN_LOCAL)
+                data["active"].append(mid)
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "batch: dropping unlaunchable pending item %s",
+                    item.get("pending_id"), exc_info=True)
+            _save(data)
+
+
+_scheduler_started = False
+
+
+def start_scheduler(interval: float = 4.0) -> None:
+    """Start the daemon scheduler thread once. Sleeps first, then ticks, so a
+    freshly-built app (and tests with a long interval) don't tick synchronously."""
+    global _scheduler_started
+    with _lock:
+        if _scheduler_started:
+            return
+        _scheduler_started = True
+
+    def _loop():
+        while True:
+            time.sleep(interval)
+            try:
+                _tick()
+            except Exception:
+                logging.getLogger(__name__).warning("batch scheduler tick failed", exc_info=True)
+
+    threading.Thread(target=_loop, name="batch-scheduler", daemon=True).start()
