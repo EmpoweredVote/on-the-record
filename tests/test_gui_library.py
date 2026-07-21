@@ -441,3 +441,50 @@ def test_library_route_no_live_badge_without_db(tagged_meeting_dir, tmp_meetings
     monkeypatch.setattr(pub, "live_published_slugs", lambda: None)  # DB not configured
     body = TestClient(create_app()).get("/").text
     assert "live-badge" not in body      # no Live/Not-live badge rendered (only the "—" placeholder)
+
+
+def test_library_route_renders_filter_bar_and_context(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.races as races
+    monkeypatch.setattr(races, "race_labels", lambda ids: {"uuid-r": "CA Governor · 2026"})
+    mdir = tagged_meeting_dir("bloomington-common-council",
+                              meeting_id="2026-02-10-council", completed_stage=4)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text())
+    data.update({"city": "Bloomington", "event_kind": "council"})
+    st.write_text(json.dumps(data))
+    body = TestClient(create_app()).get("/").text
+    # filter bar
+    assert 'id="lib-search"' in body and 'id="lib-kind"' in body and 'id="lib-status"' in body
+    assert "library.js" in body
+    # per-row data attributes for client-side filtering
+    assert 'data-status="needs-review"' in body
+    assert 'data-kind="council"' in body
+    # context subline rendered
+    assert "Bloomington Common Council" in body
+    # row links to the bare workspace URL (stage-aware), NOT /review
+    assert 'href="/meetings/2026-02-10-council"' in body
+
+
+def test_library_route_attaches_race_label(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.races as races
+    seen = {}
+
+    def _fake_race_labels(ids):
+        seen["ids"] = set(ids)
+        return {"uuid-r": "TX Senate · 2026"}
+
+    monkeypatch.setattr(races, "race_labels", _fake_race_labels)
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-01-interview", completed_stage=5)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"race_id": "uuid-r", "event_kind": "news_clip"})
+    st.write_text(json.dumps(data))
+    body = TestClient(create_app()).get("/").text
+    assert "uuid-r" in seen["ids"]           # route asked for the label
+    assert "TX Senate · 2026" in body        # and rendered it
+
+
+def test_library_js_filters_by_search_kind_status(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "lib-search" in js and "lib-kind" in js and "lib-status" in js
+    assert "data-search" in js

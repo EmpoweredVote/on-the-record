@@ -122,3 +122,12 @@ section.continue { margin-top: 1rem; }
 .race-search input { padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.95rem; width: 100%; }
 .race-results { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem; }
 .race-chosen { margin-top: 0.3rem; font-size: 0.85rem; color: #1b7a3d; cursor: pointer; }
+
+/* --- Library filter toolbar + context subline --- */
+.lib-toolbar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.lib-search { flex: 1; min-width: 12rem; padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 0.5rem; font-size: 0.9rem; }
+.lib-sel { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 0.5rem; font-size: 0.85rem; }
+.lib-spacer { flex: 1; }
+table.library .ctx { font-size: 0.8rem; color: #667; margin: 0.1rem 0; }
+.lib-empty-filter { color: #888; padding: 1rem 0; }
+.cleanup-all { margin: 0; }

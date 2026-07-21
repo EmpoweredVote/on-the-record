@@ -195,7 +195,8 @@ def test_review_page_has_media_player_and_clip_buttons(tagged_meeting_dir, tmp_m
 def test_library_links_to_review(tagged_meeting_dir, tmp_meetings_dir):
     tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     body = TestClient(create_app()).get("/").text
-    assert 'href="/meetings/2026-02-04-council/review"' in body
+    # library now links to the bare workspace URL; the shell picks the tab by stage.
+    assert 'href="/meetings/2026-02-04-council"' in body
 
 
 def test_load_review_page_malformed_transcript_shape_returns_none(tagged_meeting_dir, tmp_meetings_dir):

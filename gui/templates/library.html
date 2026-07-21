@@ -7,28 +7,44 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header><h1>Meeting Library</h1>
-    <a class="newlink" href="/new">+ New meeting</a>
-    <form method="post" action="/cleanup-all" class="cleanup-all"
-          onsubmit="return confirm('Compress audio and delete source video + WAV for ALL finalized meetings? This frees disk space and cannot be undone without reprocessing.');">
-      <button type="submit" class="cleanup-btn">🧹 Clean up all finalized media</button>
-    </form>
-  </header>
+  <header><h1>Meeting Library</h1></header>
   <main>
+    <div class="lib-toolbar">
+      <input type="search" id="lib-search" class="lib-search" placeholder="🔍  Search name, city, org, id…" autocomplete="off">
+      <select id="lib-kind" class="lib-sel">
+        <option value="">Kind: all</option>
+        {% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+      </select>
+      <select id="lib-status" class="lib-sel">
+        <option value="">Status: all</option>
+        <option value="processing">Processing</option>
+        <option value="needs-review">Needs review</option>
+        <option value="ready">Ready to publish</option>
+        <option value="live">Published/Live</option>
+      </select>
+      <span class="lib-spacer"></span>
+      <a class="newlink" href="/new">+ New meeting</a>
+      <form method="post" action="/cleanup-all" class="cleanup-all"
+            onsubmit="return confirm('Compress audio and delete source video + WAV for ALL finalized meetings? This frees disk space and cannot be undone without reprocessing.');">
+        <button type="submit" class="cleanup-btn">🧹 Clean up all finalized media</button>
+      </form>
+    </div>
     {% if meetings %}
-    <table class="library">
+    <table class="library" id="lib-table">
       <thead>
         <tr><th>Meeting</th><th>Date</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th><th>Live</th></tr>
       </thead>
       <tbody>
         {% for m in meetings %}
-        <tr>
+        <tr data-kind="{{ m.event_kind or '' }}" data-status="{{ m.status_key }}"
+            data-search="{{ [m.display_name, m.meeting_id, m.context_line, m.event_kind]|select|join(' ')|lower }}">
           <td class="name">
             {% if m.has_thumbnail %}
             <img class="thumb" src="/meetings/{{ m.meeting_id }}/thumbnail" alt="" loading="lazy">
             {% endif %}
             <div>
-              <div><a class="mlink" href="/meetings/{{ m.meeting_id }}/review">{{ m.display_name }}</a></div>
+              <div><a class="mlink" href="/meetings/{{ m.meeting_id }}">{{ m.display_name }}</a></div>
+              {% if m.context_line %}<div class="ctx">{{ m.context_line }}</div>{% endif %}
               <div class="mid">{{ m.meeting_id }}</div>
             </div>
           </td>
@@ -49,9 +65,11 @@
         {% endfor %}
       </tbody>
     </table>
+    <p class="lib-empty-filter" id="lib-empty-filter" hidden>No meetings match the current filter.</p>
     {% else %}
     <p class="empty">No meetings processed yet.</p>
     {% endif %}
   </main>
+  <script src="/static/library.js"></script>
 </body>
 </html>

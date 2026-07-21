@@ -55,8 +55,15 @@ def create_app() -> FastAPI:
         # One batch query for live-site status; None (no DB) => no live badge.
         live_slugs = publish_api.live_published_slugs()
         meetings = scan_meetings(config.MEETINGS_DIR, live_slugs=live_slugs)
+        from gui import races
+        race_ids = {m.race_id for m in meetings if m.race_id}
+        labels = races.race_labels(race_ids) if race_ids else {}
+        for m in meetings:
+            if m.race_id:
+                m.race_label = labels.get(m.race_id)
+        from src.event_kinds import EVENT_KINDS
         return _templates.TemplateResponse(
-            request, "library.html", {"meetings": meetings}
+            request, "library.html", {"meetings": meetings, "event_kinds": list(EVENT_KINDS)},
         )
 
     @app.get("/meetings/{meeting_id}/thumbnail")
