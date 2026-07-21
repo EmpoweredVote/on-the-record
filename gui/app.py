@@ -172,6 +172,11 @@ def create_app() -> FastAPI:
     def politician_search(q: str = "") -> JSONResponse:
         return JSONResponse(review_api.search_politicians_safe(q))
 
+    @app.get("/api/races/search")
+    def race_search(q: str = "") -> JSONResponse:
+        from gui import races
+        return JSONResponse(races.search_races_safe(q))
+
     @app.get("/api/source-meta")
     def source_meta(url: str = "") -> JSONResponse:
         # Podcast / public-radio CMS episode pages: resolve for real metadata.
@@ -273,6 +278,9 @@ def create_app() -> FastAPI:
         event_orgs: str = Form(""),
         body_slug: str = Form(""),
         crec_chamber: str = Form(""),
+        guest: str = Form(""),
+        race_id: str = Form(""),
+        race_slug: str = Form(""),
         confirm: str = Form(""),
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
@@ -302,6 +310,7 @@ def create_app() -> FastAPI:
                             "clip_start": clip_start, "clip_end": clip_end,
                             "event_orgs": event_orgs, "body_slug": body_slug,
                             "crec_chamber": crec_chamber,
+                            "guest": guest, "race_id": race_id, "race_slug": race_slug,
                         },
                     },
                 )
@@ -313,6 +322,9 @@ def create_app() -> FastAPI:
             event_orgs=[o.strip() for o in event_orgs.split(",") if o.strip()],
             body_slug=body_slug.strip() or None,
             crec_chamber=crec_chamber.strip() or None,
+            guest=guest.strip() or None,
+            race_id=race_id.strip() or None,
+            race_slug=race_slug.strip() or None,
         )
         try:
             meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)

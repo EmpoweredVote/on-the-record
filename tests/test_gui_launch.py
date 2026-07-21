@@ -426,3 +426,37 @@ def test_source_meta_prefers_resolver(tmp_meetings_dir, monkeypatch):
                       params={"url": "https://show.buzzsprout.com/1/ep"})
     assert resp.status_code == 200
     assert resp.json() == {"date": "2026-06-03", "title": "Ep 1", "event_org": "WNLA"}
+
+
+def test_races_search_route_returns_json(monkeypatch, tmp_meetings_dir):
+    import gui.races as races
+    monkeypatch.setattr(races, "search_races_safe",
+                        lambda q, **kw: {"results": [
+                            {"race_id": "u1", "label": "Governor of Michigan · 2026",
+                             "slug": "governor-michigan"}], "error": None})
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    resp = TestClient(create_app()).get("/api/races/search", params={"q": "gov"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["results"][0]["slug"] == "governor-michigan"
+    assert body["error"] is None
+
+
+def test_post_new_passes_guest_and_race(monkeypatch, tmp_meetings_dir):
+    from gui import runner
+    captured = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: captured.setdefault("p", p) or "2026-05-01-x")
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    resp = TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-05-01", "meeting_type": "Interview",
+        "event_kind": "news_clip", "guest": "Xavier Becerra",
+        "race_id": "uuid-9", "race_slug": "ca-governor",
+        "compute": "modal", "diarizer": "oss",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert captured["p"].guest == "Xavier Becerra"
+    assert captured["p"].race_id == "uuid-9"
+    assert captured["p"].race_slug == "ca-governor"
