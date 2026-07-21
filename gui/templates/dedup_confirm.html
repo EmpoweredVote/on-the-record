@@ -11,7 +11,7 @@
       One source recording maps to one meeting — you probably want to open it.
     </div>
     <p>
-      <a class="enroll" href="/meetings/{{ existing_id }}/review" style="text-decoration:none;">→ Open existing meeting</a>
+      <a class="enroll" href="/meetings/{{ existing_id }}" style="text-decoration:none;">→ Open existing meeting</a>
     </p>
     <form method="post" action="/new">
       {% for k, v in form.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}

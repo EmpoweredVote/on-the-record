@@ -22,7 +22,6 @@ from gui import review_api
 from gui import runner
 from gui import workspace
 from gui.library import scan_meetings
-from gui.models import stage_label as stage_label_for
 from gui.paths import is_safe_meeting_id
 from gui.review_api import find_meeting_media, load_review_page
 from gui.runner import RunParams
@@ -364,7 +363,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
-    @app.get("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
+    @app.get("/meetings/{meeting_id}/publish")
     def publish_confirm(meeting_id: str) -> RedirectResponse:
         return RedirectResponse(url=f"/meetings/{meeting_id}?tab=publish", status_code=301)
 
@@ -373,9 +372,13 @@ def create_app() -> FastAPI:
         result = publish_api.apply_publish(meeting_id, force=bool(force.strip()))
         if result.get("reason") == "unknown":
             raise HTTPException(status_code=404)
-        return _templates.TemplateResponse(
-            request, "publish_result.html",
-            {"meeting_id": meeting_id, "result": result},
-        )
+        if result.get("ok"):
+            msg = (f"✓ Published · {result.get('segments', 0)} segments · "
+                   f"{result.get('speakers', 0)} speakers")
+            body = f'<div class="publish-ok">{msg}</div>'
+        else:
+            body = (f'<div class="error-banner">Publish failed '
+                    f'({result.get("reason")}): {result.get("error", "")}</div>')
+        return HTMLResponse(body)
 
     return app
