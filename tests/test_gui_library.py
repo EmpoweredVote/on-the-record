@@ -45,6 +45,40 @@ def test_meeting_summary_display_name_falls_back_to_city_and_type():
     assert s.display_name == "Bloomington Regular Session"
 
 
+def test_meeting_summary_context_line_composes_available_fields():
+    s = MeetingSummary(
+        meeting_id="m", title=None, city="Bloomington", meeting_type="Regular Session",
+        date="2026-02-10", event_kind="council", completed_stage=4,
+        body_slug="bloomington-common-council",
+    )
+    # city + prettified body, de-duplicated, joined with ' · '
+    assert s.context_line == "Bloomington · Bloomington Common Council"
+
+    s2 = MeetingSummary(
+        meeting_id="m2", title=None, city=None, meeting_type="Interview", date="2026-05-01",
+        event_kind="news_clip", completed_stage=5,
+        event_orgs=["CBS"], race_label="CA Governor · 2026",
+    )
+    assert s2.context_line == "CBS · CA Governor · 2026"
+
+    s3 = MeetingSummary(meeting_id="m3", title=None, city=None, meeting_type=None,
+                        date=None, event_kind="floor", completed_stage=3)
+    assert s3.context_line == ""   # nothing to show
+
+
+def test_meeting_summary_status_key():
+    def s(**kw):
+        base = dict(meeting_id="m", title=None, city=None, meeting_type=None, date=None,
+                    event_kind=None, completed_stage=0)
+        base.update(kw)
+        return MeetingSummary(**base)
+    assert s(completed_stage=2).status_key == "processing"          # pre-identify
+    assert s(completed_stage=4).status_key == "needs-review"        # reviewable, gate not passed
+    assert s(completed_stage=5, review_status="pass").status_key == "ready"
+    assert s(completed_stage=7, review_status="pass", is_live=True).status_key == "live"
+    assert s(completed_stage=7, review_status="review").status_key == "needs-review"
+
+
 import json
 
 from gui.library import scan_meetings
