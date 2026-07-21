@@ -72,7 +72,7 @@ def panel_context(name: str, meeting_id: str) -> Optional[dict]:
     # review / details / publish need the processed meeting (transcript_named.json).
     if not (meeting_dir / "transcript_named.json").exists():
         base["not_ready"] = _not_ready_message(meeting_dir)
-        base["page"] = None  # review.html reads page; None + not_ready -> placeholder
+        base["page"] = None  # panels/review.html reads page; None + not_ready -> placeholder
         return base
 
     if name == "review":

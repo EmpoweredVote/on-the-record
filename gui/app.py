@@ -23,7 +23,7 @@ from gui import runner
 from gui import workspace
 from gui.library import scan_meetings
 from gui.paths import is_safe_meeting_id
-from gui.review_api import find_meeting_media, load_review_page
+from gui.review_api import find_meeting_media
 from gui.runner import RunParams
 
 _GUI_DIR = Path(__file__).resolve().parent
