@@ -63,9 +63,6 @@ def test_build_run_command_congressional_record_reuses_meeting_date():
     assert cmd[cmd.index("--compute") + 1] == "local"
 
 
-from gui.runner import RunParams, derive_meeting_id, build_run_command
-
-
 def _p(**kw):
     base = dict(input="https://x/v", date="2026-05-01", meeting_type="Interview",
                 event_kind="news_clip")
@@ -89,8 +86,7 @@ def test_derive_id_floor_uses_label_only():
 def test_derive_id_interview_guest_before_race():
     p = _p(event_kind="news_clip", meeting_type="Interview",
            guest="Xavier Becerra", race_slug="ca-governor")
-    assert derive_meeting_id(p) == "2026-05-01-becerra-ca-governor-interview" \
-        or derive_meeting_id(p) == "2026-05-01-xavier-becerra-ca-governor-interview"
+    assert derive_meeting_id(p) == "2026-05-01-xavier-becerra-ca-governor-interview"
 
 
 def test_derive_id_interview_guest_only_then_org():
@@ -112,6 +108,18 @@ def test_derive_id_overlap_dedup():
            city="Bloomington")
     mid = derive_meeting_id(p)
     assert mid == "2026-05-01-bloomington-regular-session"
+
+
+def test_derive_id_dedup_is_token_boundary_not_substring():
+    # guest "Bobby" must NOT be dropped just because label "Bo" is a substring
+    p = _p(event_kind="news_clip", meeting_type="Bo", guest="Bobby")
+    assert derive_meeting_id(p) == "2026-05-01-bobby-bo"
+    # city "Ada" must NOT be dropped because it's inside "adaptation"
+    p2 = _p(event_kind="council", meeting_type="Budget Adaptation Session", city="Ada")
+    assert derive_meeting_id(p2) == "2026-05-01-ada-budget-adaptation-session"
+    # genuine whole-token repeat is still deduped
+    p3 = _p(event_kind="council", meeting_type="Bloomington Regular Session", city="Bloomington")
+    assert derive_meeting_id(p3) == "2026-05-01-bloomington-regular-session"
 
 
 def test_derive_id_length_capped():

@@ -70,6 +70,12 @@ def _locus_for(p: "RunParams") -> str:
     return city or org                                # "other"
 
 
+def _overlaps(a: str, b: str) -> bool:
+    """True if a and b share a whole hyphen-token containment (not a partial
+    substring). Dash-wrapping makes 'ada' NOT match inside 'adaptation'."""
+    return f"-{a}-" in f"-{b}-" or f"-{b}-" in f"-{a}-"
+
+
 def derive_meeting_id(p: RunParams) -> str:
     """Custom id if given, else '{date}-{locus}-{label}' where locus is kind-aware
     (see _locus_for). New meetings only — existing slugs are never re-derived
@@ -81,7 +87,7 @@ def derive_meeting_id(p: RunParams) -> str:
         locus = _locus_for(p)
         # Overlap de-dup: if the label already contains the locus (or vice versa),
         # drop the locus so we don't get 'bloomington-bloomington-...'.
-        if locus and (locus in label or label in locus):
+        if locus and _overlaps(locus, label):
             locus = ""
         mid = "-".join(x for x in (p.date, locus, label) if x)
         if len(mid) > _MAX_ID_LEN:
