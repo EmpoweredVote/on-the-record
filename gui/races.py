@@ -70,3 +70,34 @@ def search_races_safe(q: str, *, limit: int = 20) -> dict:
         for (rid, name, yr) in rows
     ]
     return {"results": results, "error": None}
+
+
+def race_labels(race_ids) -> dict:
+    """{race_id: display label} for the given ids, best-effort ({} on empty /
+    no-DB / error). One query for the whole set — used to enrich the library."""
+    ids = [str(r) for r in race_ids if r]
+    if not ids:
+        return {}
+    url = _db_url()
+    if not url:
+        return {}
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT r.id, r.position_name,
+                           EXTRACT(YEAR FROM e.election_date)::int AS yr
+                    FROM essentials.races r
+                    LEFT JOIN essentials.elections e ON e.id = r.election_id
+                    WHERE r.id::text = ANY(%s)
+                    """,
+                    (ids,),
+                )
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return {}
+    return {str(rid): race_display(name, yr) for (rid, name, yr) in rows}

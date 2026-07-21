@@ -41,3 +41,16 @@ def test_search_races_safe_swallows_db_errors(monkeypatch):
     out = races.search_races_safe("senate")
     assert out["results"] == []
     assert out["error"]                          # a message, not a crash
+
+
+def test_race_labels_empty_and_no_db(monkeypatch):
+    assert races.race_labels([]) == {}
+    monkeypatch.setattr(races, "_db_url", lambda: None)
+    assert races.race_labels(["uuid-1"]) == {}
+
+
+def test_race_labels_swallows_db_errors(monkeypatch):
+    monkeypatch.setattr(races, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(races.psycopg2, "connect",
+                        lambda url: (_ for _ in ()).throw(RuntimeError("down")))
+    assert races.race_labels(["uuid-1"]) == {}
