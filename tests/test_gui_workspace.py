@@ -261,11 +261,13 @@ def test_workspace_attention_dot_present_but_hidden_when_zero(tagged_meeting_dir
     import re
     from src.models import Meeting, Segment, SpeakerMapping
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
-    # every speaker named + confident -> zero needs-attention
+    # every speaker named + confident + trusted id_method -> zero needs-attention
+    # (a human_review method is trusted-tier; a plain "voice" match is not — see
+    # SpeakerCard.is_confirmed / src.quality.classify_method).
     segs = [Segment(segment_id=0, start_time=10.0, end_time=70.0, speaker_label="SPEAKER_00",
                     text="Hello.", speaker_name="Mayor Johnson")]
     speakers = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
-                                             confidence=0.95, id_method="voice")}
+                                             confidence=0.95, id_method="human_review")}
     meeting = Meeting(meeting_id="2026-02-04-council", city="Bloomington", date="2026-02-04",
                       meeting_type="Regular Session", event_kind="council",
                       segments=segs, speakers=speakers)
