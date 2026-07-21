@@ -317,6 +317,31 @@ def test_scan_meetings_enrichment_absent_is_graceful(tagged_meeting_dir, tmp_mee
     assert s.gate_badge == ("none", "—")
 
 
+def test_scan_meetings_populates_context_fields(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("bloomington-common-council",
+                              meeting_id="2026-02-10-council", completed_stage=4)
+    # body_slug comes from state (tagged_meeting_dir sets it to the source arg);
+    # race_id from state; event_orgs from transcript_named.
+    state = mdir / "pipeline_state.json"
+    data = json.loads(state.read_text())
+    data.update({"city": "Bloomington", "race_id": "uuid-r"})
+    state.write_text(json.dumps(data))
+    (mdir / "transcript_named.json").write_text(json.dumps(
+        {"title": "Council", "event_orgs": ["CATS", "WFHB"]}))
+
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.body_slug == "bloomington-common-council"
+    assert s.race_id == "uuid-r"
+    assert s.event_orgs == ["CATS", "WFHB"]
+    assert "Bloomington Common Council" in s.context_line
+
+
+def test_scan_meetings_context_fields_absent_are_graceful(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-11-council", completed_stage=1)
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.event_orgs == [] and s.race_id is None
+
+
 from gui.paths import is_safe_meeting_id
 
 
