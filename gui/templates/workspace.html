@@ -38,7 +38,7 @@
     <nav class="tabstrip">
       {% for tab, label in [("progress","Progress"),("review","Review"),("details","Details"),("publish","Publish")] %}
       <a class="tab{% if tab == active_tab %} active{% endif %}"
-         data-tab="{{ tab }}" href="/meetings/{{ header.meeting_id }}?tab={{ tab }}">{{ label }}{% if tab == "review" and header.attention_count %} <span class="dot" id="attn-dot">●</span>{% endif %}</a>
+         data-tab="{{ tab }}" href="/meetings/{{ header.meeting_id }}?tab={{ tab }}">{{ label }}{% if tab == "review" %} <span class="dot" id="attn-dot"{% if not header.attention_count %} hidden{% endif %}>●</span>{% endif %}</a>
       {% endfor %}
     </nav>
   </header>

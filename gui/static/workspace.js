@@ -47,10 +47,20 @@
     if (form.hasAttribute("data-navigate")) return;         // let it navigate
     if (!panel.contains(form)) return;                       // only in-panel forms
     e.preventDefault();
+    // The publish form returns a result fragment (✓ Published … / error); every
+    // other action 303-redirects and we just re-fetch. Keep the publish result so
+    // it can be shown in the panel's #publish-result slot after the re-render.
+    const isPublish = form.matches(".publish-form");
+    let publishResult = "";
     try {
-      await fetch(form.action, { method: "POST", body: new FormData(form), redirect: "manual" });
+      const r = await fetch(form.action, { method: "POST", body: new FormData(form), redirect: "manual" });
+      if (isPublish) publishResult = await r.text();
     } catch (_) { /* best-effort; re-fetch shows current state */ }
     await loadPanel(activeTab, false);
+    if (isPublish) {
+      const slot = document.getElementById("publish-result");
+      if (slot) slot.innerHTML = publishResult;
+    }
   });
 
   // ---- Live status --------------------------------------------------------
@@ -75,7 +85,7 @@
       live.className = "live-badge live-" + (st.is_live ? "live" : "notlive");
     }
     const dot = document.getElementById("attn-dot");
-    if (dot) dot.style.display = st.attention_count ? "" : "none";
+    if (dot) dot.hidden = !st.attention_count;  // element is always present; toggle it live
 
     // Progress panel (if shown): update stepper + log in place, poll while running.
     const stepper = document.getElementById("stepper");

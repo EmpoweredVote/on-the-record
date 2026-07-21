@@ -225,3 +225,34 @@ def test_workspace_js_wires_core_endpoints(tmp_meetings_dir):
     assert "data-hls" in js
     # form interception opt-out
     assert "data-navigate" in js
+    # inline publish-success line wired into the panel's result slot
+    assert "publish-result" in js and "publish-form" in js
+
+
+def test_workspace_review_tab_always_has_attention_dot(tagged_meeting_dir, tmp_meetings_dir):
+    import re
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)  # SPEAKER_01 unnamed -> one needs-attention
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council").text
+    m = re.search(r'id="attn-dot"([^>]*)>', body)
+    assert m and "hidden" not in m.group(1)   # present and shown (attention_count == 1)
+
+
+def test_workspace_attention_dot_present_but_hidden_when_zero(tagged_meeting_dir, tmp_meetings_dir):
+    import json as _json
+    import re
+    from src.models import Meeting, Segment, SpeakerMapping
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    # every speaker named + confident -> zero needs-attention
+    segs = [Segment(segment_id=0, start_time=10.0, end_time=70.0, speaker_label="SPEAKER_00",
+                    text="Hello.", speaker_name="Mayor Johnson")]
+    speakers = {"SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
+                                             confidence=0.95, id_method="voice")}
+    meeting = Meeting(meeting_id="2026-02-04-council", city="Bloomington", date="2026-02-04",
+                      meeting_type="Regular Session", event_kind="council",
+                      segments=segs, speakers=speakers)
+    (mdir / "transcript_named.json").write_text(_json.dumps(meeting.to_dict()))
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council").text
+    m = re.search(r'id="attn-dot"([^>]*)>', body)
+    assert m and "hidden" in m.group(1)       # element present, hidden until attention appears
