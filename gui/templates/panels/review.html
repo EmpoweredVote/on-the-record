@@ -1,0 +1,33 @@
+{% import "panels/_macros.html" as m %}
+{% if page is none %}
+  <p class="empty">{{ not_ready }}</p>
+{% else %}
+  {% set all_cards = page.all_cards %}
+  {% if page.youtube_id %}
+    <iframe id="yt-player" class="player"
+            src="https://www.youtube.com/embed/{{ page.youtube_id }}"
+            title="source video" frameborder="0"
+            allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+            allowfullscreen></iframe>
+  {% elif page.hls_url %}
+    <video id="player" class="player" data-hls="{{ page.hls_url }}" controls preload="metadata"></video>
+  {% elif page.media_kind == "video" %}
+    <video id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></video>
+  {% elif page.media_kind == "audio" %}
+    <audio id="player" class="player" src="/meetings/{{ page.meeting_id }}/media" controls preload="metadata"></audio>
+  {% else %}
+    <p class="empty">No media found for clip playback.</p>
+  {% endif %}
+
+  <section>
+    <h2>Needs attention</h2>
+    {% if page.needs_attention %}
+      {% for c in page.needs_attention %}{{ m.card(c, page.meeting_id) }}{% endfor %}
+    {% else %}<p class="empty">Nothing needs attention — every speaker is confirmed.</p>{% endif %}
+  </section>
+
+  <section>
+    <h2>Confirmed</h2>
+    {% for c in page.confirmed %}{{ m.card(c, page.meeting_id) }}{% endfor %}
+  </section>
+{% endif %}
