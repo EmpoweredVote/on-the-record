@@ -37,7 +37,9 @@ def test_panel_context_review_not_ready_before_identify(tagged_meeting_dir, tmp_
     ctx = panel_context("review", "2026-02-04-council")
     assert ctx is not None
     assert ctx["page"] is None
-    assert "not_ready" in ctx and "Identify" in ctx["not_ready"]
+    # Message is non-empty and mentions the current stage label (not hard-coded wording).
+    from gui.models import stage_label
+    assert ctx.get("not_ready") and stage_label(2) in ctx["not_ready"]
 
 
 def test_panel_context_review_ready_returns_page(tagged_meeting_dir, tmp_meetings_dir):
@@ -87,3 +89,49 @@ def test_header_context_counts_attention_when_ready(tagged_meeting_dir, tmp_meet
     assert h["attention_count"] == 1
     assert h["is_live"] is True
     assert h["gate_badge"][0] in ("pass", "review", "failed", "none")
+
+
+# --- Regression tests: malformed on-disk state must degrade, never raise. ---
+
+
+def test_panel_context_review_malformed_transcript_is_not_ready(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("[]", encoding="utf-8")
+    ctx = panel_context("review", "2026-02-04-council")
+    assert ctx is not None
+    assert ctx["page"] is None
+    assert ctx.get("not_ready")
+
+
+def test_panel_context_publish_malformed_transcript_is_not_ready(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    (mdir / "transcript_named.json").write_text("not json", encoding="utf-8")
+    ctx = panel_context("publish", "2026-02-04-council")
+    assert ctx is not None
+    assert ctx.get("not_ready")
+
+
+def test_panel_context_publish_malformed_pipeline_state_is_not_ready(tagged_meeting_dir, tmp_meetings_dir):
+    # Valid transcript (so _load_meeting_ctx succeeds and we reach `PipelineState(ctx[1])`),
+    # but a corrupt pipeline_state.json -- this is what actually exercises the new guard.
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    _write_meeting(mdir)
+    (mdir / "pipeline_state.json").write_text("{ not json", encoding="utf-8")
+    ctx = panel_context("publish", "2026-02-04-council")
+    assert ctx is not None
+    assert ctx.get("not_ready")
+
+
+def test_header_context_malformed_pipeline_state_returns_none(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=2)
+    (mdir / "pipeline_state.json").write_text("{ not json", encoding="utf-8")
+    assert header_context("2026-02-04-council") is None
+
+
+def test_header_context_non_dict_transcript_does_not_crash(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    (mdir / "transcript_named.json").write_text("[]", encoding="utf-8")
+    h = header_context("2026-02-04-council")
+    assert h is not None
+    assert h["display_name"]  # falls back to city/type/id, not the (absent) title

@@ -1,9 +1,9 @@
 """Assemble the context for the meeting workspace shell and its panels.
 
 Pure-ish data assembly — no HTTP. Reuses the existing loaders (load_review_page,
-_load_meeting_ctx, run_status, PipelineState) so the workspace and the pipeline
-agree on how a meeting is read. The single source of truth for panel data,
-called by both the GET /panel/{name} route and the shell route in gui.app."""
+_load_meeting_ctx, PipelineState) so the workspace and the pipeline agree on
+how a meeting is read. The single source of truth for panel data, called by
+both the GET /panel/{name} route and the shell route in gui.app."""
 from __future__ import annotations
 
 from typing import Optional
@@ -39,14 +39,14 @@ def _meeting_dir(meeting_id: str):
 
 
 def _not_ready_message(meeting_dir) -> str:
-    """Placeholder text for a panel whose data isn't produced yet (pre-stage-4)."""
+    """Placeholder text for a panel whose data isn't available yet — either
+    genuinely pre-stage-4, or the meeting's files are malformed."""
     from src.checkpoint import PipelineState
     try:
         stage = int(PipelineState(meeting_dir).completed_stage)
     except Exception:
         stage = 0
-    return (f"This step becomes available after processing reaches the Identify "
-            f"stage. Currently: {stage_label(stage)}.")
+    return f"This step isn't available yet. Currently: {stage_label(stage)}."
 
 
 def panel_context(name: str, meeting_id: str) -> Optional[dict]:
@@ -77,7 +77,10 @@ def panel_context(name: str, meeting_id: str) -> Optional[dict]:
 
     if name == "review":
         from gui.review_api import load_review_page
-        base["page"] = load_review_page(meeting_id)
+        page = load_review_page(meeting_id)
+        if page is None:
+            base["not_ready"] = _not_ready_message(meeting_dir)
+        base["page"] = page
         return base
 
     if name == "details":
@@ -99,7 +102,11 @@ def panel_context(name: str, meeting_id: str) -> Optional[dict]:
     if ctx is None:
         base["not_ready"] = _not_ready_message(meeting_dir)
         return base
-    state = PipelineState(ctx[1])
+    try:
+        state = PipelineState(ctx[1])
+    except Exception:
+        base["not_ready"] = _not_ready_message(meeting_dir)
+        return base
     base["review_status"] = state.review_status
     base["gate_pass"] = state.review_status == "pass"
     base["already_published"] = publish_api.meeting_published_id(meeting_id) is not None
@@ -116,7 +123,10 @@ def header_context(meeting_id: str, *, is_live: Optional[bool] = None) -> Option
     meeting_dir = _meeting_dir(meeting_id)
     if meeting_dir is None:
         return None
-    state = PipelineState(meeting_dir)
+    try:
+        state = PipelineState(meeting_dir)
+    except Exception:
+        return None
     completed = int(state.completed_stage)
 
     # Title: prefer transcript_named.json title, else city + meeting_type, else id.
@@ -126,7 +136,7 @@ def header_context(meeting_id: str, *, is_live: Optional[bool] = None) -> Option
         try:
             t = json.loads(named.read_text(encoding="utf-8")).get("title")
             title = t if isinstance(t, str) and t.strip() else None
-        except (ValueError, OSError):
+        except (ValueError, OSError, KeyError, TypeError, AttributeError):
             title = None
     display_name = title or " ".join(
         p for p in (state.city, state.meeting_type) if p and p.strip()
