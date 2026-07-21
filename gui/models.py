@@ -173,10 +173,19 @@ class SpeakerCard:
 
     @property
     def is_confirmed(self) -> bool:
+        """A speaker counts as confirmed only when it's trusted the way the
+        confidence gate means it: a real name, high confidence, AND a
+        human-authoritative / trusted-tier id_method. A high-confidence
+        auto-identification (auto_linked, llm, ...) is NOT confirmed — it stays in
+        'needs attention' with a one-click Accept, so the review UI's 'confirmed'
+        can't diverge from the gate's 'trusted coverage' (which is what let a fully
+        auto-identified meeting look done yet fail the gate)."""
+        from src.quality import TIER_TRUSTED, classify_method
         return (
             bool(self.name)
             and self.name.strip() not in ("", _UNIDENTIFIED)
             and self.confidence >= CONFIDENT_THRESHOLD
+            and classify_method(self.method) == TIER_TRUSTED
         )
 
     @property
