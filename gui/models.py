@@ -72,6 +72,7 @@ class MeetingSummary:
     body_slug: Optional[str] = None
     race_id: Optional[str] = None
     race_label: Optional[str] = None
+    guest: Optional[str] = None
 
     @property
     def stage_label(self) -> str:
@@ -107,8 +108,8 @@ class MeetingSummary:
 
     @property
     def context_line(self) -> str:
-        """One-line context under the row name: city · body · org(s) · race,
-        de-duplicated, only what's present."""
+        """One-line context under the row name: city · body · org(s) · race ·
+        guest, de-duplicated, only what's present."""
         parts: list[str] = []
         if self.city and self.city.strip():
             parts.append(self.city.strip())
@@ -119,6 +120,8 @@ class MeetingSummary:
                 parts.append(str(org).strip())
         if self.race_label and self.race_label.strip():
             parts.append(self.race_label.strip())
+        if self.guest and self.guest.strip():
+            parts.append(f"guest {self.guest.strip()}")
         seen: list[str] = []
         for p in parts:
             if p not in seen:

@@ -79,6 +79,7 @@ def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
         event_orgs=event_orgs,
         body_slug=state.body_slug,
         race_id=state.race_id,
+        guest=state.guest,
     )
 
 

@@ -399,6 +399,24 @@ def test_library_has_new_meeting_link(tmp_meetings_dir):
     assert 'href="/new"' in body
 
 
+def test_meeting_summary_context_line_includes_guest():
+    s = MeetingSummary(
+        meeting_id="m", title=None, city=None, meeting_type="Interview", date="2026-05-01",
+        event_kind="news_clip", completed_stage=5,
+        event_orgs=["CBS"], race_label="CA Governor · 2026", guest="Xavier Becerra",
+    )
+    assert s.context_line == "CBS · CA Governor · 2026 · guest Xavier Becerra"
+
+
+def test_scan_meetings_reads_guest(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-01-interview", completed_stage=5)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"guest": "Xavier Becerra"}); st.write_text(json.dumps(data))
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.guest == "Xavier Becerra"
+    assert "guest Xavier Becerra" in s.context_line
+
+
 def test_humanize_kind_labels():
     from gui.formmeta import humanize_kind
     assert humanize_kind("news_clip") == "News Clip"

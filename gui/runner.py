@@ -131,6 +131,8 @@ def build_run_command(python_exe: str, script: str, p: RunParams, meeting_id: st
         cmd += ["--congressional-record", p.date, p.crec_chamber]
     if p.race_id:
         cmd += ["--race-id", p.race_id]
+    if p.guest:
+        cmd += ["--guest", p.guest]
     return cmd
 
 

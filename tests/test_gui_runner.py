@@ -137,6 +137,14 @@ def test_build_run_command_includes_race_id():
     assert "--race-id" not in build_run_command("py", "run_local.py", p2, "m")
 
 
+def test_build_run_command_includes_guest():
+    p = _p(event_kind="news_clip", guest="Xavier Becerra")
+    cmd = build_run_command("py", "run_local.py", p, "m")
+    assert "--guest" in cmd and "Xavier Becerra" in cmd
+    # absent when no guest
+    assert "--guest" not in build_run_command("py", "run_local.py", _p(event_kind="news_clip"), "m")
+
+
 import json
 from pathlib import Path
 
