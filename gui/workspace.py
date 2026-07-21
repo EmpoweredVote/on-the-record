@@ -104,3 +104,49 @@ def panel_context(name: str, meeting_id: str) -> Optional[dict]:
     base["gate_pass"] = state.review_status == "pass"
     base["already_published"] = publish_api.meeting_published_id(meeting_id) is not None
     return base
+
+
+def header_context(meeting_id: str, *, is_live: Optional[bool] = None) -> Optional[dict]:
+    """Context for the persistent workspace header. None if the meeting is
+    unknown. attention_count is 0 before stage 4 (no speakers yet)."""
+    import json
+    from src.checkpoint import PipelineState
+    from gui.models import gate_badge
+
+    meeting_dir = _meeting_dir(meeting_id)
+    if meeting_dir is None:
+        return None
+    state = PipelineState(meeting_dir)
+    completed = int(state.completed_stage)
+
+    # Title: prefer transcript_named.json title, else city + meeting_type, else id.
+    title = None
+    named = meeting_dir / "transcript_named.json"
+    if named.exists():
+        try:
+            t = json.loads(named.read_text(encoding="utf-8")).get("title")
+            title = t if isinstance(t, str) and t.strip() else None
+        except (ValueError, OSError):
+            title = None
+    display_name = title or " ".join(
+        p for p in (state.city, state.meeting_type) if p and p.strip()
+    ) or meeting_id
+
+    attention_count = 0
+    if completed >= _REVIEW_READY_STAGE:
+        from gui.review_api import load_review_page
+        page = load_review_page(meeting_id)
+        if page is not None:
+            attention_count = len(page.needs_attention)
+
+    return {
+        "meeting_id": meeting_id,
+        "display_name": display_name,
+        "date": state.date,
+        "event_kind": state.event_kind,
+        "review_status": state.review_status,
+        "completed_stage": completed,
+        "gate_badge": gate_badge(state.review_status, state.trusted_coverage),
+        "is_live": is_live,
+        "attention_count": attention_count,
+    }

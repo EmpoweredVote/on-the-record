@@ -61,3 +61,29 @@ def test_panel_context_details_and_publish(tagged_meeting_dir, tmp_meetings_dir,
 
     p = panel_context("publish", "2026-02-04-council")
     assert "review_status" in p and p["already_published"] is False
+
+
+from gui.workspace import header_context
+
+
+def test_header_context_none_for_unknown(tmp_meetings_dir):
+    assert header_context("ghost") is None
+
+
+def test_header_context_prestage4_no_attention(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=2)
+    h = header_context("2026-02-04-council")
+    assert h["completed_stage"] == 2
+    assert h["attention_count"] == 0          # no speakers before Identify
+    assert h["display_name"]                  # falls back to city/type/id
+    assert h["is_live"] is None               # unknown unless caller passes it
+
+
+def test_header_context_counts_attention_when_ready(tagged_meeting_dir, tmp_meetings_dir):
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)  # SPEAKER_01 is unnamed -> needs attention
+    h = header_context("2026-02-04-council", is_live=True)
+    assert h["attention_count"] == 1
+    assert h["is_live"] is True
+    assert h["gate_badge"][0] in ("pass", "review", "failed", "none")
