@@ -20,6 +20,7 @@ from src.download import is_ytdlp_url
 from gui import publish_api
 from gui import review_api
 from gui import runner
+from gui import workspace
 from gui.library import scan_meetings
 from gui.models import stage_label as stage_label_for
 from gui.paths import is_safe_meeting_id
@@ -74,6 +75,42 @@ def create_app() -> FastAPI:
         if page is None:
             raise HTTPException(status_code=404)
         return _templates.TemplateResponse(request, "review.html", {"page": page})
+
+    @app.get("/meetings/{meeting_id}", response_class=HTMLResponse)
+    def workspace_shell(request: Request, meeting_id: str, tab: str = "") -> HTMLResponse:
+        header = workspace.header_context(
+            meeting_id, is_live=(publish_api.meeting_published_id(meeting_id) is not None),
+        )
+        if header is None:
+            raise HTTPException(status_code=404)
+        active = tab.strip() or workspace.default_tab_for_stage(header["completed_stage"])
+        ctx = workspace.panel_context(active, meeting_id)
+        if ctx is None:  # bad ?tab value -> fall back to the default tab
+            active = workspace.default_tab_for_stage(header["completed_stage"])
+            ctx = workspace.panel_context(active, meeting_id)
+        return _templates.TemplateResponse(
+            request, "workspace.html", {**ctx, "header": header, "active_tab": active},
+        )
+
+    @app.get("/meetings/{meeting_id}/panel/{name}", response_class=HTMLResponse)
+    def workspace_panel(request: Request, meeting_id: str, name: str) -> HTMLResponse:
+        ctx = workspace.panel_context(name, meeting_id)
+        if ctx is None:
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(request, f"panels/{name}.html", ctx)
+
+    @app.get("/meetings/{meeting_id}/status")
+    def workspace_status(meeting_id: str) -> JSONResponse:
+        st = runner.run_status(meeting_id)
+        if st is None:
+            raise HTTPException(status_code=404)
+        header = workspace.header_context(
+            meeting_id, is_live=(publish_api.meeting_published_id(meeting_id) is not None),
+        )
+        st["review_status"] = header["review_status"] if header else None
+        st["is_live"] = header["is_live"] if header else None
+        st["attention_count"] = header["attention_count"] if header else 0
+        return JSONResponse(st)
 
     @app.get("/meetings/{meeting_id}/media")
     def media(meeting_id: str):

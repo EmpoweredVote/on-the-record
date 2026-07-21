@@ -135,3 +135,56 @@ def test_header_context_non_dict_transcript_does_not_crash(tagged_meeting_dir, t
     h = header_context("2026-02-04-council")
     assert h is not None
     assert h["display_name"]  # falls back to city/type/id, not the (absent) title
+
+
+from fastapi.testclient import TestClient
+from gui.app import create_app
+
+
+def test_workspace_shell_renders_active_panel(tagged_meeting_dir, tmp_meetings_dir):
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    r = client.get("/meetings/2026-02-04-council")   # no ?tab -> default (review @ stage 4)
+    assert r.status_code == 200
+    assert 'class="tabstrip"' in r.text
+    assert "Needs attention" in r.text               # review panel rendered inline
+    assert "workspace.js" in r.text
+
+
+def test_workspace_shell_respects_tab_param(tagged_meeting_dir, tmp_meetings_dir):
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council?tab=publish").text
+    assert 'action="/meetings/2026-02-04-council/publish"' in body   # publish panel
+
+
+def test_workspace_shell_404_unknown(tmp_meetings_dir):
+    assert TestClient(create_app()).get("/meetings/ghost").status_code == 404
+
+
+def test_panel_fragment_route(tagged_meeting_dir, tmp_meetings_dir):
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    r = client.get("/meetings/2026-02-04-council/panel/review")
+    assert r.status_code == 200
+    assert "Needs attention" in r.text
+    assert "<html" not in r.text.lower()             # fragment only, no shell
+    assert client.get("/meetings/2026-02-04-council/panel/bogus").status_code == 404
+    assert client.get("/meetings/ghost/panel/review").status_code == 404
+
+
+def test_status_endpoint_augments_run_status(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "meeting_published_id", lambda mid: None)
+    from tests.test_gui_review import _write_meeting
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    st = TestClient(create_app()).get("/meetings/2026-02-04-council/status").json()
+    assert st["completed_stage"] == 4
+    assert st["attention_count"] == 1
+    assert "review_status" in st and "is_live" in st
