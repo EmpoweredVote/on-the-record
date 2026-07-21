@@ -45,7 +45,7 @@ def test_launch_or_enqueue_pends_when_at_cap(tmp_meetings_dir, monkeypatch):
 
 
 def test_running_count_prunes_finished(tmp_meetings_dir, monkeypatch):
-    batch.set_max_concurrent(2)
+    batch.set_max_concurrent(1)
     monkeypatch.setattr(batch.runner, "launch_run", lambda p, **kw: "mA")
     monkeypatch.setattr(batch.runner, "run_status", lambda mid: _running(mid))
     batch.launch_or_enqueue(_params())                              # active=[mA] running
