@@ -211,3 +211,17 @@ def test_old_page_urls_redirect_to_workspace(tagged_meeting_dir, tmp_meetings_di
     r = client.get(f"/meetings/2026-02-04-council/{old}", follow_redirects=False)
     assert r.status_code == 301
     assert r.headers["location"] == f"/meetings/2026-02-04-council?tab={tab}"
+
+
+def test_workspace_js_wires_core_endpoints(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    # tab swap + panel fetch
+    assert "/panel/" in js
+    # live status poll
+    assert "/status" in js
+    # absorbed review.js behaviors
+    assert "/api/politicians/search" in js
+    assert "data-hls" in js
+    # form interception opt-out
+    assert "data-navigate" in js

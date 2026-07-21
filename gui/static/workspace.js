@@ -1,0 +1,177 @@
+// One-pane meeting workspace: tab swapping (no reload), live status polling, and
+// form interception (POST then re-fetch the active panel). Absorbs run.js (status
+// stepper/log) and review.js (clip seek, link search, HLS attach).
+(function () {
+  const header = document.querySelector(".ws-header");
+  if (!header) return;
+  const id = header.getAttribute("data-meeting-id");
+  const panel = document.getElementById("panel");
+  let activeTab = header.getAttribute("data-active-tab");
+
+  const enc = encodeURIComponent;
+
+  // ---- Panel loading ------------------------------------------------------
+  async function loadPanel(tab, push) {
+    try {
+      const resp = await fetch(`/meetings/${enc(id)}/panel/${enc(tab)}`);
+      if (!resp.ok) return;
+      panel.innerHTML = await resp.text();
+    } catch (_) { return; }
+    activeTab = tab;
+    header.setAttribute("data-active-tab", tab);
+    header.querySelectorAll(".tabstrip .tab").forEach((a) =>
+      a.classList.toggle("active", a.getAttribute("data-tab") === tab));
+    if (push) history.pushState({ tab }, "", `/meetings/${enc(id)}?tab=${enc(tab)}`);
+    initPanel();
+    refreshStatus();
+  }
+
+  header.addEventListener("click", (e) => {
+    const a = e.target.closest(".tabstrip .tab");
+    if (!a) return;
+    e.preventDefault();
+    loadPanel(a.getAttribute("data-tab"), true);
+  });
+
+  window.addEventListener("popstate", (e) => {
+    const tab = (e.state && e.state.tab) || new URLSearchParams(location.search).get("tab") || activeTab;
+    loadPanel(tab, false);
+  });
+
+  // ---- Form interception --------------------------------------------------
+  // In-panel forms POST via fetch, then the active panel is re-fetched. Forms
+  // marked data-navigate (kebab Clean up / Delete) submit normally (full nav).
+  document.addEventListener("submit", async (e) => {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (form.hasAttribute("data-navigate")) return;         // let it navigate
+    if (!panel.contains(form)) return;                       // only in-panel forms
+    e.preventDefault();
+    try {
+      await fetch(form.action, { method: "POST", body: new FormData(form), redirect: "manual" });
+    } catch (_) { /* best-effort; re-fetch shows current state */ }
+    await loadPanel(activeTab, false);
+  });
+
+  // ---- Live status --------------------------------------------------------
+  async function refreshStatus() {
+    let st;
+    try {
+      const resp = await fetch(`/meetings/${enc(id)}/status`);
+      if (!resp.ok) return;
+      st = await resp.json();
+    } catch (_) { return; }
+
+    // Header pills.
+    const gate = document.getElementById("gate-pill");
+    if (gate && st.review_status) {
+      gate.textContent = st.review_status === "pass" ? "passed"
+        : st.review_status === "review" ? "needs review"
+        : st.review_status === "failed" ? "failed" : "—";
+    }
+    const live = document.getElementById("live-pill");
+    if (live && st.is_live != null) {
+      live.textContent = st.is_live ? "Live" : "Not live";
+      live.className = "live-badge live-" + (st.is_live ? "live" : "notlive");
+    }
+    const dot = document.getElementById("attn-dot");
+    if (dot) dot.style.display = st.attention_count ? "" : "none";
+
+    // Progress panel (if shown): update stepper + log in place, poll while running.
+    const stepper = document.getElementById("stepper");
+    if (stepper) {
+      const logEl = document.getElementById("log");
+      if (logEl && st.log_tail) { logEl.textContent = st.log_tail; logEl.scrollTop = logEl.scrollHeight; }
+      stepper.querySelectorAll("li").forEach((li) => {
+        const s = parseInt(li.getAttribute("data-stage"), 10);
+        li.classList.toggle("done", s <= st.completed_stage);
+        li.classList.toggle("current", s === st.completed_stage + 1 && st.running);
+      });
+      const err = document.getElementById("error-banner");
+      if (err && st.exit_code != null && st.exit_code !== 0) {
+        err.hidden = false;
+        err.textContent = `Process exited with code ${st.exit_code}. See log below.`;
+      }
+      if (st.running) setTimeout(refreshStatus, 1500);
+    }
+  }
+
+  // ---- Per-panel init (clip seek, link search, HLS attach) ----------------
+  function initPanel() {
+    attachHls();
+  }
+
+  // Clip seek: click a .clip button to seek the media (YouTube iframe or <video>/<audio>).
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".clip");
+    if (!btn) return;
+    const seek = parseFloat(btn.getAttribute("data-seek"));
+    if (Number.isNaN(seek)) return;
+    const yt = document.getElementById("yt-player");
+    if (yt) { yt.src = yt.src.split("?")[0] + "?start=" + Math.floor(seek) + "&autoplay=1"; return; }
+    const player = document.getElementById("player");
+    if (!player) return;
+    player.currentTime = seek;
+    player.play();
+  });
+
+  // Politician link search: debounced query; each result is a native POST form
+  // (intercepted by the submit handler above, so linking refreshes the panel).
+  const DEBOUNCE = 250;
+  document.addEventListener("input", (e) => {
+    const input = e.target;
+    if (!input.matches(".link-search input")) return;
+    const widget = input.closest(".link-search");
+    const results = widget.querySelector(".link-results");
+    const q = input.value.trim();
+    clearTimeout(widget._t);
+    if (q.length < 2) { results.innerHTML = ""; return; }
+    widget._t = setTimeout(async () => {
+      const url = (widget.getAttribute("data-search-url") || "/api/politicians/search") + "?q=" + enc(q);
+      let data;
+      try { data = await (await fetch(url)).json(); }
+      catch (_) { results.innerHTML = '<div class="link-msg">search unavailable</div>'; return; }
+      const list = data.results || [];
+      if (data.error || !list.length) {
+        results.innerHTML = '<div class="link-msg">' + (data.error ? "search unavailable" : "no matches") + "</div>";
+        return;
+      }
+      let action = widget.getAttribute("data-link-action") || "";
+      if (!action.endsWith("/link")) action += "/link";
+      const esc = (s) => String(s == null ? "" : s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      results.innerHTML = list.map((r) => (
+        '<form method="post" action="' + action + '">' +
+        '<input type="hidden" name="politician_slug" value="' + esc(r.politician_slug) + '">' +
+        '<input type="hidden" name="politician_id" value="' + esc(r.politician_id) + '">' +
+        '<button type="submit" class="link-result">' +
+        esc([r.full_name, r.office_title, r.government_name].filter(Boolean).join(" · ")) +
+        "</button></form>"
+      )).join("");
+    }, DEBOUNCE);
+  });
+
+  // HLS attach: <video id="player" data-hls="..."> with no src. Prefer hls.js
+  // (Chrome/Firefox/Edge/desktop Safari can't play HLS natively despite a truthy
+  // canPlayType), fall back to native only for iOS/older Safari.
+  function attachHls() {
+    const video = document.getElementById("player");
+    if (!video) return;
+    const src = video.getAttribute("data-hls");
+    if (!src || video._hlsAttached) return;
+    video._hlsAttached = true;
+    const useNative = () => { if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = src; };
+    const script = document.createElement("script");
+    script.src = "/static/hls.min.js";
+    script.onload = () => {
+      if (window.Hls && window.Hls.isSupported()) {
+        const hls = new window.Hls(); hls.loadSource(src); hls.attachMedia(video);
+      } else { useNative(); }
+    };
+    script.onerror = useNative;
+    document.head.appendChild(script);
+  }
+
+  // Initial paint: the shell server-rendered the active panel, so just wire it up.
+  initPanel();
+  refreshStatus();
+})();

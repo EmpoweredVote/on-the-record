@@ -510,7 +510,7 @@ def test_review_page_has_link_widget_and_unlink(tagged_meeting_dir, tmp_meetings
 
 def test_review_js_references_search_and_link(tmp_meetings_dir):
     from pathlib import Path
-    js = Path("gui/static/review.js").read_text()
+    js = Path("gui/static/workspace.js").read_text()
     assert "/api/politicians/search" in js
     assert "/link" in js
 
