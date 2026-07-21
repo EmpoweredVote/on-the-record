@@ -116,3 +116,9 @@ section.continue { margin-top: 1rem; }
 .tabstrip .tab.active { background: #f4f6fb; color: #1a1a1a; font-weight: 600; }
 .tabstrip .tab .dot { color: #d08b00; }
 .ws-main { border: 1px solid #e2e2e2; border-radius: 0 0.5rem 0.5rem 0.5rem; padding: 1rem; }
+
+.fieldwrap[hidden] { display: none; }
+.race-search { position: relative; }
+.race-search input { padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.95rem; width: 100%; }
+.race-results { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem; }
+.race-chosen { margin-top: 0.3rem; font-size: 0.85rem; color: #1b7a3d; cursor: pointer; }

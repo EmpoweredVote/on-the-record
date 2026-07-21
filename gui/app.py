@@ -247,7 +247,8 @@ def create_app() -> FastAPI:
     def new_meeting_form(request: Request) -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
-                                   CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS)
+                                   CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS,
+                                   FIELDS_BY_KIND, DEFAULT_COMPUTE, DEFAULT_DIARIZER)
         from gui.rosters import list_cached_rosters
         return _templates.TemplateResponse(
             request, "new_meeting.html",
@@ -259,6 +260,9 @@ def create_app() -> FastAPI:
                 "city_required_kinds": sorted(CITY_REQUIRED_KINDS),
                 "meeting_type_defaults": MEETING_TYPE_DEFAULTS,
                 "cached_rosters": list_cached_rosters(),
+                "fields_by_kind": FIELDS_BY_KIND,
+                "default_compute": DEFAULT_COMPUTE,
+                "default_diarizer": DEFAULT_DIARIZER,
             },
         )
 

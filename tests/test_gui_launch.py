@@ -460,3 +460,26 @@ def test_post_new_passes_guest_and_race(monkeypatch, tmp_meetings_dir):
     assert captured["p"].guest == "Xavier Becerra"
     assert captured["p"].race_id == "uuid-9"
     assert captured["p"].race_slug == "ca-governor"
+
+
+def test_new_form_renders_kind_fields_and_modal_default(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/new").text
+    # kind-gated fields are present in the markup (JS hides the inapplicable ones)
+    assert 'data-field="guest"' in body
+    assert 'data-field="race"' in body
+    assert 'data-field="body"' in body
+    assert 'data-field="crec_chamber"' in body
+    # FIELDS_BY_KIND is injected for the client
+    assert "FIELDS_BY_KIND" in body
+    # compute select defaults to modal (selected option)
+    assert 'value="modal" selected' in body or "__DEFAULT_COMPUTE" in body
+
+
+def test_new_meeting_js_wires_race_search_and_field_gating(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/new_meeting.js").read_text()
+    assert "/api/races/search" in js
+    assert "data-field" in js
+    assert "race_id" in js and "race_slug" in js
