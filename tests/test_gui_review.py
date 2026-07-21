@@ -5,9 +5,9 @@ from pathlib import Path
 from gui.models import SpeakerCard, ReviewPageData, CONFIDENT_THRESHOLD
 
 
-def _card(label, name, conf):
+def _card(label, name, conf, method="human_review"):
     return SpeakerCard(
-        label=label, name=name, confidence=conf, method="llm",
+        label=label, name=name, confidence=conf, method=method,
         minutes=3.0, seg_count=4, sample_text="hello", hints=[], clip_seeks=[12.0],
     )
 
@@ -21,6 +21,28 @@ def test_speaker_card_is_confirmed_requires_name_and_high_confidence():
     assert _card("S1", "Mayor Johnson", 0.5).is_confirmed is False   # low conf
     assert _card("S2", None, 0.99).is_confirmed is False              # no name
     assert _card("S3", "(unidentified)", 0.99).is_confirmed is False  # placeholder name
+
+
+def _card_m(method, conf=0.97):
+    return SpeakerCard(
+        label="S", name="Ted Brown", confidence=conf, method=method,
+        minutes=3.0, seg_count=4,
+    )
+
+
+def test_speaker_card_is_confirmed_requires_trusted_method():
+    """Confirmed must mean gate-trusted, not merely high-confidence. A speaker the
+    pipeline auto-identified (auto_linked/llm) is NOT confirmed even at high
+    confidence, so the review UI surfaces it for a one-click human Accept and the
+    UI's 'confirmed' can't diverge from the gate's 'trusted'."""
+    # Human-authoritative / trusted-tier methods -> confirmed.
+    assert _card_m("human_review", conf=1.0).is_confirmed is True
+    assert _card_m("voice_profile", conf=0.9).is_confirmed is True
+    # High confidence but auto-identified (untrusted tier) -> NOT confirmed.
+    assert _card_m("auto_linked").is_confirmed is False
+    assert _card_m("llm").is_confirmed is False
+    assert _card_m("name_addressing").is_confirmed is False
+    assert _card_m(None).is_confirmed is False
 
 
 def test_speaker_card_display_name_placeholder():
@@ -58,7 +80,7 @@ def _write_meeting(mdir, *, clip_start=None):
     ]
     speakers = {
         "SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
-                                     confidence=0.95, id_method="voice"),
+                                     confidence=0.95, id_method="voice_profile"),
         "SPEAKER_01": SpeakerMapping(speaker_label="SPEAKER_01", speaker_name=None, confidence=0.0),
     }
     meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
@@ -881,7 +903,7 @@ def _write_youtube_meeting(mdir, *, clip_start=0.0):
     ]
     speakers = {
         "SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
-                                     confidence=0.95, id_method="voice"),
+                                     confidence=0.95, id_method="voice_profile"),
     }
     meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
                       meeting_type="Regular Session", event_kind="debate",
