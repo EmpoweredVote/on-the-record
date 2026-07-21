@@ -113,9 +113,25 @@ def panel_context(name: str, meeting_id: str) -> Optional[dict]:
     return base
 
 
-def header_context(meeting_id: str, *, is_live: Optional[bool] = None) -> Optional[dict]:
+def meeting_stage(meeting_id: str) -> Optional[int]:
+    """The meeting's completed_stage, or None if unknown/unsafe/malformed. Cheap —
+    reads PipelineState only, no review-page load. Lets the shell route pick the
+    default tab before deciding whether the review page needs loading."""
+    meeting_dir = _meeting_dir(meeting_id)
+    if meeting_dir is None:
+        return None
+    from src.checkpoint import PipelineState
+    try:
+        return int(PipelineState(meeting_dir).completed_stage)
+    except Exception:
+        return None
+
+
+def header_context(meeting_id: str, *, is_live: Optional[bool] = None,
+                   attention_count: Optional[int] = None) -> Optional[dict]:
     """Context for the persistent workspace header. None if the meeting is
-    unknown. attention_count is 0 before stage 4 (no speakers yet)."""
+    unknown. attention_count is 0 before stage 4 (no speakers yet); pass it in
+    (e.g. from an already-loaded review page) to avoid a second load_review_page."""
     import json
     from src.checkpoint import PipelineState
     from gui.models import gate_badge
@@ -142,12 +158,13 @@ def header_context(meeting_id: str, *, is_live: Optional[bool] = None) -> Option
         p for p in (state.city, state.meeting_type) if p and p.strip()
     ) or meeting_id
 
-    attention_count = 0
-    if completed >= _REVIEW_READY_STAGE:
-        from gui.review_api import load_review_page
-        page = load_review_page(meeting_id)
-        if page is not None:
-            attention_count = len(page.needs_attention)
+    if attention_count is None:
+        attention_count = 0
+        if completed >= _REVIEW_READY_STAGE:
+            from gui.review_api import load_review_page
+            page = load_review_page(meeting_id)
+            if page is not None:
+                attention_count = len(page.needs_attention)
 
     return {
         "meeting_id": meeting_id,

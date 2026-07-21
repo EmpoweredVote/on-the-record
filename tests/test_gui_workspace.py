@@ -239,6 +239,23 @@ def test_workspace_review_tab_always_has_attention_dot(tagged_meeting_dir, tmp_m
     assert m and "hidden" not in m.group(1)   # present and shown (attention_count == 1)
 
 
+def test_workspace_shell_loads_review_page_once(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    # On a review-tab render the header reuses the panel's already-loaded page
+    # instead of loading it a second time (follow-up 5).
+    from tests.test_gui_review import _write_meeting
+    import gui.review_api as rapi
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    calls = {"n": 0}
+    real = rapi.load_review_page
+    def counting(mid, *a, **k):
+        calls["n"] += 1
+        return real(mid, *a, **k)
+    monkeypatch.setattr(rapi, "load_review_page", counting)
+    TestClient(create_app()).get("/meetings/2026-02-04-council?tab=review")
+    assert calls["n"] == 1
+
+
 def test_workspace_attention_dot_present_but_hidden_when_zero(tagged_meeting_dir, tmp_meetings_dir):
     import json as _json
     import re

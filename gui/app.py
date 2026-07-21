@@ -85,16 +85,25 @@ def create_app() -> FastAPI:
 
     @app.get("/meetings/{meeting_id}", response_class=HTMLResponse)
     def workspace_shell(request: Request, meeting_id: str, tab: str = "") -> HTMLResponse:
+        # Pick the tab from a cheap stage read first, so we can load the review page
+        # at most once and reuse it for both the panel and the header's attention count.
+        stage = workspace.meeting_stage(meeting_id)
+        if stage is None:
+            raise HTTPException(status_code=404)
+        active = tab.strip() or workspace.default_tab_for_stage(stage)
+        ctx = workspace.panel_context(active, meeting_id)
+        if ctx is None:  # bad ?tab value -> fall back to the default tab
+            active = workspace.default_tab_for_stage(stage)
+            ctx = workspace.panel_context(active, meeting_id)
+        # Reuse the review page the panel already loaded so the header doesn't reload it.
+        preloaded = ctx.get("page") if active == "review" else None
+        attn = len(preloaded.needs_attention) if preloaded is not None else None
         header = workspace.header_context(
             meeting_id, is_live=(publish_api.meeting_published_id(meeting_id) is not None),
+            attention_count=attn,
         )
         if header is None:
             raise HTTPException(status_code=404)
-        active = tab.strip() or workspace.default_tab_for_stage(header["completed_stage"])
-        ctx = workspace.panel_context(active, meeting_id)
-        if ctx is None:  # bad ?tab value -> fall back to the default tab
-            active = workspace.default_tab_for_stage(header["completed_stage"])
-            ctx = workspace.panel_context(active, meeting_id)
         return _templates.TemplateResponse(
             request, "workspace.html", {**ctx, "header": header, "active_tab": active},
         )
