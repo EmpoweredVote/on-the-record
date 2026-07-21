@@ -63,6 +63,10 @@ def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
     event_orgs = []
     if isinstance(named, dict) and isinstance(named.get("event_orgs"), list):
         event_orgs = [o for o in named["event_orgs"] if isinstance(o, str) and o.strip()]
+    try:
+        processed_at = (meeting_dir / "pipeline_state.json").stat().st_mtime
+    except OSError:
+        processed_at = None
     return MeetingSummary(
         meeting_id=meeting_dir.name,
         title=title,
@@ -80,6 +84,7 @@ def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
         body_slug=state.body_slug,
         race_id=state.race_id,
         guest=state.guest,
+        processed_at=processed_at,
     )
 
 
@@ -102,9 +107,8 @@ def scan_meetings(
             if live_slugs is not None:
                 summary.is_live = summary.meeting_id in live_slugs
             summaries.append(summary)
-    # Sort newest first. Meeting IDs are date-prefixed (e.g.
-    # "2026-03-02-special-session"), so when a state file lacks an explicit
-    # `date` we fall back to the meeting_id — which keeps ordering sensible and
-    # deterministic instead of dumping undated meetings last.
-    summaries.sort(key=lambda s: (s.date or s.meeting_id, s.meeting_id), reverse=True)
+    # Sort by most-recent processing activity (state-file mtime) so running and
+    # just-finished meetings float to the top; fall back to clip date / id.
+    summaries.sort(key=lambda s: (s.processed_at or 0.0, s.date or "", s.meeting_id),
+                   reverse=True)
     return summaries

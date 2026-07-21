@@ -85,6 +85,7 @@ from gui.library import scan_meetings
 
 
 def test_scan_meetings_reads_state_and_sorts_by_date_desc(tagged_meeting_dir, tmp_meetings_dir):
+    import os, time
     # tagged_meeting_dir writes pipeline_state.json with completed_stage + body_slug.
     older = tagged_meeting_dir(
         "bloomington-common-council",
@@ -103,10 +104,16 @@ def test_scan_meetings_reads_state_and_sorts_by_date_desc(tagged_meeting_dir, tm
                  "date": "2026-01-10", "event_kind": "council"})
     state_path.write_text(json.dumps(data))
 
+    # The library now sorts by processed_at (pipeline_state.json mtime), not clip
+    # date, so pin explicit mtimes here to make the intended order deterministic.
+    now = time.time()
+    os.utime(older / "pipeline_state.json", (now - 1000, now - 1000))
+    os.utime(newer / "pipeline_state.json", (now, now))
+
     summaries = scan_meetings(tmp_meetings_dir)
 
     assert [s.meeting_id for s in summaries] == [
-        "2026-03-02-special-session",  # newer date first
+        "2026-03-02-special-session",  # more recently processed (mtime) first
         "2026-01-10-regular-session",
     ]
     older_summary = summaries[1]
@@ -525,3 +532,33 @@ def test_library_js_filters_by_search_kind_status(tmp_meetings_dir):
     js = Path("gui/static/library.js").read_text()
     assert "lib-search" in js and "lib-kind" in js and "lib-status" in js
     assert "data-search" in js
+
+
+def test_processed_label_relative():
+    import time
+    from gui.models import MeetingSummary
+    def s(pa):
+        return MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                              date=None, event_kind=None, completed_stage=0, processed_at=pa)
+    now = time.time()
+    assert s(now - 90).processed_label.endswith("m ago")     # "1m ago"
+    assert s(now - 7200).processed_label.endswith("h ago")   # "2h ago"
+    assert s(None).processed_label == "—"
+
+
+def test_scan_meetings_sorts_by_processed_recency(tagged_meeting_dir, tmp_meetings_dir):
+    import os, time
+    old = tagged_meeting_dir("x", meeting_id="2026-01-01-old", completed_stage=4)
+    new = tagged_meeting_dir("x", meeting_id="2026-01-02-new", completed_stage=4)
+    # Make "old" the more-recently-processed one (older clip date, newer mtime).
+    now = time.time()
+    os.utime(new / "pipeline_state.json", (now - 1000, now - 1000))
+    os.utime(old / "pipeline_state.json", (now, now))
+    ids = [s.meeting_id for s in scan_meetings(tmp_meetings_dir)]
+    assert ids == ["2026-01-01-old", "2026-01-02-new"]       # by mtime desc, not clip date
+
+
+def test_library_renders_processed_column(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    body = TestClient(create_app()).get("/").text
+    assert "<th>Processed</th>" in body
