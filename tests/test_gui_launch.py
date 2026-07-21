@@ -83,6 +83,34 @@ def test_formmeta_compute_and_diarizer_help():
     assert all(v.strip() for v in {**COMPUTE_HELP, **DIARIZER_HELP}.values())
 
 
+def test_fields_by_kind_covers_all_event_kinds():
+    from gui.formmeta import FIELDS_BY_KIND
+    from src.event_kinds import EVENT_KINDS
+    assert set(FIELDS_BY_KIND) == set(EVENT_KINDS)
+
+
+def test_fields_by_kind_gating():
+    from gui.formmeta import FIELDS_BY_KIND
+    # council: city + body, no guest/race/crec
+    assert "city" in FIELDS_BY_KIND["council"] and "body" in FIELDS_BY_KIND["council"]
+    assert "guest" not in FIELDS_BY_KIND["council"]
+    # interviews: guest + race, no city/body
+    for k in ("news_clip", "press_conference", "podcast"):
+        assert "guest" in FIELDS_BY_KIND[k] and "race" in FIELDS_BY_KIND[k]
+        assert "city" not in FIELDS_BY_KIND[k] and "body" not in FIELDS_BY_KIND[k]
+    # debate/forum: race, no guest
+    assert "race" in FIELDS_BY_KIND["forum"] and "guest" not in FIELDS_BY_KIND["forum"]
+    # floor: crec only
+    assert "crec_chamber" in FIELDS_BY_KIND["floor"]
+    assert "city" not in FIELDS_BY_KIND["floor"]
+
+
+def test_default_compute_is_modal():
+    from gui.formmeta import DEFAULT_COMPUTE, DEFAULT_DIARIZER
+    assert DEFAULT_COMPUTE == "modal"
+    assert DEFAULT_DIARIZER == "oss"
+
+
 def test_post_new_council_requires_city(tmp_meetings_dir):
     client = TestClient(create_app())
     resp = client.post("/new", data={
