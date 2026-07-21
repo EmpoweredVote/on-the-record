@@ -193,6 +193,26 @@ def create_app() -> FastAPI:
     def politician_search(q: str = "") -> JSONResponse:
         return JSONResponse(review_api.search_politicians_safe(q))
 
+    @app.get("/batch/status")
+    def batch_status() -> JSONResponse:
+        from gui import batch
+        return JSONResponse(batch.status())
+
+    @app.post("/batch/max")
+    def batch_set_max(n: str = Form("")):
+        from gui import batch
+        try:
+            batch.set_max_concurrent(int(n))
+        except (TypeError, ValueError):
+            pass
+        return RedirectResponse(url="/", status_code=303)
+
+    @app.post("/batch/pending/{pending_id}/remove")
+    def batch_remove_pending(pending_id: int):
+        from gui import batch
+        batch.remove_pending(pending_id)
+        return RedirectResponse(url="/", status_code=303)
+
     @app.get("/api/races/search")
     def race_search(q: str = "") -> JSONResponse:
         from gui import races

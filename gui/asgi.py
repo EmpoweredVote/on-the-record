@@ -14,3 +14,6 @@ from gui.env import load_env_local
 
 load_env_local()  # server-only; must run in the reload worker, not in create_app
 app = create_app()
+
+from gui import batch
+batch.start_scheduler()  # daemon pool scheduler; drains overflow into free slots

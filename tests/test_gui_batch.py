@@ -112,3 +112,41 @@ def test_start_scheduler_idempotent(tmp_meetings_dir):
     batch.start_scheduler(interval=999)
     batch.start_scheduler(interval=999)                      # second call is a no-op
     assert [t.name for t in threading.enumerate()].count("batch-scheduler") == 1
+
+
+# tests/test_gui_batch.py  (append)
+from fastapi.testclient import TestClient
+from gui.app import create_app
+
+
+def test_batch_status_route(tmp_meetings_dir, monkeypatch):
+    monkeypatch.setattr(batch, "status",
+                        lambda: {"counts": {"running": 2, "pending": 1, "max": 8},
+                                 "running": [{"meeting_id": "m1", "stage": 3,
+                                              "stage_label": "Transcribed", "running": True,
+                                              "exit_code": None}],
+                                 "pending": [{"pending_id": 9, "label": "X",
+                                              "event_kind": "news_clip", "derived_id": "d"}]})
+    r = TestClient(create_app()).get("/batch/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["counts"]["running"] == 2
+    assert body["running"][0]["meeting_id"] == "m1"
+
+
+def test_batch_max_route(tmp_meetings_dir):
+    client = TestClient(create_app())
+    r = client.post("/batch/max", data={"n": "5"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert batch._load()["max_concurrent"] == 5
+
+
+def test_batch_remove_pending_route(tmp_meetings_dir, monkeypatch):
+    removed = {}
+    def fake_remove(pid):
+        removed["pid"] = pid
+        return True
+    monkeypatch.setattr(batch, "remove_pending", fake_remove)
+    r = TestClient(create_app()).post("/batch/pending/7/remove", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert removed["pid"] == 7
