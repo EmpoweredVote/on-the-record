@@ -69,12 +69,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return FileResponse(str(path), media_type="image/jpeg")
 
-    @app.get("/meetings/{meeting_id}/review", response_class=HTMLResponse)
-    def review_page(request: Request, meeting_id: str) -> HTMLResponse:
-        page = load_review_page(meeting_id)
-        if page is None:
-            raise HTTPException(status_code=404)
-        return _templates.TemplateResponse(request, "review.html", {"page": page})
+    @app.get("/meetings/{meeting_id}/review")
+    def review_page(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=review", status_code=301)
 
     @app.get("/meetings/{meeting_id}", response_class=HTMLResponse)
     def workspace_shell(request: Request, meeting_id: str, tab: str = "") -> HTMLResponse:
@@ -322,16 +319,11 @@ def create_app() -> FastAPI:
             meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=progress", status_code=303)
 
-    @app.get("/meetings/{meeting_id}/run", response_class=HTMLResponse)
-    def run_page(request: Request, meeting_id: str) -> HTMLResponse:
-        from src.checkpoint import PipelineStage
-        stages = [(s.value, stage_label_for(s.value)) for s in PipelineStage if s.value >= 1]
-        return _templates.TemplateResponse(
-            request, "run.html",
-            {"meeting_id": meeting_id, "stages": stages, "redo_stages": list(runner.REDO_STAGES)},
-        )
+    @app.get("/meetings/{meeting_id}/run")
+    def run_page(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=progress", status_code=301)
 
     @app.get("/meetings/{meeting_id}/run/status")
     def run_status_json(meeting_id: str) -> JSONResponse:
@@ -356,18 +348,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
 
-    @app.get("/meetings/{meeting_id}/edit", response_class=HTMLResponse)
-    def edit_meeting_form(request: Request, meeting_id: str) -> HTMLResponse:
-        from gui.review_api import _load_meeting_ctx
-        from src.event_kinds import EVENT_KINDS
-        ctx = _load_meeting_ctx(meeting_id)
-        if ctx is None:
-            raise HTTPException(status_code=404)
-        meeting, _dir, _roster = ctx
-        return _templates.TemplateResponse(
-            request, "edit_meeting.html",
-            {"meeting_id": meeting_id, "m": meeting, "event_kinds": list(EVENT_KINDS)},
-        )
+    @app.get("/meetings/{meeting_id}/edit")
+    def edit_meeting_form(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=details", status_code=301)
 
     @app.post("/meetings/{meeting_id}/edit")
     def edit_meeting_apply(
@@ -382,23 +365,8 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.get("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
-    def publish_confirm(request: Request, meeting_id: str) -> HTMLResponse:
-        from gui.review_api import _load_meeting_ctx
-        from src.checkpoint import PipelineState
-        ctx = _load_meeting_ctx(meeting_id)
-        if ctx is None:
-            raise HTTPException(status_code=404)
-        _meeting, meeting_dir, _roster = ctx
-        state = PipelineState(meeting_dir)
-        return _templates.TemplateResponse(
-            request, "publish_confirm.html",
-            {
-                "meeting_id": meeting_id,
-                "review_status": state.review_status,
-                "gate_pass": state.review_status == "pass",
-                "already_published": publish_api.meeting_published_id(meeting_id) is not None,
-            },
-        )
+    def publish_confirm(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=publish", status_code=301)
 
     @app.post("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
     def publish_apply(request: Request, meeting_id: str, force: str = Form("")):

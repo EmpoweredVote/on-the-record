@@ -2,7 +2,6 @@
 {% if page is none %}
   <p class="empty">{{ not_ready }}</p>
 {% else %}
-  {% set all_cards = page.all_cards %}
   {% if page.youtube_id %}
     <iframe id="yt-player" class="player"
             src="https://www.youtube.com/embed/{{ page.youtube_id }}"
@@ -22,12 +21,12 @@
   <section>
     <h2>Needs attention</h2>
     {% if page.needs_attention %}
-      {% for c in page.needs_attention %}{{ m.card(c, page.meeting_id) }}{% endfor %}
+      {% for c in page.needs_attention %}{{ m.card(c, page.meeting_id, page.all_cards) }}{% endfor %}
     {% else %}<p class="empty">Nothing needs attention — every speaker is confirmed.</p>{% endif %}
   </section>
 
   <section>
     <h2>Confirmed</h2>
-    {% for c in page.confirmed %}{{ m.card(c, page.meeting_id) }}{% endfor %}
+    {% for c in page.confirmed %}{{ m.card(c, page.meeting_id, page.all_cards) }}{% endfor %}
   </section>
 {% endif %}

@@ -34,7 +34,7 @@ def test_post_new_launches_and_redirects(tmp_meetings_dir, monkeypatch):
         "event_kind": "council", "city": "Bloomington", "compute": "local", "diarizer": "oss",
     }, follow_redirects=False)
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/meetings/2026-02-10-regular/run"
+    assert resp.headers["location"] == "/meetings/2026-02-10-regular?tab=progress"
     assert launched["params"].input == "https://x/v"
 
 
@@ -55,7 +55,7 @@ def test_run_page_and_status_json(tmp_meetings_dir, tagged_meeting_dir, monkeypa
 
     page = client.get("/meetings/2026-02-10-regular/run")
     assert page.status_code == 200
-    assert "run.js" in page.text and "Diarization" in page.text or "stepper" in page.text.lower()
+    assert "workspace.js" in page.text and "stepper" in page.text.lower()
 
     st = client.get("/meetings/2026-02-10-regular/run/status")
     assert st.status_code == 200

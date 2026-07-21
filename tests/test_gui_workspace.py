@@ -197,3 +197,17 @@ def test_workspace_shell_bad_tab_falls_back(tagged_meeting_dir, tmp_meetings_dir
     r = TestClient(create_app()).get("/meetings/2026-02-04-council?tab=bogus")
     assert r.status_code == 200
     assert 'data-active-tab="review"' in r.text   # fell back to the stage-4 default
+
+
+import pytest
+
+
+@pytest.mark.parametrize("old,tab", [
+    ("run", "progress"), ("review", "review"), ("edit", "details"), ("publish", "publish"),
+])
+def test_old_page_urls_redirect_to_workspace(tagged_meeting_dir, tmp_meetings_dir, old, tab):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    client = TestClient(create_app())
+    r = client.get(f"/meetings/2026-02-04-council/{old}", follow_redirects=False)
+    assert r.status_code == 301
+    assert r.headers["location"] == f"/meetings/2026-02-04-council?tab={tab}"

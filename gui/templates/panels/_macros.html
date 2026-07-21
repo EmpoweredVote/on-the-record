@@ -1,4 +1,4 @@
-{% macro card(c, meeting_id) %}
+{% macro card(c, meeting_id, all_cards) %}
 <div class="card {{ 'confirmed' if c.is_confirmed else 'attention' }}">
   <div class="card-head">
     <span class="label">{{ c.label }}</span>
