@@ -11,7 +11,6 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 from src import config
 from gui import runner
@@ -53,6 +52,7 @@ def _load() -> dict:
 
 
 def _save(data: dict) -> None:
+    _state_path().parent.mkdir(parents=True, exist_ok=True)
     tmp = _state_path().with_suffix(".json.tmp")
     tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
     os.replace(tmp, _state_path())

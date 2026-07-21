@@ -150,3 +150,11 @@ def test_batch_remove_pending_route(tmp_meetings_dir, monkeypatch):
     r = TestClient(create_app()).post("/batch/pending/7/remove", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
     assert removed["pid"] == 7
+
+
+def test_status_survives_missing_meetings_dir(tmp_path, monkeypatch):
+    missing = tmp_path / "no-such-dir"
+    monkeypatch.setattr("src.config.MEETINGS_DIR", missing)
+    out = batch.status()                       # must not raise
+    assert out["counts"] == {"running": 0, "pending": 0, "max": 8}
+    assert missing.exists()                    # _save created the dir
