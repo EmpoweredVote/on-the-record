@@ -36,19 +36,61 @@ class RunParams:
     event_orgs: list = field(default_factory=list)
     body_slug: Optional[str] = None
     crec_chamber: Optional[str] = None   # 'house'|'senate' -> --congressional-record
+    guest: Optional[str] = None          # interview subject; slugified into the id only
+    race_id: Optional[str] = None        # essentials.races UUID -> --race-id
+    race_slug: Optional[str] = None       # slug of the race's position_name, for the id
 
 
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
 
 
+_MAX_ID_LEN = 80
+
+
+def _locus_for(p: "RunParams") -> str:
+    """The identifying token inserted between date and label, chosen by event kind.
+    All inputs are slugged here except body_slug and race_slug (already slugs)."""
+    kind = p.event_kind
+    org = _slug(p.event_orgs[0]) if p.event_orgs else ""
+    city = _slug(p.city or "")
+    guest = _slug(p.guest or "")
+    race = (p.race_slug or "").strip("-")
+    if kind in ("council", "school_board"):
+        return (p.body_slug or "").strip() or city
+    if kind == "community_meeting":
+        return city or org
+    if kind in ("debate", "forum"):
+        return race or org or city
+    if kind in ("news_clip", "press_conference", "podcast"):
+        parts = [t for t in (guest, race) if t]      # guest before race
+        return "-".join(parts) or org
+    if kind == "floor":
+        return ""                                     # chamber lives in the label
+    return city or org                                # "other"
+
+
 def derive_meeting_id(p: RunParams) -> str:
-    """Custom id if given, else '{date}-{slug(meeting_type)}'. Raises ValueError
-    if the result isn't a safe single path component (matches run_local's rule)."""
-    mid = (p.meeting_id or "").strip() or f"{p.date}-{_slug(p.meeting_type)}"
+    """Custom id if given, else '{date}-{locus}-{label}' where locus is kind-aware
+    (see _locus_for). New meetings only — existing slugs are never re-derived
+    (ADR-0002). Raises ValueError if the result isn't a safe path component."""
+    if (p.meeting_id or "").strip():
+        mid = p.meeting_id.strip()
+    else:
+        label = _slug(p.meeting_type)
+        locus = _locus_for(p)
+        # Overlap de-dup: if the label already contains the locus (or vice versa),
+        # drop the locus so we don't get 'bloomington-bloomington-...'.
+        if locus and (locus in label or label in locus):
+            locus = ""
+        mid = "-".join(x for x in (p.date, locus, label) if x)
+        if len(mid) > _MAX_ID_LEN:
+            mid = mid[:_MAX_ID_LEN].rstrip("-")
     mid = mid.strip("-")
     if not is_safe_meeting_id(mid) or mid in ("", "-"):
-        raise ValueError(f"Cannot derive a valid meeting id from date={p.date!r} type={p.meeting_type!r}")
+        raise ValueError(
+            f"Cannot derive a valid meeting id from date={p.date!r} type={p.meeting_type!r}"
+        )
     return mid
 
 
@@ -81,6 +123,8 @@ def build_run_command(python_exe: str, script: str, p: RunParams, meeting_id: st
     if p.crec_chamber:
         # CREC package date == the floor session's meeting date
         cmd += ["--congressional-record", p.date, p.crec_chamber]
+    if p.race_id:
+        cmd += ["--race-id", p.race_id]
     return cmd
 
 

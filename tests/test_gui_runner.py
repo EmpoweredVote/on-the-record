@@ -63,6 +63,72 @@ def test_build_run_command_congressional_record_reuses_meeting_date():
     assert cmd[cmd.index("--compute") + 1] == "local"
 
 
+from gui.runner import RunParams, derive_meeting_id, build_run_command
+
+
+def _p(**kw):
+    base = dict(input="https://x/v", date="2026-05-01", meeting_type="Interview",
+                event_kind="news_clip")
+    base.update(kw)
+    return RunParams(**base)
+
+
+def test_derive_id_council_prefers_body_then_city():
+    p = _p(event_kind="council", meeting_type="Regular Session",
+           body_slug="bloomington-city-council", city="Bloomington")
+    assert derive_meeting_id(p) == "2026-05-01-bloomington-city-council-regular-session"
+    p2 = _p(event_kind="council", meeting_type="Special Session", city="Monroe")
+    assert derive_meeting_id(p2) == "2026-05-01-monroe-special-session"
+
+
+def test_derive_id_floor_uses_label_only():
+    p = _p(event_kind="floor", meeting_type="House Floor")
+    assert derive_meeting_id(p) == "2026-05-01-house-floor"
+
+
+def test_derive_id_interview_guest_before_race():
+    p = _p(event_kind="news_clip", meeting_type="Interview",
+           guest="Xavier Becerra", race_slug="ca-governor")
+    assert derive_meeting_id(p) == "2026-05-01-becerra-ca-governor-interview" \
+        or derive_meeting_id(p) == "2026-05-01-xavier-becerra-ca-governor-interview"
+
+
+def test_derive_id_interview_guest_only_then_org():
+    p = _p(event_kind="news_clip", meeting_type="Interview", guest="Xavier Becerra")
+    assert derive_meeting_id(p) == "2026-05-01-xavier-becerra-interview"
+    p2 = _p(event_kind="news_clip", meeting_type="Interview", event_orgs=["CBS"])
+    assert derive_meeting_id(p2) == "2026-05-01-cbs-interview"
+
+
+def test_derive_id_forum_prefers_race():
+    p = _p(event_kind="forum", meeting_type="Candidate Forum", race_slug="tx-senate",
+           event_orgs=["LWV"])
+    assert derive_meeting_id(p) == "2026-05-01-tx-senate-candidate-forum"
+
+
+def test_derive_id_overlap_dedup():
+    # label already contains the locus -> locus dropped, no doubling
+    p = _p(event_kind="council", meeting_type="Bloomington Regular Session",
+           city="Bloomington")
+    mid = derive_meeting_id(p)
+    assert mid == "2026-05-01-bloomington-regular-session"
+
+
+def test_derive_id_length_capped():
+    p = _p(event_kind="news_clip", meeting_type="Interview",
+           guest="A" * 120)
+    assert len(derive_meeting_id(p)) <= 80
+
+
+def test_build_run_command_includes_race_id():
+    p = _p(event_kind="news_clip", race_id="uuid-123")
+    cmd = build_run_command("py", "run_local.py", p, "2026-05-01-x-interview")
+    assert "--race-id" in cmd and "uuid-123" in cmd
+    # absent when no race_id
+    p2 = _p(event_kind="news_clip")
+    assert "--race-id" not in build_run_command("py", "run_local.py", p2, "m")
+
+
 import json
 from pathlib import Path
 
