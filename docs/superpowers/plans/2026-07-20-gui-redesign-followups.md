@@ -1,8 +1,12 @@
-# GUI Redesign — Deferred Follow-ups
+# GUI Redesign — Follow-ups
+
+**Status: all resolved (2026-07-20).** Implemented on branch
+`feat/gui-meeting-workspace` (commits `a7b5188` #1/#2, `33b0682` #4, `86708fc`
+#5, `fe6ee63` #3); full suite green (1304 passed). Kept below as the record of
+what was done.
 
 Small items surfaced by the code reviews across the three GUI-redesign plans
-(workspace shell, rich IDs + kind-aware form, searchable library). None block
-using the redesign today; each was consciously deferred. Ordered by value.
+(workspace shell, rich IDs + kind-aware form, searchable library). Ordered by value.
 
 Branch: `feat/gui-meeting-workspace`. Spec: `2026-07-20-gui-meeting-workspace-redesign-design.md`.
 
