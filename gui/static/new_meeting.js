@@ -69,8 +69,12 @@
 
     // derived id: {date}-{locus}-{label}, with the label-contains-locus de-dup
     const label = slug(mtype);
+    // Mirror the server's _overlaps(): whole-hyphen-token containment, so a
+    // locus is only dropped when it repeats a full token of the label (not a
+    // partial-word substring like "ann" inside "annual").
+    const overlaps = (a, b) => `-${b}-`.includes(`-${a}-`) || `-${a}-`.includes(`-${b}-`);
     let locus = currentLocus();
-    if (locus && (label.includes(locus) || locus.includes(label))) locus = "";
+    if (locus && overlaps(locus, label)) locus = "";
     const parts = [date, locus, label].filter(Boolean);
     $("derived-id").textContent = (date && label) ? parts.join("-") : "—";
 
@@ -83,8 +87,7 @@
     input.city.toggleAttribute("required", needCity);
   }
 
-  // --- Race typeahead (mirrors the review link-search); writes the hidden
-  // race_id / race_slug inputs consumed by POST /new. ---
+  // --- Race typeahead (mirrors the review link-search) ---
   const raceWidget = $("f-race");
   const raceInput = $("f-race-input");
   const raceResults = $("f-race-results");

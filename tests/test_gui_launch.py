@@ -482,4 +482,4 @@ def test_new_meeting_js_wires_race_search_and_field_gating(tmp_meetings_dir):
     js = Path("gui/static/new_meeting.js").read_text()
     assert "/api/races/search" in js
     assert "data-field" in js
-    assert "race_id" in js and "race_slug" in js
+    assert "race_id" in js and "f-race-slug" in js
