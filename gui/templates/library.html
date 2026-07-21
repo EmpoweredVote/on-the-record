@@ -13,7 +13,7 @@
       <input type="search" id="lib-search" class="lib-search" placeholder="🔍  Search name, city, org, id…" autocomplete="off">
       <select id="lib-kind" class="lib-sel">
         <option value="">Kind: all</option>
-        {% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+        {% for k in event_kinds %}<option value="{{ k }}">{{ k | humanize_kind }}</option>{% endfor %}
       </select>
       <select id="lib-status" class="lib-sel">
         <option value="">Status: all</option>
@@ -49,7 +49,7 @@
             </div>
           </td>
           <td>{{ m.date or "—" }}</td>
-          <td>{{ m.event_kind or "—" }}</td>
+          <td>{{ m.event_kind | humanize_kind or "—" }}</td>
           <td>{{ m.speakers_label }}</td>
           <td>{{ m.duration_label }}</td>
           <td>

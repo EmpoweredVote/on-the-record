@@ -69,3 +69,10 @@ FIELDS_BY_KIND = {
 # operator reaches for most; oss is the local-quality-default diarizer.
 DEFAULT_COMPUTE = "modal"
 DEFAULT_DIARIZER = "oss"
+
+
+def humanize_kind(kind: str) -> str:
+    """Display label for an event kind: 'news_clip' -> 'News Clip'. Display only;
+    the raw snake_case value stays authoritative for form values / filtering.
+    Empty/None -> '' (callers keep their own '—' fallback)."""
+    return (kind or "").replace("_", " ").title()

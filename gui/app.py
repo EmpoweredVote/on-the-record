@@ -28,6 +28,10 @@ from gui.runner import RunParams
 
 _GUI_DIR = Path(__file__).resolve().parent
 _templates = Jinja2Templates(directory=str(_GUI_DIR / "templates"))
+# Display-only filter: 'news_clip' -> 'News Clip' in user-facing kind labels
+# (values stay snake_case for form submission / filtering).
+from gui.formmeta import humanize_kind as _humanize_kind
+_templates.env.filters["humanize_kind"] = _humanize_kind
 _REPO_DIR = _GUI_DIR.parent
 _RUN_LOCAL = str(_REPO_DIR / "run_local.py")
 

@@ -399,6 +399,25 @@ def test_library_has_new_meeting_link(tmp_meetings_dir):
     assert 'href="/new"' in body
 
 
+def test_humanize_kind_labels():
+    from gui.formmeta import humanize_kind
+    assert humanize_kind("news_clip") == "News Clip"
+    assert humanize_kind("school_board") == "School Board"
+    assert humanize_kind("council") == "Council"
+    assert humanize_kind("") == ""
+    assert humanize_kind(None) == ""
+
+
+def test_library_humanizes_kind_display(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-01-interview", completed_stage=5)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"event_kind": "news_clip"}); st.write_text(json.dumps(data))
+    body = TestClient(create_app()).get("/").text
+    assert "News Clip" in body             # humanized display (dropdown label + column)
+    assert 'value="news_clip"' in body     # raw value preserved for the filter
+    assert 'data-kind="news_clip"' in body  # raw value preserved for filtering
+
+
 # --- live-site status (distinct from the local export stage) --------------------
 
 def test_live_badge_states():

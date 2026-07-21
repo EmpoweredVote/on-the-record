@@ -13,7 +13,7 @@
       <h1>{{ header.display_name }}</h1>
       <span class="ws-pills">
         {% if header.date %}<span class="pill">{{ header.date }}</span>{% endif %}
-        {% if header.event_kind %}<span class="pill">{{ header.event_kind }}</span>{% endif %}
+        {% if header.event_kind %}<span class="pill">{{ header.event_kind | humanize_kind }}</span>{% endif %}
         {% set level, text = header.gate_badge %}
         <span id="gate-pill" class="gate gate-{{ level }}">{{ text }}</span>
         {% if header.is_live is not none %}
