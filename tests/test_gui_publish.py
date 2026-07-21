@@ -293,7 +293,7 @@ def test_post_publish_success(tagged_meeting_dir, tmp_meetings_dir, monkeypatch)
                         lambda mid, force=False: {"ok": True, "meeting_id": mid, "segments": 5, "speakers": 2})
     resp = TestClient(create_app()).post("/meetings/2026-02-04-council/publish", data={})
     assert resp.status_code == 200
-    assert "publish" in resp.text.lower()
+    assert "Published" in resp.text
     assert "5" in resp.text                       # segment count shown
 
 
@@ -303,4 +303,5 @@ def test_post_publish_gate_blocked_shown(tagged_meeting_dir, tmp_meetings_dir, m
                         lambda mid, force=False: {"ok": False, "reason": "gate", "review_status": "review"})
     resp = TestClient(create_app()).post("/meetings/2026-02-04-council/publish", data={})
     assert resp.status_code == 200
-    assert "gate" in resp.text.lower() or "review" in resp.text.lower()
+    assert "error-banner" in resp.text
+    assert "gate" in resp.text.lower()

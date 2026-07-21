@@ -189,13 +189,14 @@ def test_review_page_has_media_player_and_clip_buttons(tagged_meeting_dir, tmp_m
     body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
     assert '/meetings/2026-02-04-council/media' in body   # media element src
     assert 'data-seek=' in body                            # at least one clip button
-    assert 'review.js' in body                             # playback script wired
+    assert 'workspace.js' in body                          # playback script wired
 
 
 def test_library_links_to_review(tagged_meeting_dir, tmp_meetings_dir):
     tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     body = TestClient(create_app()).get("/").text
-    assert 'href="/meetings/2026-02-04-council/review"' in body
+    # library now links to the bare workspace URL; the shell picks the tab by stage.
+    assert 'href="/meetings/2026-02-04-council"' in body
 
 
 def test_load_review_page_malformed_transcript_shape_returns_none(tagged_meeting_dir, tmp_meetings_dir):
@@ -205,7 +206,9 @@ def test_load_review_page_malformed_transcript_shape_returns_none(tagged_meeting
 
     assert load_review_page("2026-02-04-council") is None
     resp = TestClient(create_app()).get("/meetings/2026-02-04-council/review")
-    assert resp.status_code == 404
+    assert resp.status_code == 200                 # degrades to a placeholder, not 404
+    assert "available yet" in resp.text            # the not-ready placeholder is shown
+                                                    # (Jinja escapes "isn't" -> "isn&#39;t")
 
 
 def test_load_review_page_malformed_embeddings_degrade_gracefully(tagged_meeting_dir, tmp_meetings_dir):
@@ -508,7 +511,7 @@ def test_review_page_has_link_widget_and_unlink(tagged_meeting_dir, tmp_meetings
 
 def test_review_js_references_search_and_link(tmp_meetings_dir):
     from pathlib import Path
-    js = Path("gui/static/review.js").read_text()
+    js = Path("gui/static/workspace.js").read_text()
     assert "/api/politicians/search" in js
     assert "/link" in js
 
@@ -848,15 +851,15 @@ def test_review_page_shows_link_for_id_only_speaker(tagged_meeting_dir, tmp_meet
 def test_review_page_links_to_run(tagged_meeting_dir, tmp_meetings_dir):
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     _write_meeting(mdir)
-    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
-    assert 'href="/meetings/2026-02-04-council/run"' in body
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council").text
+    assert 'data-tab="progress"' in body and 'href="/meetings/2026-02-04-council?tab=progress"' in body
 
 
 def test_review_page_links_to_publish(tagged_meeting_dir, tmp_meetings_dir):
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
     _write_meeting(mdir)
-    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
-    assert 'href="/meetings/2026-02-04-council/publish"' in body
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council").text
+    assert 'data-tab="publish"' in body
 
 
 def test_find_meeting_media_falls_back_to_opus(tmp_path):

@@ -767,6 +767,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
     if state.meeting_type != args.meeting_type and args.meeting_type is not None:
         state.meeting_type = args.meeting_type
         _state_dirty = True
+    if getattr(args, "guest", None) is not None and state.guest != args.guest:
+        state.guest = args.guest
+        _state_dirty = True
     # Record the normalized source key so the GUI can detect duplicate grabs.
     if audio_path and not state.source_key:
         from src.source_key import source_key as _source_key
@@ -3647,6 +3650,12 @@ Environment Variables:
         "--title",
         default=None,
         help="Optional human display title; blank/omitted uses city + meeting type",
+    )
+    parser.add_argument(
+        "--guest",
+        default=None,
+        help="Interview subject/guest name; recorded in pipeline_state for the "
+             "library context line (display only).",
     )
     parser.add_argument(
         "--event-org",

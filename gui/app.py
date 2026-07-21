@@ -20,14 +20,18 @@ from src.download import is_ytdlp_url
 from gui import publish_api
 from gui import review_api
 from gui import runner
+from gui import workspace
 from gui.library import scan_meetings
-from gui.models import stage_label as stage_label_for
 from gui.paths import is_safe_meeting_id
-from gui.review_api import find_meeting_media, load_review_page
+from gui.review_api import find_meeting_media
 from gui.runner import RunParams
 
 _GUI_DIR = Path(__file__).resolve().parent
 _templates = Jinja2Templates(directory=str(_GUI_DIR / "templates"))
+# Display-only filter: 'news_clip' -> 'News Clip' in user-facing kind labels
+# (values stay snake_case for form submission / filtering).
+from gui.formmeta import humanize_kind as _humanize_kind
+_templates.env.filters["humanize_kind"] = _humanize_kind
 _REPO_DIR = _GUI_DIR.parent
 _RUN_LOCAL = str(_REPO_DIR / "run_local.py")
 
@@ -55,8 +59,15 @@ def create_app() -> FastAPI:
         # One batch query for live-site status; None (no DB) => no live badge.
         live_slugs = publish_api.live_published_slugs()
         meetings = scan_meetings(config.MEETINGS_DIR, live_slugs=live_slugs)
+        from gui import races
+        race_ids = {m.race_id for m in meetings if m.race_id}
+        labels = races.race_labels(race_ids) if race_ids else {}
+        for m in meetings:
+            if m.race_id:
+                m.race_label = labels.get(m.race_id)
+        from src.event_kinds import EVENT_KINDS
         return _templates.TemplateResponse(
-            request, "library.html", {"meetings": meetings}
+            request, "library.html", {"meetings": meetings, "event_kinds": list(EVENT_KINDS)},
         )
 
     @app.get("/meetings/{meeting_id}/thumbnail")
@@ -68,12 +79,57 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return FileResponse(str(path), media_type="image/jpeg")
 
-    @app.get("/meetings/{meeting_id}/review", response_class=HTMLResponse)
-    def review_page(request: Request, meeting_id: str) -> HTMLResponse:
-        page = load_review_page(meeting_id)
-        if page is None:
+    @app.get("/meetings/{meeting_id}/review")
+    def review_page(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=review", status_code=301)
+
+    @app.get("/meetings/{meeting_id}", response_class=HTMLResponse)
+    def workspace_shell(request: Request, meeting_id: str, tab: str = "") -> HTMLResponse:
+        # Pick the tab from a cheap stage read first, so we can load the review page
+        # at most once and reuse it for both the panel and the header's attention count.
+        stage = workspace.meeting_stage(meeting_id)
+        if stage is None:
             raise HTTPException(status_code=404)
-        return _templates.TemplateResponse(request, "review.html", {"page": page})
+        active = tab.strip() or workspace.default_tab_for_stage(stage)
+        ctx = workspace.panel_context(active, meeting_id)
+        if ctx is None:  # bad ?tab value -> fall back to the default tab
+            active = workspace.default_tab_for_stage(stage)
+            ctx = workspace.panel_context(active, meeting_id)
+        # Reuse the review page the panel already loaded so the header doesn't reload it.
+        preloaded = ctx.get("page") if active == "review" else None
+        attn = len(preloaded.needs_attention) if preloaded is not None else None
+        header = workspace.header_context(
+            meeting_id, is_live=(publish_api.meeting_published_id(meeting_id) is not None),
+            attention_count=attn,
+        )
+        if header is None:
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(
+            request, "workspace.html", {**ctx, "header": header, "active_tab": active},
+        )
+
+    @app.get("/meetings/{meeting_id}/panel/{name}", response_class=HTMLResponse)
+    def workspace_panel(request: Request, meeting_id: str, name: str) -> HTMLResponse:
+        ctx = workspace.panel_context(name, meeting_id)
+        if ctx is None:
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(request, f"panels/{name}.html", ctx)
+
+    @app.get("/meetings/{meeting_id}/status")
+    def workspace_status(meeting_id: str) -> JSONResponse:
+        st = runner.run_status(meeting_id)
+        if st is None:
+            raise HTTPException(status_code=404)
+        # is_live changes only on an explicit publish (never mid-run), so skip the
+        # remote DB round-trip while the pipeline is running to keep the poll cheap.
+        is_live = None if st.get("running") else (
+            publish_api.meeting_published_id(meeting_id) is not None
+        )
+        header = workspace.header_context(meeting_id, is_live=is_live)
+        st["review_status"] = header["review_status"] if header else None
+        st["is_live"] = header["is_live"] if header else None
+        st["attention_count"] = header["attention_count"] if header else 0
+        return JSONResponse(st)
 
     @app.get("/meetings/{meeting_id}/media")
     def media(meeting_id: str):
@@ -135,6 +191,11 @@ def create_app() -> FastAPI:
     @app.get("/api/politicians/search")
     def politician_search(q: str = "") -> JSONResponse:
         return JSONResponse(review_api.search_politicians_safe(q))
+
+    @app.get("/api/races/search")
+    def race_search(q: str = "") -> JSONResponse:
+        from gui import races
+        return JSONResponse(races.search_races_safe(q))
 
     @app.get("/api/source-meta")
     def source_meta(url: str = "") -> JSONResponse:
@@ -206,7 +267,8 @@ def create_app() -> FastAPI:
     def new_meeting_form(request: Request) -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
-                                   CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS)
+                                   CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS,
+                                   FIELDS_BY_KIND, DEFAULT_COMPUTE, DEFAULT_DIARIZER)
         from gui.rosters import list_cached_rosters
         return _templates.TemplateResponse(
             request, "new_meeting.html",
@@ -218,6 +280,9 @@ def create_app() -> FastAPI:
                 "city_required_kinds": sorted(CITY_REQUIRED_KINDS),
                 "meeting_type_defaults": MEETING_TYPE_DEFAULTS,
                 "cached_rosters": list_cached_rosters(),
+                "fields_by_kind": FIELDS_BY_KIND,
+                "default_compute": DEFAULT_COMPUTE,
+                "default_diarizer": DEFAULT_DIARIZER,
             },
         )
 
@@ -237,6 +302,9 @@ def create_app() -> FastAPI:
         event_orgs: str = Form(""),
         body_slug: str = Form(""),
         crec_chamber: str = Form(""),
+        guest: str = Form(""),
+        race_id: str = Form(""),
+        race_slug: str = Form(""),
         confirm: str = Form(""),
     ):
         if not input.strip() or not date.strip() or not meeting_type.strip():
@@ -266,9 +334,22 @@ def create_app() -> FastAPI:
                             "clip_start": clip_start, "clip_end": clip_end,
                             "event_orgs": event_orgs, "body_slug": body_slug,
                             "crec_chamber": crec_chamber,
+                            "guest": guest, "race_id": race_id, "race_slug": race_slug,
                         },
                     },
                 )
+        from gui.formmeta import FIELDS_BY_KIND
+        _allowed = set(FIELDS_BY_KIND.get(event_kind, ()))
+        if "city" not in _allowed:
+            city = ""
+        if "body" not in _allowed:
+            body_slug = ""
+        if "guest" not in _allowed:
+            guest = ""
+        if "race" not in _allowed:
+            race_id = race_slug = ""
+        if "crec_chamber" not in _allowed:
+            crec_chamber = ""
         p = RunParams(
             input=input.strip(), date=date.strip(), meeting_type=meeting_type.strip(),
             event_kind=event_kind, city=city.strip() or None, title=title.strip() or None,
@@ -277,21 +358,19 @@ def create_app() -> FastAPI:
             event_orgs=[o.strip() for o in event_orgs.split(",") if o.strip()],
             body_slug=body_slug.strip() or None,
             crec_chamber=crec_chamber.strip() or None,
+            guest=guest.strip() or None,
+            race_id=race_id.strip() or None,
+            race_slug=race_slug.strip() or None,
         )
         try:
             meeting_id = runner.launch_run(p, python_exe=sys.executable, script=_RUN_LOCAL)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=progress", status_code=303)
 
-    @app.get("/meetings/{meeting_id}/run", response_class=HTMLResponse)
-    def run_page(request: Request, meeting_id: str) -> HTMLResponse:
-        from src.checkpoint import PipelineStage
-        stages = [(s.value, stage_label_for(s.value)) for s in PipelineStage if s.value >= 1]
-        return _templates.TemplateResponse(
-            request, "run.html",
-            {"meeting_id": meeting_id, "stages": stages, "redo_stages": list(runner.REDO_STAGES)},
-        )
+    @app.get("/meetings/{meeting_id}/run")
+    def run_page(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=progress", status_code=301)
 
     @app.get("/meetings/{meeting_id}/run/status")
     def run_status_json(meeting_id: str) -> JSONResponse:
@@ -316,18 +395,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
 
-    @app.get("/meetings/{meeting_id}/edit", response_class=HTMLResponse)
-    def edit_meeting_form(request: Request, meeting_id: str) -> HTMLResponse:
-        from gui.review_api import _load_meeting_ctx
-        from src.event_kinds import EVENT_KINDS
-        ctx = _load_meeting_ctx(meeting_id)
-        if ctx is None:
-            raise HTTPException(status_code=404)
-        meeting, _dir, _roster = ctx
-        return _templates.TemplateResponse(
-            request, "edit_meeting.html",
-            {"meeting_id": meeting_id, "m": meeting, "event_kinds": list(EVENT_KINDS)},
-        )
+    @app.get("/meetings/{meeting_id}/edit")
+    def edit_meeting_form(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=details", status_code=301)
 
     @app.post("/meetings/{meeting_id}/edit")
     def edit_meeting_apply(
@@ -341,33 +411,22 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
-    @app.get("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
-    def publish_confirm(request: Request, meeting_id: str) -> HTMLResponse:
-        from gui.review_api import _load_meeting_ctx
-        from src.checkpoint import PipelineState
-        ctx = _load_meeting_ctx(meeting_id)
-        if ctx is None:
-            raise HTTPException(status_code=404)
-        _meeting, meeting_dir, _roster = ctx
-        state = PipelineState(meeting_dir)
-        return _templates.TemplateResponse(
-            request, "publish_confirm.html",
-            {
-                "meeting_id": meeting_id,
-                "review_status": state.review_status,
-                "gate_pass": state.review_status == "pass",
-                "already_published": publish_api.meeting_published_id(meeting_id) is not None,
-            },
-        )
+    @app.get("/meetings/{meeting_id}/publish")
+    def publish_confirm(meeting_id: str) -> RedirectResponse:
+        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=publish", status_code=301)
 
     @app.post("/meetings/{meeting_id}/publish", response_class=HTMLResponse)
     def publish_apply(request: Request, meeting_id: str, force: str = Form("")):
         result = publish_api.apply_publish(meeting_id, force=bool(force.strip()))
         if result.get("reason") == "unknown":
             raise HTTPException(status_code=404)
-        return _templates.TemplateResponse(
-            request, "publish_result.html",
-            {"meeting_id": meeting_id, "result": result},
-        )
+        if result.get("ok"):
+            msg = (f"✓ Published · {result.get('segments', 0)} segments · "
+                   f"{result.get('speakers', 0)} speakers")
+            body = f'<div class="publish-ok">{msg}</div>'
+        else:
+            body = (f'<div class="error-banner">Publish failed '
+                    f'({result.get("reason")}): {result.get("error", "")}</div>')
+        return HTMLResponse(body)
 
     return app

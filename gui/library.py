@@ -60,6 +60,9 @@ def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
     if isinstance(named, dict):
         t = named.get("title")
         title = t if isinstance(t, str) and t.strip() else None
+    event_orgs = []
+    if isinstance(named, dict) and isinstance(named.get("event_orgs"), list):
+        event_orgs = [o for o in named["event_orgs"] if isinstance(o, str) and o.strip()]
     return MeetingSummary(
         meeting_id=meeting_dir.name,
         title=title,
@@ -73,6 +76,10 @@ def _summarize(meeting_dir: Path) -> Optional[MeetingSummary]:
         review_status=state.review_status,
         trusted_coverage=state.trusted_coverage,
         has_thumbnail=(meeting_dir / "thumbnail.jpg").exists(),
+        event_orgs=event_orgs,
+        body_slug=state.body_slug,
+        race_id=state.race_id,
+        guest=state.guest,
     )
 
 

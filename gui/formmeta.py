@@ -47,3 +47,32 @@ MEETING_TYPE_DEFAULTS = {
     "podcast": "Podcast",
     "other": "Recording",
 }
+
+# Which optional fields the new-meeting form shows for each event kind. The
+# always-shown fields (source, date, event_kind, title, event_orgs) are NOT
+# listed here. Keys must equal EVENT_KINDS (test-enforced). Consumed by the
+# template + new_meeting.js to hide inapplicable inputs.
+FIELDS_BY_KIND = {
+    "council":           ("city", "body"),
+    "school_board":      ("city", "body"),
+    "debate":            ("race",),
+    "forum":             ("race",),
+    "community_meeting": ("city",),
+    "floor":             ("crec_chamber",),
+    "news_clip":         ("guest", "race"),
+    "press_conference":  ("guest", "race"),
+    "podcast":           ("guest", "race"),
+    "other":             ("city",),
+}
+
+# GUI form defaults (the CLI keeps its own defaults). Modal is the compute the
+# operator reaches for most; oss is the local-quality-default diarizer.
+DEFAULT_COMPUTE = "modal"
+DEFAULT_DIARIZER = "oss"
+
+
+def humanize_kind(kind: str) -> str:
+    """Display label for an event kind: 'news_clip' -> 'News Clip'. Display only;
+    the raw snake_case value stays authoritative for form values / filtering.
+    Empty/None -> '' (callers keep their own '—' fallback)."""
+    return (kind or "").replace("_", " ").title()

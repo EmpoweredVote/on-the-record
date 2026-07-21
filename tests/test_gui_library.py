@@ -45,6 +45,40 @@ def test_meeting_summary_display_name_falls_back_to_city_and_type():
     assert s.display_name == "Bloomington Regular Session"
 
 
+def test_meeting_summary_context_line_composes_available_fields():
+    s = MeetingSummary(
+        meeting_id="m", title=None, city="Bloomington", meeting_type="Regular Session",
+        date="2026-02-10", event_kind="council", completed_stage=4,
+        body_slug="bloomington-common-council",
+    )
+    # city + prettified body, de-duplicated, joined with ' · '
+    assert s.context_line == "Bloomington · Bloomington Common Council"
+
+    s2 = MeetingSummary(
+        meeting_id="m2", title=None, city=None, meeting_type="Interview", date="2026-05-01",
+        event_kind="news_clip", completed_stage=5,
+        event_orgs=["CBS"], race_label="CA Governor · 2026",
+    )
+    assert s2.context_line == "CBS · CA Governor · 2026"
+
+    s3 = MeetingSummary(meeting_id="m3", title=None, city=None, meeting_type=None,
+                        date=None, event_kind="floor", completed_stage=3)
+    assert s3.context_line == ""   # nothing to show
+
+
+def test_meeting_summary_status_key():
+    def s(**kw):
+        base = dict(meeting_id="m", title=None, city=None, meeting_type=None, date=None,
+                    event_kind=None, completed_stage=0)
+        base.update(kw)
+        return MeetingSummary(**base)
+    assert s(completed_stage=2).status_key == "processing"          # pre-identify
+    assert s(completed_stage=4).status_key == "needs-review"        # reviewable, gate not passed
+    assert s(completed_stage=5, review_status="pass").status_key == "ready"
+    assert s(completed_stage=7, review_status="pass", is_live=True).status_key == "live"
+    assert s(completed_stage=7, review_status="review").status_key == "needs-review"
+
+
 import json
 
 from gui.library import scan_meetings
@@ -283,6 +317,31 @@ def test_scan_meetings_enrichment_absent_is_graceful(tagged_meeting_dir, tmp_mee
     assert s.gate_badge == ("none", "—")
 
 
+def test_scan_meetings_populates_context_fields(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("bloomington-common-council",
+                              meeting_id="2026-02-10-council", completed_stage=4)
+    # body_slug comes from state (tagged_meeting_dir sets it to the source arg);
+    # race_id from state; event_orgs from transcript_named.
+    state = mdir / "pipeline_state.json"
+    data = json.loads(state.read_text())
+    data.update({"city": "Bloomington", "race_id": "uuid-r"})
+    state.write_text(json.dumps(data))
+    (mdir / "transcript_named.json").write_text(json.dumps(
+        {"title": "Council", "event_orgs": ["CATS", "WFHB"]}))
+
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.body_slug == "bloomington-common-council"
+    assert s.race_id == "uuid-r"
+    assert s.event_orgs == ["CATS", "WFHB"]
+    assert "Bloomington Common Council" in s.context_line
+
+
+def test_scan_meetings_context_fields_absent_are_graceful(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-02-11-council", completed_stage=1)
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.event_orgs == [] and s.race_id is None
+
+
 from gui.paths import is_safe_meeting_id
 
 
@@ -340,6 +399,43 @@ def test_library_has_new_meeting_link(tmp_meetings_dir):
     assert 'href="/new"' in body
 
 
+def test_meeting_summary_context_line_includes_guest():
+    s = MeetingSummary(
+        meeting_id="m", title=None, city=None, meeting_type="Interview", date="2026-05-01",
+        event_kind="news_clip", completed_stage=5,
+        event_orgs=["CBS"], race_label="CA Governor · 2026", guest="Xavier Becerra",
+    )
+    assert s.context_line == "CBS · CA Governor · 2026 · guest Xavier Becerra"
+
+
+def test_scan_meetings_reads_guest(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-01-interview", completed_stage=5)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"guest": "Xavier Becerra"}); st.write_text(json.dumps(data))
+    s = scan_meetings(tmp_meetings_dir)[0]
+    assert s.guest == "Xavier Becerra"
+    assert "guest Xavier Becerra" in s.context_line
+
+
+def test_humanize_kind_labels():
+    from gui.formmeta import humanize_kind
+    assert humanize_kind("news_clip") == "News Clip"
+    assert humanize_kind("school_board") == "School Board"
+    assert humanize_kind("council") == "Council"
+    assert humanize_kind("") == ""
+    assert humanize_kind(None) == ""
+
+
+def test_library_humanizes_kind_display(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-01-interview", completed_stage=5)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"event_kind": "news_clip"}); st.write_text(json.dumps(data))
+    body = TestClient(create_app()).get("/").text
+    assert "News Clip" in body             # humanized display (dropdown label + column)
+    assert 'value="news_clip"' in body     # raw value preserved for the filter
+    assert 'data-kind="news_clip"' in body  # raw value preserved for filtering
+
+
 # --- live-site status (distinct from the local export stage) --------------------
 
 def test_live_badge_states():
@@ -382,3 +478,50 @@ def test_library_route_no_live_badge_without_db(tagged_meeting_dir, tmp_meetings
     monkeypatch.setattr(pub, "live_published_slugs", lambda: None)  # DB not configured
     body = TestClient(create_app()).get("/").text
     assert "live-badge" not in body      # no Live/Not-live badge rendered (only the "—" placeholder)
+
+
+def test_library_route_renders_filter_bar_and_context(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.races as races
+    monkeypatch.setattr(races, "race_labels", lambda ids: {"uuid-r": "CA Governor · 2026"})
+    mdir = tagged_meeting_dir("bloomington-common-council",
+                              meeting_id="2026-02-10-council", completed_stage=4)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text())
+    data.update({"city": "Bloomington", "event_kind": "council"})
+    st.write_text(json.dumps(data))
+    body = TestClient(create_app()).get("/").text
+    # filter bar
+    assert 'id="lib-search"' in body and 'id="lib-kind"' in body and 'id="lib-status"' in body
+    assert "library.js" in body
+    # per-row data attributes for client-side filtering
+    assert 'data-status="needs-review"' in body
+    assert 'data-kind="council"' in body
+    # context subline rendered
+    assert "Bloomington Common Council" in body
+    # row links to the bare workspace URL (stage-aware), NOT /review
+    assert 'href="/meetings/2026-02-10-council"' in body
+
+
+def test_library_route_attaches_race_label(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
+    import gui.races as races
+    seen = {}
+
+    def _fake_race_labels(ids):
+        seen["ids"] = set(ids)
+        return {"uuid-r": "TX Senate · 2026"}
+
+    monkeypatch.setattr(races, "race_labels", _fake_race_labels)
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-01-interview", completed_stage=5)
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"race_id": "uuid-r", "event_kind": "news_clip"})
+    st.write_text(json.dumps(data))
+    body = TestClient(create_app()).get("/").text
+    assert "uuid-r" in seen["ids"]           # route asked for the label
+    assert "TX Senate · 2026" in body        # and rendered it
+
+
+def test_library_js_filters_by_search_kind_status(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "lib-search" in js and "lib-kind" in js and "lib-status" in js
+    assert "data-search" in js

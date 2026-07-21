@@ -67,6 +67,12 @@ class MeetingSummary:
     # Live-site status from the DB: True = live, False = queried but not live,
     # None = not checked (no DB configured) so no badge is shown.
     is_live: Optional[bool] = None
+    # Slice 3: library context. All optional so older/partial meetings still build.
+    event_orgs: list = field(default_factory=list)
+    body_slug: Optional[str] = None
+    race_id: Optional[str] = None
+    race_label: Optional[str] = None
+    guest: Optional[str] = None
 
     @property
     def stage_label(self) -> str:
@@ -99,6 +105,40 @@ class MeetingSummary:
             return title
         parts = [p for p in (self.city, self.meeting_type) if p and p.strip()]
         return " ".join(parts) if parts else self.meeting_id
+
+    @property
+    def context_line(self) -> str:
+        """One-line context under the row name: city · body · org(s) · race ·
+        guest, de-duplicated, only what's present."""
+        parts: list[str] = []
+        if self.city and self.city.strip():
+            parts.append(self.city.strip())
+        if self.body_slug and self.body_slug.strip():
+            parts.append(self.body_slug.replace("-", " ").title())
+        for org in (self.event_orgs or []):
+            if org and str(org).strip():
+                parts.append(str(org).strip())
+        if self.race_label and self.race_label.strip():
+            parts.append(self.race_label.strip())
+        if self.guest and self.guest.strip():
+            parts.append(f"guest {self.guest.strip()}")
+        seen: list[str] = []
+        for p in parts:
+            if p not in seen:
+                seen.append(p)
+        return " · ".join(seen)
+
+    @property
+    def status_key(self) -> str:
+        """Coarse lifecycle bucket for the library Status filter:
+        'live' | 'ready' | 'needs-review' | 'processing'."""
+        if self.is_live:
+            return "live"
+        if self.review_status == "pass":
+            return "ready"
+        if self.completed_stage >= 4:
+            return "needs-review"
+        return "processing"
 
 
 # Confidence at/above which an identified speaker is auto-accepted (green) and

@@ -34,7 +34,7 @@ def test_post_new_launches_and_redirects(tmp_meetings_dir, monkeypatch):
         "event_kind": "council", "city": "Bloomington", "compute": "local", "diarizer": "oss",
     }, follow_redirects=False)
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/meetings/2026-02-10-regular/run"
+    assert resp.headers["location"] == "/meetings/2026-02-10-regular?tab=progress"
     assert launched["params"].input == "https://x/v"
 
 
@@ -55,7 +55,7 @@ def test_run_page_and_status_json(tmp_meetings_dir, tagged_meeting_dir, monkeypa
 
     page = client.get("/meetings/2026-02-10-regular/run")
     assert page.status_code == 200
-    assert "run.js" in page.text and "Diarization" in page.text or "stepper" in page.text.lower()
+    assert "workspace.js" in page.text and "stepper" in page.text.lower()
 
     st = client.get("/meetings/2026-02-10-regular/run/status")
     assert st.status_code == 200
@@ -81,6 +81,34 @@ def test_formmeta_compute_and_diarizer_help():
     assert set(COMPUTE_HELP) == {"local", "modal"}
     assert set(DIARIZER_HELP) == {"oss", "api", "vibevoice"}
     assert all(v.strip() for v in {**COMPUTE_HELP, **DIARIZER_HELP}.values())
+
+
+def test_fields_by_kind_covers_all_event_kinds():
+    from gui.formmeta import FIELDS_BY_KIND
+    from src.event_kinds import EVENT_KINDS
+    assert set(FIELDS_BY_KIND) == set(EVENT_KINDS)
+
+
+def test_fields_by_kind_gating():
+    from gui.formmeta import FIELDS_BY_KIND
+    # council: city + body, no guest/race/crec
+    assert "city" in FIELDS_BY_KIND["council"] and "body" in FIELDS_BY_KIND["council"]
+    assert "guest" not in FIELDS_BY_KIND["council"]
+    # interviews: guest + race, no city/body
+    for k in ("news_clip", "press_conference", "podcast"):
+        assert "guest" in FIELDS_BY_KIND[k] and "race" in FIELDS_BY_KIND[k]
+        assert "city" not in FIELDS_BY_KIND[k] and "body" not in FIELDS_BY_KIND[k]
+    # debate/forum: race, no guest
+    assert "race" in FIELDS_BY_KIND["forum"] and "guest" not in FIELDS_BY_KIND["forum"]
+    # floor: crec only
+    assert "crec_chamber" in FIELDS_BY_KIND["floor"]
+    assert "city" not in FIELDS_BY_KIND["floor"]
+
+
+def test_default_compute_is_modal():
+    from gui.formmeta import DEFAULT_COMPUTE, DEFAULT_DIARIZER
+    assert DEFAULT_COMPUTE == "modal"
+    assert DEFAULT_DIARIZER == "oss"
 
 
 def test_post_new_council_requires_city(tmp_meetings_dir):
@@ -398,3 +426,81 @@ def test_source_meta_prefers_resolver(tmp_meetings_dir, monkeypatch):
                       params={"url": "https://show.buzzsprout.com/1/ep"})
     assert resp.status_code == 200
     assert resp.json() == {"date": "2026-06-03", "title": "Ep 1", "event_org": "WNLA"}
+
+
+def test_races_search_route_returns_json(monkeypatch, tmp_meetings_dir):
+    import gui.races as races
+    monkeypatch.setattr(races, "search_races_safe",
+                        lambda q, **kw: {"results": [
+                            {"race_id": "u1", "label": "Governor of Michigan · 2026",
+                             "slug": "governor-michigan"}], "error": None})
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    resp = TestClient(create_app()).get("/api/races/search", params={"q": "gov"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["results"][0]["slug"] == "governor-michigan"
+    assert body["error"] is None
+
+
+def test_post_new_passes_guest_and_race(monkeypatch, tmp_meetings_dir):
+    from gui import runner
+    captured = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: captured.setdefault("p", p) or "2026-05-01-x")
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    resp = TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-05-01", "meeting_type": "Interview",
+        "event_kind": "news_clip", "guest": "Xavier Becerra",
+        "race_id": "uuid-9", "race_slug": "ca-governor",
+        "compute": "modal", "diarizer": "oss",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    assert captured["p"].guest == "Xavier Becerra"
+    assert captured["p"].race_id == "uuid-9"
+    assert captured["p"].race_slug == "ca-governor"
+
+
+def test_post_new_gates_fields_not_allowed_for_kind(monkeypatch, tmp_meetings_dir):
+    from gui import runner
+    captured = {}
+    monkeypatch.setattr(runner, "launch_run",
+                        lambda p, **kw: captured.setdefault("p", p) or "2026-05-01-x")
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    # council kind, but a stray race_id/race_slug (as if picked then kind-switched)
+    resp = TestClient(create_app()).post("/new", data={
+        "input": "https://x/v", "date": "2026-05-01", "meeting_type": "Regular Session",
+        "event_kind": "council", "city": "Bloomington",
+        "race_id": "uuid-stray", "race_slug": "ca-governor", "guest": "Nobody",
+        "compute": "modal", "diarizer": "oss",
+    }, follow_redirects=False)
+    assert resp.status_code == 303
+    p = captured["p"]
+    assert p.race_id is None and p.race_slug is None   # gated out for council
+    assert p.guest is None                              # gated out for council
+    assert p.city == "Bloomington"                      # city IS allowed for council -> kept
+
+
+def test_new_form_renders_kind_fields_and_modal_default(tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/new").text
+    # kind-gated fields are present in the markup (JS hides the inapplicable ones)
+    assert 'data-field="guest"' in body
+    assert 'data-field="race"' in body
+    assert 'data-field="body"' in body
+    assert 'data-field="crec_chamber"' in body
+    # FIELDS_BY_KIND is injected for the client
+    assert "FIELDS_BY_KIND" in body
+    # compute select defaults to modal (selected option)
+    assert 'value="modal" selected' in body or "__DEFAULT_COMPUTE" in body
+
+
+def test_new_meeting_js_wires_race_search_and_field_gating(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/new_meeting.js").read_text()
+    assert "/api/races/search" in js
+    assert "data-field" in js
+    assert "race_id" in js and "f-race-slug" in js
