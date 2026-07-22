@@ -35,6 +35,7 @@ def test_gpu_sweep_script_can_run_directly():
 
 
 def test_modal_app_exposes_all_gpu_sweep_functions():
+    pytest.importorskip("modal")  # optional cloud-benchmark SDK, not in requirements.txt
     from bench import modal_app
 
     assert modal_app.vibevoice_sweep_l40s is not None
