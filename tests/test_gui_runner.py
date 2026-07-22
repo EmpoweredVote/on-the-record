@@ -224,7 +224,7 @@ def test_run_status_reports_stage_and_liveness(tmp_meetings_dir):
 
 def test_run_status_liveness_fallback_via_sidecar_pid(tmp_meetings_dir, monkeypatch):
     """After a GUI restart (_RUNS empty), liveness is recovered from the sidecar
-    pid via os.kill(pid, 0)."""
+    pid via the cross-platform _pid_alive probe."""
     from gui import runner
     runner._RUNS.clear()
     mid = "2026-02-10-regular"
@@ -233,19 +233,43 @@ def test_run_status_liveness_fallback_via_sidecar_pid(tmp_meetings_dir, monkeypa
     (mdir / "gui_run.json").write_text(json.dumps({"pid": 9999, "cmd": [], "status": "running"}))
     (mdir / "pipeline_state.json").write_text(json.dumps({"completed_stage": 2}))
 
-    # os.kill succeeds -> process alive -> running True
-    monkeypatch.setattr(runner.os, "kill", lambda pid, sig: None)
+    # probe says alive -> running True
+    monkeypatch.setattr(runner, "_pid_alive", lambda pid: True)
     st = runner.run_status(mid)
     assert st is not None
     assert st["running"] is True
     assert st["completed_stage"] == 2
 
-    # os.kill raises ProcessLookupError -> process dead -> running False
+    # probe says dead -> running False
+    monkeypatch.setattr(runner, "_pid_alive", lambda pid: False)
+    st2 = runner.run_status(mid)
+    assert st2["running"] is False
+
+
+def test_pid_alive_posix_signal_semantics(monkeypatch):
+    """On POSIX, _pid_alive maps os.kill(pid, 0) outcomes to liveness; a non-CTRL
+    signal-0 kill must never reach os.kill on Windows (it would TerminateProcess)."""
+    import os as _os
+    from gui import runner
+
+    monkeypatch.setattr(runner.os, "name", "posix")
+    monkeypatch.setattr(runner.os, "kill", lambda pid, sig: None)
+    assert runner._pid_alive(9999) is True
+
     def _dead(pid, sig):
         raise ProcessLookupError
     monkeypatch.setattr(runner.os, "kill", _dead)
-    st2 = runner.run_status(mid)
-    assert st2["running"] is False
+    assert runner._pid_alive(9999) is False
+
+    def _not_ours(pid, sig):
+        raise PermissionError
+    monkeypatch.setattr(runner.os, "kill", _not_ours)
+    assert runner._pid_alive(9999) is True
+
+    def _boom(pid, sig):
+        raise OSError(87, "The parameter is incorrect")
+    monkeypatch.setattr(runner.os, "kill", _boom)
+    assert runner._pid_alive(9999) is False
 
 
 def test_find_meeting_by_source_matches_state_key(tagged_meeting_dir, tmp_meetings_dir):
