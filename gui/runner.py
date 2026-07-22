@@ -272,6 +272,39 @@ def _log_tail(meeting_dir: Path, max_bytes: int = 16000) -> str:
     return _collapse_progress(data[-max_bytes:].decode("utf-8", errors="replace"))
 
 
+def _pid_alive(pid: int) -> bool:
+    """Best-effort cross-platform liveness probe for a recovered sidecar pid.
+
+    POSIX uses the signal-0 idiom. On Windows os.kill() maps to TerminateProcess
+    for any non-CTRL signal, so signal 0 would *kill* a live process (or raise
+    WinError 87 on a stale pid) — we must query the OS instead. Any error is
+    treated as not-alive, since sidecar recovery is best-effort.
+    """
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        SYNCHRONIZE = 0x00100000
+        WAIT_TIMEOUT = 0x00000102  # handle not signaled -> process still running
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+        if not handle:
+            return False  # no such process (or access denied) -> treat as dead
+        try:
+            return kernel32.WaitForSingleObject(wintypes.HANDLE(handle), 0) == WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False  # dead
+    except PermissionError:
+        return True   # exists but not ours -> alive
+    except OSError:
+        return False
+    return True       # process still alive
+
+
 def run_status(meeting_id: str) -> Optional[dict]:
     """Progress snapshot for any meeting that has pipeline_state.json (GUI-launched
     or not), or None if the meeting is truly absent."""
@@ -306,12 +339,7 @@ def run_status(meeting_id: str) -> Optional[dict]:
             pid = None
         if pid:
             try:
-                os.kill(int(pid), 0)
-                running = True   # process still alive
-            except ProcessLookupError:
-                running = False  # dead
-            except PermissionError:
-                running = True   # exists but not ours -> alive
+                running = _pid_alive(int(pid))
             except (ValueError, TypeError):
                 running = False
 
