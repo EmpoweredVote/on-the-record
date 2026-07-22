@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from src.source_key import source_key
 
 
@@ -24,8 +26,12 @@ def test_generic_url_normalized():
 
 
 def test_local_file_absolute():
-    assert source_key("/tmp/meeting.mp4") == "file:/tmp/meeting.mp4"
-    assert source_key("file:///tmp/meeting.mp4") == "file:/tmp/meeting.mp4"
+    # A bare path becomes file:<abspath>; the file:// URL form converges to the
+    # same key. Expected value is computed like the impl so it holds on any OS
+    # (Windows abspath("/tmp/x") -> C:\tmp\x, not /tmp/x).
+    expected = "file:" + os.path.abspath("/tmp/meeting.mp4")
+    assert source_key("/tmp/meeting.mp4") == expected
+    assert source_key("file:///tmp/meeting.mp4") == expected
 
 
 def test_empty_is_empty():
