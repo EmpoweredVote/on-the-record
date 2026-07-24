@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from src.models import Segment, Word
-from src.word_assign import assign_words_to_segments
+from src.word_assign import assign_words_to_segments, snap_segment_boundaries
 
 
 def _seg(seg_id, start, end, label):
     return Segment(segment_id=seg_id, start_time=start, end_time=end, speaker_label=label)
+
+
+def _tokens(seg):
+    return [w.word for w in seg.words]
 
 
 def test_assigns_word_by_midpoint_to_containing_segment():
@@ -110,3 +114,161 @@ def test_no_midpoint_match_falls_back_to_max_overlap_long_turn():
     owner = "A" if any(w.word == "spanning" for w in segs[0].words) else \
             ("B" if any(w.word == "spanning" for w in segs[1].words) else None)
     assert owner is not None  # not dropped
+
+
+# --- boundary-snap: fixes turn-boundary word bleed -------------------------
+
+def test_marker_leading_fragment_moves_to_previous_segment():
+    # The reported symptom: a moderator's sentence tail ("district.") is captured
+    # at the START of the next speaker's segment, right before the '>>' marker.
+    # Mirrors real seg 18/19 of the CD1 debate. "district." must move back.
+    a = _seg(0, 490.60, 597.52, "SPEAKER_03")
+    b = _seg(1, 597.52, 609.42, "SPEAKER_05")
+    a.words = [Word("this", 597.38, 597.50)]
+    b.words = [
+        Word("district.", 597.50, 597.63),   # trailing tail of A, bled into B
+        Word(">>", 598.18, 598.29),
+        Word("Ms.", 598.29, 598.39),
+        Word("Colon", 598.39, 598.50),
+        Word("Woods", 598.50, 598.61),
+    ]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == ["this", "district."]
+    assert _tokens(b) == [">>", "Ms.", "Colon", "Woods"]
+
+
+def test_marker_does_not_move_long_lead_before_late_marker():
+    # A full candidate turn that merely ENDS with ">> Okay." (real seg 45). The
+    # long lead is the candidate's own speech and must NOT be dragged backward.
+    a = _seg(0, 1200.0, 1300.0, "MODERATOR")
+    b = _seg(1, 1300.0, 1400.0, "CANDIDATE")
+    a.words = [Word("question?", 1299.5, 1300.0)]
+    lead = [Word(f"w{i}", 1300.0 + i * 0.1, 1300.0 + i * 0.1 + 0.09) for i in range(150)]
+    lead[-1] = Word("interests.", lead[-1].start, lead[-1].end)
+    b.words = lead + [Word(">>", 1399.0, 1399.1), Word("Okay.", 1399.1, 1399.4)]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == ["question?"]              # unchanged
+    assert _tokens(b)[0] == "w0"                     # lead stayed with B
+
+
+def test_marker_trailing_fragment_moves_to_next_segment():
+    # The next speaker's opening ("Thank") captured at the TAIL of a moderator
+    # turn after a late '>>' (real seg 6). It must move to the next segment.
+    a = _seg(0, 100.0, 126.0, "MODERATOR")
+    b = _seg(1, 126.24, 189.60, "CANDIDATE")
+    a.words = [
+        Word(">>", 100.0, 100.1),
+        Word("one", 100.1, 100.3),
+        Word("minute.", 125.4, 125.6),
+        Word(">>", 125.9, 126.0),
+        Word("Thank", 126.0, 126.2),
+    ]
+    b.words = [Word("you", 126.24, 126.4), Word("very", 126.4, 126.6)]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == [">>", "one", "minute."]
+    assert _tokens(b) == [">>", "Thank", "you", "very"]
+
+
+def test_pause_and_punctuation_move_bleed_word_without_marker():
+    # Whole-audio Whisper meetings carry no '>>'. Fall back to the acoustic
+    # signal: a terminal-punctuation word butted against A (gap≈0) with a real
+    # pause before B's own content groups with A.
+    a = _seg(0, 0.0, 5.0, "A")
+    b = _seg(1, 5.0, 12.0, "B")
+    a.words = [Word("in", 4.7, 4.9), Word("this", 4.9, 5.02)]
+    b.words = [
+        Word("district.", 5.02, 5.20),   # gap_before≈0.0, continuous with A
+        Word("So,", 5.95, 6.10),         # gap_after≈0.75 → real pause
+        Word("thank", 6.10, 6.30),
+    ]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == ["in", "this", "district."]
+    assert _tokens(b) == ["So,", "thank"]
+
+
+def test_no_move_when_word_is_own_sentence_after_turn_pause():
+    # A genuine short opener: "Yes." starts B after a real turn-change silence
+    # (gap_before is large, not near-zero). It must stay with B.
+    a = _seg(0, 0.0, 5.0, "A")
+    b = _seg(1, 5.5, 12.0, "B")
+    a.words = [Word("agree?", 4.7, 4.95)]
+    b.words = [
+        Word("Yes.", 5.55, 5.75),   # gap_before≈0.6 (turn silence) → B's own word
+        Word("So", 6.30, 6.45),
+        Word("here", 6.45, 6.65),
+    ]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == ["agree?"]
+    assert _tokens(b) == ["Yes.", "So", "here"]
+
+
+def test_snap_never_empties_a_segment():
+    # A one-word segment that looks like a leading fragment must not be emptied.
+    a = _seg(0, 0.0, 5.0, "A")
+    b = _seg(1, 5.0, 6.0, "B")
+    a.words = [Word("this", 4.8, 5.0)]
+    b.words = [Word("done.", 5.0, 5.2)]   # single terminal word, no following word
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(b) == ["done."]   # kept — moving it would empty B
+
+
+def test_pause_rule_does_not_steal_vote_from_overlapping_turn():
+    # Real council roll-call shape: the clerk's diarized span (long) OVERLAPS a
+    # member's brief "Yes." turn, so the clerk's last word ends AFTER the
+    # member's word starts (negative gap_before). That is not a bleed — the
+    # member's vote must stay with the member, not be handed to the clerk.
+    clerk = _seg(0, 122.78, 132.26, "CLERK")
+    member = _seg(1, 123.12, 125.23, "MEMBER")
+    clerk.words = [Word("Ready?", 122.78, 123.26), Word("Piedmont", 131.9, 132.2)]
+    member.words = [
+        Word("Yes.", 123.12, 123.90),      # the member's vote
+        Word("Stasberg?", 124.26, 124.70),
+        Word("Yes.", 124.94, 125.00),
+    ]
+
+    snap_segment_boundaries([clerk, member])
+
+    assert _tokens(member)[0] == "Yes."           # vote stays with the member
+    assert "Yes." not in _tokens(clerk)[1:]        # clerk did not steal it
+
+
+def test_snap_is_idempotent_across_degenerate_segments():
+    # Real shape from an interview: an under-segmented turn with several mid-turn
+    # '>>' markers, next to a turn whose word timestamps run past its own span. A
+    # single left-to-right pass relays a trailing '>> Yes.' fragment but does not
+    # settle — a second pass moves it again. Snapping must reach a fixpoint, so
+    # snapping twice equals snapping once.
+    s12 = _seg(12, 198.667, 201.113, "S0")
+    s12.words = [Word(">>", 198.833, 199.01), Word("it.", 199.893, 200.07),
+                 Word("step.", 201.281, 201.39)]
+    s13 = _seg(13, 201.113, 206.952, "S6")
+    s13.words = [
+        Word(">>", 201.856, 201.947), Word("happen.", 204.698, 204.771),
+        Word("okay,", 204.844, 204.917), Word("so", 204.917, 204.99),
+        Word(">>", 205.287, 205.334), Word("I", 205.334, 205.382),
+        Word("agree.", 205.382, 205.43), Word(">>", 205.727, 205.823),
+        Word("it.", 206.014, 206.11), Word(">>", 206.353, 206.412),
+        Word("Yes.", 206.412, 206.47),
+    ]
+    s14 = _seg(14, 203.645, 205.467, "S0")
+    s14.words = [Word(">>", 206.842, 207.023)]
+    segs = [s12, s13, s14]
+
+    snap_segment_boundaries(segs)
+    once = [_tokens(s) for s in segs]
+    snap_segment_boundaries(segs)
+    twice = [_tokens(s) for s in segs]
+
+    assert once == twice
