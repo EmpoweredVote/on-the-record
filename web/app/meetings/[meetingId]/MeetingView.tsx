@@ -12,6 +12,7 @@ import type { Meeting, Segment, SummarySection, Vote } from "@/lib/types";
 import type { PlayerAdapter } from "./players/adapter";
 import YouTubePlayer from "./players/YouTubePlayer";
 import FilePlayer from "./players/FilePlayer";
+import AudioPlayer from "./players/AudioPlayer";
 import { formatTime } from "@/lib/format";
 import ProvenanceBadge, { speakerStatus } from "@/components/ProvenanceBadge";
 
@@ -183,6 +184,12 @@ export default function MeetingView({
       <FilePlayer
         src={meeting.playback_url}
         kind={meeting.playback_kind}
+        onAdapter={onAdapter}
+      />
+    ) : meeting.playback_kind === "audio" && meeting.playback_url ? (
+      <AudioPlayer
+        src={meeting.playback_url}
+        thumbnailUrl={meeting.thumbnail_url}
         onAdapter={onAdapter}
       />
     ) : null;

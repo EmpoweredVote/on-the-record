@@ -507,6 +507,27 @@ a {
   display: block;
 }
 
+.audioBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.audioArt {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: block;
+}
+
+.audioBox audio {
+  width: 100%;
+}
+
 .noPlayer {
   aspect-ratio: 16 / 9;
   display: flex;

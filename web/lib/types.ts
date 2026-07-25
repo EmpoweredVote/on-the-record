@@ -20,7 +20,7 @@ export interface Meeting {
   meeting_type: string;
   meeting_date: string;     // YYYY-MM-DD
   source_url: string | null;
-  playback_kind: "youtube" | "file" | "hls" | null;
+  playback_kind: "youtube" | "file" | "hls" | "audio" | null;
   playback_url: string | null;  // video_url from ev-accounts (resolved: YT id, file URL, etc.)
   duration_seconds: number | null;
   clip_start_seconds: number | null;
