@@ -25,3 +25,33 @@ def test_lists_only_dirs_with_source_and_no_thumbnail(tmp_path: Path):
 
 def test_empty_when_dir_missing(tmp_path: Path):
     assert meetings_needing_thumbnail(tmp_path / "nope") == []
+
+
+import json
+
+
+def _mk_hls(mdir: Path, *, m3u8=True, thumb=False):
+    mdir.mkdir(parents=True)
+    if thumb:
+        (mdir / "thumbnail.jpg").write_bytes(b"x")
+    src = "https://cdn/east/x/manifest.m3u8" if m3u8 else "https://cdn/x/audio.mp3"
+    (mdir / "transcript_named.json").write_text(
+        json.dumps({"processing_metadata": {"source_audio_url": src}}),
+        encoding="utf-8",
+    )
+
+
+def test_includes_hls_source_meetings(tmp_path: Path):
+    _mk_hls(tmp_path / "house")                    # HLS, no video, no thumb -> included
+    out = meetings_needing_thumbnail(tmp_path)
+    assert out == [tmp_path / "house"]
+
+
+def test_skips_hls_meeting_that_has_thumbnail(tmp_path: Path):
+    _mk_hls(tmp_path / "house", thumb=True)        # already has thumb -> skipped
+    assert meetings_needing_thumbnail(tmp_path) == []
+
+
+def test_skips_non_hls_audio_only_meeting(tmp_path: Path):
+    _mk_hls(tmp_path / "podcast", m3u8=False)      # audio.mp3 source, no video -> skipped
+    assert meetings_needing_thumbnail(tmp_path) == []
