@@ -15,10 +15,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from src import config
 from src.thumbnail import attach_thumbnail, find_video_file
+
+
+def _has_streamable_hls(mdir: Path) -> bool:
+    """True when the meeting's source is an HLS .m3u8 (House Clerk) — ffmpeg can
+    extract a frame from it even though there's no local video file on disk."""
+    named = mdir / "transcript_named.json"
+    if not named.exists():
+        return False
+    try:
+        d = json.loads(named.read_text(encoding="utf-8"))
+        url = (d.get("processing_metadata") or {}).get("source_audio_url") or ""
+    except (ValueError, OSError, TypeError, AttributeError):
+        return False
+    return url.split("?", 1)[0].lower().endswith(".m3u8")
 
 
 def meetings_needing_thumbnail(meetings_dir: Path) -> list[Path]:
@@ -29,7 +44,7 @@ def meetings_needing_thumbnail(meetings_dir: Path) -> list[Path]:
     for mdir in sorted(p for p in meetings_dir.iterdir() if p.is_dir()):
         if (mdir / "thumbnail.jpg").exists():
             continue
-        if find_video_file(mdir, ""):
+        if find_video_file(mdir, "") or _has_streamable_hls(mdir):
             out.append(mdir)
     return out
 
@@ -70,7 +85,14 @@ def backfill(*, dry_run: bool = False) -> int:
         if dry_run:
             print(f"  [dry-run] would backfill {meeting_id}")
             continue
-        attach_thumbnail(_meeting_for(meeting_id), mdir)
+        meeting = _meeting_for(meeting_id)
+        attach_thumbnail(meeting, mdir)
+        if getattr(meeting, "thumbnail_url", None) and hasattr(meeting, "to_dict"):
+            from gui.review_api import _atomic_write_text
+            _atomic_write_text(
+                mdir / "transcript_named.json",
+                json.dumps(meeting.to_dict(), indent=2),
+            )
         if (mdir / "thumbnail.jpg").exists():
             made += 1
             print(f"  OK   {meeting_id}")

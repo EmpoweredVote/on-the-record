@@ -149,3 +149,68 @@ def test_attach_thumbnail_uses_artwork_when_no_video(tmp_path, monkeypatch):
     m = _M()
     th.attach_thumbnail(m, tmp_path)
     assert m.thumbnail_url == "https://bucket/thumb.jpg"
+
+
+# --- HLS (House Clerk) thumbnail source ---
+from src.thumbnail import streamable_video_url
+
+
+class _HlsMeeting:
+    def __init__(self, m3u8, meeting_dir):
+        self.audio_source = "https://live.house.gov/?date=2026-07-16"
+        self.clip_start_seconds = None
+        self.duration_seconds = 12240.0
+        self.meeting_id = "2026-07-16-house-floor"
+        self.thumbnail_url = None
+        class _PM:
+            source_audio_url = m3u8
+            source_image_url = None
+        self.processing_metadata = _PM()
+
+
+def test_streamable_video_url_returns_m3u8():
+    m = _HlsMeeting("https://cdn/east/x/manifest.m3u8", ".")
+    assert streamable_video_url(m) == "https://cdn/east/x/manifest.m3u8"
+
+
+def test_streamable_video_url_handles_query_string():
+    m = _HlsMeeting("https://cdn/x/manifest.m3u8?token=abc", ".")
+    assert streamable_video_url(m) == "https://cdn/x/manifest.m3u8?token=abc"
+
+
+def test_streamable_video_url_none_for_non_hls():
+    m = _HlsMeeting("https://cdn/x/audio.mp3", ".")
+    assert streamable_video_url(m) is None
+
+
+def test_streamable_video_url_none_when_no_processing_metadata():
+    class _Bare:
+        pass
+    assert streamable_video_url(_Bare()) is None
+
+
+def test_attach_thumbnail_uses_hls_when_no_local_video(tmp_path, monkeypatch):
+    import src.thumbnail as th
+    captured = {}
+    monkeypatch.setattr(th, "find_video_file", lambda d, s: None)
+    monkeypatch.setattr(th, "extract_thumbnail",
+                        lambda vp, cs, cd, out: captured.setdefault("vp", vp) or out)
+    monkeypatch.setattr("src.storage.upload_thumbnail",
+                        lambda jpg, mid: "https://bucket/thumb.jpg")
+    m = _HlsMeeting("https://cdn/east/x/manifest.m3u8", tmp_path)
+    th.attach_thumbnail(m, tmp_path)
+    assert captured["vp"] == "https://cdn/east/x/manifest.m3u8"
+    assert m.thumbnail_url == "https://bucket/thumb.jpg"
+
+
+def test_attach_thumbnail_prefers_local_video_over_hls(tmp_path, monkeypatch):
+    import src.thumbnail as th
+    (tmp_path / "source.webm").write_bytes(b"x")
+    captured = {}
+    monkeypatch.setattr(th, "extract_thumbnail",
+                        lambda vp, cs, cd, out: captured.setdefault("vp", vp) or out)
+    monkeypatch.setattr("src.storage.upload_thumbnail",
+                        lambda jpg, mid: "https://bucket/thumb.jpg")
+    m = _HlsMeeting("https://cdn/east/x/manifest.m3u8", tmp_path)
+    th.attach_thumbnail(m, tmp_path)
+    assert captured["vp"] == str(tmp_path / "source.webm")   # local wins over HLS

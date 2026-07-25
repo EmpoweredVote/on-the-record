@@ -107,6 +107,18 @@ def find_video_file(meeting_dir: Path, original_input: str) -> Optional[str]:
     return None
 
 
+def streamable_video_url(meeting) -> Optional[str]:
+    """A remote video URL ffmpeg can pull a frame from when no local video file
+    exists — currently the House Clerk HLS manifest stored as source_audio_url.
+    Returns the URL for an .m3u8 source, else None.
+    """
+    pm = getattr(meeting, "processing_metadata", None)
+    url = getattr(pm, "source_audio_url", None) if pm else None
+    if url and url.split("?", 1)[0].lower().endswith(".m3u8"):
+        return url
+    return None
+
+
 def attach_thumbnail(meeting, meeting_dir) -> None:
     """Best-effort: extract a frame from the kept section, upload it, and set
     ``meeting.thumbnail_url``. Never raises — a thumbnail must not break
@@ -117,6 +129,10 @@ def attach_thumbnail(meeting, meeting_dir) -> None:
 
         video_path = find_video_file(meeting_dir, meeting.audio_source)
         out = Path(meeting_dir) / "thumbnail.jpg"
+        if not video_path:
+            # No local file, but a streamable HLS video (House Clerk): ffmpeg can
+            # pull a frame straight from the .m3u8 manifest.
+            video_path = streamable_video_url(meeting)
         if not video_path:
             # Audio-only source: use the resolver-provided artwork, if any.
             processing_metadata = getattr(meeting, "processing_metadata", None)
