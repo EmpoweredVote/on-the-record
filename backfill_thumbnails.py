@@ -30,9 +30,9 @@ def _has_streamable_hls(mdir: Path) -> bool:
         return False
     try:
         d = json.loads(named.read_text(encoding="utf-8"))
-    except (ValueError, OSError):
+        url = (d.get("processing_metadata") or {}).get("source_audio_url") or ""
+    except (ValueError, OSError, TypeError, AttributeError):
         return False
-    url = (d.get("processing_metadata") or {}).get("source_audio_url") or ""
     return url.split("?", 1)[0].lower().endswith(".m3u8")
 
 
