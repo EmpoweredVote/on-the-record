@@ -571,7 +571,9 @@ def build_agenda_item_rows(meeting_uuid: str, items) -> list[tuple]:
 
 def _replace_agenda_items(cur, meeting_uuid: str, items) -> int:
     """Delete-then-insert, like _replace_votes. Caller must have verified the
-    meeting is NOT status='published' (the video pass owns items after that)."""
+    meeting is NOT status='published' (the video pass owns items after that).
+    Duplicate positions abort the publish via the UNIQUE (meeting_id, position)
+    constraint — fail-loud by design."""
     cur.execute(
         "DELETE FROM meetings.agenda_items WHERE meeting_id = %s", (meeting_uuid,)
     )
