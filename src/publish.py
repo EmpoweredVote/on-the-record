@@ -539,6 +539,117 @@ def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
     return len(rows)
 
 
+def scheduled_slug(body, date: str) -> str:
+    """Slug for an agenda-published (Pass A) meeting: '{body.slug}-{date}'.
+
+    This is the join key the video pass must reuse so its upsert flips this
+    row to published instead of creating a duplicate."""
+    return f"{body.slug}-{date}"
+
+
+# Column order matches the INSERT in _replace_agenda_items below.
+def build_agenda_item_rows(meeting_uuid: str, items) -> list[tuple]:
+    rows = []
+    for it in items:
+        rows.append((
+            meeting_uuid,
+            it.position,
+            it.item_number,
+            it.title_raw,
+            it.kind,
+            it.legislation_ref,
+            it.summary_plain,
+            it.decision_plain,
+            it.stage,
+            it.public_comment,
+            it.public_comment_note,
+            it.source_url,
+            "upcoming",
+        ))
+    return rows
+
+
+def _replace_agenda_items(cur, meeting_uuid: str, items) -> int:
+    """Delete-then-insert, like _replace_votes. Caller must have verified the
+    meeting is NOT status='published' (the video pass owns items after that)."""
+    cur.execute(
+        "DELETE FROM meetings.agenda_items WHERE meeting_id = %s", (meeting_uuid,)
+    )
+    rows = build_agenda_item_rows(meeting_uuid, items)
+    if rows:
+        psycopg2.extras.execute_values(
+            cur,
+            """
+            INSERT INTO meetings.agenda_items
+              (meeting_id, position, item_number, title_raw, kind,
+               legislation_ref, summary_plain, decision_plain, stage,
+               public_comment, public_comment_note, source_url, status)
+            VALUES %s
+            """,
+            rows,
+        )
+    return len(rows)
+
+
+def publish_scheduled_meeting(body, date: str, title: str, starts_at: str,
+                              source_url: str, items) -> Optional[str]:
+    """Publish a future meeting + its agenda items (Pass A).
+
+    Returns the meeting slug on success, None when skipped because the row is
+    already published (video pass owns it). Idempotent: re-polls re-run this
+    and delete-then-insert refreshes the items (agenda revisions/addenda).
+    """
+    date = _validate_date(date)
+    slug = scheduled_slug(body, date)
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, status FROM meetings.meetings WHERE slug = %s",
+                    (slug,),
+                )
+                row = cur.fetchone()
+                if row and row[1] == "published":
+                    return None
+                if row:
+                    meeting_uuid = row[0]
+                    cur.execute(
+                        """
+                        UPDATE meetings.meetings SET
+                          title = %s,
+                          starts_at = %s,
+                          timezone = %s,
+                          source_url = %s,
+                          updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (title, starts_at, body.timezone, source_url, meeting_uuid),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO meetings.meetings
+                          (id, city, state, date, meeting_type, title, event_kind,
+                           status, slug, source_url, starts_at, timezone,
+                           created_at, updated_at)
+                        VALUES
+                          (gen_random_uuid(), %s, %s, %s, %s, %s, %s,
+                           'scheduled', %s, %s, %s, %s,
+                           NOW(), NOW())
+                        RETURNING id
+                        """,
+                        (body.city, body.state, date, body.meeting_type, title,
+                         body.event_kind, slug, source_url, starts_at,
+                         body.timezone),
+                    )
+                    meeting_uuid = cur.fetchone()[0]
+                _replace_agenda_items(cur, meeting_uuid, items)
+    finally:
+        conn.close()
+    return slug
+
+
 def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
     """Delete-then-insert meeting_topics rows from meeting.section_topics.
 
