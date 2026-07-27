@@ -137,7 +137,10 @@ def main() -> int:
                 items=items,
             )
             if published is None:
-                print(f"  SKIP {w.slug}: already published (video pass owns it)")
+                # Video pass owns the items now; record the marker so future
+                # polls don't re-download/re-interpret this agenda.
+                state.record(w.slug, meeting.agenda_updated_marker)
+                print(f"  SKIP {w.slug}: already published (video pass owns it; marker recorded)")
             else:
                 print(f"  PUBLISHED {published}: {len(items)} agenda item(s)")
                 state.record(w.slug, meeting.agenda_updated_marker)
