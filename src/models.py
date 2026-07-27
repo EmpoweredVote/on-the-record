@@ -291,6 +291,64 @@ class FloorVote:
 
 
 @dataclass
+class AgendaItem:
+    """One agenda item published pre-meeting (Pass A of the Bloomington
+    item-centric coverage design). segment bounds/outcome stay None until the
+    post-meeting alignment pass (Pass B) fills them."""
+
+    position: int
+    item_number: str
+    title_raw: str
+    kind: str
+    source_url: str
+    legislation_ref: Optional[str] = None
+    summary_plain: Optional[str] = None
+    decision_plain: Optional[str] = None
+    stage: Optional[str] = None
+    public_comment: bool = False
+    public_comment_note: Optional[str] = None
+    outcome: Optional[str] = None
+    segment_start_seconds: Optional[float] = None
+    segment_end_seconds: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        d = {
+            "position": self.position,
+            "item_number": self.item_number,
+            "title_raw": self.title_raw,
+            "kind": self.kind,
+            "source_url": self.source_url,
+            "public_comment": self.public_comment,
+        }
+        for key in ("legislation_ref", "summary_plain", "decision_plain",
+                    "stage", "public_comment_note", "outcome",
+                    "segment_start_seconds", "segment_end_seconds"):
+            value = getattr(self, key)
+            if value is not None:
+                d[key] = value
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "AgendaItem":
+        return cls(
+            position=d["position"],
+            item_number=d["item_number"],
+            title_raw=d["title_raw"],
+            kind=d["kind"],
+            source_url=d["source_url"],
+            public_comment=d.get("public_comment", False),
+            legislation_ref=d.get("legislation_ref"),
+            summary_plain=d.get("summary_plain"),
+            decision_plain=d.get("decision_plain"),
+            stage=d.get("stage"),
+            public_comment_note=d.get("public_comment_note"),
+            outcome=d.get("outcome"),
+            segment_start_seconds=d.get("segment_start_seconds"),
+            segment_end_seconds=d.get("segment_end_seconds"),
+        )
+
+
+@dataclass
 class Meeting:
     meeting_id: str
     city: Optional[str]

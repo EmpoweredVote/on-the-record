@@ -137,3 +137,48 @@ def test_processing_metadata_roundtrips_source_audio_url():
     assert d["source_audio_url"] == "https://cdn/ep.mp3"
     assert ProcessingMetadata.from_dict(d).source_audio_url == "https://cdn/ep.mp3"
     assert "source_audio_url" not in ProcessingMetadata().to_dict()
+
+
+def test_agenda_item_roundtrip():
+    from src.models import AgendaItem
+
+    item = AgendaItem(
+        position=9,
+        item_number="7B",
+        title_raw="Resolution 2026-14 - Approval of Amended Legal Representation Agreement",
+        kind="resolution",
+        source_url="https://app.onboardmeetings.com/agenda.pdf",
+        legislation_ref="Resolution 2026-14",
+        summary_plain="Approves an amended legal agreement.",
+        decision_plain="Whether to approve the agreement.",
+        stage="Second reading — final vote",
+        public_comment=True,
+        public_comment_note="Public comment is taken before the vote.",
+        outcome="Adopted 8-0",
+        segment_start_seconds=1234.5,
+        segment_end_seconds=1900.0,
+    )
+    assert AgendaItem.from_dict(item.to_dict()) == item
+
+
+def test_agenda_item_to_dict_omits_none_fields():
+    from src.models import AgendaItem
+
+    item = AgendaItem(
+        position=1,
+        item_number="1",
+        title_raw="Roll Call",
+        kind="procedural",
+        source_url="https://app.onboardmeetings.com/agenda.pdf",
+    )
+    d = item.to_dict()
+    assert d == {
+        "position": 1,
+        "item_number": "1",
+        "title_raw": "Roll Call",
+        "kind": "procedural",
+        "source_url": "https://app.onboardmeetings.com/agenda.pdf",
+        "public_comment": False,
+    }
+    # Round-trips even with all optionals absent.
+    assert AgendaItem.from_dict(d) == item
