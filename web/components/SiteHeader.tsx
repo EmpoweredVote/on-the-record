@@ -96,7 +96,7 @@ export default function SiteHeader() {
   return (
     <Header
       logoSrc="/EVLogo.svg"
-      navItems={[]}
+      navItems={[{ label: "Upcoming", href: "/upcoming" }]}
       darkMode={isDark}
       secondaryAction={<DarkToggle isDark={isDark} onToggle={toggle} />}
       profileMenu={{
