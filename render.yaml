@@ -21,3 +21,6 @@ services:
       - type: rewrite
         source: /topics/*
         destination: /topics/view/index.html
+      - type: rewrite
+        source: /items/*
+        destination: /items/view/index.html

@@ -2020,3 +2020,68 @@ a.skimTs:hover {
   margin-top: 0.6rem;
   font-size: 0.85rem;
 }
+
+/* ===== Agenda item page ===== */
+.itemPage {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+.itemBadge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  margin-bottom: 0.5rem;
+}
+.itemBadge-upcoming {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.itemBadge-happened {
+  background: var(--inform-soft);
+  color: var(--inform);
+}
+.itemTitleRaw {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+.itemSection {
+  margin-top: 1.5rem;
+}
+.itemSection h2 {
+  font-size: 1rem;
+  margin: 0 0 0.4rem;
+}
+.itemStage {
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+.itemCommentYes {
+  color: var(--inform);
+  margin: 0;
+}
+.itemCommentNo {
+  color: var(--muted);
+  margin: 0;
+}
+.itemOutcome {
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+.itemSeekLink {
+  display: inline-block;
+  margin-top: 0.4rem;
+}
+.itemMeta {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.itemMeta p {
+  margin: 0 0 0.3rem;
+}
