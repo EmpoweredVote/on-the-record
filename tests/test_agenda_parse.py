@@ -21,6 +21,21 @@ def test_real_fixture_positions_strictly_increasing_from_1():
     assert [i.position for i in items] == list(range(1, len(items) + 1))
 
 
+def test_real_fixture_full_item_number_sequence():
+    # Template-drift tripwire: pin the exact item sequence of the real agenda.
+    items = _real_items()
+    assert [i.item_number for i in items] == [
+        "1", "2",
+        "3A", "3B", "3C", "3D", "3E",
+        "4A", "4B", "4C", "4D",
+        "5A",
+        "6A", "6B",
+        "7A", "7B",
+        "8", "9", "10",
+    ]
+    assert len(items) == 19
+
+
 def test_real_fixture_6a_wrapped_title_and_ref():
     items = _real_items()
     by_number = {i.item_number: i for i in items}
@@ -100,7 +115,7 @@ def test_synthetic_template_full_shape():
     assert by_number["6A"].legislation_ref == "Ordinance 2026-16"
     assert by_number["6A"].sponsor == "CM Piedmont-Smith"
     assert by_number["7A"].legislation_ref == "Resolution 2026-14"
-    assert by_number["7B" if "7B" in by_number else "7A"].sponsor == "CM Rosenbarger"
+    assert by_number["7A"].sponsor == "CM Rosenbarger"
     assert by_number["1"].section == "Roll Call"
     assert [i.position for i in items] == list(range(1, len(items) + 1))
 
