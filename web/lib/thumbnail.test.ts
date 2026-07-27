@@ -24,6 +24,9 @@ const base: Meeting = {
   event_orgs: [],
   source_title: null,
   thumbnail_url: null,
+  status: "published",
+  starts_at: null,
+  timezone: null,
 };
 
 describe("youtubeThumbnailUrl", () => {

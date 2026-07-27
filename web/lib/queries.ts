@@ -1,4 +1,6 @@
 import type {
+  AgendaItem,
+  AgendaItemDetail,
   Appearance,
   EventKind,
   Meeting,
@@ -43,6 +45,9 @@ function mapMeeting(m: any): Meeting {
     source_title: m.processingMetadata?.sourceTitle ?? null,
     thumbnail_url: m.thumbnailUrl ?? null,
     speaker_count: m.speakerCount ?? null,
+    status: m.status ?? "published",
+    starts_at: m.startsAt ?? null,
+    timezone: m.timezone ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     speakers: ((m.speakers ?? []) as any[]).map((sp): MeetingSpeaker => ({
       label: sp.label,
@@ -137,6 +142,73 @@ function mapAppearance(a: any): Appearance {
       end_time: s.endTime,
       text: s.text,
     })),
+  };
+}
+
+// Exported for tests.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mapAgendaItem(a: any): AgendaItem {
+  return {
+    id: a.id,
+    meeting_id: a.meetingId,
+    position: a.position ?? 0,
+    item_number: a.itemNumber,
+    title_raw: a.titleRaw,
+    kind: a.kind,
+    legislation_ref: a.legislationRef ?? null,
+    summary_plain: a.summaryPlain ?? null,
+    decision_plain: a.decisionPlain ?? null,
+    stage: a.stage ?? null,
+    public_comment: a.publicComment ?? false,
+    public_comment_note: a.publicCommentNote ?? null,
+    status: a.status === "happened" ? "happened" : "upcoming",
+    outcome: a.outcome ?? null,
+    segment_start_seconds: a.segmentStartSeconds ?? null,
+    segment_end_seconds: a.segmentEndSeconds ?? null,
+    continued_from_item_id: a.continuedFromItemId ?? null,
+    source_url: a.sourceUrl,
+  };
+}
+
+export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
+  if (!base()) return [];
+  const res = await fetch(`${base()}/api/meetings/upcoming`, FETCH_INIT);
+  if (!res.ok) throw new Error(`upcoming meetings fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (data as unknown[]).map(mapMeeting);
+}
+
+export async function fetchAgendaItems(meetingId: string): Promise<AgendaItem[]> {
+  if (!base()) return [];
+  const res = await fetch(
+    `${base()}/api/meetings/${encodeURIComponent(meetingId)}/agenda-items`,
+    FETCH_INIT
+  );
+  if (!res.ok) throw new Error(`agenda items fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (data as unknown[]).map(mapAgendaItem);
+}
+
+export async function fetchAgendaItem(itemId: string): Promise<AgendaItemDetail | null> {
+  if (!base()) return null;
+  const res = await fetch(
+    `${base()}/api/agenda-items/${encodeURIComponent(itemId)}`,
+    FETCH_INIT
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`agenda item fetch failed: ${res.status}`);
+  const a = await res.json();
+  return {
+    ...mapAgendaItem(a),
+    meeting: {
+      id: a.meeting?.id,
+      title: a.meeting?.title ?? null,
+      date: a.meeting?.date,
+      city: a.meeting?.city ?? null,
+      status: a.meeting?.status ?? "published",
+      starts_at: a.meeting?.startsAt ?? null,
+      timezone: a.meeting?.timezone ?? null,
+    },
   };
 }
 

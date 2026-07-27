@@ -31,6 +31,9 @@ export interface Meeting {
   event_orgs: string[];         // hosting/producing organizations; may be empty
   source_title: string | null;  // title from yt-dlp metadata; used as title fallback
   thumbnail_url: string | null;  // extracted-frame thumbnail (Supabase Storage)
+  status: string;               // "published" | "upcoming" | ... (defaults to "published")
+  starts_at: string | null;     // ISO UTC start time (upcoming meetings)
+  timezone: string | null;      // IANA timezone (e.g. "America/Indiana/Indianapolis")
 }
 
 export interface Segment {
@@ -193,4 +196,37 @@ export interface Candidate {
   note: string;               // editor rationale: why selected + what was edited & why (required before publish export)
   starred: boolean;           // the one live pick for its label
   created_at: number;         // epoch ms
+}
+
+export interface AgendaItem {
+  id: string;
+  meeting_id: string;
+  position: number;
+  item_number: string;
+  title_raw: string;
+  kind: string;
+  legislation_ref: string | null;
+  summary_plain: string | null;
+  decision_plain: string | null;
+  stage: string | null;
+  public_comment: boolean;
+  public_comment_note: string | null;
+  status: "upcoming" | "happened";
+  outcome: string | null;
+  segment_start_seconds: number | null;
+  segment_end_seconds: number | null;
+  continued_from_item_id: string | null;
+  source_url: string;
+}
+
+export interface AgendaItemDetail extends AgendaItem {
+  meeting: {
+    id: string;
+    title: string | null;
+    date: string;
+    city: string | null;
+    status: string;
+    starts_at: string | null;
+    timezone: string | null;
+  };
 }

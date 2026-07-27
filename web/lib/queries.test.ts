@@ -69,4 +69,160 @@ describe("queries data layer", () => {
     const { fetchVotes } = await load();
     expect(await fetchVotes("m1")).toEqual([]);
   });
+
+  it("mapAgendaItem maps a full camelCase payload to snake_case", async () => {
+    const { mapAgendaItem } = await load();
+    const out = mapAgendaItem({
+      id: "ai1",
+      meetingId: "m1",
+      position: 13,
+      itemNumber: "13",
+      titleRaw: "Ordinance 2026-16 — To Amend Title 20 (Unified Development Ordinance)",
+      kind: "legislation",
+      legislationRef: "Ordinance 2026-16",
+      summaryPlain: "Changes zoning rules for duplexes.",
+      decisionPlain: "Whether to adopt the ordinance.",
+      stage: "second reading",
+      publicComment: true,
+      publicCommentNote: "Comment limited to 3 minutes.",
+      status: "happened",
+      outcome: "adopted 7-2",
+      segmentStartSeconds: 1234.5,
+      segmentEndSeconds: 2345.6,
+      continuedFromItemId: "ai0",
+      sourceUrl: "https://bloomington.in.gov/agenda.pdf",
+    });
+    expect(out).toEqual({
+      id: "ai1",
+      meeting_id: "m1",
+      position: 13,
+      item_number: "13",
+      title_raw: "Ordinance 2026-16 — To Amend Title 20 (Unified Development Ordinance)",
+      kind: "legislation",
+      legislation_ref: "Ordinance 2026-16",
+      summary_plain: "Changes zoning rules for duplexes.",
+      decision_plain: "Whether to adopt the ordinance.",
+      stage: "second reading",
+      public_comment: true,
+      public_comment_note: "Comment limited to 3 minutes.",
+      status: "happened",
+      outcome: "adopted 7-2",
+      segment_start_seconds: 1234.5,
+      segment_end_seconds: 2345.6,
+      continued_from_item_id: "ai0",
+      source_url: "https://bloomington.in.gov/agenda.pdf",
+    });
+  });
+
+  it("mapAgendaItem defaults missing nullables and narrows status", async () => {
+    const { mapAgendaItem } = await load();
+    const out = mapAgendaItem({
+      id: "ai2",
+      meetingId: "m1",
+      itemNumber: "1",
+      titleRaw: "Roll Call",
+      kind: "procedural",
+      sourceUrl: "https://bloomington.in.gov/agenda.pdf",
+    });
+    expect(out.position).toBe(0);
+    expect(out.legislation_ref).toBeNull();
+    expect(out.summary_plain).toBeNull();
+    expect(out.decision_plain).toBeNull();
+    expect(out.stage).toBeNull();
+    expect(out.public_comment).toBe(false);
+    expect(out.public_comment_note).toBeNull();
+    expect(out.status).toBe("upcoming");
+    expect(out.outcome).toBeNull();
+    expect(out.segment_start_seconds).toBeNull();
+    expect(out.segment_end_seconds).toBeNull();
+    expect(out.continued_from_item_id).toBeNull();
+  });
+
+  it("fetchUpcomingMeetings returns [] when the API base is unset", async () => {
+    vi.stubEnv("NEXT_PUBLIC_EV_ACCOUNTS_URL", "");
+    vi.resetModules();
+    const { fetchUpcomingMeetings } = await import("./queries");
+    expect(await fetchUpcomingMeetings()).toEqual([]);
+  });
+
+  it("fetchUpcomingMeetings hits the upcoming API and maps results", async () => {
+    const f = mockFetch(200, [
+      { id: "m9", date: "2026-08-05", meetingType: "Regular Session",
+        status: "upcoming", startsAt: "2026-08-06T00:30:00Z", timezone: "America/Indiana/Indianapolis" },
+    ]);
+    vi.stubGlobal("fetch", f);
+    const { fetchUpcomingMeetings } = await load();
+    const out = await fetchUpcomingMeetings();
+    const [url, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe(`${API}/api/meetings/upcoming`);
+    expect((init as RequestInit).cache).toBe("no-store");
+    expect(out).toHaveLength(1);
+    expect(out[0].meeting_id).toBe("m9");
+    expect(out[0].status).toBe("upcoming");
+    expect(out[0].starts_at).toBe("2026-08-06T00:30:00Z");
+    expect(out[0].timezone).toBe("America/Indiana/Indianapolis");
+  });
+
+  it("mapMeeting carries status/starts_at/timezone and defaults status to published", async () => {
+    vi.stubGlobal("fetch", mockFetch(200, [
+      { id: "m1", date: "2026-01-01", meetingType: "X" },
+      { id: "m2", date: "2026-08-05", meetingType: "Y",
+        status: "upcoming", startsAt: "2026-08-06T00:30:00Z", timezone: "America/Chicago" },
+    ]));
+    const { fetchMeetings } = await load();
+    const out = await fetchMeetings();
+    expect(out[0].status).toBe("published");
+    expect(out[0].starts_at).toBeNull();
+    expect(out[0].timezone).toBeNull();
+    expect(out[1].status).toBe("upcoming");
+    expect(out[1].starts_at).toBe("2026-08-06T00:30:00Z");
+    expect(out[1].timezone).toBe("America/Chicago");
+  });
+
+  it("fetchAgendaItems hits the meeting items API and maps results", async () => {
+    const f = mockFetch(200, [
+      { id: "ai1", meetingId: "m 1", position: 1, itemNumber: "1",
+        titleRaw: "Roll Call", kind: "procedural", status: "upcoming",
+        sourceUrl: "https://example.gov/a.pdf" },
+    ]);
+    vi.stubGlobal("fetch", f);
+    const { fetchAgendaItems } = await load();
+    const out = await fetchAgendaItems("m 1");
+    const [url] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe(`${API}/api/meetings/m%201/agenda-items`);
+    expect(out).toHaveLength(1);
+    expect(out[0].meeting_id).toBe("m 1");
+    expect(out[0].title_raw).toBe("Roll Call");
+  });
+
+  it("fetchAgendaItem returns the detail with embedded meeting", async () => {
+    const f = mockFetch(200, {
+      id: "ai1", meetingId: "m1", position: 13, itemNumber: "13",
+      titleRaw: "Ordinance 2026-16", kind: "legislation", status: "upcoming",
+      sourceUrl: "https://example.gov/a.pdf",
+      meeting: {
+        id: "m1", title: "Common Council Regular Session", date: "2026-08-05",
+        city: "Bloomington", status: "upcoming",
+        startsAt: "2026-08-06T00:30:00Z", timezone: "America/Indiana/Indianapolis",
+      },
+    });
+    vi.stubGlobal("fetch", f);
+    const { fetchAgendaItem } = await load();
+    const out = await fetchAgendaItem("ai1");
+    const [url] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe(`${API}/api/agenda-items/ai1`);
+    expect(out?.id).toBe("ai1");
+    expect(out?.title_raw).toBe("Ordinance 2026-16");
+    expect(out?.meeting).toEqual({
+      id: "m1", title: "Common Council Regular Session", date: "2026-08-05",
+      city: "Bloomington", status: "upcoming",
+      starts_at: "2026-08-06T00:30:00Z", timezone: "America/Indiana/Indianapolis",
+    });
+  });
+
+  it("fetchAgendaItem returns null on 404", async () => {
+    vi.stubGlobal("fetch", mockFetch(404, {}));
+    const { fetchAgendaItem } = await load();
+    expect(await fetchAgendaItem("missing")).toBeNull();
+  });
 });
