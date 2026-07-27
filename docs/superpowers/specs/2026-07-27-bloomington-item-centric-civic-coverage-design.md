@@ -123,8 +123,10 @@ Mirrors the publish-then-reconcile philosophy of the structure-alignment design.
 
 **Pass A — agenda side (new; runs when an agenda is posted, days pre-meeting):**
 
-1. Bloomington adapter fetches the posted agenda (mechanism per spike findings:
-   scraper / PDF parser / API client).
+1. Bloomington adapter fetches the posted agenda. Per spike findings
+   (`2026-07-27-bloomington-publishing-spike-findings.md`): enumerate meetings via
+   the city's OnBoard JSON API, download the templated Agenda/Packet PDFs, poll from
+   ~6 days out and re-poll through meeting time for addenda.
 2. Parse to structured items (number, title, attachments, legislation refs).
 3. LLM interpretation with a **faithfulness gate**: every sentence of
    `summary_plain`/`decision_plain` must be traceable to agenda or attachment text.
@@ -173,11 +175,13 @@ Mirrors the publish-then-reconcile philosophy of the structure-alignment design.
 
 ## Phasing
 
-- **Phase 0 — spike (in progress).** Bloomington publishing reality: agenda portal +
-  format + advance notice, legislation lookup, minutes, CATS/city video access **and
-  licensing** (C-SPAN-style AI clauses are a hard blocker for Pass B video sourcing),
-  public-comment rules, meeting cadence/template. Also a one-paragraph sanity check on
-  both Monroe County bodies. Findings doc under `docs/superpowers/specs/`.
+- **Phase 0 — spike (DONE 2026-07-27).** Findings:
+  `2026-07-27-bloomington-publishing-spike-findings.md`. Key results: OnBoard JSON
+  API + templated agenda PDFs (adapter = API client + PDF parser); CATS video is
+  **public domain** with direct MP4s + machine transcripts (Phase 3 unblocked);
+  legislation detail pages carry sponsors and roll-call outcomes (a votes oracle);
+  minutes lag 4–7 months (reconcile-only), session memo at ~1 week is a faster weak
+  signal.
 - **Phase 1 — agenda ingestion + upcoming pages.** Pass A end to end: adapter,
   parsing, interpretation + faithfulness gate, `scheduled` publish, upcoming-meetings
   page and item pages in upcoming state. **Citizen value ships here.**
@@ -194,8 +198,9 @@ consequence of the before-first ordering.
 
 ## Risks
 
-- **CATS video licensing** (the C-SPAN scar): if CATS terms restrict AI/ML processing,
-  Phase 3 needs the city's own video or a public-records posture. Phases 1–2 unaffected.
+- **CATS video licensing — RESOLVED (Phase 0):** CATS declares government-meeting
+  footage public domain; direct MP4s + transcripts, no AI/ML clause. Prefer CATS blob
+  over the city's YouTube (platform ToS).
 - **Agenda format instability**: in-house city CMS pages can change without notice;
   the adapter treats parse failure as a loud, logged event and the coverage metric
   surfaces drift.
