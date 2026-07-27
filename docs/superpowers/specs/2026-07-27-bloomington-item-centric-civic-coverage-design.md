@@ -157,8 +157,9 @@ Mirrors the publish-then-reconcile philosophy of the structure-alignment design.
   meetings, agenda items per meeting, item-by-id, and **agenda/item keyword search**
   (the static-export site cannot search client-side at useful scale).
 - **web/** (static-export Next.js) gains: upcoming meetings page, item permalink page
-  rendering both states, recap view, search UI. Upcoming pages ride the existing
-  publish-triggers-rebuild flow.
+  rendering both states, recap view, search UI. The site fetches live from the
+  ev-accounts API at runtime (there is no publish-triggers-rebuild flow anymore), so
+  upcoming pages are current the moment the pipeline publishes.
 
 ## Quality gates (two, because the failure modes differ)
 
