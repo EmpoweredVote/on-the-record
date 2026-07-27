@@ -107,6 +107,20 @@ def test_ungrounded_number_rejected():
     assert "500" in result.rejected_reason
 
 
+def test_lowercase_invented_ref_rejected():
+    # Case must not let a ref slip the gate: SOURCE has only Ordinance 2026-16,
+    # so "resolution 2026-16" (any casing) is an invented ref.
+    assert "resolution" not in (_item().title_raw + SOURCE).lower()
+    reply = _reply(
+        "This updates pay for police and fire employees.",
+        "The council is deciding whether to approve resolution 2026-16.",
+    )
+    result = interpret_item(FakeClient(reply), _item(), SOURCE)
+    assert result.summary_plain is None
+    assert result.decision_plain is None
+    assert "resolution 2026-16" in result.rejected_reason
+
+
 def test_invented_legislation_ref_rejected():
     assert "2026-99" not in _item().title_raw + SOURCE
     reply = _reply(
@@ -133,6 +147,23 @@ def test_no_json_abstains_with_reason():
     result = interpret_item(FakeClient("I cannot help with that."), _item(), SOURCE)
     assert result.summary_plain is None
     assert result.rejected_reason == "no JSON in reply"
+
+
+def test_non_string_field_values_abstain_not_raise():
+    # A numeric field value must be treated as absent, not raised as TypeError.
+    result = interpret_item(
+        FakeClient('{"summary_plain": 5, "decision_plain": null}'), _item(), SOURCE
+    )
+    assert result.summary_plain is None
+    assert result.decision_plain is None
+    assert result.rejected_reason is not None
+
+
+def test_empty_payload_abstains():
+    result = interpret_item(FakeClient("{}"), _item(), SOURCE)
+    assert result.summary_plain is None
+    assert result.decision_plain is None
+    assert result.rejected_reason == "empty payload"
 
 
 # --- ungrounded_tokens helper directly ----------------------------------

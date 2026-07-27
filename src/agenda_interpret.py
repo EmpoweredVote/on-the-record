@@ -24,7 +24,11 @@ _SYSTEM = (
 )
 
 _NUM_RE = re.compile(r"\d[\d,.]*")
-_REF_RE = re.compile(r"\b(?:Appropriation\s+)?(?:Ordinance|Resolution)\s+\d{4}-\d+")
+# IGNORECASE: a lowercase invented ref ("resolution 2026-16") must still be
+# extracted from generated text so the gate can check it against the source.
+_REF_RE = re.compile(
+    r"\b(?:Appropriation\s+)?(?:Ordinance|Resolution)\s+\d{4}-\d+", re.IGNORECASE
+)
 
 
 @dataclass
@@ -61,6 +65,13 @@ def ungrounded_tokens(generated: str, source: str) -> list[str]:
     return bad
 
 
+def _string_or_none(value) -> Optional[str]:
+    """Non-string or empty JSON field values are treated as absent, not errors."""
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
 def interpret_item(client, item: ParsedItem, source_text: str) -> InterpretResult:
     response = client.messages.create(
         model=config.AGENDA_INTERPRET_MODEL,
@@ -76,8 +87,10 @@ def interpret_item(client, item: ParsedItem, source_text: str) -> InterpretResul
         payload = json.loads(match.group(0))
     except ValueError:
         return InterpretResult(None, None, rejected_reason="malformed JSON")
-    summary = payload.get("summary_plain") or None
-    decision = payload.get("decision_plain") or None
+    summary = _string_or_none(payload.get("summary_plain"))
+    decision = _string_or_none(payload.get("decision_plain"))
+    if summary is None and decision is None:
+        return InterpretResult(None, None, rejected_reason="empty payload")
     combined = " ".join(filter(None, [summary, decision]))
     bad = ungrounded_tokens(combined, f"{item.title_raw}\n{source_text}")
     if bad:
