@@ -29,6 +29,10 @@ export default function ItemDetailClient() {
   const item = itemQ.data;
   const badge = itemStateBadge(item.status, item.meeting.date);
   const outcome = outcomeLabel(item.outcome);
+  const seekHref =
+    item.segment_start_seconds != null
+      ? `/meetings/${item.meeting.id}?t=${Math.floor(item.segment_start_seconds)}`
+      : null;
 
   return (
     <main className="itemPage">
@@ -65,15 +69,12 @@ export default function ItemDetailClient() {
         </section>
       )}
 
-      {item.status === "happened" && (
+      {item.status === "happened" && (outcome || seekHref) && (
         <section className="itemSection">
           <h2>What happened</h2>
           {outcome && <p className="itemOutcome">{outcome}</p>}
-          {item.segment_start_seconds != null && (
-            <Link
-              className="itemSeekLink"
-              href={`/meetings/${item.meeting.id}?t=${Math.floor(item.segment_start_seconds)}`}
-            >
+          {seekHref && (
+            <Link className="itemSeekLink" href={seekHref}>
               Watch the discussion
             </Link>
           )}
