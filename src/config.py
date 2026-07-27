@@ -45,6 +45,11 @@ SUMMARY_MAX_TOKENS_CLASSIFY = 4096
 SUMMARY_MAX_TOKENS_SYNTHESIZE = 4096
 SUMMARY_CHUNK_SIZE = 150  # Max segments per classification chunk
 
+# Agenda interpretation (Pass A of item-centric coverage). Sonnet: citizens
+# act on these summaries; the groundedness gate rejects rather than repairs.
+AGENDA_INTERPRET_MODEL = "claude-sonnet-4-5"
+AGENDA_INTERPRET_MAX_TOKENS = 600
+
 # --- Layer-3 speaker identification (LLM) ---
 # Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
 # final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
