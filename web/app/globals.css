@@ -1953,3 +1953,135 @@ a.skimTs:hover {
 .voteNoSeek {
   cursor: default;
 }
+
+/* =====================================================
+   Upcoming meetings
+   ===================================================== */
+
+.upcomingGroup {
+  margin: 1.5rem 0;
+}
+.upcomingMeeting {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+.upcomingMeeting h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+.upcomingWhen {
+  color: var(--accent);
+  font-weight: 600;
+  margin: 0;
+}
+.upcomingWhere {
+  color: var(--muted);
+  margin: 0.15rem 0 0;
+}
+.upcomingItems {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+.upcomingItemLink {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--foreground);
+}
+.upcomingItemLink:hover {
+  background: var(--accent-soft);
+}
+.upcomingItemTitle {
+  flex: 1 1 24rem;
+}
+.upcomingItemStage,
+.upcomingItemComment {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.upcomingItemComment {
+  color: var(--inform);
+  border-color: var(--inform-soft);
+}
+.upcomingSource {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* ===== Agenda item page ===== */
+.itemPage {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+.itemBadge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  margin-bottom: 0.5rem;
+}
+.itemBadge-upcoming {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.itemBadge-happened {
+  background: var(--inform-soft);
+  color: var(--inform);
+}
+.itemTitleRaw {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+.itemSection {
+  margin-top: 1.5rem;
+}
+.itemSection h2 {
+  font-size: 1rem;
+  margin: 0 0 0.4rem;
+}
+.itemStage {
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+.itemCommentYes {
+  color: var(--inform);
+  margin: 0;
+}
+.itemCommentNo {
+  color: var(--muted);
+  margin: 0;
+}
+.itemOutcome {
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+.itemSeekLink {
+  display: inline-block;
+  margin-top: 0.4rem;
+}
+.itemMeta {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.itemMeta p {
+  margin: 0 0 0.3rem;
+}
