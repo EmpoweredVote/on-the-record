@@ -137,3 +137,17 @@ def test_passed_tag_variant_and_withdraw():
     assert memo.items[0].disposition == "passed"
     assert memo.items[0].motions[0].ayes_names == ["A", "B", "C", "D", "E"]
     assert memo.items[1].disposition == "pulled"
+
+
+def test_timetable_does_not_read_as_tabling():
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Resolution 2026-90\n"
+        "Daily moved and Ruff seconded to accept the revised timetable for "
+        "Resolution 2026-90. The motion received a roll call vote of "
+        "Ayes: 8, Nays: 0, Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    assert item.motions[0].kind == "unknown"
+    assert item.disposition is None

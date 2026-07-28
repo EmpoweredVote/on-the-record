@@ -106,7 +106,7 @@ def _classify_action(clause: str) -> str:
         return "procedural"
     if "be adopted" in lowered or "be approved" in lowered:
         return "adopt"
-    if "postpone" in lowered or "table" in lowered:
+    if "postpone" in lowered or re.search(r"\btabled?\b", lowered):
         return "continue"
     if "withdraw" in lowered:
         return "pull"
