@@ -27,12 +27,15 @@ legislation-page oracle in `apply_oracle`). Negations are not modeled.
 """
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import Callable, Optional
 
+from . import config
 from .agenda_parse import ParsedItem
+from .legislation_oracle import fetch_final_action
 
 #: Publish vocabulary for item outcomes (matches src/legislation_oracle.py).
 OUTCOME_VOCABULARY = ("passed", "failed", "continued", "pulled")
@@ -259,4 +262,153 @@ def validate_spans(
                 )
         result.append(span)
 
+    return result
+
+# ---------------------------------------------------------------------------
+# LLM span bounding (Task 4) — the model proposes, the gates dispose.
+# ---------------------------------------------------------------------------
+
+_ALIGN_SYSTEM = (
+    "You align a city-council meeting's agenda items to its transcript. For "
+    "each agenda item, identify the contiguous run of transcript segments in "
+    "which that item is actually taken up, using the mechanical anchor hints "
+    "where given. Items never reached get null bounds. Report an outcome "
+    "ONLY when it is announced on the record (motion carries / does not "
+    "carry, adopted, roll-call result), and cite the segment where it is "
+    "announced; do NOT infer or invent outcomes. Procedural stretches "
+    "(roll-call reading, recesses, chatter between items) belong to no "
+    "item. Reply with JSON only: {\"spans\": [{\"position\": N, "
+    "\"start_segment\": i or null, \"end_segment\": i or null, "
+    "\"outcome\": \"passed\"|\"failed\"|\"continued\"|\"pulled\"|null, "
+    "\"outcome_evidence_segment\": i or null}]} with one entry per agenda "
+    "item position."
+)
+
+
+def _mmss(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def build_align_prompt(
+    items: list[ParsedItem],
+    segments: list[SegmentRef],
+    anchors: dict[int, list[int]],
+) -> str:
+    lines = ["Agenda items (position | item | title | legislation ref):"]
+    for item in items:
+        lines.append(
+            f"{item.position} | {item.item_number} | {item.title_raw} | "
+            f"{item.legislation_ref or '-'}"
+        )
+    lines.append("")
+    lines.append(
+        "Mechanical anchors (segment indices whose text contains the item's "
+        "legislation ref — the item's span should cover its anchors):"
+    )
+    for position in sorted(anchors):
+        hits = ", ".join(str(i) for i in anchors[position]) or "none found"
+        lines.append(f"position {position}: {hits}")
+    lines.append("")
+    lines.append("Transcript segments (i | mm:ss | speaker | text):")
+    for seg in segments:
+        text = " ".join(seg.text.split())[:160]
+        lines.append(f"{seg.i} | {_mmss(seg.start)} | {seg.speaker} | {text}")
+    return "\n".join(lines)
+
+
+def _all_abstain(items: list[ParsedItem], reason: str) -> list[ItemSpan]:
+    return [ItemSpan(position=item.position, rejected_reason=reason) for item in items]
+
+
+def _int_or_none(value) -> Optional[int]:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def align_items(
+    client, items: list[ParsedItem], segments: list[SegmentRef]
+) -> list[ItemSpan]:
+    """Anchor → prompt → tolerant JSON parse → validate_spans. Never raises
+    on a bad reply: a reply we can't use means every item abstains, with the
+    reason recorded."""
+    anchors = find_ref_anchors(items, segments)
+    response = client.messages.create(
+        model=config.AGENDA_ALIGN_MODEL,
+        max_tokens=config.AGENDA_ALIGN_MAX_TOKENS,
+        system=_ALIGN_SYSTEM,
+        messages=[
+            {"role": "user", "content": build_align_prompt(items, segments, anchors)}
+        ],
+    )
+    text = response.content[0].text
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        return _all_abstain(items, "no JSON in reply")
+    try:
+        payload = json.loads(match.group(0))
+    except ValueError:
+        return _all_abstain(items, "malformed JSON")
+    raw_spans = payload.get("spans") if isinstance(payload, dict) else None
+    if not isinstance(raw_spans, list):
+        return _all_abstain(items, "no spans in reply")
+
+    by_position: dict[int, ItemSpan] = {}
+    for entry in raw_spans:
+        if not isinstance(entry, dict):
+            continue
+        position = _int_or_none(entry.get("position"))
+        if position is None:
+            continue
+        outcome = entry.get("outcome")
+        by_position[position] = ItemSpan(
+            position=position,
+            start_segment=_int_or_none(entry.get("start_segment")),
+            end_segment=_int_or_none(entry.get("end_segment")),
+            outcome=outcome if isinstance(outcome, str) else None,
+            outcome_evidence_segment=_int_or_none(entry.get("outcome_evidence_segment")),
+        )
+    spans = [
+        by_position.get(
+            item.position,
+            ItemSpan(position=item.position, rejected_reason="position missing from reply"),
+        )
+        for item in items
+    ]
+    return validate_spans(items, spans, segments)
+
+
+def apply_oracle(
+    spans: list[ItemSpan],
+    items: list[ParsedItem],
+    *,
+    fetch: Callable[[str], str],
+) -> list[ItemSpan]:
+    """Cross-check claimed outcomes against the legislation-page oracle.
+
+    Oracle has a final action that disagrees -> zero the OUTCOME (keep the
+    span) with reason "oracle disagreement". Oracle agrees, or is pending
+    (no page / no Final row / fetch error) -> keep the claim as-is.
+    """
+    by_position = {item.position: item for item in items}
+    actions: dict[str, object] = {}  # ref -> FinalAction | None, fetched once
+    result: list[ItemSpan] = []
+    for span in spans:
+        item = by_position.get(span.position)
+        ref = item.legislation_ref if item else None
+        if span.outcome is None or not ref:
+            result.append(span)
+            continue
+        if ref not in actions:
+            actions[ref] = fetch_final_action(ref, fetch=fetch)
+        action = actions[ref]
+        if action is not None and action.outcome != span.outcome:
+            result.append(
+                _strip_outcome(
+                    span,
+                    f"oracle disagreement: legislation page says "
+                    f"{action.outcome!r}, span claimed {span.outcome!r}",
+                )
+            )
+        else:
+            result.append(span)
     return result
