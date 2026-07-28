@@ -107,7 +107,28 @@ Guard: if it reports **zero agenda items** for the slug, the meeting was
 published under the wrong `--meeting-id` — do not proceed; the scheduled slug
 is required (see step 2).
 
-## 6. Verify
+## 6. When the clerk's Memorandum posts
+
+OnBoard file type "Memorandum" — observed next-day for July 22, allow up to
+~a week:
+
+```bash
+.venv/bin/python run_local.py --reconcile-memo bloomington-city-council-YYYY-MM-DD
+```
+
+Overwrites item outcomes from the memo (authoritative — fixes the
+pass-abstention gap: the chair never says "motion carries"), writes one
+meetings.votes row per substantive motion ("Passed 8–0" style), and
+per-member vote_records on named split votes. Unparseable motions
+abstain loudly — read the NOTE lines.
+
+- **Re-run this after any `--publish-meeting` re-publish** — re-publishing
+  wipes memo votes (`_replace_votes` delete-then-inserts).
+- Or let the daily poller do it: `poll_agendas.py --reconcile-memos`
+  (opt-in flag; not yet on the launchd job — enable after July 22 ages
+  out of the lookback window, since its legacy slug fails loudly there).
+
+## 7. Verify
 
 - `/upcoming` no longer lists the meeting; its item pages (`/items/<id>`)
   show the happened-state badge and, for bound items, a **Watch the
