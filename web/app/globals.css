@@ -2093,3 +2093,6 @@ a.skimTs:hover {
   font-size: 0.85rem;
   margin-top: 0.15rem;
 }
+
+/* Upcoming item: what this page becomes after the meeting */
+.itemUpcomingNote { color: var(--muted); }

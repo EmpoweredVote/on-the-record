@@ -81,9 +81,29 @@ export default function ItemDetailClient() {
         </section>
       )}
 
+      {item.status === "upcoming" && (
+        // No dead end before the meeting: say what this page will become.
+        <section className="itemSection">
+          <h2>After the meeting</h2>
+          <p className="itemUpcomingNote">
+            Once this meeting happens and the recording is processed, this page
+            will show what happened to this item — including the discussion and
+            any vote.
+          </p>
+        </section>
+      )}
+
       <footer className="itemMeta">
         <p>
-          {item.meeting.title ?? "Meeting"} ·{" "}
+          {/* Meeting pages only exist once the recording is processed. */}
+          {item.meeting.status === "published" ? (
+            <Link href={`/meetings/${item.meeting.id}`}>
+              {item.meeting.title ?? "Meeting"}
+            </Link>
+          ) : (
+            item.meeting.title ?? "Meeting"
+          )}
+          {" · "}
           {formatMeetingWhen(
             item.meeting.date,
             item.meeting.starts_at,
