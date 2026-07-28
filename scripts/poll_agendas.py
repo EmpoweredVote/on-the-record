@@ -7,11 +7,19 @@ Usage:
   .venv/bin/python scripts/poll_agendas.py --days 14
   .venv/bin/python scripts/poll_agendas.py --dry-run       # no DB writes, no state recording
   .venv/bin/python scripts/poll_agendas.py --no-interpret  # skip LLM summaries
+  .venv/bin/python scripts/poll_agendas.py --reconcile-memos  # also reconcile clerk memoranda
 
 Agendas post the Friday before the meeting (sometimes only ~48h ahead) and
 addenda can land through the meeting day, so run this daily from ~6 days out
 (default window: today .. today+8). Change detection is per-meeting via the
 OnBoard file created/updated marker; an unchanged agenda is skipped.
+
+With --reconcile-memos, a lookback pass (default --lookback-days 10) also
+checks recent PAST meetings for a posted clerk Memorandum and runs
+publish.reconcile_memo on new/changed ones. Change detection uses a separate
+memo_state.json marker file; a failed reconcile (e.g. meeting not yet
+published under its scheduled slug) is NOT recorded, so it retries daily
+until it succeeds or ages out of the window.
 
 Requires DATABASE_URL (and ANTHROPIC_API_KEY unless --no-interpret) in
 .env.local. Failures are loud, per-meeting, and non-fatal: each failed
@@ -78,8 +86,6 @@ def reconcile_memos(body, agendas_dir: Path, *, lookback_days: int, dry_run: boo
     isn't in the DB fails loudly WITHOUT recording the marker, so it retries
     daily until the meeting publishes or ages out of the window. Returns the
     failure count."""
-    from datetime import timedelta
-
     from src.publish import reconcile_memo, scheduled_slug
 
     start = (date.today() - timedelta(days=lookback_days)).isoformat()
