@@ -80,10 +80,22 @@ def match_speaker(
     return None, f"{kind} speaker match for memo member {member_name!r} — record skipped"
 
 
-def _result_string(motion: MemoMotion) -> str:
+def _result_string(motion: MemoMotion, notes: list[str]) -> str:
+    """"Passed 8–0" style. A motion that neither carried nor bears the
+    clerk's FAILED tag gets a bare tally — the roll call is fact, its
+    verdict is not ours to call (abstain-don't-guess)."""
     t = motion.tally
-    word = _CARRIED_WORDS[motion.kind] if carried(motion) else "Failed"
-    result = f"{word} {t.ayes}–{t.nays}"
+    if carried(motion):
+        word = _CARRIED_WORDS[motion.kind]
+    elif motion.failed_tag or t.ayes < t.nays:
+        word = "Failed"
+    else:
+        word = ""
+        notes.append(
+            f"motion tallied {t.ayes}–{t.nays} without a FAILED tag — "
+            "recording bare tally, no verdict"
+        )
+    result = f"{word} {t.ayes}–{t.nays}".strip()
     if t.abstain:
         result += f", {t.abstain} abstaining"
     return result
@@ -143,13 +155,24 @@ def build_reconcile_plan(
                 )
             plan.outcome_updates.append((item.disposition, agenda_item.id))
 
+        if item.disposition == "continued":
+            disposition_motion = (
+                item.motions[item.disposition_motion]
+                if item.disposition_motion is not None else None
+            )
+            if disposition_motion is not None and disposition_motion.continued_to_date:
+                plan.notes.append(
+                    f"{item.legislation_ref}: continued to "
+                    f"{disposition_motion.continued_to_date}"
+                )
+
         for motion in item.motions:
             if motion.kind not in _CARRIED_WORDS or motion.tally is None:
                 continue  # procedural/unknown or moved-but-unvoted
             plan.votes.append(PlannedVote(
                 resolution=item.legislation_ref,
                 description=motion.raw_text,
-                result=_result_string(motion),
+                result=_result_string(motion, plan.notes),
                 agenda_item_id=agenda_item.id if agenda_item else None,
                 records=_planned_records(motion, speakers, plan.notes),
             ))

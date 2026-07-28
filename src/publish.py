@@ -929,6 +929,11 @@ def reconcile_memo(meeting_id: str) -> dict:
         download_file(memo_url, pdf_path)
 
         memo = parse_memo(extract_text(pdf_path))
+        if not memo.items:
+            raise RuntimeError(
+                f"memo for {meeting_id!r} parsed to zero legislation items — "
+                "template drift? No votes/outcomes written."
+            )
         plan = build_reconcile_plan(memo, agenda_items, speakers)
 
         with conn:

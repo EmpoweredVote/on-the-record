@@ -81,6 +81,8 @@ def test_july22_plan_end_to_end(memo):
         ("s-rollo", "nay"), ("s-ruff", "nay"),
     ])
 
+    assert any("continued to 2026-07-29" in n for n in plan.notes)
+
 
 def test_memo_ref_without_agenda_item_still_votes_no_update(memo):
     plan = build_reconcile_plan(memo, [], SPEAKERS)   # July 22 reality: no items
@@ -108,3 +110,15 @@ def test_duplicate_agenda_refs_abstain(memo):
     r13 = [v for v in plan.votes if v.resolution == "Resolution 2026-13"][0]
     assert r13.agenda_item_id is None
     assert any("share this ref" in n for n in plan.notes)
+
+
+def test_tie_without_tag_gets_bare_tally_result():
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-98\n"
+        "Daily moved and Ruff seconded that Ordinance 2026-98 be adopted. "
+        "The motion received a roll call vote of Ayes: 4, Nays: 4, Abstain: 0.\n"
+    )
+    plan = build_reconcile_plan(parse_memo(text), [], [])
+    assert plan.votes[0].result == "4–4"
+    assert any("no verdict" in n for n in plan.notes)
