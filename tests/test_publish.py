@@ -9,9 +9,11 @@ helpers below survived the refactor unchanged and remain worth covering.
 
 import pytest
 
-from src.models import Meeting, ProcessingMetadata, SpeakerMapping
+from src.bodies import BLOOMINGTON_COMMON_COUNCIL
+from src.models import AgendaItem, Meeting, ProcessingMetadata, SpeakerMapping
 from src.publish import _resolve_chamber_id, _upsert_event_orgs, _upsert_meeting
 from src.publish import _upsert_local_people, _upsert_speakers
+from src.publish import build_agenda_item_rows, scheduled_slug
 from src.publish import extract_youtube_id, resolve_playback, playback_for_meeting
 
 
@@ -424,6 +426,37 @@ def test_replace_votes_empty_deletes_and_inserts_nothing(monkeypatch):
     assert publish._replace_votes(cur, m, "uuid-1") == 0
     assert any("DELETE FROM meetings.votes" in s for s, _ in cur.executes)
     assert called["execute_values"] is False
+
+
+# ---------------------------------------------------------------------------
+# Pass A (scheduled meeting + agenda items) pure helpers
+# ---------------------------------------------------------------------------
+
+def test_scheduled_slug_is_body_plus_date():
+    assert (
+        scheduled_slug(BLOOMINGTON_COMMON_COUNCIL, "2026-07-29")
+        == "bloomington-city-council-2026-07-29"
+    )
+
+
+def test_build_agenda_item_rows_orders_and_nulls():
+    items = [
+        AgendaItem(position=1, item_number="1", title_raw="Roll Call",
+                   kind="procedural", source_url="https://x.gov/a.pdf"),
+        AgendaItem(position=13, item_number="6A",
+                   title_raw="Ordinance 2026-16 – Salaries", kind="ordinance",
+                   legislation_ref="Ordinance 2026-16",
+                   summary_plain="Raises pay 4 percent.",
+                   stage="First reading", public_comment=False,
+                   source_url="https://x.gov/a.pdf"),
+    ]
+    rows = build_agenda_item_rows("uuid-123", items)
+    assert rows[0][0] == "uuid-123"          # meeting_id first
+    assert rows[0][1] == 1                    # position
+    assert rows[0][5] is None                 # legislation_ref null for roll call
+    assert rows[1][2] == "6A"
+    assert rows[1][12] == "upcoming"          # status literal
+    assert len(rows[0]) == 13                 # column count locks INSERT arity
 
 
 def test_replace_votes_result_uses_outcome_when_present(monkeypatch):
