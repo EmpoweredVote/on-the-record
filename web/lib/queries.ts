@@ -3,6 +3,8 @@ import type {
   AgendaItemDetail,
   Appearance,
   EventKind,
+  ItemSpeaker,
+  ItemVote,
   Meeting,
   MeetingSpeaker,
   MeetingSummary,
@@ -170,6 +172,37 @@ export function mapAgendaItem(a: any): AgendaItem {
   };
 }
 
+// Exported for tests.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mapItemVote(v: any): ItemVote {
+  return {
+    id: v.id,
+    resolution: v.resolution ?? null,
+    description: v.description ?? null,
+    result: v.result ?? "",
+    vote_type: v.voteType ?? null,
+    timestamp: v.timestamp ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    records: ((v.records ?? []) as any[]).map((r) => ({
+      position: r.position ?? "",
+      name: r.name ?? null,
+      politician_id: r.politicianId ?? null,
+    })),
+  };
+}
+
+// Exported for tests.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mapItemSpeaker(s: any): ItemSpeaker {
+  return {
+    name: s.name ?? "",
+    politician_id: s.politicianId ?? null,
+    role: s.role ?? null,
+    first_spoke_seconds: s.firstSpokeSeconds ?? 0,
+    segment_count: s.segmentCount ?? 0,
+  };
+}
+
 export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
   if (!base()) return [];
   const res = await fetch(`${base()}/api/meetings/upcoming`, FETCH_INIT);
@@ -209,6 +242,15 @@ export async function fetchAgendaItem(itemId: string): Promise<AgendaItemDetail 
       starts_at: a.meeting?.startsAt ?? null,
       timezone: a.meeting?.timezone ?? null,
     },
+    votes: ((a.votes ?? []) as unknown[]).map(mapItemVote),
+    speakers: ((a.speakers ?? []) as unknown[]).map(mapItemSpeaker),
+    continued_from: a.continuedFrom
+      ? {
+          id: a.continuedFrom.id,
+          item_number: a.continuedFrom.itemNumber,
+          meeting_date: a.continuedFrom.meetingDate,
+        }
+      : null,
   };
 }
 

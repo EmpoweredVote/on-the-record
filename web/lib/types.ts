@@ -219,6 +219,35 @@ export interface AgendaItem {
   source_url: string;
 }
 
+// One member's recorded position on an item vote. `name` resolves through the
+// meeting's speaker rows; `politician_id` links to /people when present.
+export interface ItemVoteRecord {
+  position: string;
+  name: string | null;
+  politician_id: string | null;
+}
+
+// A roll-call vote hung off the item (votes.agenda_item_id, written by the
+// clerk-memo reconciler). `records` may be empty (tally-only votes).
+export interface ItemVote {
+  id: string;
+  resolution: string | null;
+  description: string | null;
+  result: string;
+  vote_type: string | null;
+  timestamp: number | null;
+  records: ItemVoteRecord[];
+}
+
+// Someone who spoke within the item's segment span, first-appearance order.
+export interface ItemSpeaker {
+  name: string;
+  politician_id: string | null;
+  role: string | null;
+  first_spoke_seconds: number;
+  segment_count: number;
+}
+
 export interface AgendaItemDetail extends AgendaItem {
   meeting: {
     id: string;
@@ -229,4 +258,12 @@ export interface AgendaItemDetail extends AgendaItem {
     starts_at: string | null;
     timezone: string | null;
   };
+  votes: ItemVote[];
+  speakers: ItemSpeaker[];
+  // Prior appearance of the same matter (the matter-tracking seed).
+  continued_from: {
+    id: string;
+    item_number: string;
+    meeting_date: string;
+  } | null;
 }

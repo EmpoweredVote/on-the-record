@@ -1,5 +1,7 @@
 // Citizen-language presentation for agenda items. Neutral voice — never
 // editorialize outcomes (spec: provenance-first, rep-citable pages).
+import type { ItemSpeaker, ItemVoteRecord } from "./types";
+
 export function outcomeLabel(outcome: string | null): string | null {
   switch (outcome) {
     case "passed":
@@ -37,4 +39,74 @@ export function itemStateBadge(
     return { label: `From the meeting on ${formatted}`, tone: "happened" };
   }
   return { label: "Coming up", tone: "upcoming" };
+}
+
+// ✓/✗ next to the outcome headline — only for the two unambiguous outcomes.
+export function outcomeGlyph(outcome: string | null): string | null {
+  if (outcome === "passed") return "✓";
+  if (outcome === "failed") return "✗";
+  return null;
+}
+
+// Vote-record positions bucketed into citizen-facing tabs. The reconciler
+// writes clerk-memo vocabulary (Ayes/Nays/Abstain); federal votes use
+// yea/nay; be tolerant of both.
+export type VoteBucketKey = "for" | "against" | "abstain" | "other";
+
+const FOR_POSITIONS = new Set(["aye", "ayes", "yea", "yes", "for", "y"]);
+const AGAINST_POSITIONS = new Set(["nay", "nays", "no", "against", "n"]);
+const ABSTAIN_POSITIONS = new Set(["abstain", "abstained", "abstention", "present"]);
+
+export function votePositionBucket(position: string): VoteBucketKey {
+  const p = position.trim().toLowerCase();
+  if (FOR_POSITIONS.has(p)) return "for";
+  if (AGAINST_POSITIONS.has(p)) return "against";
+  if (ABSTAIN_POSITIONS.has(p)) return "abstain";
+  return "other";
+}
+
+export interface VoteBucket {
+  key: VoteBucketKey;
+  label: string;
+  records: ItemVoteRecord[];
+}
+
+const BUCKET_LABELS: Record<VoteBucketKey, string> = {
+  for: "For",
+  against: "Against",
+  abstain: "Abstained",
+  other: "Other",
+};
+
+// Fixed For/Against order (both always shown so "Against 0" is visible, the
+// CalMatters pattern); abstain/other tabs appear only when non-empty.
+export function voteBuckets(records: ItemVoteRecord[]): VoteBucket[] {
+  const byKey: Record<VoteBucketKey, ItemVoteRecord[]> = {
+    for: [],
+    against: [],
+    abstain: [],
+    other: [],
+  };
+  for (const r of records) byKey[votePositionBucket(r.position)].push(r);
+  return (Object.keys(byKey) as VoteBucketKey[])
+    .filter((k) => k === "for" || k === "against" || byKey[k].length > 0)
+    .map((k) => ({ key: k, label: BUCKET_LABELS[k], records: byKey[k] }));
+}
+
+// Who-spoke grouping: legislators/officials (linked to a politician record)
+// vs. everyone else. "Non-speaker" is a pipeline label for non-speech audio,
+// not a person — drop it.
+export interface SpeakerGroups {
+  officials: ItemSpeaker[];
+  others: ItemSpeaker[];
+}
+
+export function groupItemSpeakers(speakers: ItemSpeaker[]): SpeakerGroups {
+  const officials: ItemSpeaker[] = [];
+  const others: ItemSpeaker[] = [];
+  for (const s of speakers) {
+    if (s.name === "Non-speaker") continue;
+    (s.politician_id != null ? officials : others).push(s);
+  }
+  return { officials, others };
 }

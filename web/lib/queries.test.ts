@@ -225,4 +225,72 @@ describe("queries data layer", () => {
     const { fetchAgendaItem } = await load();
     expect(await fetchAgendaItem("missing")).toBeNull();
   });
+
+  it("fetchAgendaItem defaults votes/speakers to [] and continued_from to null", async () => {
+    // Old API payloads (pre-panel deploy) simply omit the new fields.
+    vi.stubGlobal(
+      "fetch",
+      mockFetch(200, {
+        id: "ai1", meetingId: "m1", position: 13, itemNumber: "13",
+        titleRaw: "Ordinance 2026-16", kind: "legislation", status: "upcoming",
+        sourceUrl: "https://example.gov/a.pdf",
+        meeting: { id: "m1", date: "2026-08-05" },
+      })
+    );
+    const { fetchAgendaItem } = await load();
+    const out = await fetchAgendaItem("ai1");
+    expect(out?.votes).toEqual([]);
+    expect(out?.speakers).toEqual([]);
+    expect(out?.continued_from).toBeNull();
+  });
+
+  it("fetchAgendaItem maps votes, speakers, and continued_from to snake_case", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch(200, {
+        id: "ai1", meetingId: "m1", position: 13, itemNumber: "13",
+        titleRaw: "Ordinance 2026-16", kind: "legislation", status: "happened",
+        sourceUrl: "https://example.gov/a.pdf",
+        meeting: { id: "m1", date: "2026-07-22" },
+        votes: [
+          {
+            id: "v1", resolution: "Ordinance 2026-16", description: "Adoption",
+            result: "Passed · 7–0", voteType: "roll-call", timestamp: 5321.5,
+            records: [
+              { position: "aye", name: "Isak Nti Asare", politicianId: "p1" },
+              { position: "nay", name: "Dave Rollo", politicianId: null },
+            ],
+          },
+        ],
+        speakers: [
+          {
+            name: "Kate Rosenbarger", politicianId: "p2", role: null,
+            firstSpokeSeconds: 1210.2, segmentCount: 7,
+          },
+        ],
+        continuedFrom: { id: "prior1", itemNumber: "7A", meetingDate: "2026-07-15" },
+      })
+    );
+    const { fetchAgendaItem } = await load();
+    const out = await fetchAgendaItem("ai1");
+    expect(out?.votes).toEqual([
+      {
+        id: "v1", resolution: "Ordinance 2026-16", description: "Adoption",
+        result: "Passed · 7–0", vote_type: "roll-call", timestamp: 5321.5,
+        records: [
+          { position: "aye", name: "Isak Nti Asare", politician_id: "p1" },
+          { position: "nay", name: "Dave Rollo", politician_id: null },
+        ],
+      },
+    ]);
+    expect(out?.speakers).toEqual([
+      {
+        name: "Kate Rosenbarger", politician_id: "p2", role: null,
+        first_spoke_seconds: 1210.2, segment_count: 7,
+      },
+    ]);
+    expect(out?.continued_from).toEqual({
+      id: "prior1", item_number: "7A", meeting_date: "2026-07-15",
+    });
+  });
 });
