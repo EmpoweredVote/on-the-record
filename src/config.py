@@ -50,6 +50,12 @@ SUMMARY_CHUNK_SIZE = 150  # Max segments per classification chunk
 AGENDA_INTERPRET_MODEL = "claude-sonnet-4-5"
 AGENDA_INTERPRET_MAX_TOKENS = 600
 
+# Agenda item -> video alignment (Pass B). Sonnet bounds spans between
+# mechanical anchors and reads outcomes; validate_spans + the legislation
+# oracle gate everything it says. 4000 tokens covers a full agenda's spans.
+AGENDA_ALIGN_MODEL = "claude-sonnet-4-5"
+AGENDA_ALIGN_MAX_TOKENS = 4000
+
 # --- Layer-3 speaker identification (LLM) ---
 # Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
 # final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
