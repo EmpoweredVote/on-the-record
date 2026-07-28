@@ -847,6 +847,163 @@ def align_and_flip(meeting_id: str) -> dict:
     }
 
 
+def reconcile_memo(meeting_id: str) -> dict:
+    """Reconcile a meeting's item outcomes and votes from the clerk's
+    post-meeting Memorandum (OnBoard file type 'Memorandum').
+
+    ``meeting_id`` is the meeting SLUG. The memo is authoritative: item
+    dispositions OVERWRITE agenda_items.outcome, and each substantive motion
+    with a recorded roll call becomes a meetings.votes row ('roll call',
+    timestamp NULL) — with per-member meetings.vote_records rows when the
+    memo names the sides. Idempotent: this meeting's votes are
+    delete-then-inserted (records first — FK). NOTE a later re-publish of
+    the meeting wipes these votes via _replace_votes; re-run this after any
+    re-publish (see the runbook).
+    """
+    import requests
+
+    from . import config
+    from .bodies import BLOOMINGTON_COMMON_COUNCIL as body  # single body today
+    from .memo_parse import parse_memo
+    from .memo_reconcile import AgendaItemRow, SpeakerRow, build_reconcile_plan
+    from .onboard import fetch_meetings_window
+    from .pdf_text import extract_text
+
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, date FROM meetings.meetings WHERE slug = %s",
+                    (meeting_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise RuntimeError(f"No meeting with slug {meeting_id!r}.")
+                meeting_uuid, meeting_date = row
+                cur.execute(
+                    """
+                    SELECT id, position, legislation_ref, outcome
+                    FROM meetings.agenda_items
+                    WHERE meeting_id = %s ORDER BY position
+                    """,
+                    (meeting_uuid,),
+                )
+                agenda_items = [
+                    AgendaItemRow(str(i), p, ref, out)
+                    for (i, p, ref, out) in cur.fetchall()
+                ]
+                cur.execute(
+                    "SELECT id, display_name FROM meetings.speakers WHERE meeting_id = %s",
+                    (meeting_uuid,),
+                )
+                speakers = [SpeakerRow(str(i), dn or "") for (i, dn) in cur.fetchall()]
+
+        # Network (OnBoard + PDF) runs outside any transaction. A single-day
+        # start==end window returns [] (verified live), so span ±1 day and
+        # filter back to the exact date.
+        from datetime import timedelta
+
+        day = timedelta(days=1)
+        window = fetch_meetings_window(
+            (meeting_date - day).isoformat(),
+            (meeting_date + day).isoformat(),
+            title_prefix=body.meeting_title_prefix,
+        )
+        matches = [m for m in window if m.start[:10] == meeting_date.isoformat()]
+        if not matches:
+            raise RuntimeError(
+                f"OnBoard has no {body.meeting_title_prefix!r} meeting on "
+                f"{meeting_date.isoformat()} — cannot locate a memorandum."
+            )
+        memo_url = matches[0].memo_url
+        if memo_url is None:
+            print(f"\n=== Memo reconcile: {meeting_id} ===")
+            print("  No Memorandum posted yet (clerk posts within ~a week). "
+                  "Re-run when it appears.")
+            return {"meeting_id": meeting_id, "memo": None}
+
+        pdf_path = config.DRIVE_ROOT / "agendas" / body.slug / meeting_id / "memo.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        resp = requests.get(memo_url, timeout=(30, 120),
+                            headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        pdf_path.write_bytes(resp.content)
+
+        memo = parse_memo(extract_text(pdf_path))
+        plan = build_reconcile_plan(memo, agenda_items, speakers)
+
+        with conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    UPDATE meetings.agenda_items
+                    SET outcome = %s, updated_at = now()
+                    WHERE id = %s
+                    """,
+                    plan.outcome_updates,
+                )
+                cur.execute(
+                    """
+                    DELETE FROM meetings.vote_records
+                    WHERE vote_id IN
+                      (SELECT id FROM meetings.votes WHERE meeting_id = %s)
+                    """,
+                    (meeting_uuid,),
+                )
+                cur.execute(
+                    "DELETE FROM meetings.votes WHERE meeting_id = %s",
+                    (meeting_uuid,),
+                )
+                record_count = 0
+                for vote in plan.votes:
+                    cur.execute(
+                        """
+                        INSERT INTO meetings.votes
+                          (meeting_id, resolution, description, result,
+                           vote_type, timestamp, agenda_item_id)
+                        VALUES (%s, %s, %s, %s, 'roll call', NULL, %s)
+                        RETURNING id
+                        """,
+                        (meeting_uuid, vote.resolution, vote.description,
+                         vote.result, vote.agenda_item_id),
+                    )
+                    vote_uuid = cur.fetchone()[0]
+                    if vote.records:
+                        psycopg2.extras.execute_values(
+                            cur,
+                            """
+                            INSERT INTO meetings.vote_records
+                              (vote_id, speaker_id, position)
+                            VALUES %s
+                            """,
+                            [(vote_uuid, sid, pos) for (sid, pos) in vote.records],
+                        )
+                        record_count += len(vote.records)
+    finally:
+        conn.close()
+
+    print(f"\n=== Memo reconcile: {meeting_id} ===")
+    print(f"  {len(memo.items)} memo item(s); {len(plan.outcome_updates)} outcome "
+          f"update(s); {len(plan.votes)} vote(s); {record_count} member record(s).")
+    for vote in plan.votes:
+        attached = "" if vote.agenda_item_id else "  (no agenda item)"
+        print(f"  [{vote.resolution}] {vote.result} — "
+              f"{len(vote.records)} record(s){attached}")
+    for note in plan.notes:
+        print(f"  NOTE: {note}")
+    print("=" * 40)
+
+    return {
+        "meeting_id": meeting_id,
+        "memo": memo_url,
+        "outcome_updates": len(plan.outcome_updates),
+        "votes": len(plan.votes),
+        "records": record_count,
+        "notes": plan.notes,
+    }
+
+
 def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
     """Delete-then-insert meeting_topics rows from meeting.section_topics.
 

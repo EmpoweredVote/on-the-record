@@ -3757,6 +3757,11 @@ Environment Variables:
                              "and flip them to 'happened' in place, then exit "
                              "(run after --publish-meeting; MEETING_ID must be the "
                              "scheduled slug, e.g. bloomington-city-council-2026-07-29)")
+    parser.add_argument("--reconcile-memo", metavar="MEETING_ID",
+                        help="Reconcile a published meeting's item outcomes and "
+                             "votes from the clerk's post-meeting Memorandum, "
+                             "then exit (MEETING_ID is the meeting slug; re-run "
+                             "after any re-publish — republishing wipes memo votes)")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
     parser.add_argument("--relink-person", metavar="NAME",
@@ -3881,6 +3886,7 @@ def main():
             "--publish": _option_supplied(cli_argv, "--publish"),
             "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
             "--align-agenda": _option_supplied(cli_argv, "--align-agenda"),
+            "--reconcile-memo": _option_supplied(cli_argv, "--reconcile-memo"),
             "--merge-profiles": _option_supplied(cli_argv, "--merge-profiles"),
             "--show-roster": _option_supplied(cli_argv, "--show-roster"),
             "--no-review": _option_supplied(cli_argv, "--no-review"),
@@ -4062,6 +4068,12 @@ def main():
         from src.publish import align_and_flip
 
         align_and_flip(args.align_agenda)
+        return
+
+    if args.reconcile_memo:
+        from src.publish import reconcile_memo
+
+        reconcile_memo(args.reconcile_memo)
         return
 
     if args.relink_person:
