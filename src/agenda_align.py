@@ -114,6 +114,23 @@ def _bare_number_re(number: str) -> re.Pattern:
     return re.compile(rf"(?<![\d-]){re.escape(number)}(?![\d-])")
 
 
+# A plain "Ordinance NNNN-N" must not match INSIDE "Appropriation Ordinance
+# NNNN-N" — with both types on one agenda that would anchor (and satisfy
+# containment for) the wrong item. Checked against the text preceding each
+# candidate match, since the separator run makes a lookbehind variable-width.
+_APPROPRIATION_TAIL_RE = re.compile(rf"\bappropriation{_REF_SEP}$", re.IGNORECASE)
+
+
+def _full_form_present(legislation_ref: str, text: str) -> bool:
+    kind = _split_ref(legislation_ref)[0]
+    plain_ordinance = kind.lower() == "ordinance"
+    for match in _full_form_re(legislation_ref).finditer(text):
+        if plain_ordinance and _APPROPRIATION_TAIL_RE.search(text, 0, match.start()):
+            continue
+        return True
+    return False
+
+
 def _ambiguous_numbers(items: list[ParsedItem]) -> set[str]:
     counts = Counter(
         _split_ref(item.legislation_ref)[1] for item in items if item.legislation_ref
@@ -122,7 +139,7 @@ def _ambiguous_numbers(items: list[ParsedItem]) -> set[str]:
 
 
 def _ref_matches(legislation_ref: str, text: str, ambiguous: set[str]) -> bool:
-    if _full_form_re(legislation_ref).search(text):
+    if _full_form_present(legislation_ref, text):
         return True
     number = _split_ref(legislation_ref)[1]
     return number not in ambiguous and bool(_bare_number_re(number).search(text))
@@ -346,7 +363,12 @@ def align_items(
             {"role": "user", "content": build_align_prompt(items, segments, anchors)}
         ],
     )
-    text = response.content[0].text
+    try:
+        text = response.content[0].text
+    except (AttributeError, IndexError, TypeError):
+        return _all_abstain(items, "unusable reply content")
+    if not isinstance(text, str):
+        return _all_abstain(items, "unusable reply content")
     match = re.search(r"\{[\s\S]*\}", text)
     if not match:
         return _all_abstain(items, "no JSON in reply")
@@ -359,11 +381,16 @@ def align_items(
         return _all_abstain(items, "no spans in reply")
 
     by_position: dict[int, ItemSpan] = {}
+    duplicates: set[int] = set()
     for entry in raw_spans:
         if not isinstance(entry, dict):
             continue
         position = _int_or_none(entry.get("position"))
         if position is None:
+            continue
+        if position in by_position:
+            # Two entries for one item conflict — trust neither.
+            duplicates.add(position)
             continue
         outcome = entry.get("outcome")
         by_position[position] = ItemSpan(
@@ -373,13 +400,22 @@ def align_items(
             outcome=outcome if isinstance(outcome, str) else None,
             outcome_evidence_segment=_int_or_none(entry.get("outcome_evidence_segment")),
         )
-    spans = [
-        by_position.get(
-            item.position,
-            ItemSpan(position=item.position, rejected_reason="position missing from reply"),
-        )
-        for item in items
-    ]
+    spans = []
+    for item in items:
+        if item.position in duplicates:
+            spans.append(
+                ItemSpan(position=item.position, rejected_reason="duplicate position in reply")
+            )
+        else:
+            spans.append(
+                by_position.get(
+                    item.position,
+                    ItemSpan(
+                        position=item.position,
+                        rejected_reason="position missing from reply",
+                    ),
+                )
+            )
     return validate_spans(items, spans, segments)
 
 

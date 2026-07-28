@@ -612,3 +612,78 @@ def test_apply_oracle_fetches_each_ref_once():
     ]
     apply_oracle(spans, items, fetch=counting_fetch)
     assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# Gate hardening: appropriation-ordinance boundary + reply-shape guards
+# ---------------------------------------------------------------------------
+
+
+def test_plain_ordinance_does_not_match_inside_appropriation_ordinance():
+    # "appropriation ordinance 2026-2" must anchor ONLY the Appropriation
+    # Ordinance item: a plain "Ordinance 2026-2" pattern matching inside it
+    # would also punch through the containment gate.
+    items = [
+        _item(1, "Appropriation Ordinance 2026-2 Budget Transfer",
+              "Appropriation Ordinance 2026-2"),
+        _item(2, "Ordinance 2026-2 Zoning Change", "Ordinance 2026-2"),
+    ]
+    segments = [
+        _seg(0, "i move that appropriation ordinance 2026-2 be introduced"),
+        _seg(1, "the appropriation - ordinance 2026-2 passes"),  # pause-dash form
+        _seg(2, "now ordinance 2026-2, the zoning change"),
+    ]
+    assert find_ref_anchors(items, segments) == {1: [0, 1], 2: [2]}
+
+
+def test_containment_gate_honors_appropriation_boundary():
+    items = [
+        _item(1, "Appropriation Ordinance 2026-2 Budget Transfer",
+              "Appropriation Ordinance 2026-2"),
+        _item(2, "Ordinance 2026-2 Zoning Change", "Ordinance 2026-2"),
+    ]
+    segments = [
+        _seg(0, "taking up appropriation ordinance 2026-2 tonight"),
+        _seg(1, "discussion continues on the budget transfer"),
+    ]
+    # Item 2's span over appropriation-only text must fail containment.
+    result = validate_spans(items, [ItemSpan(2, 0, 1)], segments)
+    assert result[0].start_segment is None
+    assert "containment" in result[0].rejected_reason
+    # Item 1's identical span passes.
+    result = validate_spans(items, [ItemSpan(1, 0, 1)], segments)
+    assert result[0].rejected_reason is None
+
+
+def test_align_items_empty_content_block_abstains_not_raises(july22_items, july22_segments):
+    class EmptyContentClient:
+        class _Messages:
+            def create(self, **kwargs):
+                class _Response:
+                    content = []
+
+                return _Response()
+
+        messages = _Messages()
+
+    spans = align_items(EmptyContentClient(), july22_items, july22_segments)
+    assert len(spans) == 15
+    for span in spans:
+        assert span.start_segment is None
+        assert span.rejected_reason is not None
+
+
+def test_align_items_duplicate_position_in_reply_abstains(july22_items, july22_segments):
+    entries = _grounded_span_entries()
+    # A second, conflicting entry for position 9: neither should win.
+    entries.append(
+        {"position": 9, "start_segment": 200, "end_segment": 210,
+         "outcome": None, "outcome_evidence_segment": None}
+    )
+    spans = align_items(FakeClient(_reply(entries)), july22_items, july22_segments)
+    by_pos = {s.position: s for s in spans}
+    assert by_pos[9].start_segment is None
+    assert by_pos[9].end_segment is None
+    assert "duplicate position" in by_pos[9].rejected_reason
+    assert by_pos[10].rejected_reason is None  # others unaffected
+    assert by_pos[12].outcome == "failed"
