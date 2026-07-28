@@ -277,7 +277,12 @@ _ALIGN_SYSTEM = (
     "carry, adopted, roll-call result), and cite the segment where it is "
     "announced; do NOT infer or invent outcomes. Procedural stretches "
     "(roll-call reading, recesses, chatter between items) belong to no "
-    "item. Reply with JSON only: {\"spans\": [{\"position\": N, "
+    "item. Spans must follow agenda order: no span may start before an "
+    "earlier item's span starts. A ref is sometimes mentioned procedurally "
+    "long before its item is taken up (e.g. an early motion to introduce); "
+    "such early anchor mentions may fall outside the span — bound the span "
+    "where the item is substantively taken up. Reply with JSON only: "
+    "{\"spans\": [{\"position\": N, "
     "\"start_segment\": i or null, \"end_segment\": i or null, "
     "\"outcome\": \"passed\"|\"failed\"|\"continued\"|\"pulled\"|null, "
     "\"outcome_evidence_segment\": i or null}]} with one entry per agenda "
@@ -304,7 +309,8 @@ def build_align_prompt(
     lines.append("")
     lines.append(
         "Mechanical anchors (segment indices whose text contains the item's "
-        "legislation ref — the item's span should cover its anchors):"
+        "legislation ref; early procedural mentions may precede the item's "
+        "actual span):"
     )
     for position in sorted(anchors):
         hits = ", ".join(str(i) for i in anchors[position]) or "none found"
