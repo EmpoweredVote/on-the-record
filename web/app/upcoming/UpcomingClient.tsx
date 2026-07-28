@@ -38,6 +38,12 @@ function UpcomingAgenda({ meetingId }: { meetingId: string }) {
           <Link href={`/items/${item.id}`} className="upcomingItemLink">
             <span className="upcomingItemTitle">
               {item.summary_plain ?? item.title_raw}
+              {item.summary_plain && (
+                // The official name (e.g. "Ordinance 2026-16 – To Amend ...")
+                // stays visible under the plain-language summary — citizens
+                // need the formal handle to look it up or speak to it.
+                <span className="upcomingItemOfficial">{item.title_raw}</span>
+              )}
             </span>
             {item.stage && (
               <span className="upcomingItemStage">{item.stage}</span>

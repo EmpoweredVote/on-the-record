@@ -2085,3 +2085,11 @@ a.skimTs:hover {
 .itemMeta p {
   margin: 0 0 0.3rem;
 }
+
+/* Official legislation name under a plain-language upcoming item */
+.upcomingItemOfficial {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
