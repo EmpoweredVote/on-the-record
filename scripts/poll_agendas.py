@@ -72,12 +72,54 @@ def build_items(parsed, body, source_url: str, source_text: str, client) -> list
     return items
 
 
+def reconcile_memos(body, agendas_dir: Path, *, lookback_days: int, dry_run: bool) -> int:
+    """Reconcile clerk memoranda for recent past meetings. Change-detects on
+    the memo file marker (separate memo_state.json); a meeting whose slug
+    isn't in the DB fails loudly WITHOUT recording the marker, so it retries
+    daily until the meeting publishes or ages out of the window. Returns the
+    failure count."""
+    from datetime import timedelta
+
+    from src.publish import reconcile_memo, scheduled_slug
+
+    start = (date.today() - timedelta(days=lookback_days)).isoformat()
+    end = date.today().isoformat()
+    print(f"Checking {body.slug} memoranda {start} .. {end}")
+    meetings = fetch_meetings_window(start, end, title_prefix=body.meeting_title_prefix)
+    state = PollState(agendas_dir / "memo_state.json")
+    failures = 0
+    for m in meetings:
+        marker = m.memo_updated_marker
+        if not marker:
+            continue  # memo not posted yet
+        slug = scheduled_slug(body, m.start[:10])
+        if state.marker_for(slug) == marker:
+            print(f"  MEMO SKIP {slug}: unchanged")
+            continue
+        if dry_run:
+            print(f"  MEMO DRY-RUN {slug}: memo present, would reconcile")
+            continue
+        try:
+            result = reconcile_memo(slug)
+        except Exception as exc:
+            failures += 1
+            print(f"MEMO FAILED {slug}: {exc}", file=sys.stderr)
+            continue
+        if result.get("memo") is not None:
+            state.record(slug, marker)
+    return failures
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=int, default=8, help="window size in days (default 8)")
     ap.add_argument("--dry-run", action="store_true",
                     help="fetch/parse/interpret but no DB writes and no state recording")
     ap.add_argument("--no-interpret", action="store_true", help="skip LLM interpretation")
+    ap.add_argument("--reconcile-memos", action="store_true",
+                    help="also reconcile clerk memoranda for recent past meetings")
+    ap.add_argument("--lookback-days", type=int, default=10,
+                    help="memo lookback window in days (default 10)")
     args = ap.parse_args()
 
     body = BLOOMINGTON_COMMON_COUNCIL
@@ -137,6 +179,12 @@ def main() -> int:
         except Exception as exc:
             failures += 1
             print(f"FAILED {w.slug}: {exc}", file=sys.stderr)
+
+    if args.reconcile_memos:
+        failures += reconcile_memos(
+            body, agendas_dir,
+            lookback_days=args.lookback_days, dry_run=args.dry_run,
+        )
 
     if failures:
         print(f"{failures} meeting(s) failed", file=sys.stderr)
