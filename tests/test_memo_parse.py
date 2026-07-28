@@ -170,3 +170,25 @@ def test_continue_motion_that_did_not_carry_abstains_with_note():
 def test_empty_text_yields_no_items_with_note():
     memo = parse_memo("")
     assert memo.items == [] and any("template drift" in n for n in memo.notes)
+
+
+def test_pdf_round_trip_matches_frozen_text():
+    from src.pdf_text import extract_text
+    pdf = FIXTURE.with_suffix(".pdf")
+    memo = parse_memo(extract_text(pdf))
+    assert [i.legislation_ref for i in memo.items] == [
+        "Ordinance 2026-15", "Resolution 2026-12",
+        "Resolution 2026-13", "Ordinance 2026-12",
+    ]
+    assert [i.disposition for i in memo.items] == [
+        "continued", "continued", "passed", "failed",
+    ]
+
+
+def test_dispositions_stay_within_outcome_vocabulary():
+    from src.memo_parse import OUTCOME_VOCABULARY
+    memo = parse_memo(FIXTURE.read_text())
+    assert all(
+        i.disposition in OUTCOME_VOCABULARY
+        for i in memo.items if i.disposition is not None
+    )

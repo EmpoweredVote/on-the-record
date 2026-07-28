@@ -205,6 +205,7 @@ def _disposition(motions: list[MemoMotion], notes: list[str]) -> tuple[Optional[
                     f"withdrawal motion did not carry "
                     f"(Ayes {m.tally.ayes}, Nays {m.tally.nays}) — abstaining"
                 )
+    assert result[0] is None or result[0] in OUTCOME_VOCABULARY
     return result
 
 
