@@ -2102,3 +2102,105 @@ a.skimTs:hover {
 
 /* Upcoming item: what this page becomes after the meeting */
 .itemUpcomingNote { color: var(--muted); }
+
+/* ===== Item vote panel (outcome + For/Against member tabs) ===== */
+.itemOutcomeGlyph-passed { color: var(--accent); }
+.itemOutcomeGlyph-failed { color: var(--muted); }
+.votePanel {
+  margin-top: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.voteDescription {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.voteResult {
+  margin: 0;
+  font-weight: 600;
+}
+.voteTabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.voteTab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.voteTab:hover { color: var(--foreground); }
+.voteTab-active {
+  color: var(--foreground);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.voteTabCount {
+  display: inline-block;
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  margin-left: 0.15rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+.voteMembers {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+.voteMembersEmpty {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.votePanel .itemSeekLink { margin-top: 0.6rem; }
+
+/* Link to the official ordinance/resolution text on the city site */
+.itemTextLink {
+  display: inline-block;
+  margin-top: 0.4rem;
+}
+.itemSeekLink + .itemTextLink { margin-left: 1rem; }
+
+/* ===== Who spoke on this item ===== */
+.itemSpeakerGroup {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0.9rem 0 0.3rem;
+}
+.itemSpeakerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.itemSpeakerList li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.itemSpeakerList li:last-child { border-bottom: none; }
+.itemSpeakerRole { color: var(--muted); font-size: 0.9rem; }
+.itemSpeakerSeek {
+  float: right;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
