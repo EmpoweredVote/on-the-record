@@ -459,6 +459,59 @@ def test_build_agenda_item_rows_orders_and_nulls():
     assert len(rows[0]) == 13                 # column count locks INSERT arity
 
 
+# ---------------------------------------------------------------------------
+# Pass B (alignment flip) pure helper
+# ---------------------------------------------------------------------------
+
+def _seg(i, start, end):
+    from src.agenda_align import SegmentRef
+    return SegmentRef(i=i, start=start, end=end, speaker="S", text="t")
+
+
+def test_build_alignment_updates_bound_span_maps_segment_seconds():
+    from src.agenda_align import ItemSpan
+    from src.publish import build_alignment_updates
+
+    segments = [_seg(0, 0.0, 10.5), _seg(1, 10.5, 42.0), _seg(2, 42.0, 99.9)]
+    spans = [
+        ItemSpan(position=3, start_segment=1, end_segment=2, outcome="passed",
+                 outcome_evidence_segment=2),
+    ]
+    rows = build_alignment_updates(spans, segments)
+    assert rows == [("happened", 10.5, 99.9, "passed", 3)]
+
+
+def test_build_alignment_updates_abstained_span_none_bounds():
+    from src.agenda_align import ItemSpan
+    from src.publish import build_alignment_updates
+
+    segments = [_seg(0, 0.0, 10.0)]
+    spans = [ItemSpan(position=1, rejected_reason="position missing from reply")]
+    rows = build_alignment_updates(spans, segments)
+    # Status is 'happened' even without a span: the meeting happened, the
+    # item just wasn't bound (not reached / abstained).
+    assert rows == [("happened", None, None, None, 1)]
+
+
+def test_build_alignment_updates_arity_and_every_item_happened():
+    from src.agenda_align import ItemSpan
+    from src.publish import build_alignment_updates
+
+    segments = [_seg(0, 0.0, 5.0), _seg(1, 5.0, 8.0)]
+    spans = [
+        ItemSpan(position=1, start_segment=0, end_segment=0),  # bound, no outcome
+        ItemSpan(position=2),                                   # abstained
+        ItemSpan(position=5, start_segment=1, end_segment=1, outcome="failed",
+                 outcome_evidence_segment=1),
+    ]
+    rows = build_alignment_updates(spans, segments)
+    assert len(rows) == 3
+    assert all(len(r) == 5 for r in rows)          # arity locks the UPDATE
+    assert all(r[0] == "happened" for r in rows)   # every item flips
+    assert rows[0] == ("happened", 0.0, 5.0, None, 1)
+    assert [r[4] for r in rows] == [1, 2, 5]       # position is last
+
+
 def test_replace_votes_result_uses_outcome_when_present(monkeypatch):
     from src import publish
     from src.models import Meeting, FloorVote

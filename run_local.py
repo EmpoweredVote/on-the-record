@@ -3752,6 +3752,11 @@ Environment Variables:
                              "verdict is 'review' or 'failed' (human override)")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
                         help="Publish an already-processed meeting to Supabase and exit")
+    parser.add_argument("--align-agenda", metavar="MEETING_ID",
+                        help="Align a published meeting's agenda items to its video "
+                             "and flip them to 'happened' in place, then exit "
+                             "(run after --publish-meeting; MEETING_ID must be the "
+                             "scheduled slug, e.g. bloomington-city-council-2026-07-29)")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
     parser.add_argument("--relink-person", metavar="NAME",
@@ -3875,6 +3880,7 @@ def main():
             "--fix-transcripts": _option_supplied(cli_argv, "--fix-transcripts"),
             "--publish": _option_supplied(cli_argv, "--publish"),
             "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
+            "--align-agenda": _option_supplied(cli_argv, "--align-agenda"),
             "--merge-profiles": _option_supplied(cli_argv, "--merge-profiles"),
             "--show-roster": _option_supplied(cli_argv, "--show-roster"),
             "--no-review": _option_supplied(cli_argv, "--no-review"),
@@ -4050,6 +4056,12 @@ def main():
 
     if args.publish_meeting:
         _publish_meeting_standalone(args.publish_meeting, getattr(args, "publish_anyway", False))
+        return
+
+    if args.align_agenda:
+        from src.publish import align_and_flip
+
+        align_and_flip(args.align_agenda)
         return
 
     if args.relink_person:

@@ -687,3 +687,97 @@ def test_align_items_duplicate_position_in_reply_abstains(july22_items, july22_s
     assert "duplicate position" in by_pos[9].rejected_reason
     assert by_pos[10].rejected_reason is None  # others unaffected
     assert by_pos[12].outcome == "failed"
+
+
+# ---------------------------------------------------------------------------
+# July 22 calibration replay — first hand-labeled benchmark meeting.
+#
+# tests/fixtures/alignment/llm_reply_2026-07-22.json is the RAW reply from
+# the live calibration run (scripts/calibrate_alignment.py, 2026-07-28,
+# claude-sonnet-4-5). Ground truth from the published July 22 outline +
+# known outcomes: Ordinance 2026-15 first reading at 23:01 (vote is July
+# 29 -> outcome MUST be None); Resolution 2026-13 discussion at 35:18,
+# roll-call at 1:37:03, passed; Ordinance 2026-12 (Carless Kirkwood)
+# discussion ~1:39:44, veto-override roll-call at 2:52:41, override motion
+# "does not carry" (seg 509); Resolution 2026-12 read at seg 145 then
+# tabled indefinitely (seg 156) -> continued.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def july22_calibrated(july22_items, july22_segments):
+    reply = (FIXTURES / "alignment" / "llm_reply_2026-07-22.json").read_text()
+    spans = align_items(FakeClient(reply), july22_items, july22_segments)
+    return {s.position: s for s in spans}
+
+
+def test_calibration_all_positions_present(july22_calibrated):
+    assert sorted(july22_calibrated) == list(range(1, 16))
+
+
+def test_calibration_2026_15_span_at_23_01_and_no_outcome(july22_calibrated, july22_segments):
+    """First reading: span starts at the known 23:01 mark; its vote is a
+    week later, so any claimed outcome must be gate-stripped to None."""
+    span = july22_calibrated[9]
+    assert span.start_segment == 45 and span.end_segment == 99
+    assert abs(july22_segments[45].start - 1381) <= 15  # 23:01
+    assert span.outcome is None
+    assert span.outcome_evidence_segment is None
+    assert "does not evidence" in span.rejected_reason  # model claimed one; gate killed it
+
+
+def test_calibration_resolution_2026_12_tabled(july22_calibrated, july22_segments):
+    """Alcohol permits: read at seg 145, tabled indefinitely at seg 156 —
+    a real 'continued' with surviving on-the-record evidence."""
+    span = july22_calibrated[10]
+    assert span.start_segment == 144 and span.end_segment == 174
+    assert span.outcome == "continued"
+    assert span.outcome_evidence_segment == 156
+    assert "tabled" in july22_segments[156].text.lower()
+    assert span.rejected_reason is None
+
+
+def test_calibration_resolution_2026_13_span_covers_truth_abstains_on_outcome(
+    july22_calibrated, july22_segments
+):
+    """BHA bonds: span covers the 35:18 discussion and 1:37:03 roll-call.
+    It passed in fact, but the garbled roll-call has no citable outcome
+    phrase — the gate strips the claim: abstain-don't-guess."""
+    span = july22_calibrated[11]
+    assert span.start_segment is not None
+    assert july22_segments[span.start_segment].start <= 2118  # 35:18
+    assert july22_segments[span.end_segment].end >= 5823      # 1:37:03
+    assert span.outcome is None
+    assert "does not evidence" in span.rejected_reason
+
+
+def test_calibration_kirkwood_override_failed(july22_calibrated, july22_segments):
+    """Carless Kirkwood: span covers discussion (~1:39:44) through the
+    veto-override roll-call (2:52:41); 'motion does not carry' (seg 509)
+    is the meeting's one explicit outcome announcement."""
+    span = july22_calibrated[12]
+    assert span.start_segment == 395 and span.end_segment == 509
+    assert july22_segments[395].start <= 5984   # ~1:39:44 discussion
+    assert july22_segments[509].end >= 10361    # 2:52:41 roll-call
+    assert span.outcome == "failed"
+    assert span.outcome_evidence_segment == 509
+    assert "does not carry" in july22_segments[509].text.lower()
+    assert span.rejected_reason is None
+
+
+def test_calibration_monotonic_and_binding_floor(july22_calibrated):
+    """Accepted spans follow agenda order, and the run bound 10 of 15 items
+    (the verified floor); the 5 unbound are exactly the expected short-title
+    containment casualties (Roll Call, 4A Council members, 4D Public*,
+    Council Schedule, Adjournment)."""
+    bound = {p for p, s in july22_calibrated.items() if s.start_segment is not None}
+    assert bound == {2, 3, 5, 6, 8, 9, 10, 11, 12, 13}
+    starts = [
+        july22_calibrated[p].start_segment
+        for p in sorted(bound)
+    ]
+    assert starts == sorted(starts)
+    for pos in (1, 4, 7, 14, 15):
+        span = july22_calibrated[pos]
+        assert span.start_segment is None
+        assert "containment" in span.rejected_reason

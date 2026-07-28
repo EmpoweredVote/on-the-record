@@ -1,0 +1,111 @@
+```json
+{
+  "spans": [
+    {
+      "position": 1,
+      "start_segment": 0,
+      "end_segment": 9,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 2,
+      "start_segment": 10,
+      "end_segment": 10,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 3,
+      "start_segment": 11,
+      "end_segment": 11,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 4,
+      "start_segment": 12,
+      "end_segment": 17,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 5,
+      "start_segment": 18,
+      "end_segment": 24,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 6,
+      "start_segment": 25,
+      "end_segment": 25,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 7,
+      "start_segment": 26,
+      "end_segment": 44,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 8,
+      "start_segment": 44,
+      "end_segment": 44,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 9,
+      "start_segment": 45,
+      "end_segment": 99,
+      "outcome": "continued",
+      "outcome_evidence_segment": 81
+    },
+    {
+      "position": 10,
+      "start_segment": 144,
+      "end_segment": 174,
+      "outcome": "continued",
+      "outcome_evidence_segment": 156
+    },
+    {
+      "position": 11,
+      "start_segment": 176,
+      "end_segment": 393,
+      "outcome": "passed",
+      "outcome_evidence_segment": 391
+    },
+    {
+      "position": 12,
+      "start_segment": 395,
+      "end_segment": 509,
+      "outcome": "failed",
+      "outcome_evidence_segment": 509
+    },
+    {
+      "position": 13,
+      "start_segment": 509,
+      "end_segment": 509,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 14,
+      "start_segment": 510,
+      "end_segment": 513,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    },
+    {
+      "position": 15,
+      "start_segment": 514,
+      "end_segment": 514,
+      "outcome": null,
+      "outcome_evidence_segment": null
+    }
+  ]
+}
+```

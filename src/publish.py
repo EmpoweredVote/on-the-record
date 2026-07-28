@@ -652,6 +652,201 @@ def publish_scheduled_meeting(body, date: str, title: str, starts_at: str,
     return slug
 
 
+# ---------------------------------------------------------------------------
+# Pass B: align published agenda items to the processed video and flip them
+# to 'happened' — in place (UPDATE only; item ids are public permalinks).
+# ---------------------------------------------------------------------------
+
+def build_alignment_updates(spans, segments) -> list[tuple]:
+    """Rows for _update_aligned_items: (status, segment_start_seconds,
+    segment_end_seconds, outcome, position).
+
+    Status is 'happened' for EVERY item — the meeting happened; an item whose
+    span abstained is happened-without-span (not reached), so its bounds stay
+    None. Seconds come from the span's boundary segments.
+    """
+    rows = []
+    for span in spans:
+        if span.start_segment is None or span.end_segment is None:
+            start_s = end_s = None
+        else:
+            start_s = segments[span.start_segment].start
+            end_s = segments[span.end_segment].end
+        rows.append(("happened", start_s, end_s, span.outcome, span.position))
+    return rows
+
+
+def _update_aligned_items(cur, meeting_uuid: str, updates: list[tuple]) -> None:
+    """Per-row in-place UPDATE of meetings.agenda_items. NEVER deletes —
+    item ids are public permalinks.
+
+    ``updates`` tuples are (status, start_s, end_s, outcome, position) and do
+    not carry the meeting uuid; SQL params are composed here in the statement's
+    placeholder order: (status, start_s, end_s, outcome, meeting_uuid, position).
+    """
+    cur.executemany(
+        """
+        UPDATE meetings.agenda_items
+        SET status = %s,
+            segment_start_seconds = %s,
+            segment_end_seconds = %s,
+            outcome = %s,
+            updated_at = now()
+        WHERE meeting_id = %s AND position = %s
+        """,
+        [
+            (status, start_s, end_s, outcome, meeting_uuid, position)
+            for (status, start_s, end_s, outcome, position) in updates
+        ],
+    )
+
+
+def _hms(seconds: float) -> str:
+    total = int(seconds)
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}"
+
+
+def align_and_flip(meeting_id: str) -> dict:
+    """Align a published meeting's agenda items to its processed video and
+    flip every item to 'happened' in place.
+
+    ``meeting_id`` is the meeting SLUG — for an agenda-first meeting that is
+    the scheduled slug ('{body}-{date}', e.g.
+    bloomington-city-council-2026-07-29), which the video pass must also have
+    used so both passes share one row. Loads the local transcript, absolutizes
+    times into the source video's timeline (matching the published segments),
+    runs the anchor→LLM→gates→oracle chain, and UPDATEs the item rows.
+    """
+    from . import config
+    from .agenda_align import SegmentRef, align_items, apply_oracle
+    from .agenda_parse import ParsedItem
+    from .clip import absolutize_meeting_times
+    from .legislation_oracle import _default_fetch
+
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    named_path = meeting_dir / "transcript_named.json"
+    if not named_path.exists():
+        raise RuntimeError(
+            f"No transcript_named.json for {meeting_id!r} (expected {named_path})"
+        )
+    with open(named_path, "r", encoding="utf-8") as f:
+        meeting = Meeting.from_dict(json.load(f))
+    if meeting.clip_start_seconds is None:
+        # Pre-clip-feature transcripts kept the window in pipeline state only
+        # (same fallback as the publish loader).
+        from .checkpoint import PipelineState
+
+        meeting.clip_start_seconds = PipelineState(meeting_dir).clip_start_seconds
+    meeting = absolutize_meeting_times(meeting)
+    segments = [
+        SegmentRef(
+            i=i,
+            start=seg.start_time,
+            end=seg.end_time,
+            speaker=seg.speaker_name or seg.speaker_label or "",
+            text=seg.text or "",
+        )
+        for i, seg in enumerate(meeting.segments)
+    ]
+
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM meetings.meetings WHERE slug = %s",
+                    (meeting_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise RuntimeError(
+                        f"No published meeting with slug {meeting_id!r}."
+                    )
+                meeting_uuid = row[0]
+                cur.execute(
+                    """
+                    SELECT position, item_number, title_raw, legislation_ref
+                    FROM meetings.agenda_items
+                    WHERE meeting_id = %s
+                    ORDER BY position
+                    """,
+                    (meeting_uuid,),
+                )
+                item_rows = cur.fetchall()
+        if not item_rows:
+            raise RuntimeError(
+                f"Meeting {meeting_id!r} has no agenda_items rows — nothing to "
+                "align. This usually means the video pass published under a "
+                "slug the agenda pass never used (wrong --meeting-id): the "
+                "scheduled slug (e.g. bloomington-city-council-2026-07-29) is "
+                "required so both passes share one meeting row."
+            )
+        items = [
+            ParsedItem(
+                position=position,
+                item_number=item_number or "",
+                section="",
+                section_number=0,
+                title_raw=title_raw or "",
+                legislation_ref=legislation_ref,
+            )
+            for (position, item_number, title_raw, legislation_ref) in item_rows
+        ]
+
+        # LLM + oracle run OUTSIDE any transaction (slow network calls).
+        import anthropic
+
+        client = anthropic.Anthropic()
+        spans = align_items(client, items, segments)
+        spans = apply_oracle(spans, items, fetch=_default_fetch)
+        updates = build_alignment_updates(spans, segments)
+
+        with conn:
+            with conn.cursor() as cur:
+                _update_aligned_items(cur, meeting_uuid, updates)
+    finally:
+        conn.close()
+
+    by_position = {item.position: item for item in items}
+    bound = [s for s in spans if s.start_segment is not None]
+    outcomes = {s.position: s.outcome for s in spans if s.outcome}
+    abstained = [
+        {"position": s.position,
+         "item_number": by_position[s.position].item_number,
+         "reason": s.rejected_reason or "no span proposed"}
+        for s in spans if s.start_segment is None
+    ]
+
+    print(f"\n=== Agenda alignment: {meeting_id} ===")
+    print(f"  {len(items)} item(s) flipped to 'happened', "
+          f"{len(bound)} bound to video spans, {len(outcomes)} outcome(s).")
+    for span in spans:
+        item = by_position[span.position]
+        label = f"  [{item.item_number:>4}] pos {span.position:<3}"
+        if span.start_segment is None:
+            reason = span.rejected_reason or "no span proposed"
+            print(f"{label} ABSTAINED — {reason}")
+        else:
+            start_s = segments[span.start_segment].start
+            end_s = segments[span.end_segment].end
+            line = f"{label} {_hms(start_s)}–{_hms(end_s)}"
+            line += f"  outcome: {span.outcome or 'none'}"
+            if span.outcome is None and span.rejected_reason:
+                line += f" ({span.rejected_reason})"
+            print(line)
+    print("=" * 40)
+
+    return {
+        "meeting_id": meeting_id,
+        "items": len(items),
+        "bound": len(bound),
+        "outcomes": outcomes,
+        "abstained": abstained,
+    }
+
+
 def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
     """Delete-then-insert meeting_topics rows from meeting.section_topics.
 
