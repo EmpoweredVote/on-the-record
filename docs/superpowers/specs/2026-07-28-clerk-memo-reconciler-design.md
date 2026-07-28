@@ -76,7 +76,8 @@ Three new units plus wiring:
      pass-abstention fix). Items without refs are never touched. Memo refs with no
      matching item and items whose memo section had no disposition → logged, no change.
      Zero agenda_items rows (e.g. July 22, pre-poller) → zero updates, still writes votes.
-   - **Votes:** one `meetings.votes` row per *dispositive* motion with a recorded vote
+   - **Votes:** one `meetings.votes` row per *substantive* motion (adopt/continue/pull
+     kinds) with a recorded roll call — including ones that did not carry
      (procedural read-by-title roll calls are noise): `resolution` = legislation_ref,
      `description` = the motion sentence verbatim (trimmed), `result` = "Passed 8–0" /
      "Failed 4–4" / "Continued 8–0" / "Pulled N–N", `vote_type` = 'roll call',

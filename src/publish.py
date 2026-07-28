@@ -512,6 +512,9 @@ def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
     store the parsed outcome + tally ("Agreed to · 236–193"), falling back to the
     bare tally ("Yea X, Nay Y") when CREC has no parseable outcome line.
     Timestamps are expected to already be source-absolute (absolutize_meeting_times).
+    Since the memo reconciler (reconcile_memo) became a second writer of this
+    table (vote_type 'roll call'), re-publishing wipes its rows too — re-run
+    --reconcile-memo afterwards.
     """
     cur.execute("DELETE FROM meetings.votes WHERE meeting_id = %s", (meeting_uuid,))
     rows = []
@@ -916,7 +919,7 @@ def reconcile_memo(meeting_id: str) -> dict:
                 f"{meeting_date.isoformat()} — cannot locate a memorandum."
             )
         if len(matches) > 1:
-            print(f"  NOTE: {len(matches)} OnBoard meetings match "
+            print(f"  NOTE [{meeting_id}]: {len(matches)} OnBoard meetings match "
                   f"{meeting_date.isoformat()} — using the first")
         memo_url = matches[0].memo_url
         if memo_url is None:

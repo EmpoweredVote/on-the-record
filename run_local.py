@@ -3751,7 +3751,9 @@ Environment Variables:
                         help="Force publishing even when the confidence gate "
                              "verdict is 'review' or 'failed' (human override)")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
-                        help="Publish an already-processed meeting to Supabase and exit")
+                        help="Publish an already-processed meeting to Supabase and exit"
+                             "; re-publishing wipes memo-reconciled votes — re-run "
+                             "--reconcile-memo after")
     parser.add_argument("--align-agenda", metavar="MEETING_ID",
                         help="Align a published meeting's agenda items to its video "
                              "and flip them to 'happened' in place, then exit "
