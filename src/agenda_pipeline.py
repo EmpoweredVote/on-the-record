@@ -65,3 +65,15 @@ def plan_work(meetings, state: "PollState", *, body_slug: str):
             continue
         work.append(WorkItem(slug=slug, meeting=m, date=date))
     return work, skipped
+
+
+def download_file(url: str, dest: Path) -> Path:
+    """Download an OnBoard document (agenda/memo PDF) to dest. Shared by the
+    poller and publish.reconcile_memo so UA/timeout live in one place."""
+    import requests
+
+    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(resp.content)
+    return dest

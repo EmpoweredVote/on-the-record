@@ -860,9 +860,8 @@ def reconcile_memo(meeting_id: str) -> dict:
     the meeting wipes these votes via _replace_votes; re-run this after any
     re-publish (see the runbook).
     """
-    import requests
-
     from . import config
+    from .agenda_pipeline import download_file
     from .bodies import BLOOMINGTON_COMMON_COUNCIL as body  # single body today
     from .memo_parse import parse_memo
     from .memo_reconcile import AgendaItemRow, SpeakerRow, build_reconcile_plan
@@ -916,6 +915,9 @@ def reconcile_memo(meeting_id: str) -> dict:
                 f"OnBoard has no {body.meeting_title_prefix!r} meeting on "
                 f"{meeting_date.isoformat()} — cannot locate a memorandum."
             )
+        if len(matches) > 1:
+            print(f"  NOTE: {len(matches)} OnBoard meetings match "
+                  f"{meeting_date.isoformat()} — using the first")
         memo_url = matches[0].memo_url
         if memo_url is None:
             print(f"\n=== Memo reconcile: {meeting_id} ===")
@@ -924,11 +926,7 @@ def reconcile_memo(meeting_id: str) -> dict:
             return {"meeting_id": meeting_id, "memo": None}
 
         pdf_path = config.DRIVE_ROOT / "agendas" / body.slug / meeting_id / "memo.pdf"
-        pdf_path.parent.mkdir(parents=True, exist_ok=True)
-        resp = requests.get(memo_url, timeout=(30, 120),
-                            headers={"User-Agent": "Mozilla/5.0"})
-        resp.raise_for_status()
-        pdf_path.write_bytes(resp.content)
+        download_file(memo_url, pdf_path)
 
         memo = parse_memo(extract_text(pdf_path))
         plan = build_reconcile_plan(memo, agenda_items, speakers)
@@ -955,7 +953,6 @@ def reconcile_memo(meeting_id: str) -> dict:
                     "DELETE FROM meetings.votes WHERE meeting_id = %s",
                     (meeting_uuid,),
                 )
-                record_count = 0
                 for vote in plan.votes:
                     cur.execute(
                         """
@@ -979,9 +976,10 @@ def reconcile_memo(meeting_id: str) -> dict:
                             """,
                             [(vote_uuid, sid, pos) for (sid, pos) in vote.records],
                         )
-                        record_count += len(vote.records)
     finally:
         conn.close()
+
+    record_count = sum(len(v.records) for v in plan.votes)
 
     print(f"\n=== Memo reconcile: {meeting_id} ===")
     print(f"  {len(memo.items)} memo item(s); {len(plan.outcome_updates)} outcome "

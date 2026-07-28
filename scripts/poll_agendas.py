@@ -30,12 +30,10 @@ from gui.env import load_env_local
 
 load_env_local()  # before src.config so CS_DATA_DIR/API keys are visible
 
-import requests
-
 from src import config
 from src.agenda_interpret import interpret_item
 from src.agenda_parse import parse_agenda
-from src.agenda_pipeline import PollState, plan_work
+from src.agenda_pipeline import PollState, download_file, plan_work
 from src.bodies import BLOOMINGTON_COMMON_COUNCIL, classify_item
 from src.models import AgendaItem
 from src.onboard import fetch_meetings_window
@@ -43,14 +41,6 @@ from src.pdf_text import extract_text
 from src.publish import publish_scheduled_meeting
 
 INTERPRET_KINDS = ("ordinance", "resolution", "appointment")
-
-
-def download_agenda(url: str, dest: Path) -> Path:
-    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(resp.content)
-    return dest
 
 
 def build_items(parsed, body, source_url: str, source_text: str, client) -> list[AgendaItem]:
@@ -113,7 +103,7 @@ def main() -> int:
     for w in work:
         try:
             meeting = w.meeting
-            pdf_path = download_agenda(meeting.agenda_url, agendas_dir / w.slug / "agenda.pdf")
+            pdf_path = download_file(meeting.agenda_url, agendas_dir / w.slug / "agenda.pdf")
             text = extract_text(pdf_path)
             parsed = parse_agenda(text)
             if not parsed:
