@@ -14,8 +14,10 @@ Rules calibrated on that fixture:
   discuss Ordinance 2026-13" inside the 2026-15 subsection) that would
   misattribute under ref-scanning.
 - Disposition = the LAST motion in the item's scope that has a recorded
-  roll-call vote and carried. A moved-but-unvoted motion is a non-event
-  (Res 2026-12's adoption motion was superseded by the table motion).
+  roll-call vote and either carried, or — for an adoption motion — was
+  tagged FAILED (a failed adoption IS the disposition). A moved-but-unvoted
+  motion is a non-event (Res 2026-12's adoption motion was superseded by
+  the table motion).
 - The "Actions on Legislation:" history block never matches the motion
   grammar, so prior-meeting actions are naturally excluded.
 - Abstain-don't-guess: an unrecognized action clause is kind "unknown" and
@@ -29,8 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-#: Outcome vocabulary shared with agenda_align / legislation_oracle.
-OUTCOME_VOCABULARY = ("passed", "failed", "continued", "pulled")
+from .agenda_align import OUTCOME_VOCABULARY  # single source of truth
 
 _SECTION_RE = re.compile(r"^(\d+)\.\s+(.+?)\s*(?:\[(\d{1,2}:\d{2}\s*[ap]m)\])?\s*$")
 _SUBSECTION_RE = re.compile(r"^(\d+)\.(\d+)\.\s*(.*)$")
@@ -102,7 +103,7 @@ def _classify_action(clause: str) -> str:
     lowered = clause.lower()
     if "read by title" in lowered or "be introduced" in lowered:
         return "procedural"
-    if lowered.startswith("discuss ") or " discuss " in f" {lowered} ":
+    if " discuss " in f" {lowered} ":
         return "procedural"
     if "be adopted" in lowered or "be approved" in lowered:
         return "adopt"
@@ -122,6 +123,9 @@ def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
         # The action clause runs from "seconded that/to" to the result
         # sentence ("The motion ...") or the block end.
         clause_start = start.end() - start.start()
+        # The literal "The motion" anchor is template-calibrated; if the
+        # clerk's wording drifts, the clause simply absorbs the result
+        # sentence too (harmless for classification today).
         cut = block.find("The motion")
         clause = block[clause_start:cut if cut != -1 else len(block)].strip(" .")
         kind = _classify_action(clause)
@@ -185,10 +189,22 @@ def _disposition(motions: list[MemoMotion], notes: list[str]) -> tuple[Optional[
                     f"adoption vote neither carried nor tagged FAILED "
                     f"(Ayes {m.tally.ayes}, Nays {m.tally.nays}) — abstaining"
                 )
-        elif m.kind == "continue" and _carried(m):
-            result = ("continued", i)
-        elif m.kind == "pull" and _carried(m):
-            result = ("pulled", i)
+        elif m.kind == "continue":
+            if _carried(m):
+                result = ("continued", i)
+            else:
+                notes.append(
+                    f"continuance motion did not carry "
+                    f"(Ayes {m.tally.ayes}, Nays {m.tally.nays}) — abstaining"
+                )
+        elif m.kind == "pull":
+            if _carried(m):
+                result = ("pulled", i)
+            else:
+                notes.append(
+                    f"withdrawal motion did not carry "
+                    f"(Ayes {m.tally.ayes}, Nays {m.tally.nays}) — abstaining"
+                )
     return result
 
 

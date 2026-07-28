@@ -151,3 +151,22 @@ def test_timetable_does_not_read_as_tabling():
     item = memo.items[0]
     assert item.motions[0].kind == "unknown"
     assert item.disposition is None
+
+
+def test_continue_motion_that_did_not_carry_abstains_with_note():
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-95\n"
+        "Daily moved and Ruff seconded to postpone consideration of "
+        "Ordinance 2026-95 until August 5, 2026. The motion received a "
+        "roll call vote of Ayes: 3, Nays: 5, Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    assert item.disposition is None
+    assert any("did not carry" in n for n in item.notes)
+
+
+def test_empty_text_yields_no_items_with_note():
+    memo = parse_memo("")
+    assert memo.items == [] and any("template drift" in n for n in memo.notes)
