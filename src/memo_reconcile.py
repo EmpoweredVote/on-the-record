@@ -3,9 +3,10 @@
 The memo is authoritative for outcomes and votes: dispositions OVERWRITE
 agenda_items.outcome (this is the fix for the pass-abstention limitation —
 the chair never says "motion carries", so the LLM pass abstains on passes),
-and every dispositive motion with a recorded roll call becomes a
-meetings.votes row. Named split votes additionally plan per-member
-meetings.vote_records rows.
+and every substantive motion (adopt/continue/pull kinds) with a recorded
+roll call — including ones that did not carry — becomes a meetings.votes
+row. Named split votes additionally plan per-member meetings.vote_records
+rows.
 
 vote_records.speaker_id is NOT NULL and speakers are diarization-owned, so
 a memo name with no (or an ambiguous) speaker match SKIPS that record with
@@ -14,13 +15,15 @@ plan no records (deriving members from attendance would be a guess).
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .memo_parse import MemoMotion, ParsedMemo
+from .memo_parse import MemoMotion, ParsedMemo, carried
 
 #: Dispositive motion kinds -> the word used in the vote result string when
 #: the motion carried. (A FAILED-tagged or not-carried motion reads "Failed".)
+#: Also does double duty as the set of vote-eligible motion kinds.
 _CARRIED_WORDS = {"adopt": "Passed", "continue": "Continued", "pull": "Pulled"}
 
 
@@ -79,8 +82,7 @@ def match_speaker(
 
 def _result_string(motion: MemoMotion) -> str:
     t = motion.tally
-    carried = not motion.failed_tag and t.ayes > t.nays
-    word = _CARRIED_WORDS[motion.kind] if carried else "Failed"
+    word = _CARRIED_WORDS[motion.kind] if carried(motion) else "Failed"
     result = f"{word} {t.ayes}–{t.nays}"
     if t.abstain:
         result += f", {t.abstain} abstaining"
@@ -111,7 +113,19 @@ def build_reconcile_plan(
     speakers: list[SpeakerRow],
 ) -> ReconcilePlan:
     plan = ReconcilePlan(notes=list(memo.notes))
-    by_ref = {i.legislation_ref: i for i in agenda_items if i.legislation_ref}
+
+    ref_counts = Counter(i.legislation_ref for i in agenda_items if i.legislation_ref)
+    duplicate_refs = {ref for ref, n in ref_counts.items() if n > 1}
+    for ref in sorted(duplicate_refs):
+        plan.notes.append(
+            f"{ref}: {ref_counts[ref]} agenda items share this ref — ambiguous, "
+            "votes written unattached, no outcome update"
+        )
+    by_ref = {
+        i.legislation_ref: i
+        for i in agenda_items
+        if i.legislation_ref and i.legislation_ref not in duplicate_refs
+    }
 
     for item in memo.items:
         plan.notes.extend(f"{item.legislation_ref}: {n}" for n in item.notes)

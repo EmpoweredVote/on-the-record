@@ -164,7 +164,7 @@ def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
     return motions
 
 
-def _carried(motion: MemoMotion) -> bool:
+def carried(motion: MemoMotion) -> bool:
     return (
         motion.tally is not None
         and not motion.failed_tag
@@ -182,7 +182,7 @@ def _disposition(motions: list[MemoMotion], notes: list[str]) -> tuple[Optional[
         if m.kind == "adopt":
             if m.failed_tag:
                 result = ("failed", i)
-            elif _carried(m):
+            elif carried(m):
                 result = ("passed", i)
             else:
                 notes.append(
@@ -190,7 +190,7 @@ def _disposition(motions: list[MemoMotion], notes: list[str]) -> tuple[Optional[
                     f"(Ayes {m.tally.ayes}, Nays {m.tally.nays}) — abstaining"
                 )
         elif m.kind == "continue":
-            if _carried(m):
+            if carried(m):
                 result = ("continued", i)
             else:
                 notes.append(
@@ -198,7 +198,7 @@ def _disposition(motions: list[MemoMotion], notes: list[str]) -> tuple[Optional[
                     f"(Ayes {m.tally.ayes}, Nays {m.tally.nays}) — abstaining"
                 )
         elif m.kind == "pull":
-            if _carried(m):
+            if carried(m):
                 result = ("pulled", i)
             else:
                 notes.append(

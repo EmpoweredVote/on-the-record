@@ -5,6 +5,8 @@ and asserts the full plan against hand-checked ground truth.
 """
 from pathlib import Path
 
+import pytest
+
 from src.memo_parse import parse_memo
 from src.memo_reconcile import (
     AgendaItemRow, SpeakerRow, build_reconcile_plan, match_speaker,
@@ -26,6 +28,11 @@ SPEAKERS = [
 ]
 
 
+@pytest.fixture(scope="module")
+def memo():
+    return parse_memo(FIXTURE.read_text())
+
+
 def test_match_speaker_last_name_suffix():
     assert match_speaker("Asare", SPEAKERS)[0] == "s-asare"          # multi-word surname
     assert match_speaker("Piedmont-Smith", SPEAKERS)[0] == "s-piedmont"
@@ -40,8 +47,7 @@ def test_match_speaker_missing_and_ambiguous():
     assert sid is None and "ambiguous" in note
 
 
-def test_july22_plan_end_to_end():
-    memo = parse_memo(FIXTURE.read_text())
+def test_july22_plan_end_to_end(memo):
     agenda_items = [
         AgendaItemRow("i-15", 10, "Ordinance 2026-15", None),
         AgendaItemRow("i-r12", 11, "Resolution 2026-12", None),
@@ -76,8 +82,7 @@ def test_july22_plan_end_to_end():
     ])
 
 
-def test_memo_ref_without_agenda_item_still_votes_no_update():
-    memo = parse_memo(FIXTURE.read_text())
+def test_memo_ref_without_agenda_item_still_votes_no_update(memo):
     plan = build_reconcile_plan(memo, [], SPEAKERS)   # July 22 reality: no items
     assert plan.outcome_updates == []
     assert len(plan.votes) == 4
@@ -85,10 +90,21 @@ def test_memo_ref_without_agenda_item_still_votes_no_update():
     assert any("no agenda item" in n for n in plan.notes)
 
 
-def test_unmatched_member_skipped_with_note():
-    memo = parse_memo(FIXTURE.read_text())
+def test_unmatched_member_skipped_with_note(memo):
     thin = [s for s in SPEAKERS if s.id != "s-ruff"]  # Ruff never spoke
     plan = build_reconcile_plan(memo, [], thin)
     split = [v for v in plan.votes if v.resolution == "Ordinance 2026-12"][0]
     assert len(split.records) == 7
     assert any("Ruff" in n for n in plan.notes)
+
+
+def test_duplicate_agenda_refs_abstain(memo):
+    dupes = [
+        AgendaItemRow("i-a", 1, "Resolution 2026-13", None),
+        AgendaItemRow("i-b", 2, "Resolution 2026-13", None),
+    ]
+    plan = build_reconcile_plan(memo, dupes, SPEAKERS)
+    assert plan.outcome_updates == []
+    r13 = [v for v in plan.votes if v.resolution == "Resolution 2026-13"][0]
+    assert r13.agenda_item_id is None
+    assert any("share this ref" in n for n in plan.notes)
