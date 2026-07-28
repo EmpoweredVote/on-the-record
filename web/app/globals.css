@@ -747,6 +747,12 @@ a {
   flex-shrink: 0;
 }
 
+/* The global `* { padding: 0 }` reset strips the ul's padding-inline-start, so
+   default `list-style: disc` markers would sit outside the card's padding box. */
+.outline ul {
+  list-style: none;
+}
+
 .outlineItem {
   padding: 0.35rem 0;
   border-bottom: 1px solid var(--border);
