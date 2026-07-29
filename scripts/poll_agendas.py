@@ -19,7 +19,9 @@ checks recent PAST meetings for a posted clerk Memorandum and runs
 publish.reconcile_memo on new/changed ones. Change detection uses a separate
 memo_state.json marker file; a failed reconcile (e.g. meeting not yet
 published under its scheduled slug) is NOT recorded, so it retries daily
-until it succeeds or ages out of the window.
+until it succeeds or ages out of the window. An unchanged marker whose
+memo-stripe votes have gone missing from the DB self-heals by
+re-reconciling instead of trusting the marker.
 
 Requires DATABASE_URL (and ANTHROPIC_API_KEY unless --no-interpret) in
 .env.local. Failures are loud, per-meeting, and non-fatal: each failed
@@ -85,8 +87,16 @@ def reconcile_memos(body, agendas_dir: Path, *, lookback_days: int, dry_run: boo
     the memo file marker (separate memo_state.json); a meeting whose slug
     isn't in the DB fails loudly WITHOUT recording the marker, so it retries
     daily until the meeting publishes or ages out of the window. Returns the
-    failure count."""
-    from src.publish import reconcile_memo, scheduled_slug
+    failure count.
+
+    Self-heal: an unchanged marker is also cross-checked against the DB
+    (memo_votes_present) — if the marker says reconciled but the memo-stripe
+    votes are gone (e.g. wiped by hand, or a bug), we re-reconcile instead of
+    trusting the marker. Known bounded edge: a meeting whose memo genuinely
+    yields zero substantive votes will re-heal daily until it ages out of the
+    lookback window — harmless, loud, bounded.
+    """
+    from src.publish import memo_votes_present, reconcile_memo, scheduled_slug
 
     start = (date.today() - timedelta(days=lookback_days)).isoformat()
     end = date.today().isoformat()
@@ -100,8 +110,11 @@ def reconcile_memos(body, agendas_dir: Path, *, lookback_days: int, dry_run: boo
             continue  # memo not posted yet
         slug = scheduled_slug(body, m.start[:10])
         if state.marker_for(slug) == marker:
-            print(f"  MEMO SKIP {slug}: unchanged")
-            continue
+            if dry_run or memo_votes_present(slug):
+                print(f"  MEMO SKIP {slug}: unchanged")
+                continue
+            print(f"  MEMO HEAL {slug}: marker recorded but roll-call votes "
+                  "missing — re-reconciling")
         if dry_run:
             print(f"  MEMO DRY-RUN {slug}: memo present, would reconcile")
             continue

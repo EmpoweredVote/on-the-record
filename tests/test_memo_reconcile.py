@@ -9,7 +9,8 @@ import pytest
 
 from src.memo_parse import parse_memo
 from src.memo_reconcile import (
-    AgendaItemRow, SpeakerRow, build_reconcile_plan, match_speaker,
+    AgendaItemRow, SpeakerRow, build_reconcile_plan, diff_plan_against_db,
+    match_speaker,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "onboard" / "memo_2026-07-22.txt"
@@ -110,6 +111,23 @@ def test_duplicate_agenda_refs_abstain(memo):
     r13 = [v for v in plan.votes if v.resolution == "Resolution 2026-13"][0]
     assert r13.agenda_item_id is None
     assert any("share this ref" in n for n in plan.notes)
+
+
+def test_diff_clean_when_db_matches(memo):
+    plan = build_reconcile_plan(memo, [], SPEAKERS)
+    existing = [(v.resolution, v.result, len(v.records)) for v in plan.votes]
+    assert diff_plan_against_db(plan, [], existing) == []
+
+
+def test_diff_flags_missing_extra_and_outcome(memo):
+    items = [AgendaItemRow("i-r13", 12, "Resolution 2026-13", "failed")]  # wrong outcome
+    plan = build_reconcile_plan(memo, items, SPEAKERS)
+    existing = [(v.resolution, v.result, len(v.records)) for v in plan.votes][1:]  # one missing
+    existing.append(("Ordinance 9999-9", "Passed 1–0", 0))                          # one extra
+    drift = diff_plan_against_db(plan, items, existing)
+    assert any("missing" in d for d in drift)
+    assert any("Ordinance 9999-9" in d and "unexpected" in d for d in drift)
+    assert any("Resolution 2026-13" in d and "outcome" in d for d in drift)
 
 
 def test_tie_without_tag_gets_bare_tally_result():

@@ -59,6 +59,36 @@ class ReconcilePlan:
     notes: list[str] = field(default_factory=list)
 
 
+def diff_plan_against_db(
+    plan: ReconcilePlan,
+    agenda_items: list[AgendaItemRow],
+    existing_votes: list[tuple[str, str, int]],  # (resolution, result, record_count)
+) -> list[str]:
+    """Drift between what the memo says and what the DB holds (read-only).
+
+    Returns human-readable drift lines; empty list = DB matches the memo.
+    Votes compare as multisets of (resolution, result, record_count);
+    outcomes compare each planned update against the snapshot's outcome.
+    """
+    drift: list[str] = []
+    expected = Counter((v.resolution, v.result, len(v.records)) for v in plan.votes)
+    actual = Counter(existing_votes)
+    for key in sorted(expected - actual):
+        drift.append(f"vote missing from DB: {key[0]} | {key[1]} | {key[2]} record(s)")
+    for key in sorted(actual - expected):
+        drift.append(f"unexpected vote in DB: {key[0]} | {key[1]} | {key[2]} record(s)")
+
+    outcome_by_id = {i.id: i.outcome for i in agenda_items}
+    ref_by_id = {i.id: i.legislation_ref for i in agenda_items}
+    for outcome, item_id in plan.outcome_updates:
+        if outcome_by_id.get(item_id) != outcome:
+            drift.append(
+                f"outcome drift on {ref_by_id.get(item_id) or item_id}: "
+                f"memo says {outcome!r}, DB has {outcome_by_id.get(item_id)!r}"
+            )
+    return drift
+
+
 def match_speaker(
     member_name: str, speakers: list[SpeakerRow]
 ) -> tuple[Optional[str], Optional[str]]:

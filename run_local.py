@@ -3762,6 +3762,10 @@ Environment Variables:
                              "votes from the clerk's post-meeting Memorandum, "
                              "then exit (MEETING_ID is the meeting slug; re-run "
                              "only when the clerk re-posts the memo)")
+    parser.add_argument("--check-memo", metavar="MEETING_ID",
+                        help="Read-only: recompute the memo reconcile plan and "
+                             "report drift against the DB, then exit non-zero "
+                             "on drift")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
     parser.add_argument("--relink-person", metavar="NAME",
@@ -3887,6 +3891,7 @@ def main():
             "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
             "--align-agenda": _option_supplied(cli_argv, "--align-agenda"),
             "--reconcile-memo": _option_supplied(cli_argv, "--reconcile-memo"),
+            "--check-memo": _option_supplied(cli_argv, "--check-memo"),
             "--merge-profiles": _option_supplied(cli_argv, "--merge-profiles"),
             "--show-roster": _option_supplied(cli_argv, "--show-roster"),
             "--no-review": _option_supplied(cli_argv, "--no-review"),
@@ -4075,6 +4080,12 @@ def main():
 
         reconcile_memo(args.reconcile_memo)
         return
+
+    if args.check_memo:
+        from src.publish import reconcile_memo
+
+        result = reconcile_memo(args.check_memo, check=True)
+        sys.exit(1 if result.get("drift") else 0)
 
     if args.relink_person:
         _relink_person(args)

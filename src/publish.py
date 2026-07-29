@@ -891,7 +891,7 @@ def align_and_flip(meeting_id: str) -> dict:
     }
 
 
-def reconcile_memo(meeting_id: str) -> dict:
+def reconcile_memo(meeting_id: str, check: bool = False) -> dict:
     """Reconcile a meeting's item outcomes and votes from the clerk's
     post-meeting Memorandum (OnBoard file type 'Memorandum').
 
@@ -904,12 +904,19 @@ def reconcile_memo(meeting_id: str) -> dict:
     vote_type: this function owns the MEMO_VOTE_TYPE stripe and never
     touches federal floor votes; re-publish (_replace_votes) likewise
     cannot wipe memo votes.
+
+    ``check=True`` is read-only: the plan is recomputed and diffed against
+    the DB's current memo-stripe votes/outcomes, but the write transaction
+    never runs. Returns the usual dict plus ``"drift"`` (list of strings,
+    empty when the DB matches the memo) and ``"checked": True``.
     """
     from . import config
     from .agenda_pipeline import download_file
     from .bodies import BLOOMINGTON_COMMON_COUNCIL as body  # single body today
     from .memo_parse import parse_memo
-    from .memo_reconcile import AgendaItemRow, SpeakerRow, build_reconcile_plan
+    from .memo_reconcile import (
+        AgendaItemRow, SpeakerRow, build_reconcile_plan, diff_plan_against_db,
+    )
     from .onboard import fetch_meetings_window
     from .pdf_text import extract_text
 
@@ -942,6 +949,17 @@ def reconcile_memo(meeting_id: str) -> dict:
                     (meeting_uuid,),
                 )
                 speakers = [SpeakerRow(str(i), dn or "") for (i, dn) in cur.fetchall()]
+                cur.execute(
+                    """
+                    SELECT v.resolution, v.result, count(r.id)
+                    FROM meetings.votes v
+                    LEFT JOIN meetings.vote_records r ON r.vote_id = v.id
+                    WHERE v.meeting_id = %s AND v.vote_type = %s
+                    GROUP BY v.id
+                    """,
+                    (meeting_uuid, MEMO_VOTE_TYPE),
+                )
+                existing_votes = [(res, result, int(n)) for (res, result, n) in cur.fetchall()]
 
         # Network (OnBoard + PDF) runs outside any transaction. A single-day
         # start==end window returns [] (verified live), so span ±1 day and
@@ -968,7 +986,7 @@ def reconcile_memo(meeting_id: str) -> dict:
             print(f"\n=== Memo reconcile: {meeting_id} ===")
             print("  No Memorandum posted yet (clerk posts within ~a week). "
                   "Re-run when it appears.")
-            return {"meeting_id": meeting_id, "memo": None}
+            return {"meeting_id": meeting_id, "memo": None, "checked": check}
 
         pdf_path = config.DRIVE_ROOT / "agendas" / body.slug / meeting_id / "memo.pdf"
         download_file(memo_url, pdf_path)
@@ -980,6 +998,28 @@ def reconcile_memo(meeting_id: str) -> dict:
                 "template drift? No votes/outcomes written."
             )
         plan = build_reconcile_plan(memo, agenda_items, speakers)
+
+        if check:
+            drift = diff_plan_against_db(plan, agenda_items, existing_votes)
+            print(f"\n=== Memo check: {meeting_id} ===")
+            if drift:
+                for line in drift:
+                    print(f"  DRIFT: {line}")
+            else:
+                print("  no drift — DB matches the memo")
+            for note in plan.notes:
+                print(f"  NOTE: {note}")
+            print("=" * 40)
+            return {
+                "meeting_id": meeting_id,
+                "memo": memo_url,
+                "outcome_updates": len(plan.outcome_updates),
+                "votes": len(plan.votes),
+                "records": sum(len(v.records) for v in plan.votes),
+                "notes": plan.notes,
+                "drift": drift,
+                "checked": True,
+            }
 
         with conn:
             with conn.cursor() as cur:
@@ -1051,6 +1091,27 @@ def reconcile_memo(meeting_id: str) -> dict:
         "records": record_count,
         "notes": plan.notes,
     }
+
+
+def memo_votes_present(meeting_id: str) -> bool:
+    """True when the meeting (by slug) has memo-stripe votes rows. Cheap
+    probe for the poller's self-heal: marker says reconciled but votes
+    vanished -> re-reconcile."""
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1 FROM meetings.votes v
+                JOIN meetings.meetings m ON m.id = v.meeting_id
+                WHERE m.slug = %s AND v.vote_type = %s
+                LIMIT 1
+                """,
+                (meeting_id, MEMO_VOTE_TYPE),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
 
 
 def _replace_topics(cur, meeting_uuid: str, meeting: "Meeting") -> None:
