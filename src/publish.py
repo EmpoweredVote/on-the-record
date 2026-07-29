@@ -513,8 +513,9 @@ def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
     Federal floor votes carry only the vote event (roll, tally, timestamp) — the
     400+ voters are not meeting speakers and their per-member positions already
     live in essentials.legislative_votes, so meetings.vote_records is deliberately
-    NOT populated here. On-the-record owns meetings.votes for meetings it publishes
-    (delete-then-insert, mirroring _replace_segments). `result` is NOT NULL; we
+    NOT populated here. On-the-record owns the floor-vote stripe of meetings.votes
+    for meetings it publishes (delete-then-insert within the stripe, mirroring
+    _replace_segments). `result` is NOT NULL; we
     store the parsed outcome + tally ("Agreed to · 236–193"), falling back to the
     bare tally ("Yea X, Nay Y") when CREC has no parseable outcome line.
     Timestamps are expected to already be source-absolute (absolutize_meeting_times).
