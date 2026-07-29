@@ -1,6 +1,7 @@
 from scripts.checks import (
     check_note_quality, check_deid_present, check_trailing_ellipsis,
-    check_partisan_tell_in_blind, check_source_tier, topic_live_count, topic_min_candidates,
+    check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
+    check_unquotable_source, topic_live_count, topic_min_candidates,
 )
 
 def row(**kw):
@@ -61,6 +62,46 @@ def test_partisan_tell_symmetric_bipartisan_framing_not_flagged():
 def test_source_tier_campaign_site_flagged():
     f = check_source_tier(row(source_url="https://www.xavierbecerra2026.com/housing", source_name="www.xavierbecerra2026.com"))
     assert f and f.check_id == "source-tier-4"
+
+def test_invalid_source_ontheissues_flagged():
+    f = check_invalid_source(row(source_url="https://www.ontheissues.org/John_James.htm", source_name="www.ontheissues.org"))
+    assert f is not None and f.check_id == "invalid-source" and f.severity == "high"
+
+def test_invalid_source_wikipedia_flagged():
+    f = check_invalid_source(row(source_url="https://en.wikipedia.org/wiki/Jocelyn_Benson", source_name="en.wikipedia.org"))
+    assert f is not None and f.check_id == "invalid-source"
+
+def test_invalid_source_youtube_not_flagged():
+    assert check_invalid_source(row(source_url="https://youtu.be/x?t=1s")) is None
+
+def test_invalid_source_ballotpedia_not_flagged():
+    # ballotpedia footnotes originals and publishes Candidate Connection answers itself —
+    # it is neither an aggregator to re-attribute from nor a quiz site to delete
+    assert check_invalid_source(row(source_url="https://ballotpedia.org/Antony_Barran",
+                                    source_name="ballotpedia.org")) is None
+    assert check_unquotable_source(row(source_url="https://ballotpedia.org/Antony_Barran",
+                                       source_name="ballotpedia.org")) is None
+
+def test_unquotable_source_isidewith_flagged():
+    f = check_unquotable_source(row(source_url="https://www.isidewith.com/candidates/james-sceniak",
+                                    source_name="www.isidewith.com"))
+    assert f is not None and f.check_id == "unquotable-source"
+    assert f.severity == "high" and f.fix_class == "decision-required"
+
+def test_unquotable_source_is_delete_not_reattribute():
+    # the two classes must not collapse: a quiz site is NOT flagged as a re-attributable aggregator
+    r = row(source_url="https://www.isidewith.com/candidates/james-sceniak")
+    assert check_invalid_source(r) is None
+    assert "delete" in check_unquotable_source(r).suggested_fix.lower()
+
+def test_unquotable_source_youtube_not_flagged():
+    assert check_unquotable_source(row(source_url="https://youtu.be/x?t=1s")) is None
+
+def test_run_mechanical_flags_isidewith_row():
+    from scripts.checks import run_mechanical
+    rows = [row(id="a", candidate="A", source_url="https://www.isidewith.com/candidates/x"),
+            row(id="b", candidate="B")]
+    assert "unquotable-source" in {f.check_id for f in run_mechanical(rows)}
 
 def test_topic_same_candidate_two_live_flagged_legacy():
     g = {"race_id": "r1", "topic_key": "housing",

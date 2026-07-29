@@ -12,6 +12,17 @@ _PARTISAN = re.compile(r"\b(Democrat|Democrats|Democratic|Republican|Republicans
 _PARTY_PHRASE = re.compile(r"\b(?:my|our) party\b", re.I)
 _SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
 CAMPAIGN_SITE = re.compile(r"(for[a-z]+\d{2,4}|20\d\d|campaign)\.(com|org)|(vote|elect)[a-z]+\.(com|org)", re.I)
+# Secondary aggregators / encyclopedias — NOT valid sources. They only point to originals,
+# so the fix is re-attribution. Deliberately EXCLUDES ballotpedia.org: it reproduces campaign-site
+# text verbatim with footnotes to the original, and its Candidate Connection survey answers are
+# Ballotpedia-original (see docs/audits/2026-07-25-ballotpedia-triage.md).
+AGGREGATOR_SOURCE = re.compile(r"ontheissues\.org|wikipedia\.org", re.I)
+# Quiz / questionnaire comparison sites — categorically unquotable, no original to re-attribute to.
+# One candidate page mixes canned multiple-choice option text, third-party aggregates
+# ("PARTY'S SUPPORT BASE" = surveyed party-affiliated voters) and AI-generated stances (rows
+# labelled "CHATGPT"), all under the candidate's name — so no row is quotable regardless of which
+# row it came from (see docs/audits/2026-07-25-isidewith-purge.md).
+QUIZ_SOURCE = re.compile(r"isidewith\.com", re.I)
 
 def check_note_quality(r) -> Optional[Finding]:
     note = (r.get("editor_note") or "").strip()
@@ -82,6 +93,28 @@ def check_source_tier(r) -> Optional[Finding]:
                        suggested_fix="Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.")
     return None
 
+def check_invalid_source(r) -> Optional[Finding]:
+    url = r.get("source_url") or ""
+    if not AGGREGATOR_SOURCE.search(url):
+        return None
+    return Finding(check_id="invalid-source", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
+                   race_id=r["race_id"], candidate=r["candidate"],
+                   principle="quotes must cite the ORIGINAL source, not an aggregator",
+                   severity="high", fix_class="decision-required",
+                   what=f"Source is a secondary aggregator, not an original: {url}",
+                   suggested_fix="Follow the aggregator to the candidate's original source (speech/interview/vote/statement), re-source the quote to it; deselect from live until re-sourced.")
+
+def check_unquotable_source(r) -> Optional[Finding]:
+    url = r.get("source_url") or ""
+    if not QUIZ_SOURCE.search(url):
+        return None
+    return Finding(check_id="unquotable-source", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
+                   race_id=r["race_id"], candidate=r["candidate"],
+                   principle="quiz/questionnaire sites publish no quotable rows",
+                   severity="high", fix_class="decision-required",
+                   what=f"Source is a quiz/questionnaire comparison site: {url}. Such pages mix canned answer-option text, third-party aggregates and AI-generated stances under one candidate's name, so no row is a candidate utterance.",
+                   suggested_fix="Delete the row (deselect from live first). There is no original to re-attribute to — if the candidate holds this position, source it from an actual statement instead.")
+
 def topic_live_count(group) -> Optional[Finding]:
     counts = Counter(q["candidate"] for q in group["quotes"] if q.get("readrank_selected"))
     dupes = {c: n for c, n in counts.items() if n > 1}
@@ -102,7 +135,8 @@ def topic_min_candidates(group) -> Optional[Finding]:
                    suggested_fix="Source a second candidate's on-question quote, or drop the topic from the race.")
 
 QUOTE_CHECKS = [check_note_quality, check_deid_present, check_trailing_ellipsis,
-                check_partisan_tell_in_blind, check_source_tier]
+                check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
+                check_unquotable_source]
 TOPIC_CHECKS = [topic_live_count, topic_min_candidates]
 
 def run_mechanical(rows) -> list:
