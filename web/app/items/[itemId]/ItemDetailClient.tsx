@@ -177,6 +177,10 @@ export default function ItemDetailClient() {
             )}
             {headline.text}
           </p>
+          {/* What the question WAS, right next to its answer. */}
+          {item.decision_plain && (
+            <p className="decisionContext">{item.decision_plain}</p>
+          )}
           {item.votes.map((v) => (
             <VoteDivision key={v.id} vote={v} meetingId={item.meeting.id} />
           ))}
@@ -201,7 +205,9 @@ export default function ItemDetailClient() {
         </p>
       )}
 
-      {item.decision_plain && (
+      {/* Standalone section only when there's no banner to carry it —
+          upcoming items, and happened items with no recorded outcome. */}
+      {item.decision_plain && !headline && (
         <section className="itemSection">
           <h2>{happened ? "What was being decided" : "What's being decided"}</h2>
           <p>{item.decision_plain}</p>

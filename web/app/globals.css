@@ -2192,6 +2192,11 @@ a.skimTs:hover {
 .decisionBanner-passed .decisionGlyph { color: var(--outcome-passed); }
 .decisionBanner-failed .decisionGlyph { color: var(--outcome-failed); }
 .decisionBanner-continued .decisionGlyph { color: var(--outcome-continued); }
+/* The question the outcome answered — full-contrast text, it's load-bearing */
+.decisionContext {
+  margin: 0.45rem 0 0;
+  max-width: 38rem;
+}
 
 .voteBlock { margin-top: 0.7rem; }
 .voteMotion {
