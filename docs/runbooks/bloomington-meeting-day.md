@@ -122,8 +122,10 @@ meetings.votes row per substantive motion ("Passed 8–0" style), and
 per-member vote_records on named split votes. Unparseable motions
 abstain loudly — read the NOTE lines.
 
-- **Re-run this after any `--publish-meeting` re-publish** — re-publishing
-  wipes memo votes (`_replace_votes` delete-then-inserts).
+- Memo votes survive re-publish (vote-type ownership partition) and memo
+  outcomes survive re-align (align fills, never overwrites). A
+  `--reconcile-memo` re-run is only needed when the clerk re-posts the
+  memo — the daily poller handles that.
 - Or let the daily poller do it: `poll_agendas.py --reconcile-memos`
   (opt-in flag; not yet on the launchd job — enable after July 22 ages
   out of the lookback window, since its legacy slug fails loudly there).

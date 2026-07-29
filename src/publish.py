@@ -27,6 +27,12 @@ from .models import Meeting
 
 SEGMENT_BATCH_SIZE = 500
 
+# Ownership partition for meetings.votes: each writer deletes/inserts only
+# its own vote_type stripe, so a re-publish can never wipe memo-reconciled
+# votes and a re-reconcile can never wipe federal floor votes.
+FLOOR_VOTE_TYPE = "recorded"     # written by _replace_votes (federal CREC)
+MEMO_VOTE_TYPE = "roll call"     # written by reconcile_memo (clerk memo)
+
 _DIRECT_FILE_EXTENSIONS = (".mp4", ".m4v", ".mov", ".webm")
 _AUDIO_EXTENSIONS = (".mp3", ".m4a", ".aac", ".ogg", ".wav")
 
@@ -512,11 +518,22 @@ def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
     store the parsed outcome + tally ("Agreed to · 236–193"), falling back to the
     bare tally ("Yea X, Nay Y") when CREC has no parseable outcome line.
     Timestamps are expected to already be source-absolute (absolutize_meeting_times).
-    Since the memo reconciler (reconcile_memo) became a second writer of this
-    table (vote_type 'roll call'), re-publishing wipes its rows too — re-run
-    --reconcile-memo afterwards.
+    Deletes/inserts only the FLOOR_VOTE_TYPE stripe: memo-reconciled votes
+    (MEMO_VOTE_TYPE, written by reconcile_memo) are a separate ownership
+    stripe and survive re-publish untouched.
     """
-    cur.execute("DELETE FROM meetings.votes WHERE meeting_id = %s", (meeting_uuid,))
+    cur.execute(
+        """
+        DELETE FROM meetings.vote_records
+        WHERE vote_id IN (SELECT id FROM meetings.votes
+                          WHERE meeting_id = %s AND vote_type = %s)
+        """,
+        (meeting_uuid, FLOOR_VOTE_TYPE),
+    )
+    cur.execute(
+        "DELETE FROM meetings.votes WHERE meeting_id = %s AND vote_type = %s",
+        (meeting_uuid, FLOOR_VOTE_TYPE),
+    )
     rows = []
     for fv in meeting.floor_votes:
         result = (f"{fv.outcome} · {fv.yea}–{fv.nay}"   # "Agreed to · 236–193"
@@ -526,7 +543,7 @@ def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
             f"Roll No. {fv.roll_number}",        # resolution
             fv.question,                          # description
             result,                               # result (NOT NULL): outcome+tally, else tally
-            "recorded",                           # vote_type
+            FLOOR_VOTE_TYPE,                      # vote_type
             fv.timestamp,                         # numeric seconds (absolutized), NULL if unmatched
         ))
     if rows:
@@ -667,6 +684,10 @@ def build_alignment_updates(spans, segments) -> list[tuple]:
     Status is 'happened' for EVERY item — the meeting happened; an item whose
     span abstained is happened-without-span (not reached), so its bounds stay
     None. Seconds come from the span's boundary segments.
+
+    outcome may be None (span abstained or no legislation match) — the
+    authority ladder's fill-only UPDATE (_update_aligned_items) treats None
+    as "leave the existing outcome alone", never blanking a memo-set outcome.
     """
     rows = []
     for span in spans:
@@ -686,6 +707,10 @@ def _update_aligned_items(cur, meeting_uuid: str, updates: list[tuple]) -> None:
     ``updates`` tuples are (status, start_s, end_s, outcome, position) and do
     not carry the meeting uuid; SQL params are composed here in the statement's
     placeholder order: (status, start_s, end_s, outcome, meeting_uuid, position).
+
+    outcome uses COALESCE(existing, new): alignment FILLS outcomes but never
+    overwrites one already set (the memo reconciler is the only overwriter —
+    authority ladder: align fills → memo overwrites → align never un-fills).
     """
     cur.executemany(
         """
@@ -693,7 +718,7 @@ def _update_aligned_items(cur, meeting_uuid: str, updates: list[tuple]) -> None:
         SET status = %s,
             segment_start_seconds = %s,
             segment_end_seconds = %s,
-            outcome = %s,
+            outcome = COALESCE(outcome, %s),
             updated_at = now()
         WHERE meeting_id = %s AND position = %s
         """,
@@ -721,6 +746,10 @@ def align_and_flip(meeting_id: str) -> dict:
     used so both passes share one row. Loads the local transcript, absolutizes
     times into the source video's timeline (matching the published segments),
     runs the anchor→LLM→gates→oracle chain, and UPDATEs the item rows.
+
+    Outcome authority ladder: this only fills a NULL outcome (COALESCE in
+    _update_aligned_items) — an outcome already set by the memo reconciler
+    is never overwritten here.
     """
     from . import config
     from .agenda_align import SegmentRef, align_items, apply_oracle
@@ -770,7 +799,7 @@ def align_and_flip(meeting_id: str) -> dict:
                 meeting_uuid = row[0]
                 cur.execute(
                     """
-                    SELECT position, item_number, title_raw, legislation_ref
+                    SELECT position, item_number, title_raw, legislation_ref, outcome
                     FROM meetings.agenda_items
                     WHERE meeting_id = %s
                     ORDER BY position
@@ -795,8 +824,12 @@ def align_and_flip(meeting_id: str) -> dict:
                 title_raw=title_raw or "",
                 legislation_ref=legislation_ref,
             )
-            for (position, item_number, title_raw, legislation_ref) in item_rows
+            for (position, item_number, title_raw, legislation_ref, outcome) in item_rows
         ]
+        existing_outcomes = {
+            position: outcome
+            for (position, item_number, title_raw, legislation_ref, outcome) in item_rows
+        }
 
         # LLM + oracle run OUTSIDE any transaction (slow network calls).
         import anthropic
@@ -828,9 +861,15 @@ def align_and_flip(meeting_id: str) -> dict:
     for span in spans:
         item = by_position[span.position]
         label = f"  [{item.item_number:>4}] pos {span.position:<3}"
+        existing_outcome = existing_outcomes.get(span.position)
+        preserved = (
+            f" [existing outcome {existing_outcome!r} preserved]"
+            if existing_outcome is not None and existing_outcome != span.outcome
+            else ""
+        )
         if span.start_segment is None:
             reason = span.rejected_reason or "no span proposed"
-            print(f"{label} ABSTAINED — {reason}")
+            print(f"{label} ABSTAINED — {reason}{preserved}")
         else:
             start_s = segments[span.start_segment].start
             end_s = segments[span.end_segment].end
@@ -838,6 +877,7 @@ def align_and_flip(meeting_id: str) -> dict:
             line += f"  outcome: {span.outcome or 'none'}"
             if span.outcome is None and span.rejected_reason:
                 line += f" ({span.rejected_reason})"
+            line += preserved
             print(line)
     print("=" * 40)
 
@@ -859,9 +899,10 @@ def reconcile_memo(meeting_id: str) -> dict:
     with a recorded roll call becomes a meetings.votes row ('roll call',
     timestamp NULL) — with per-member meetings.vote_records rows when the
     memo names the sides. Idempotent: this meeting's votes are
-    delete-then-inserted (records first — FK). NOTE a later re-publish of
-    the meeting wipes these votes via _replace_votes; re-run this after any
-    re-publish (see the runbook).
+    delete-then-inserted (records first — FK). Votes are partitioned by
+    vote_type: this function owns the MEMO_VOTE_TYPE stripe and never
+    touches federal floor votes; re-publish (_replace_votes) likewise
+    cannot wipe memo votes.
     """
     from . import config
     from .agenda_pipeline import download_file
@@ -953,13 +994,14 @@ def reconcile_memo(meeting_id: str) -> dict:
                     """
                     DELETE FROM meetings.vote_records
                     WHERE vote_id IN
-                      (SELECT id FROM meetings.votes WHERE meeting_id = %s)
+                      (SELECT id FROM meetings.votes
+                       WHERE meeting_id = %s AND vote_type = %s)
                     """,
-                    (meeting_uuid,),
+                    (meeting_uuid, MEMO_VOTE_TYPE),
                 )
                 cur.execute(
-                    "DELETE FROM meetings.votes WHERE meeting_id = %s",
-                    (meeting_uuid,),
+                    "DELETE FROM meetings.votes WHERE meeting_id = %s AND vote_type = %s",
+                    (meeting_uuid, MEMO_VOTE_TYPE),
                 )
                 for vote in plan.votes:
                     cur.execute(
@@ -967,11 +1009,11 @@ def reconcile_memo(meeting_id: str) -> dict:
                         INSERT INTO meetings.votes
                           (meeting_id, resolution, description, result,
                            vote_type, timestamp, agenda_item_id)
-                        VALUES (%s, %s, %s, %s, 'roll call', NULL, %s)
+                        VALUES (%s, %s, %s, %s, %s, NULL, %s)
                         RETURNING id
                         """,
                         (meeting_uuid, vote.resolution, vote.description,
-                         vote.result, vote.agenda_item_id),
+                         vote.result, MEMO_VOTE_TYPE, vote.agenda_item_id),
                     )
                     vote_uuid = cur.fetchone()[0]
                     if vote.records:

@@ -1174,7 +1174,7 @@ PR body: summarize the three units, the July 22 calibration table (from the spec
 - Modify: `run_local.py` (`--publish-meeting` help text)
 - Modify: `docs/runbooks/bloomington-meeting-day.md`, `docs/superpowers/specs/2026-07-28-clerk-memo-reconciler-design.md`
 
-- [ ] **Step 1: Vote-type constants + partitioned deletes.** In `src/publish.py`, add module-level constants near `SEGMENT_BATCH_SIZE`:
+- [x] **Step 1: Vote-type constants + partitioned deletes.** In `src/publish.py`, add module-level constants near `SEGMENT_BATCH_SIZE`:
 
 ```python
 # Ownership partition for meetings.votes: each writer deletes/inserts only
@@ -1205,7 +1205,7 @@ Docstring replacement for the last sentence: "Deletes/inserts only the FLOOR_VOT
 
 In `reconcile_memo`: scope both deletes to `MEMO_VOTE_TYPE` the same way, and use the constant in the INSERT (replace the literal `'roll call'` with a `%s` param). Update its docstring: delete the "NOTE a later re-publish ... wipes these votes ..." sentence and replace with "Votes are partitioned by vote_type: this function owns the MEMO_VOTE_TYPE stripe and never touches federal floor votes; re-publish (_replace_votes) likewise cannot wipe memo votes."
 
-- [ ] **Step 2: Outcome authority ladder.** In `_update_aligned_items`, change the SQL so alignment fills but never overwrites an existing outcome:
+- [x] **Step 2: Outcome authority ladder.** In `_update_aligned_items`, change the SQL so alignment fills but never overwrites an existing outcome:
 
 ```sql
         UPDATE meetings.agenda_items
@@ -1219,11 +1219,11 @@ In `reconcile_memo`: scope both deletes to `MEMO_VOTE_TYPE` the same way, and us
 
 Docstring addition: "outcome uses COALESCE(existing, new): alignment FILLS outcomes but never overwrites one already set (the memo reconciler is the only overwriter — authority ladder: align fills → memo overwrites → align never un-fills)."
 
-- [ ] **Step 3: Operator visibility in align.** In `align_and_flip`, extend the item SELECT to include `outcome`, keep a `{position: existing_outcome}` dict, and in the summary print loop append ` [existing outcome {x!r} preserved]` to an item's line when its existing outcome is non-null and differs from what the span proposed (or when span proposed None). Update `align_and_flip`'s docstring with one sentence on the ladder. Keep `ParsedItem` construction unchanged (unpack the 5th column separately).
+- [x] **Step 3: Operator visibility in align.** In `align_and_flip`, extend the item SELECT to include `outcome`, keep a `{position: existing_outcome}` dict, and in the summary print loop append ` [existing outcome {x!r} preserved]` to an item's line when its existing outcome is non-null and differs from what the span proposed (or when span proposed None). Update `align_and_flip`'s docstring with one sentence on the ladder. Keep `ParsedItem` construction unchanged (unpack the 5th column separately).
 
-- [ ] **Step 4: Text sites.** `run_local.py` `--publish-meeting` help: replace the "; re-publishing wipes memo-reconciled votes — re-run --reconcile-memo after" suffix (added in the review round) with nothing (the hazard is gone). Runbook step 6: replace the "Re-run this after any --publish-meeting re-publish" bullet with: "Memo votes survive re-publish (vote-type ownership partition) and memo outcomes survive re-align (align fills, never overwrites). A --reconcile-memo re-run is only needed when the clerk re-posts the memo — the daily poller handles that." Spec: rewrite the "Known interaction" section to describe the partition + ladder as implemented (title it "Ownership hardening (2026-07-28)").
+- [x] **Step 4: Text sites.** `run_local.py` `--publish-meeting` help: replace the "; re-publishing wipes memo-reconciled votes — re-run --reconcile-memo after" suffix (added in the review round) with nothing (the hazard is gone). Runbook step 6: replace the "Re-run this after any --publish-meeting re-publish" bullet with: "Memo votes survive re-publish (vote-type ownership partition) and memo outcomes survive re-align (align fills, never overwrites). A --reconcile-memo re-run is only needed when the clerk re-posts the memo — the daily poller handles that." Spec: rewrite the "Known interaction" section to describe the partition + ladder as implemented (title it "Ownership hardening (2026-07-28)").
 
-- [ ] **Step 5:** Full suite green; commit: `fix: vote-type ownership partition + outcome authority ladder (align fills, memo overwrites)`.
+- [x] **Step 5:** Full suite green; commit: `fix: vote-type ownership partition + outcome authority ladder (align fills, memo overwrites)`.
 
 ### Task 8: Poller self-heal + --check-memo drift audit
 

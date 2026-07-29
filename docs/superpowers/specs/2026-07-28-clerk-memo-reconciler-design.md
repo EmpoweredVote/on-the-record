@@ -107,13 +107,22 @@ Three new units plus wiring:
      whose meeting row exists; missing meeting row → loud skip. The launchd job can add
      the flag once trusted.
 
-## Known interaction (documented, not engineered around)
+## Ownership hardening (2026-07-28)
 
-Re-running `--publish-meeting` wipes memo votes: `_replace_votes` delete-then-inserts
-`meetings.votes` from `floor_votes`, which is empty for Bloomington. Mitigation: the
-runbook says **re-run `--reconcile-memo` after any re-publish**. (Guarding
-`_replace_votes` by vote_type was considered and rejected as subtle cross-feature
-coupling for v1.)
+`meetings.votes` is partitioned by `vote_type` into two ownership stripes, each
+delete-then-inserted only by its own writer: `FLOOR_VOTE_TYPE = "recorded"`
+(federal CREC floor votes, written by `_replace_votes`) and
+`MEMO_VOTE_TYPE = "roll call"` (clerk memo votes, written by `reconcile_memo`).
+A re-publish (`_replace_votes`) scopes its DELETE/INSERT to the floor stripe
+and can never touch memo rows; a re-reconcile scopes to the memo stripe and
+can never touch floor rows. Re-running `--publish-meeting` after
+`--reconcile-memo` is therefore safe with no required re-run order.
+
+Separately, agenda-item `outcome` follows an authority ladder: alignment's
+`_update_aligned_items` writes `outcome = COALESCE(outcome, %s)` — it FILLS a
+NULL outcome but never overwrites one already set. `reconcile_memo` remains
+the only overwriter (memo dispositions are authoritative). So: align fills →
+memo overwrites → align never un-fills, in either run order.
 
 ## Calibration (July 22, committed fixture)
 

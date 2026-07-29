@@ -3751,9 +3751,7 @@ Environment Variables:
                         help="Force publishing even when the confidence gate "
                              "verdict is 'review' or 'failed' (human override)")
     parser.add_argument("--publish-meeting", metavar="MEETING_ID",
-                        help="Publish an already-processed meeting to Supabase and exit"
-                             "; re-publishing wipes memo-reconciled votes — re-run "
-                             "--reconcile-memo after")
+                        help="Publish an already-processed meeting to Supabase and exit")
     parser.add_argument("--align-agenda", metavar="MEETING_ID",
                         help="Align a published meeting's agenda items to its video "
                              "and flip them to 'happened' in place, then exit "
@@ -3763,7 +3761,7 @@ Environment Variables:
                         help="Reconcile a published meeting's item outcomes and "
                              "votes from the clerk's post-meeting Memorandum, "
                              "then exit (MEETING_ID is the meeting slug; re-run "
-                             "after any re-publish — republishing wipes memo votes)")
+                             "only when the clerk re-posts the memo)")
     parser.add_argument("--merge-profiles", nargs=2, metavar=("SOURCE", "DEST"),
                         help="Merge SOURCE profile into DEST profile and exit (use slugs from --list-profiles)")
     parser.add_argument("--relink-person", metavar="NAME",
