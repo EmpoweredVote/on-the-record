@@ -1160,3 +1160,202 @@ gh pr create --title "Clerk memorandum reconciler: authoritative outcomes + firs
 PR body: summarize the three units, the July 22 calibration table (from the spec), the live E2E results (votes/records written + API check), the skip-with-loud-log vote_records policy, and the re-publish-wipes-votes runbook note. End the body with the standard Claude Code attribution line.
 
 **Deferred (explicitly):** attendance extraction; action-history / `continued_from` edges (Phase 4 — `continued_to_date` is parsed and printed, not persisted); vote timestamp derivation from wall-clocks; web display of votes/records (separate task chip ad12978a); guarding `_replace_votes` by vote_type.
+
+---
+
+## Hardening addendum (2026-07-28, user-approved after final review)
+
+**Goal:** Make memo-derived data survive pipeline re-runs and make drift detectable. Four measures: (1) vote ownership partitioned by `vote_type` so re-publish can never wipe memo votes; (2) outcome authority ladder — align FILLS `outcome` only when NULL, memo keeps overwrite rights; (3) poller self-heals when reconciled votes vanish; (4) `--check-memo` read-only drift audit.
+
+### Task 7: Ownership partition + outcome authority ladder
+
+**Files:**
+- Modify: `src/publish.py` (`_replace_votes`, `reconcile_memo`, `_update_aligned_items`, `align_and_flip`, `build_alignment_updates` docstring)
+- Modify: `run_local.py` (`--publish-meeting` help text)
+- Modify: `docs/runbooks/bloomington-meeting-day.md`, `docs/superpowers/specs/2026-07-28-clerk-memo-reconciler-design.md`
+
+- [ ] **Step 1: Vote-type constants + partitioned deletes.** In `src/publish.py`, add module-level constants near `SEGMENT_BATCH_SIZE`:
+
+```python
+# Ownership partition for meetings.votes: each writer deletes/inserts only
+# its own vote_type stripe, so a re-publish can never wipe memo-reconciled
+# votes and a re-reconcile can never wipe federal floor votes.
+FLOOR_VOTE_TYPE = "recorded"     # written by _replace_votes (federal CREC)
+MEMO_VOTE_TYPE = "roll call"     # written by reconcile_memo (clerk memo)
+```
+
+In `_replace_votes`: scope the delete to the floor stripe (records first for FK safety, even though the federal path never writes records today), use the constant in the insert row, and replace the stale "re-publishing wipes its rows too" docstring sentence:
+
+```python
+    cur.execute(
+        """
+        DELETE FROM meetings.vote_records
+        WHERE vote_id IN (SELECT id FROM meetings.votes
+                          WHERE meeting_id = %s AND vote_type = %s)
+        """,
+        (meeting_uuid, FLOOR_VOTE_TYPE),
+    )
+    cur.execute(
+        "DELETE FROM meetings.votes WHERE meeting_id = %s AND vote_type = %s",
+        (meeting_uuid, FLOOR_VOTE_TYPE),
+    )
+```
+
+Docstring replacement for the last sentence: "Deletes/inserts only the FLOOR_VOTE_TYPE stripe: memo-reconciled votes (MEMO_VOTE_TYPE, written by reconcile_memo) are a separate ownership stripe and survive re-publish untouched."
+
+In `reconcile_memo`: scope both deletes to `MEMO_VOTE_TYPE` the same way, and use the constant in the INSERT (replace the literal `'roll call'` with a `%s` param). Update its docstring: delete the "NOTE a later re-publish ... wipes these votes ..." sentence and replace with "Votes are partitioned by vote_type: this function owns the MEMO_VOTE_TYPE stripe and never touches federal floor votes; re-publish (_replace_votes) likewise cannot wipe memo votes."
+
+- [ ] **Step 2: Outcome authority ladder.** In `_update_aligned_items`, change the SQL so alignment fills but never overwrites an existing outcome:
+
+```sql
+        UPDATE meetings.agenda_items
+        SET status = %s,
+            segment_start_seconds = %s,
+            segment_end_seconds = %s,
+            outcome = COALESCE(outcome, %s),
+            updated_at = now()
+        WHERE meeting_id = %s AND position = %s
+```
+
+Docstring addition: "outcome uses COALESCE(existing, new): alignment FILLS outcomes but never overwrites one already set (the memo reconciler is the only overwriter — authority ladder: align fills → memo overwrites → align never un-fills)."
+
+- [ ] **Step 3: Operator visibility in align.** In `align_and_flip`, extend the item SELECT to include `outcome`, keep a `{position: existing_outcome}` dict, and in the summary print loop append ` [existing outcome {x!r} preserved]` to an item's line when its existing outcome is non-null and differs from what the span proposed (or when span proposed None). Update `align_and_flip`'s docstring with one sentence on the ladder. Keep `ParsedItem` construction unchanged (unpack the 5th column separately).
+
+- [ ] **Step 4: Text sites.** `run_local.py` `--publish-meeting` help: replace the "; re-publishing wipes memo-reconciled votes — re-run --reconcile-memo after" suffix (added in the review round) with nothing (the hazard is gone). Runbook step 6: replace the "Re-run this after any --publish-meeting re-publish" bullet with: "Memo votes survive re-publish (vote-type ownership partition) and memo outcomes survive re-align (align fills, never overwrites). A --reconcile-memo re-run is only needed when the clerk re-posts the memo — the daily poller handles that." Spec: rewrite the "Known interaction" section to describe the partition + ladder as implemented (title it "Ownership hardening (2026-07-28)").
+
+- [ ] **Step 5:** Full suite green; commit: `fix: vote-type ownership partition + outcome authority ladder (align fills, memo overwrites)`.
+
+### Task 8: Poller self-heal + --check-memo drift audit
+
+**Files:**
+- Modify: `src/memo_reconcile.py` (+ `diff_plan_against_db`), `src/publish.py` (`memo_votes_present`, `reconcile_memo(check=...)`), `scripts/poll_agendas.py`, `run_local.py`
+- Test: extend `tests/test_memo_reconcile.py`
+
+- [ ] **Step 1 (TDD): pure drift diff.** Tests first in `tests/test_memo_reconcile.py`:
+
+```python
+def test_diff_clean_when_db_matches(memo):
+    plan = build_reconcile_plan(memo, [], SPEAKERS)
+    existing = [(v.resolution, v.result, len(v.records)) for v in plan.votes]
+    assert diff_plan_against_db(plan, [], existing) == []
+
+
+def test_diff_flags_missing_extra_and_outcome(memo):
+    items = [AgendaItemRow("i-r13", 12, "Resolution 2026-13", "failed")]  # wrong outcome
+    plan = build_reconcile_plan(memo, items, SPEAKERS)
+    existing = [(v.resolution, v.result, len(v.records)) for v in plan.votes][1:]  # one missing
+    existing.append(("Ordinance 9999-9", "Passed 1–0", 0))                          # one extra
+    drift = diff_plan_against_db(plan, items, existing)
+    assert any("missing" in d for d in drift)
+    assert any("Ordinance 9999-9" in d and "unexpected" in d for d in drift)
+    assert any("Resolution 2026-13" in d and "outcome" in d for d in drift)
+```
+
+Implementation in `src/memo_reconcile.py`:
+
+```python
+def diff_plan_against_db(
+    plan: ReconcilePlan,
+    agenda_items: list[AgendaItemRow],
+    existing_votes: list[tuple[str, str, int]],  # (resolution, result, record_count)
+) -> list[str]:
+    """Drift between what the memo says and what the DB holds (read-only).
+
+    Returns human-readable drift lines; empty list = DB matches the memo.
+    Votes compare as multisets of (resolution, result, record_count);
+    outcomes compare each planned update against the snapshot's outcome.
+    """
+    from collections import Counter
+
+    drift: list[str] = []
+    expected = Counter((v.resolution, v.result, len(v.records)) for v in plan.votes)
+    actual = Counter(existing_votes)
+    for key in sorted(expected - actual):
+        drift.append(f"vote missing from DB: {key[0]} | {key[1]} | {key[2]} record(s)")
+    for key in sorted(actual - expected):
+        drift.append(f"unexpected vote in DB: {key[0]} | {key[1]} | {key[2]} record(s)")
+
+    outcome_by_id = {i.id: i.outcome for i in agenda_items}
+    ref_by_id = {i.id: i.legislation_ref for i in agenda_items}
+    for outcome, item_id in plan.outcome_updates:
+        if outcome_by_id.get(item_id) != outcome:
+            drift.append(
+                f"outcome drift on {ref_by_id.get(item_id) or item_id}: "
+                f"memo says {outcome!r}, DB has {outcome_by_id.get(item_id)!r}"
+            )
+    return drift
+```
+
+- [ ] **Step 2: `reconcile_memo(meeting_id, check=False)`.** In the same first transaction, ALSO fetch the meeting's existing memo-stripe votes:
+
+```python
+                cur.execute(
+                    """
+                    SELECT v.resolution, v.result, count(r.id)
+                    FROM meetings.votes v
+                    LEFT JOIN meetings.vote_records r ON r.vote_id = v.id
+                    WHERE v.meeting_id = %s AND v.vote_type = %s
+                    GROUP BY v.id
+                    """,
+                    (meeting_uuid, MEMO_VOTE_TYPE),
+                )
+                existing_votes = [(res, result, int(n)) for (res, result, n) in cur.fetchall()]
+```
+
+After building `plan`: when `check` is true, skip the write transaction entirely; compute `drift = diff_plan_against_db(plan, agenda_items, existing_votes)`; print a `=== Memo check: {meeting_id} ===` block with each drift line prefixed `DRIFT:` (or "no drift — DB matches the memo"), still print plan NOTEs; return dict gains `"drift": drift` (and `"checked": True`). Write path unchanged otherwise.
+
+- [ ] **Step 3: `memo_votes_present(meeting_id)` helper + poller self-heal.** publish.py:
+
+```python
+def memo_votes_present(meeting_id: str) -> bool:
+    """True when the meeting (by slug) has memo-stripe votes rows. Cheap
+    probe for the poller's self-heal: marker says reconciled but votes
+    vanished -> re-reconcile."""
+    conn = psycopg2.connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1 FROM meetings.votes v
+                JOIN meetings.meetings m ON m.id = v.meeting_id
+                WHERE m.slug = %s AND v.vote_type = %s
+                LIMIT 1
+                """,
+                (meeting_id, MEMO_VOTE_TYPE),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+```
+
+`scripts/poll_agendas.py` `reconcile_memos`, replace the unchanged-marker skip:
+
+```python
+        if state.marker_for(slug) == marker:
+            if dry_run or memo_votes_present(slug):
+                print(f"  MEMO SKIP {slug}: unchanged")
+                continue
+            print(f"  MEMO HEAL {slug}: marker recorded but roll-call votes "
+                  "missing — re-reconciling")
+```
+
+(import `memo_votes_present` alongside `reconcile_memo`; falls through to the normal reconcile path. Known bounded edge, note it in the function docstring: a meeting whose memo genuinely yields zero substantive votes re-heals daily until it ages out of the lookback window — harmless, loud, bounded.)
+
+- [ ] **Step 4: `run_local.py --check-memo MEETING_ID`.** argparse next to `--reconcile-memo` ("Read-only: recompute the memo reconcile plan and report drift against the DB, then exit non-zero on drift"); dispatch after the reconcile-memo block:
+
+```python
+    if args.check_memo:
+        from src.publish import reconcile_memo
+
+        result = reconcile_memo(args.check_memo, check=True)
+        sys.exit(1 if result.get("drift") else 0)
+```
+
+(match the file's existing exit conventions — check how other dispatches exit; `sys` is already imported. Also add to the `_option_supplied` map like the siblings.)
+
+- [ ] **Step 5:** Full suite green (expect +2 tests); poller docstring Usage block gains one `--reconcile-memos` self-heal sentence; commit: `feat: poller self-heal + --check-memo drift audit`.
+
+### Task 9: Live verification + push
+
+- [ ] **Step 1:** Live: `--check-memo 2026-07-22-bloomington-regular-session` → expect "no drift" and exit 0 (votes written earlier this session are still there and match the memo). Then re-run `--reconcile-memo` once more (idempotency under the partitioned deletes) and `--check-memo` again → no drift. Any drift → STOP and report.
+- [ ] **Step 2:** Full suite; push; note the hardening in the PR body (edit via `gh pr edit --body-file` or append a PR comment via `gh pr comment` — comment preferred, keeps history).
