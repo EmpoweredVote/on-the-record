@@ -9,8 +9,8 @@ import pytest
 
 from src.memo_parse import parse_memo
 from src.memo_reconcile import (
-    AgendaItemRow, SpeakerRow, build_reconcile_plan, diff_plan_against_db,
-    match_speaker,
+    AgendaItemRow, PlannedVote, ReconcilePlan, SpeakerRow, build_reconcile_plan,
+    diff_plan_against_db, match_speaker,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "onboard" / "memo_2026-07-22.txt"
@@ -128,6 +128,18 @@ def test_diff_flags_missing_extra_and_outcome(memo):
     assert any("missing" in d for d in drift)
     assert any("Ordinance 9999-9" in d and "unexpected" in d for d in drift)
     assert any("Resolution 2026-13" in d and "outcome" in d for d in drift)
+
+
+def test_diff_reports_one_line_per_duplicate_missing_vote():
+    # Two identical planned votes, nothing in the DB: Counter subtraction
+    # preserves multiplicity, so this must yield two "missing" lines, not one.
+    plan = ReconcilePlan(votes=[
+        PlannedVote("Ordinance 2026-1", "moved and seconded", "Passed 8–0", "i-1"),
+        PlannedVote("Ordinance 2026-1", "moved and seconded", "Passed 8–0", "i-2"),
+    ])
+    drift = diff_plan_against_db(plan, [], [])
+    missing = [d for d in drift if "missing" in d]
+    assert len(missing) == 2
 
 
 def test_tie_without_tag_gets_bare_tally_result():

@@ -949,17 +949,20 @@ def reconcile_memo(meeting_id: str, check: bool = False) -> dict:
                     (meeting_uuid,),
                 )
                 speakers = [SpeakerRow(str(i), dn or "") for (i, dn) in cur.fetchall()]
-                cur.execute(
-                    """
-                    SELECT v.resolution, v.result, count(r.id)
-                    FROM meetings.votes v
-                    LEFT JOIN meetings.vote_records r ON r.vote_id = v.id
-                    WHERE v.meeting_id = %s AND v.vote_type = %s
-                    GROUP BY v.id
-                    """,
-                    (meeting_uuid, MEMO_VOTE_TYPE),
-                )
-                existing_votes = [(res, result, int(n)) for (res, result, n) in cur.fetchall()]
+                if check:
+                    cur.execute(
+                        """
+                        SELECT v.resolution, v.result, count(r.id)
+                        FROM meetings.votes v
+                        LEFT JOIN meetings.vote_records r ON r.vote_id = v.id
+                        WHERE v.meeting_id = %s AND v.vote_type = %s
+                        GROUP BY v.id
+                        """,
+                        (meeting_uuid, MEMO_VOTE_TYPE),
+                    )
+                    existing_votes = [(res, result, int(n)) for (res, result, n) in cur.fetchall()]
+                else:
+                    existing_votes = []
 
         # Network (OnBoard + PDF) runs outside any transaction. A single-day
         # start==end window returns [] (verified live), so span ±1 day and
@@ -1090,6 +1093,7 @@ def reconcile_memo(meeting_id: str, check: bool = False) -> dict:
         "votes": len(plan.votes),
         "records": record_count,
         "notes": plan.notes,
+        "checked": False,
     }
 
 

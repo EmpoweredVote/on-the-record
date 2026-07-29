@@ -73,9 +73,9 @@ def diff_plan_against_db(
     drift: list[str] = []
     expected = Counter((v.resolution, v.result, len(v.records)) for v in plan.votes)
     actual = Counter(existing_votes)
-    for key in sorted(expected - actual):
+    for key in sorted((expected - actual).elements()):
         drift.append(f"vote missing from DB: {key[0]} | {key[1]} | {key[2]} record(s)")
-    for key in sorted(actual - expected):
+    for key in sorted((actual - expected).elements()):
         drift.append(f"unexpected vote in DB: {key[0]} | {key[1]} | {key[2]} record(s)")
 
     outcome_by_id = {i.id: i.outcome for i in agenda_items}
