@@ -41,9 +41,9 @@ can be applied by a script (`scripts/apply_fixes.py`) without human judgment. Le
 
 ## 2. Mechanical checks
 
-Detected deterministically by `scripts/checks.py` — no model in the loop, no ambiguity. Of the
-nine, only `trailing-ellipsis` carries an auto-applied `fix_op` (a regex strip); the rest are
-flagged for a human to resolve even though the *detection* is mechanical.
+Detected deterministically by `scripts/checks.py` — no model in the loop, no ambiguity. Only
+`trailing-ellipsis` carries an auto-applied `fix_op` (a regex strip); the rest are flagged for a
+human to resolve even though the *detection* is mechanical.
 
 | id | level | principle | severity | fix-class |
 |---|---|---|---|---|
@@ -54,8 +54,39 @@ flagged for a human to resolve even though the *detection* is mechanical.
 | `trailing-ellipsis` | quote | no trailing ellipsis | low | **mechanical** (auto-fix: regex strip) |
 | `partisan-tell` | quote | no partisan/side tell on blind card | high | guided |
 | `source-tier-4` | quote | prefer tier 1–2 spoken sources | medium | decision-required |
+| `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
+| `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
+
+### 2.1 The two bad-source classes
+
+`invalid-source` and `unquotable-source` are deliberately separate checks because their remedies
+are opposite.
+
+- **`invalid-source` — aggregator; an original exists, so re-attribute.** ontheissues.org and
+  wikipedia.org restate or paraphrase something the candidate actually said elsewhere. The quote is
+  badly *cited*, not fabricated: follow the aggregator down to the speech/interview/vote/statement
+  and re-source it. Deselect from live only until the original is found. (Method and its gotchas:
+  `docs/audits/2026-07-25-ballotpedia-triage.md` §"Method notes".)
+- **`unquotable-source` — quiz site; no original exists, so delete.** A quiz/questionnaire
+  comparison page such as isidewith.com publishes, side by side under one candidate's name: (a)
+  canned multiple-choice option text nobody ever said ("No, this is a violation of free speech"),
+  (b) third-party aggregates (rows labelled `PARTY'S SUPPORT BASE` — surveyed party-affiliated
+  voters), and (c) AI-generated positions (rows labelled `CHATGPT` — 87 of 397 stance rows on one
+  candidate's page). So **no row on such a page is quotable regardless of which row it came from**,
+  including the candidate-labelled rows: those are still canned option text, not utterances. There
+  is nothing to descend to. All 29 isidewith.com rows were hard-deleted on 2026-07-25 — evidence
+  and cost in `docs/audits/2026-07-25-isidewith-purge.md`.
+
+**ballotpedia.org is in neither class and is not flagged.** It reproduces campaign-site text
+verbatim under an attribution line with a footnote to the original (re-attributable case by case),
+and its Candidate Connection survey answers are candidate-written *for* Ballotpedia — Ballotpedia
+**is** the original publisher there, so the citation is already correct. Treating it as
+delete-on-sight would have cost 10 races and 55 topics for no sourcing gain; the 266-row triage in
+`docs/audits/2026-07-25-ballotpedia-triage.md` resolved it row by row instead. The real Ballotpedia
+defects — stale-cycle answers and text not on the cited page — are curation calls a host-list check
+can't see.
 
 Source-verification checks (`scripts/verify_source.py`) — also deterministic, run against the
 ingested transcript for any `source_url` that's a YouTube link; non-video/written sources are out
