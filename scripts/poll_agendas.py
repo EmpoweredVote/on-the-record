@@ -7,11 +7,21 @@ Usage:
   .venv/bin/python scripts/poll_agendas.py --days 14
   .venv/bin/python scripts/poll_agendas.py --dry-run       # no DB writes, no state recording
   .venv/bin/python scripts/poll_agendas.py --no-interpret  # skip LLM summaries
+  .venv/bin/python scripts/poll_agendas.py --reconcile-memos  # also reconcile clerk memoranda
 
 Agendas post the Friday before the meeting (sometimes only ~48h ahead) and
 addenda can land through the meeting day, so run this daily from ~6 days out
 (default window: today .. today+8). Change detection is per-meeting via the
 OnBoard file created/updated marker; an unchanged agenda is skipped.
+
+With --reconcile-memos, a lookback pass (default --lookback-days 10) also
+checks recent PAST meetings for a posted clerk Memorandum and runs
+publish.reconcile_memo on new/changed ones. Change detection uses a separate
+memo_state.json marker file; a failed reconcile (e.g. meeting not yet
+published under its scheduled slug) is NOT recorded, so it retries daily
+until it succeeds or ages out of the window. An unchanged marker whose
+memo-stripe votes have gone missing from the DB self-heals by
+re-reconciling instead of trusting the marker.
 
 Requires DATABASE_URL (and ANTHROPIC_API_KEY unless --no-interpret) in
 .env.local. Failures are loud, per-meeting, and non-fatal: each failed
@@ -30,12 +40,10 @@ from gui.env import load_env_local
 
 load_env_local()  # before src.config so CS_DATA_DIR/API keys are visible
 
-import requests
-
 from src import config
 from src.agenda_interpret import interpret_item
 from src.agenda_parse import parse_agenda
-from src.agenda_pipeline import PollState, plan_work
+from src.agenda_pipeline import PollState, download_file, plan_work
 from src.bodies import BLOOMINGTON_COMMON_COUNCIL, classify_item
 from src.models import AgendaItem
 from src.onboard import fetch_meetings_window
@@ -43,14 +51,6 @@ from src.pdf_text import extract_text
 from src.publish import publish_scheduled_meeting
 
 INTERPRET_KINDS = ("ordinance", "resolution", "appointment")
-
-
-def download_agenda(url: str, dest: Path) -> Path:
-    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(resp.content)
-    return dest
 
 
 def build_items(parsed, body, source_url: str, source_text: str, client) -> list[AgendaItem]:
@@ -82,12 +82,63 @@ def build_items(parsed, body, source_url: str, source_text: str, client) -> list
     return items
 
 
+def reconcile_memos(body, agendas_dir: Path, *, lookback_days: int, dry_run: bool) -> int:
+    """Reconcile clerk memoranda for recent past meetings. Change-detects on
+    the memo file marker (separate memo_state.json); a meeting whose slug
+    isn't in the DB fails loudly WITHOUT recording the marker, so it retries
+    daily until the meeting publishes or ages out of the window. Returns the
+    failure count.
+
+    Self-heal: an unchanged marker is also cross-checked against the DB
+    (memo_votes_present) — if the marker says reconciled but the memo-stripe
+    votes are gone (e.g. wiped by hand, or a bug), we re-reconcile instead of
+    trusting the marker. Known bounded edge: a meeting whose memo genuinely
+    yields zero substantive votes will re-heal daily until it ages out of the
+    lookback window — harmless, loud, bounded.
+    """
+    from src.publish import memo_votes_present, reconcile_memo, scheduled_slug
+
+    start = (date.today() - timedelta(days=lookback_days)).isoformat()
+    end = date.today().isoformat()
+    print(f"Checking {body.slug} memoranda {start} .. {end}")
+    meetings = fetch_meetings_window(start, end, title_prefix=body.meeting_title_prefix)
+    state = PollState(agendas_dir / "memo_state.json")
+    failures = 0
+    for m in meetings:
+        marker = m.memo_updated_marker
+        if not marker:
+            continue  # memo not posted yet
+        slug = scheduled_slug(body, m.start[:10])
+        if state.marker_for(slug) == marker:
+            if dry_run or memo_votes_present(slug):
+                print(f"  MEMO SKIP {slug}: unchanged")
+                continue
+            print(f"  MEMO HEAL {slug}: marker recorded but roll-call votes "
+                  "missing — re-reconciling")
+        if dry_run:
+            print(f"  MEMO DRY-RUN {slug}: memo present, would reconcile")
+            continue
+        try:
+            result = reconcile_memo(slug)
+        except Exception as exc:
+            failures += 1
+            print(f"MEMO FAILED {slug}: {exc}", file=sys.stderr)
+            continue
+        if result.get("memo") is not None:
+            state.record(slug, marker)
+    return failures
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=int, default=8, help="window size in days (default 8)")
     ap.add_argument("--dry-run", action="store_true",
                     help="fetch/parse/interpret but no DB writes and no state recording")
     ap.add_argument("--no-interpret", action="store_true", help="skip LLM interpretation")
+    ap.add_argument("--reconcile-memos", action="store_true",
+                    help="also reconcile clerk memoranda for recent past meetings")
+    ap.add_argument("--lookback-days", type=int, default=10,
+                    help="memo lookback window in days (default 10)")
     args = ap.parse_args()
 
     body = BLOOMINGTON_COMMON_COUNCIL
@@ -113,7 +164,7 @@ def main() -> int:
     for w in work:
         try:
             meeting = w.meeting
-            pdf_path = download_agenda(meeting.agenda_url, agendas_dir / w.slug / "agenda.pdf")
+            pdf_path = download_file(meeting.agenda_url, agendas_dir / w.slug / "agenda.pdf")
             text = extract_text(pdf_path)
             parsed = parse_agenda(text)
             if not parsed:
@@ -147,6 +198,12 @@ def main() -> int:
         except Exception as exc:
             failures += 1
             print(f"FAILED {w.slug}: {exc}", file=sys.stderr)
+
+    if args.reconcile_memos:
+        failures += reconcile_memos(
+            body, agendas_dir,
+            lookback_days=args.lookback_days, dry_run=args.dry_run,
+        )
 
     if failures:
         print(f"{failures} meeting(s) failed", file=sys.stderr)

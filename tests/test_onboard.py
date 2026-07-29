@@ -85,3 +85,30 @@ def test_window_filter_and_url_construction():
 
 def test_malformed_json_returns_empty():
     assert fetch_meetings_window("2026-07-01", "2026-08-31", title_prefix="X", fetch=lambda u: "not json") == []
+
+
+def _mk_file(file_type, url, created):
+    from src.onboard import OnBoardFile
+    return OnBoardFile(file_type=file_type, url=url, filename="f.pdf", created=created)
+
+
+def test_memo_url_picks_latest_created_memorandum():
+    from src.onboard import OnBoardMeeting
+    m = OnBoardMeeting(onboard_id="1", title="T", start="2026-07-22 18:30", files=[
+        _mk_file("Agenda", "https://x/agenda", "2026-07-17"),
+        _mk_file("Memorandum", "https://x/memo-old", "2026-07-23"),
+        _mk_file("Memorandum", "https://x/memo-new", "2026-07-24"),
+    ])
+    assert m.memo_url == "https://x/memo-new"
+    assert m.memo_created == "2026-07-24"
+    assert m.memo_updated_marker == "https://x/memo-new|2026-07-24"
+
+
+def test_memo_properties_none_when_absent():
+    from src.onboard import OnBoardMeeting
+    m = OnBoardMeeting(onboard_id="1", title="T", start="2026-07-22 18:30", files=[
+        _mk_file("Agenda", "https://x/agenda", "2026-07-17"),
+    ])
+    assert m.memo_url is None
+    assert m.memo_created is None
+    assert m.memo_updated_marker == ""

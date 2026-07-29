@@ -403,7 +403,9 @@ def test_replace_votes_builds_rows(monkeypatch):
     n = publish._replace_votes(cur, m, "uuid-1")
 
     assert n == 2
-    assert any("DELETE FROM meetings.votes" in s for s, _ in cur.executes)
+    votes_delete = next((s, p) for s, p in cur.executes if "DELETE FROM meetings.votes" in s)
+    assert "vote_type = %s" in votes_delete[0]           # stripe-scoped, not a blanket delete
+    assert publish.FLOOR_VOTE_TYPE in votes_delete[1]    # bound to the floor stripe
     assert captured["rows"][0] == (
         "uuid-1", "Roll No. 438", "On the Smith amendment", "Yea 236, Nay 193", "recorded", 102.6)
     assert captured["rows"][1][5] is None
@@ -424,7 +426,9 @@ def test_replace_votes_empty_deletes_and_inserts_nothing(monkeypatch):
     m = Meeting(meeting_id="m", city=None, date="d")
     cur = _Cur()
     assert publish._replace_votes(cur, m, "uuid-1") == 0
-    assert any("DELETE FROM meetings.votes" in s for s, _ in cur.executes)
+    votes_delete = next((s, p) for s, p in cur.executes if "DELETE FROM meetings.votes" in s)
+    assert "vote_type = %s" in votes_delete[0]           # stripe-scoped, not a blanket delete
+    assert publish.FLOOR_VOTE_TYPE in votes_delete[1]    # bound to the floor stripe
     assert called["execute_values"] is False
 
 

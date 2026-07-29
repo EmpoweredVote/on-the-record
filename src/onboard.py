@@ -75,6 +75,25 @@ class OnBoardMeeting:
             return ""
         return f"{f.url}|{f.updated or f.created or ''}"
 
+    @property
+    def memo_url(self) -> Optional[str]:
+        f = self._latest_file("Memorandum")
+        return f.url if f else None
+
+    @property
+    def memo_created(self) -> Optional[str]:
+        f = self._latest_file("Memorandum")
+        return f.created if f else None
+
+    @property
+    def memo_updated_marker(self) -> str:
+        """Change-detection key for the clerk memorandum, same shape as
+        agenda_updated_marker."""
+        f = self._latest_file("Memorandum")
+        if f is None:
+            return ""
+        return f"{f.url}|{f.updated or f.created or ''}"
+
 
 def _is_canceled(title: str) -> bool:
     return title.strip().lower().startswith("cancel")
