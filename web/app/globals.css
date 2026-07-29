@@ -2103,81 +2103,171 @@ a.skimTs:hover {
 /* Upcoming item: what this page becomes after the meeting */
 .itemUpcomingNote { color: var(--muted); }
 
-/* ===== Item vote panel (outcome + For/Against member tabs) ===== */
-.itemOutcomeGlyph-passed { color: var(--accent); }
-.itemOutcomeGlyph-failed { color: var(--muted); }
-.votePanel {
-  margin-top: 0.6rem;
-  padding: 0.75rem 0.9rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+/* ===== Item decision banner (answer-first: outcome + margin + division) ===== */
+/* Outcome tones. Color never carries meaning alone (glyph + words always do);
+   these are the tints behind them. AA-checked against --foreground text. */
+:root {
+  --outcome-passed: #166534;
+  --outcome-passed-soft: #f0fdf4;
+  --outcome-failed: #991b1b;
+  --outcome-failed-soft: #fef2f2;
+  --outcome-continued: #92400e;
+  --outcome-continued-soft: #fffbeb;
 }
-.voteDescription {
-  margin: 0 0 0.35rem;
-  font-size: 0.9rem;
-  color: var(--muted);
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --outcome-passed: #4ade80;
+    --outcome-passed-soft: #122f22;
+    --outcome-failed: #f87171;
+    --outcome-failed-soft: #3b1414;
+    --outcome-continued: #fbbf24;
+    --outcome-continued-soft: #382a10;
+  }
 }
-.voteResult {
-  margin: 0;
-  font-weight: 600;
+[data-theme="dark"] {
+  --outcome-passed: #4ade80;
+  --outcome-passed-soft: #122f22;
+  --outcome-failed: #f87171;
+  --outcome-failed-soft: #3b1414;
+  --outcome-continued: #fbbf24;
+  --outcome-continued-soft: #382a10;
 }
-.voteTabs {
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-  border-bottom: 1px solid var(--border);
-}
-.voteTab {
-  appearance: none;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0.25rem 0.6rem;
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-.voteTab:hover { color: var(--foreground); }
-.voteTab-active {
-  color: var(--foreground);
-  font-weight: 600;
-  border-bottom-color: var(--accent);
-}
-.voteTabCount {
-  display: inline-block;
-  min-width: 1.2rem;
-  padding: 0 0.3rem;
-  margin-left: 0.15rem;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-align: center;
-}
-.voteMembers {
-  list-style: none;
-  margin: 0.5rem 0 0;
+
+/* Screen-reader-only heading (the banner's visible headline IS the outcome) */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.itemChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1rem;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0 0 0.5rem;
 }
-.voteMembersEmpty {
-  margin: 0.5rem 0 0;
+.itemChips .itemBadge { margin-bottom: 0; }
+.itemStageChip {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.decisionBanner {
+  margin-top: 1.25rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.decisionBanner-passed {
+  border-left-color: var(--outcome-passed);
+  background: var(--outcome-passed-soft);
+}
+.decisionBanner-failed {
+  border-left-color: var(--outcome-failed);
+  background: var(--outcome-failed-soft);
+}
+.decisionBanner-continued {
+  border-left-color: var(--outcome-continued);
+  background: var(--outcome-continued-soft);
+}
+.decisionHeadline {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.decisionBanner-passed .decisionGlyph { color: var(--outcome-passed); }
+.decisionBanner-failed .decisionGlyph { color: var(--outcome-failed); }
+.decisionBanner-continued .decisionGlyph { color: var(--outcome-continued); }
+
+.voteBlock { margin-top: 0.7rem; }
+.voteMotion {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+/* The division: For and Against side by side, every name visible — a roll
+   call reads at a glance, not behind a tab. */
+.voteDivision {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1.25rem;
+}
+.voteSide-abstain,
+.voteSide-other { grid-column: 1 / -1; }
+@media (max-width: 560px) {
+  .voteDivision { grid-template-columns: 1fr; }
+}
+.voteSideHeading {
+  margin: 0 0 0.3rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.voteSide-for .voteSideHeading { border-bottom-color: var(--outcome-passed); }
+.voteSide-against .voteSideHeading { border-bottom-color: var(--outcome-failed); }
+.voteSideCount {
+  float: right;
+  font-variant-numeric: tabular-nums;
+}
+.voteSideNames {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.voteSideNames li { padding: 0.15rem 0; }
+.voteSideEmpty {
+  margin: 0.15rem 0 0;
   color: var(--muted);
   font-size: 0.9rem;
 }
-.votePanel .itemSeekLink { margin-top: 0.6rem; }
 
-/* Link to the official ordinance/resolution text on the city site */
-.itemTextLink {
-  display: inline-block;
-  margin-top: 0.4rem;
+/* Primary actions under the banner: watch (with length) and read */
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0.9rem 0 0;
 }
-.itemSeekLink + .itemTextLink { margin-left: 1rem; }
+.itemActionLink {
+  display: inline-block;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.itemActionLink:hover { background: var(--accent-soft); }
+.itemActionLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.itemActionLink-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--background);
+}
+.itemActionLink-primary:hover { opacity: 0.9; background: var(--accent); }
+.itemActionMeta { font-weight: 400; opacity: 0.85; }
+.voteBlock .itemActionLink { margin-top: 0.6rem; }
 
 /* ===== Who spoke on this item ===== */
 .itemSpeakerGroup {

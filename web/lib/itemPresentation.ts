@@ -41,11 +41,32 @@ export function itemStateBadge(
   return { label: "Coming up", tone: "upcoming" };
 }
 
-// ✓/✗ next to the outcome headline — only for the two unambiguous outcomes.
-export function outcomeGlyph(outcome: string | null): string | null {
-  if (outcome === "passed") return "✓";
-  if (outcome === "failed") return "✗";
-  return null;
+// The decision banner: the single most important fact on a happened item,
+// composed answer-first. Headline prefers the clerk-recorded result verbatim
+// ("Failed 4–4" — outcome AND margin) over the bare outcome word; the last
+// vote is the dispositive one (reconciler writes motions in order). Tone
+// drives the banner tint; the glyph+words always carry the meaning so color
+// is never the only signal.
+export interface OutcomeHeadline {
+  text: string;
+  glyph: string | null;
+  tone: "passed" | "failed" | "continued" | "neutral";
+}
+
+export function outcomeHeadline(
+  outcome: string | null,
+  votes: { result: string }[]
+): OutcomeHeadline | null {
+  const dispositive = votes.length > 0 ? votes[votes.length - 1] : null;
+  const text = dispositive?.result || outcomeLabel(outcome);
+  if (!text) return null;
+  const tone =
+    outcome === "passed" || outcome === "failed" || outcome === "continued"
+      ? outcome
+      : "neutral";
+  const glyph =
+    outcome === "passed" ? "✓" : outcome === "failed" ? "✗" : outcome === "continued" ? "→" : null;
+  return { text, glyph, tone };
 }
 
 // Vote-record positions bucketed into citizen-facing tabs. The reconciler

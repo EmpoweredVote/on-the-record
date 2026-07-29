@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   groupItemSpeakers,
   itemStateBadge,
-  outcomeGlyph,
+  outcomeHeadline,
   outcomeLabel,
   voteBuckets,
   votePositionBucket,
@@ -52,12 +52,47 @@ describe("itemStateBadge", () => {
   });
 });
 
-describe("outcomeGlyph", () => {
-  it("marks only the unambiguous outcomes", () => {
-    expect(outcomeGlyph("passed")).toBe("✓");
-    expect(outcomeGlyph("failed")).toBe("✗");
-    expect(outcomeGlyph("continued")).toBeNull();
-    expect(outcomeGlyph(null)).toBeNull();
+describe("outcomeHeadline", () => {
+  it("prefers the clerk-recorded result (outcome AND margin) over the bare word", () => {
+    expect(outcomeHeadline("failed", [{ result: "Failed 4–4" }])).toEqual({
+      text: "Failed 4–4",
+      glyph: "✗",
+      tone: "failed",
+    });
+  });
+
+  it("uses the LAST vote — the dispositive motion", () => {
+    expect(
+      outcomeHeadline("passed", [{ result: "Amendment failed 3–5" }, { result: "Passed 8–0" }])
+        ?.text
+    ).toBe("Passed 8–0");
+  });
+
+  it("falls back to the outcome label when no votes are recorded yet", () => {
+    expect(outcomeHeadline("passed", [])).toEqual({
+      text: "Passed",
+      glyph: "✓",
+      tone: "passed",
+    });
+    expect(outcomeHeadline("continued", [])).toEqual({
+      text: "Continued to a later meeting",
+      glyph: "→",
+      tone: "continued",
+    });
+  });
+
+  it("is neutral-toned for pulled/no-action and null when nothing is known", () => {
+    expect(outcomeHeadline("pulled", [])?.tone).toBe("neutral");
+    expect(outcomeHeadline("pulled", [])?.glyph).toBeNull();
+    expect(outcomeHeadline(null, [])).toBeNull();
+  });
+
+  it("shows a recorded vote even when the outcome column is empty", () => {
+    expect(outcomeHeadline(null, [{ result: "Passed 8–0" }])).toEqual({
+      text: "Passed 8–0",
+      glyph: null,
+      tone: "neutral",
+    });
   });
 });
 

@@ -1,17 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { fetchAgendaItem } from "@/lib/queries";
 import {
   groupItemSpeakers,
   itemStateBadge,
-  outcomeGlyph,
-  outcomeLabel,
+  outcomeHeadline,
   voteBuckets,
 } from "@/lib/itemPresentation";
 import { legislationUrl } from "@/lib/legislationLink";
-import { formatMeetingDate, formatTime } from "@/lib/format";
+import { formatDuration, formatMeetingDate, formatTime } from "@/lib/format";
 import { formatMeetingWhen } from "@/lib/upcoming";
 import { useApi } from "@/lib/useApi";
 import { usePathParam } from "@/lib/usePathParam";
@@ -21,53 +19,44 @@ import ErrorState from "@/components/ErrorState";
 import NotFound from "@/components/NotFound";
 import type { ItemSpeaker, ItemVote } from "@/lib/types";
 
-// One roll-call vote: result headline, then For/Against(/Abstained) tabs with
-// per-member names. Tally-only votes (no named records yet) show the result
-// string the reconciler wrote, verbatim.
-function VotePanel({ vote, meetingId }: { vote: ItemVote; meetingId: string }) {
+// One recorded vote: the clerk's motion sentence, then a division list —
+// For and Against side by side (both always shown, so "Against — 0" reads as
+// unanimity), Abstained/Other only when occupied. No tabs: every name is on
+// the page, in reading order, zero clicks.
+function VoteDivision({ vote, meetingId }: { vote: ItemVote; meetingId: string }) {
   const buckets = voteBuckets(vote.records);
-  const [active, setActive] = useState(0);
-
   return (
-    <div className="votePanel">
-      {vote.description && <p className="voteDescription">{vote.description}</p>}
-      <p className="voteResult">{vote.result}</p>
+    <div className="voteBlock">
+      {vote.description && <p className="voteMotion">{vote.description}</p>}
       {vote.records.length > 0 && (
-        <>
-          <div className="voteTabs" role="tablist">
-            {buckets.map((b, i) => (
-              <button
-                key={b.key}
-                type="button"
-                role="tab"
-                aria-selected={i === active}
-                className={`voteTab${i === active ? " voteTab-active" : ""}`}
-                onClick={() => setActive(i)}
-              >
-                {b.label} <span className="voteTabCount">{b.records.length}</span>
-              </button>
-            ))}
-          </div>
-          {buckets[active].records.length > 0 ? (
-            <ul className="voteMembers">
-              {buckets[active].records.map((r, i) => (
-                <li key={i}>
-                  {r.politician_id ? (
-                    <Link href={`/people/${r.politician_id}`}>{r.name}</Link>
-                  ) : (
-                    r.name ?? "Unrecorded"
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="voteMembersEmpty">None</p>
-          )}
-        </>
+        <div className="voteDivision">
+          {buckets.map((b) => (
+            <div key={b.key} className={`voteSide voteSide-${b.key}`}>
+              <h3 className="voteSideHeading">
+                {b.label} <span className="voteSideCount">{b.records.length}</span>
+              </h3>
+              {b.records.length > 0 ? (
+                <ul className="voteSideNames">
+                  {b.records.map((r, i) => (
+                    <li key={i}>
+                      {r.politician_id ? (
+                        <Link href={`/people/${r.politician_id}`}>{r.name}</Link>
+                      ) : (
+                        r.name ?? "Unrecorded"
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="voteSideEmpty">No one</p>
+              )}
+            </div>
+          ))}
+        </div>
       )}
       {vote.timestamp != null && (
         <Link
-          className="itemSeekLink"
+          className="itemActionLink"
           href={`/meetings/${meetingId}?t=${Math.floor(vote.timestamp)}`}
         >
           Watch the vote
@@ -98,6 +87,7 @@ function SpeakerList({
           <Link
             className="itemSpeakerSeek"
             href={`/meetings/${meetingId}?t=${Math.floor(s.first_spoke_seconds)}`}
+            aria-label={`Watch ${s.name} at ${formatTime(s.first_spoke_seconds)}`}
           >
             {formatTime(s.first_spoke_seconds)}
           </Link>
@@ -123,9 +113,13 @@ export default function ItemDetailClient() {
   if (!itemQ.data) return <NotFound message="Agenda item not found." />;
 
   const item = itemQ.data;
+  const happened = item.status === "happened";
   const badge = itemStateBadge(item.status, item.meeting.date);
-  const outcome = outcomeLabel(item.outcome);
-  const glyph = outcomeGlyph(item.outcome);
+  const headline = happened ? outcomeHeadline(item.outcome, item.votes) : null;
+  const discussionSeconds =
+    item.segment_start_seconds != null && item.segment_end_seconds != null
+      ? item.segment_end_seconds - item.segment_start_seconds
+      : null;
   const seekHref =
     item.segment_start_seconds != null
       ? `/meetings/${item.meeting.id}?t=${Math.floor(item.segment_start_seconds)}`
@@ -133,21 +127,36 @@ export default function ItemDetailClient() {
   // The city's legislation page only exists once a final action is recorded
   // (pending legislation 404s) — link it for happened items only. Upcoming
   // items already link the agenda packet, which carries the draft text.
-  const ordinanceHref =
-    item.status === "happened" ? legislationUrl(item.legislation_ref) : null;
+  const ordinanceHref = happened ? legislationUrl(item.legislation_ref) : null;
   const speakerGroups = groupItemSpeakers(item.speakers);
   const hasSpeakers =
     speakerGroups.officials.length > 0 || speakerGroups.others.length > 0;
 
+  // Wayfinding matches the item's state: a happened item belongs to its
+  // meeting; an upcoming item belongs to the Upcoming list.
+  const crumbs =
+    happened && item.meeting.status === "published"
+      ? [
+          {
+            label: formatMeetingDate(item.meeting.date),
+            href: `/meetings/${item.meeting.id}`,
+          },
+          { label: `Item ${item.item_number}` },
+        ]
+      : [
+          { label: "Upcoming", href: "/upcoming" },
+          { label: `Item ${item.item_number}` },
+        ];
+
   return (
     <main className="itemPage">
-      <Breadcrumbs
-        items={[
-          { label: "Upcoming", href: "/upcoming" },
-          { label: item.item_number },
-        ]}
-      />
-      <span className={`itemBadge itemBadge-${badge.tone}`}>{badge.label}</span>
+      <Breadcrumbs items={crumbs} />
+      <p className="itemChips">
+        <span className={`itemBadge itemBadge-${badge.tone}`}>{badge.label}</span>
+        {/* Post-meeting, the stage reads as context ("Second reading — final
+            vote"), not status — a chip, not a section. */}
+        {happened && item.stage && <span className="itemStageChip">{item.stage}</span>}
+      </p>
       <h1>{item.summary_plain ?? item.title_raw}</h1>
       {item.summary_plain && (
         <p className="itemTitleRaw">
@@ -155,14 +164,53 @@ export default function ItemDetailClient() {
         </p>
       )}
 
+      {/* THE answer, first: outcome + margin, the clerk's motion sentence,
+          and the full division — who voted which way, no clicks. */}
+      {headline && (
+        <section className={`decisionBanner decisionBanner-${headline.tone}`}>
+          <h2 className="srOnly">Outcome</h2>
+          <p className="decisionHeadline">
+            {headline.glyph && (
+              <span className="decisionGlyph" aria-hidden="true">
+                {headline.glyph}{" "}
+              </span>
+            )}
+            {headline.text}
+          </p>
+          {item.votes.map((v) => (
+            <VoteDivision key={v.id} vote={v} meetingId={item.meeting.id} />
+          ))}
+        </section>
+      )}
+
+      {happened && (seekHref || ordinanceHref) && (
+        <p className="itemActions">
+          {seekHref && (
+            <Link className="itemActionLink itemActionLink-primary" href={seekHref}>
+              Watch the discussion
+              {discussionSeconds != null && discussionSeconds > 0 && (
+                <span className="itemActionMeta"> · {formatDuration(discussionSeconds)}</span>
+              )}
+            </Link>
+          )}
+          {ordinanceHref && (
+            <a className="itemActionLink" href={ordinanceHref} target="_blank" rel="noreferrer">
+              Read the full text of {item.legislation_ref}
+            </a>
+          )}
+        </p>
+      )}
+
       {item.decision_plain && (
         <section className="itemSection">
-          <h2>What&apos;s being decided</h2>
+          <h2>{happened ? "What was being decided" : "What's being decided"}</h2>
           <p>{item.decision_plain}</p>
         </section>
       )}
 
-      {(item.stage || item.public_comment_note) && (
+      {/* Stage + how-to-comment guidance is advice for BEFORE the meeting;
+          it reads stale (wrong tense) afterwards. */}
+      {!happened && (item.stage || item.public_comment_note) && (
         <section className="itemSection">
           <h2>Where this stands</h2>
           {item.stage && <p className="itemStage">{item.stage}</p>}
@@ -170,6 +218,34 @@ export default function ItemDetailClient() {
             <p className={item.public_comment ? "itemCommentYes" : "itemCommentNo"}>
               {item.public_comment_note}
             </p>
+          )}
+        </section>
+      )}
+
+      {happened && hasSpeakers && (
+        <section className="itemSection">
+          <h2>Who spoke on this item</h2>
+          {speakerGroups.officials.length > 0 && (
+            <>
+              <h3 className="itemSpeakerGroup">
+                Council members &amp; officials · {speakerGroups.officials.length}
+              </h3>
+              <SpeakerList
+                speakers={speakerGroups.officials}
+                meetingId={item.meeting.id}
+              />
+            </>
+          )}
+          {speakerGroups.others.length > 0 && (
+            <>
+              <h3 className="itemSpeakerGroup">
+                Public &amp; staff · {speakerGroups.others.length}
+              </h3>
+              <SpeakerList
+                speakers={speakerGroups.others}
+                meetingId={item.meeting.id}
+              />
+            </>
           )}
         </section>
       )}
@@ -184,69 +260,6 @@ export default function ItemDetailClient() {
               See what happened there
             </Link>
           </p>
-        </section>
-      )}
-
-      {item.status === "happened" &&
-        (outcome || seekHref || ordinanceHref || item.votes.length > 0) && (
-          <section className="itemSection">
-            <h2>What happened</h2>
-            {outcome && (
-              <p className="itemOutcome">
-                {outcome}
-                {glyph && (
-                  <span
-                    className={`itemOutcomeGlyph itemOutcomeGlyph-${item.outcome}`}
-                    aria-hidden="true"
-                  >
-                    {" "}
-                    {glyph}
-                  </span>
-                )}
-              </p>
-            )}
-            {item.votes.map((v) => (
-              <VotePanel key={v.id} vote={v} meetingId={item.meeting.id} />
-            ))}
-            {seekHref && (
-              <Link className="itemSeekLink" href={seekHref}>
-                Watch the discussion
-              </Link>
-            )}
-            {ordinanceHref && (
-              <a
-                className="itemTextLink"
-                href={ordinanceHref}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Read the full text of {item.legislation_ref}
-              </a>
-            )}
-          </section>
-        )}
-
-      {item.status === "happened" && hasSpeakers && (
-        <section className="itemSection">
-          <h2>Who spoke on this item</h2>
-          {speakerGroups.officials.length > 0 && (
-            <>
-              <h3 className="itemSpeakerGroup">Council members &amp; officials</h3>
-              <SpeakerList
-                speakers={speakerGroups.officials}
-                meetingId={item.meeting.id}
-              />
-            </>
-          )}
-          {speakerGroups.others.length > 0 && (
-            <>
-              <h3 className="itemSpeakerGroup">Public &amp; staff</h3>
-              <SpeakerList
-                speakers={speakerGroups.others}
-                meetingId={item.meeting.id}
-              />
-            </>
-          )}
         </section>
       )}
 
