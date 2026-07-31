@@ -17,7 +17,9 @@ unique across both all memo item refs and all agenda item refs; anything
 less unique is refused with a loud note (June 10 holds both Ordinance
 2026-12 and Resolution 2026-12 in one memo). Agenda-side uniqueness is
 counted per row, so an agenda item excluded by the duplicate-refs guard
-can never come back into reach through the fallback.
+can never come back into reach through the fallback; a memo ref that
+exact-matches a duplicated agenda ref skips the fallback entirely (the
+duplicate-guard note already states the cause).
 
 vote_records.speaker_id is NOT NULL and speakers are diarization-owned, so
 a memo name with no (or an ambiguous) speaker match SKIPS that record with
@@ -43,8 +45,9 @@ _CARRIED_WORDS = {
 }
 
 #: The bare number of a legislation ref ("Ordinance 2026-15" -> "2026-15"),
-#: mirroring memo_parse._REF_RE's number shape.
-_REF_NUMBER_RE = re.compile(r"(\d{4}-\d{1,3})\s*$")
+#: mirroring memo_parse._REF_RE's number shape. The left digit boundary
+#: keeps "12026-15" from suffix-matching as "2026-15".
+_REF_NUMBER_RE = re.compile(r"(?<!\d)(\d{4}-\d{1,3})\s*$")
 
 
 def _ref_number(ref: Optional[str]) -> Optional[str]:
@@ -242,9 +245,13 @@ def build_reconcile_plan(
     for item in memo.items:
         plan.notes.extend(f"{item.legislation_ref}: {n}" for n in item.notes)
         agenda_item = by_ref.get(item.legislation_ref)
-        if agenda_item is None:
+        if agenda_item is None and item.legislation_ref not in duplicate_refs:
             # Guarded bare-number fallback; the note is loud either way
             # (fallback fired, refused as ambiguous, or nothing to match).
+            # A ref excluded by the duplicate-refs guard skips the fallback
+            # entirely: exact matches DO exist, so a "no exact agenda
+            # match" note would mislead — the guard's own note already
+            # states the cause.
             agenda_item, note = _number_fallback(
                 item.legislation_ref, memo_number_counts, agenda_items
             )

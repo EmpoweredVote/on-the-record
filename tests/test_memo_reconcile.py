@@ -126,6 +126,9 @@ def test_duplicate_agenda_refs_abstain(memo):
     r13 = [v for v in plan.votes if v.resolution == "Resolution 2026-13"][0]
     assert r13.agenda_item_id is None
     assert any("share this ref" in n for n in plan.notes)
+    # Exact matches DO exist (guard-excluded) — a fallback note claiming
+    # "no exact agenda match" would mislead a human triager.
+    assert not any("no exact agenda match" in n for n in plan.notes)
 
 
 def test_diff_clean_when_db_matches(memo):
@@ -278,6 +281,22 @@ def test_number_fallback_refuses_memo_side_collision(memo_june10):
     assert any(
         "Ordinance 2026-12" in n and "not unique" in n for n in plan.notes
     )
+
+
+def test_number_fallback_requires_left_digit_boundary():
+    # "Ordinance 12026-15" is a DIFFERENT number — it must not become a
+    # bare-number candidate for "2026-15" via a suffix match.
+    text = (
+        "7. Legislation [7:00pm]\n"
+        "7.1. Resolution 2026-15\n"
+        "Daily moved and Zulich seconded that Resolution 2026-15 be adopted. "
+        "The motion received a roll call vote of Ayes: 8, Nays: 0, Abstain: 0.\n"
+    )
+    agenda = [AgendaItemRow("i-a", 1, "Ordinance 12026-15", None)]
+    plan = build_reconcile_plan(parse_memo(text), agenda, [])
+    assert plan.outcome_updates == []
+    assert plan.votes[0].agenda_item_id is None
+    assert any("no agenda item with this ref" in n for n in plan.notes)
 
 
 def test_number_fallback_refuses_agenda_side_collision():
