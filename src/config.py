@@ -90,6 +90,14 @@ RETURNING_SPEAKER_THRESHOLD_3 = 0.70  # Lowered match threshold for profiles see
 MERGE_GAP_SECONDS = 0.5  # merge adjacent same-speaker segments closer than this
 SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similarity above this
 
+# Chunked diarization (see docs/superpowers/specs/2026-07-31-chunked-parallel-diarization-design.md).
+# 0 disables chunking (single-pass diarization, the pre-2026-08 behaviour).
+DIARIZE_CHUNK_MINUTES = 0
+DIARIZE_CHUNK_OVERLAP_SECONDS = 60
+# Cosine similarity required to call a chunk-local speaker the same person as
+# an already-seen global speaker. Same scale as SPEAKER_MERGE_THRESHOLD.
+CHUNK_STITCH_THRESHOLD = 0.80
+
 # --- Post-identification segment merging ---
 SEGMENT_MERGE_GAP = 2.0  # merge adjacent same-speaker segments with gap < this (seconds)
 
