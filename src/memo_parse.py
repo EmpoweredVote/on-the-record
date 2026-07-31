@@ -1,25 +1,48 @@
 """Deterministic parser for the clerk's post-meeting Memorandum.
 
-The memo is highly templated prose (verified on the July 22, 2026 fixture):
-numbered sections with wall-clock stamps ("7. Legislation ... [7:01pm]"),
-ref-titled subsections ("7.2. Resolution 2026-13"), and motion sentences
-("X moved, and Y seconded that <ref> be <action>. The motion received a
-roll call vote of Ayes: N, Nays: N, Abstain: N." — split votes name the
-members per side and append FAILED/PASSED).
+The memo is highly templated prose (verified on the July 22, June 10, and
+July 29, 2026 fixtures): numbered sections with wall-clock stamps
+("7. Legislation ... [7:01pm]"), ref-titled subsections ("7.2. Resolution
+2026-13"), and motion sentences ("X moved, and Y seconded that <ref> be
+<action>. The motion received a roll call vote of Ayes: N, Nays: N,
+Abstain: N." — split votes name the members per side and append
+FAILED/PASSED).
 
-Rules calibrated on that fixture:
+Rules calibrated on those fixtures:
 
 - Motions attribute to the ENCLOSING SUBSECTION, never to refs inside
   motion prose — the July 22 memo itself has a clerk typo ("The motion to
   discuss Ordinance 2026-13" inside the 2026-15 subsection) that would
   misattribute under ref-scanning.
+- ALL result sentences ("The motion[ <desc>] received a roll call vote
+  ...") in a motion's block are collected; each is associated to a motion
+  in the ITEM scope by classifying its own description clause, never by
+  refs inside it (June 10's amendment blocks carry both the amendment vote
+  and the deferred as-amended adoption vote in one block; the July 22
+  clerk-typo desc stays with its block's discuss motion; the block owner
+  outranks any fallback so multi-amendment items keep per-amendment
+  tallies). An unmatchable or ambiguous description drops the result with
+  a loud note; a result whose target already holds a tally is dropped,
+  loudly, rather than overwritten; roll-call text that neither the motion
+  grammar nor the result frame accounts for trips a loud template-drift
+  note instead of vanishing.
+- Kind "amend" ("to adopt Amendment NN to <ref>") gets a vote row but is
+  NEVER dispositive; "amend the agenda ..." is procedural housekeeping.
+- "for second reading" clauses (first-reading referral to the next
+  session) are continuances; the continued-to date follows "until" or
+  "to be held on".
+- Names/count guard: the clerk annotates quorum changes as a parenthetical
+  on a side ("Abstain: 0 (Rosenbarger, Ruff out of the room)"). When a
+  side's name-list length differs from its count, or any token is not
+  name-shaped, the names are dropped (tally stands) with a note.
 - Disposition = the LAST motion in the item's scope that has a recorded
   roll-call vote and either carried, or — for an adoption motion — was
   tagged FAILED (a failed adoption IS the disposition). A moved-but-unvoted
   motion is a non-event (Res 2026-12's adoption motion was superseded by
   the table motion).
 - The "Actions on Legislation:" history block never matches the motion
-  grammar, so prior-meeting actions are naturally excluded.
+  grammar (no "roll call vote" phrase, precedes the first motion), so
+  prior-meeting actions are naturally excluded.
 - Abstain-don't-guess: an unrecognized action clause is kind "unknown" and
   can never be dispositive; an adoption vote that neither carried nor bears
   a FAILED tag yields no disposition. Both leave loud notes.
@@ -44,7 +67,11 @@ _NAME = r"[A-Z][\w'’.-]+(?:\s[A-Z][\w'’.-]+)?"
 _MOTION_START_RE = re.compile(
     rf"(?P<mover>{_NAME})\s+moved,?\s+and\s+(?P<seconder>{_NAME})\s+seconded\s+(?:that|to)\b"
 )
-_ROLL_CALL_RE = re.compile(
+# A result sentence carries its own description clause between "The motion"
+# and "received" ("to adopt Amendment 01 to ...", or empty). Descriptions
+# never contain a period, which bounds the non-greedy capture.
+_RESULT_RE = re.compile(
+    r"The\s+motion\b(?P<desc>[^.]*?)\s*received\s+a\s+"
     r"roll\s+call\s+vote(?:\s+of|:)?\s*"
     r"Ayes:\s*(?P<ayes>\d+)\s*(?:\((?P<ayes_names>[^)]*)\))?\s*[;,.]?\s*"
     r"Nays:\s*(?P<nays>\d+)\s*(?:\((?P<nays_names>[^)]*)\))?\s*[;,.]?\s*"
@@ -52,7 +79,16 @@ _ROLL_CALL_RE = re.compile(
     r"\s*(?P<tag>FAILED|PASSED)?",
     re.IGNORECASE,
 )
-_CONTINUED_DATE_RE = re.compile(r"until\b.*?\b([A-Z][a-z]+ \d{1,2}, \d{4})")
+# "until <date>" or "... to be held on <date>"; July 22's postpone contains
+# both anchors ("until the next Regular Session to be held on July 29,
+# 2026") — the leftmost anchor and the non-greedy hop to the FIRST date
+# keep that yielding July 29.
+_CONTINUED_DATE_RE = re.compile(
+    r"(?:until|to\s+be\s+held\s+on)\b.*?\b([A-Z][a-z]+ \d{1,2}, \d{4})"
+)
+# Bare roll-call phrase, for the drift tripwire (a result the _RESULT_RE
+# frame failed to recognize must not vanish silently).
+_ROLL_CALL_TEXT_RE = re.compile(r"roll\s+call\s+vote", re.IGNORECASE)
 
 
 @dataclass
@@ -66,7 +102,10 @@ class MemoTally:
 class MemoMotion:
     mover: str
     seconder: str
-    kind: str  # 'procedural' | 'adopt' | 'continue' | 'pull' | 'unknown'
+    # 'procedural' | 'adopt' | 'amend' | 'continue' | 'pull' | 'unknown'
+    # — 'amend' (adopt an Amendment NN to the legislation) gets a vote row
+    # but is never dispositive for the item itself.
+    kind: str
     raw_text: str
     tally: Optional[MemoTally] = None
     ayes_names: list[str] = field(default_factory=list)
@@ -74,7 +113,7 @@ class MemoMotion:
     abstain_names: list[str] = field(default_factory=list)
     failed_tag: bool = False   # trailing FAILED tag on the roll call
     passed_tag: bool = False   # trailing PASSED tag
-    continued_to_date: Optional[str] = None  # ISO date from "until <date>"
+    continued_to_date: Optional[str] = None  # ISO date from "until"/"to be held on"
 
 
 @dataclass
@@ -101,12 +140,23 @@ def _split_names(raw: Optional[str]) -> list[str]:
 
 def _classify_action(clause: str) -> str:
     lowered = clause.lower()
+    # "amend the agenda ..." is meeting housekeeping, not an amendment to
+    # the legislation — must outrank the Amendment check.
+    if "amend the agenda" in lowered:
+        return "procedural"
     if "read by title" in lowered or "be introduced" in lowered:
         return "procedural"
     if " discuss " in f" {lowered} ":
         return "procedural"
+    # "Amendment NN" is capital-A in the memo but keep this case-blind;
+    # \bamendment\b never matches the "as amended" adoption phrasing.
+    if re.search(r"\bamendment\b", lowered):
+        return "amend"
     if "be adopted" in lowered or "be approved" in lowered:
         return "adopt"
+    # First-reading referral to the next session is a continuance.
+    if "for second reading" in lowered:
+        return "continue"
     if "postpone" in lowered or re.search(r"\btabled?\b", lowered):
         return "continue"
     if "withdraw" in lowered:
@@ -114,9 +164,115 @@ def _classify_action(clause: str) -> str:
     return "unknown"
 
 
+def _classify_result_desc(desc: str) -> str:
+    """Classify a result sentence's own description clause. Descs use the
+    infinitive ("The motion to adopt X received ...") where motion clauses
+    use the passive ("that X be adopted"), so fall back on the bare verbs."""
+    kind = _classify_action(desc)
+    if kind != "unknown":
+        return kind
+    lowered = desc.lower()
+    if re.search(r"\badopt\b|\bapprove\b", lowered):
+        return "adopt"
+    if re.search(r"\bintroduce\b", lowered):
+        return "procedural"
+    return "unknown"
+
+
+def _associate_result(
+    desc: str, owner: MemoMotion, motions: list[MemoMotion], notes: list[str]
+) -> Optional[MemoMotion]:
+    """Pick the motion a result sentence belongs to — by classifying its
+    description, NEVER by refs inside it (clerk typos put wrong refs there).
+    Leaves a loud note and returns None when no target can be defended
+    (abstain-don't-guess)."""
+    if not desc:
+        return owner
+    kind = _classify_result_desc(desc)
+    # Owner match comes FIRST — it is load-bearing: an amendment's own
+    # result must settle its own (block-owning) amend motion. Were the
+    # amend fallback checked first, two amendments in one item would hand
+    # each block's result to the OTHER amendment (last-unvoted), swapping
+    # tallies. Same rule keeps July 22's "to discuss Ordinance 2026-13"
+    # typo on 2026-15's discuss motion, whatever ref the desc names.
+    # "unknown" never equals anything.
+    if kind != "unknown" and kind == owner.kind and owner.tally is None:
+        return owner
+    if kind == "amend":
+        # Only amendment results stranded in a FOREIGN block reach this
+        # fallback; with several unvoted amend motions the claim is
+        # ambiguous — abstain.
+        unvoted = [m for m in motions if m.kind == "amend" and m.tally is None]
+        if len(unvoted) == 1:
+            return unvoted[0]
+        if unvoted:
+            notes.append(
+                f"result desc {desc[:120]!r} could claim {len(unvoted)} unvoted "
+                f"amendment motions — dropped (ambiguous)"
+            )
+            return None
+    elif kind == "adopt":
+        # "to adopt <ref> as amended" lands after the amendment vote, in the
+        # amendment's block — it settles the pending unvoted adoption motion.
+        unvoted = [m for m in motions if m.kind == "adopt" and m.tally is None]
+        if unvoted:
+            return unvoted[-1]
+    notes.append(f"result sentence matches no pending motion (dropped): {desc[:120]!r}")
+    return None
+
+
+# _NAME with the second char optional: vote lists may carry initials ("A")
+# alongside surnames; used to reject annotation prose ("Ruff out of the
+# room") that comma-splits into a count-matching token.
+_NAME_TOKEN_RE = re.compile(r"[A-Z][\w'’.-]*(?:\s[A-Z][\w'’.-]*)?")
+
+
+def _guarded_names(names: list[str], count: int, side: str, notes: list[str]) -> list[str]:
+    # Quorum annotations ride the sides ("Abstain: 0 (Rosenbarger, Ruff
+    # out of the room)") — a name list that disagrees with its count, or
+    # that holds a non-name-shaped token, is not a vote record. Keep the
+    # tally, drop the names.
+    if names and (
+        len(names) != count
+        or not all(_NAME_TOKEN_RE.fullmatch(n) for n in names)
+    ):
+        notes.append(
+            f"{side} names {names!r} fail the names/count guard "
+            f"(count {count}) — names dropped"
+        )
+        return []
+    return names
+
+
+def _apply_result(motion: MemoMotion, roll: re.Match, notes: list[str]) -> None:
+    motion.tally = MemoTally(
+        ayes=int(roll.group("ayes")),
+        nays=int(roll.group("nays")),
+        abstain=int(roll.group("abstain")),
+    )
+    for side in ("ayes", "nays", "abstain"):
+        names = _guarded_names(
+            _split_names(roll.group(f"{side}_names")),
+            int(roll.group(side)), side, notes,
+        )
+        setattr(motion, f"{side}_names", names)
+    tag = (roll.group("tag") or "").upper()
+    motion.failed_tag = tag == "FAILED"
+    motion.passed_tag = tag == "PASSED"
+
+
 def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
     starts = list(_MOTION_START_RE.finditer(scope_text))
+    # Scope-level drift tripwire: if the MOTION grammar itself drifts, the
+    # roll-call text sits in no block and the per-block tripwire below
+    # never sees it — a motionless item with vote text must be loud.
+    if not starts and _ROLL_CALL_TEXT_RE.search(scope_text):
+        notes.append(
+            "roll-call text but no recognizable motion sentence — template "
+            f"drift? scope: {scope_text[:120]!r}"
+        )
     motions: list[MemoMotion] = []
+    blocks: list[str] = []
     for idx, start in enumerate(starts):
         block_end = starts[idx + 1].start() if idx + 1 < len(starts) else len(scope_text)
         block = scope_text[start.start():block_end]
@@ -137,19 +293,6 @@ def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
         )
         if kind == "unknown":
             notes.append(f"unrecognized motion action (abstained): {clause[:120]!r}")
-        roll = _ROLL_CALL_RE.search(block)
-        if roll:
-            motion.tally = MemoTally(
-                ayes=int(roll.group("ayes")),
-                nays=int(roll.group("nays")),
-                abstain=int(roll.group("abstain")),
-            )
-            motion.ayes_names = _split_names(roll.group("ayes_names"))
-            motion.nays_names = _split_names(roll.group("nays_names"))
-            motion.abstain_names = _split_names(roll.group("abstain_names"))
-            tag = (roll.group("tag") or "").upper()
-            motion.failed_tag = tag == "FAILED"
-            motion.passed_tag = tag == "PASSED"
         if kind == "continue":
             date_match = _CONTINUED_DATE_RE.search(clause)
             if date_match:
@@ -161,6 +304,39 @@ def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
                 except ValueError:
                     notes.append(f"unparseable continuance date: {date_match.group(1)!r}")
         motions.append(motion)
+        blocks.append(block)
+
+    # Second pass: a block may hold several result sentences (June 10's
+    # amendment blocks hold the amendment vote AND the as-amended adoption
+    # vote). Results are matched in scope order so earlier ones consume
+    # their targets before later ones look for pending unvoted motions.
+    for owner, block in zip(motions, blocks):
+        n_results = 0
+        for roll in _RESULT_RE.finditer(block):
+            n_results += 1
+            desc = roll.group("desc").strip()
+            target = _associate_result(desc, owner, motions, notes)
+            if target is None:
+                continue  # _associate_result left the note
+            if target.tally is not None:
+                notes.append(
+                    f"result sentence (Ayes {roll.group('ayes')}, "
+                    f"Nays {roll.group('nays')}, Abstain {roll.group('abstain')}) "
+                    f"would overwrite the recorded vote on "
+                    f"{target.raw_text[:80]!r} — dropped"
+                )
+                continue
+            _apply_result(target, roll, notes)
+        # Drift tripwire: v1 matched ANY bare roll-call text; the stricter
+        # result frame must never fail silently (e.g. a desc containing
+        # "U.S." breaks the no-period bound). Each parsed result consumes
+        # exactly one "roll call vote" phrase — a surplus means phrasing
+        # the frame did not recognize.
+        if len(_ROLL_CALL_TEXT_RE.findall(block)) > n_results:
+            notes.append(
+                "roll-call text without a parsed result sentence — template "
+                f"drift? block: {block[:120]!r}"
+            )
     return motions
 
 
@@ -177,7 +353,8 @@ def _disposition(motions: list[MemoMotion], notes: list[str]) -> tuple[Optional[
     was tagged FAILED — a failed adoption IS the item's disposition)."""
     result: tuple[Optional[str], Optional[int]] = (None, None)
     for i, m in enumerate(motions):
-        if m.tally is None or m.kind in ("procedural", "unknown"):
+        # 'amend' settles an amendment, never the item — non-dispositive.
+        if m.tally is None or m.kind in ("procedural", "unknown", "amend"):
             continue
         if m.kind == "adopt":
             if m.failed_tag:
