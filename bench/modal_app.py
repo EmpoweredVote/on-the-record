@@ -1353,7 +1353,15 @@ def pipeline_extract_embeddings(meeting_id: str, segments_json: str) -> str:
     # meeting; an A100 is a 2-4x speedup on this workload for ~$2.10/hr vs
     # $0.80/hr — still well under $2/meeting. The bench model functions above
     # stay on L4 so their recorded $/run comparisons remain apples-to-apples.
+    #
+    # EXPERIMENT (June 10 finding): the A100 gave NO speedup — the pipeline
+    # call is 99.7% of wall-clock and appears CPU-bound (clustering?). This
+    # function previously ran at Modal's default (low) CPU allocation while
+    # the GPU idled; cpu=16 tests that hypothesis. The _StageTimer hook
+    # below splits the pipeline internally. If clustering dominates and the
+    # cpu bump fixes it, drop gpu back to "L4".
     gpu="A100",
+    cpu=16,
     timeout=60 * 60 * 2,
 )
 def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
@@ -1391,9 +1399,30 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
     )
     pipeline.to(device)
 
+    class _StageTimer:
+        """Pipeline hook: pyannote calls it per internal step (segmentation,
+        embeddings, clustering, ...); recording each step's first-seen time
+        turns consecutive starts into per-stage durations."""
+
+        def __init__(self):
+            self.starts: dict[str, float] = {}
+
+        def __call__(self, step_name, step_artifact=None, file=None,
+                     total=None, completed=None):
+            self.starts.setdefault(str(step_name), time.time())
+
+        def report(self, t_end: float) -> None:
+            names = list(self.starts)
+            for i, name in enumerate(names):
+                t_next = self.starts[names[i + 1]] if i + 1 < len(names) else t_end
+                print(f"  [timing]   pipeline stage {name}: "
+                      f"{t_next - self.starts[name]:.1f}s")
+
+    stage_timer = _StageTimer()
     t0 = time.time()
-    diarization = pipeline(str(wav_path))
+    diarization = pipeline(str(wav_path), hook=stage_timer)
     t_diarize = time.time() - t0
+    stage_timer.report(t0 + t_diarize)
     turns = _annotation_to_turns(diarization)
 
     # Convert to plain dicts (no Segment dataclass dependency here).
