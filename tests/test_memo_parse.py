@@ -419,6 +419,24 @@ def test_non_name_tokens_on_nonzero_side_drop_names():
     assert any("names" in n.lower() for n in item.notes)
 
 
+def test_motion_grammar_drift_leaves_scope_level_note():
+    # If the motion grammar itself drifts, the roll-call text sits in NO
+    # block — the per-block tripwire never sees it. The scope-level check
+    # must flag it instead of yielding a silent, motionless item.
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-77\n"
+        "Daily made a motion, seconded by Ruff, that Ordinance 2026-77 be "
+        "adopted. The motion received a roll call vote of Ayes: 8, Nays: 0, "
+        "Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    assert item.motions == []
+    assert item.disposition is None
+    assert any("template drift" in n for n in item.notes)
+
+
 def test_duplicate_result_keeps_first_tally_and_notes_the_drop():
     text = (
         "5. Legislation [7:00pm]\n"

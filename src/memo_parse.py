@@ -23,8 +23,9 @@ Rules calibrated on those fixtures:
   outranks any fallback so multi-amendment items keep per-amendment
   tallies). An unmatchable or ambiguous description drops the result with
   a loud note; a result whose target already holds a tally is dropped,
-  loudly, rather than overwritten; roll-call text the result frame fails
-  to recognize trips a loud template-drift note instead of vanishing.
+  loudly, rather than overwritten; roll-call text that neither the motion
+  grammar nor the result frame accounts for trips a loud template-drift
+  note instead of vanishing.
 - Kind "amend" ("to adopt Amendment NN to <ref>") gets a vote row but is
   NEVER dispositive; "amend the agenda ..." is procedural housekeeping.
 - "for second reading" clauses (first-reading referral to the next
@@ -262,6 +263,14 @@ def _apply_result(motion: MemoMotion, roll: re.Match, notes: list[str]) -> None:
 
 def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
     starts = list(_MOTION_START_RE.finditer(scope_text))
+    # Scope-level drift tripwire: if the MOTION grammar itself drifts, the
+    # roll-call text sits in no block and the per-block tripwire below
+    # never sees it — a motionless item with vote text must be loud.
+    if not starts and _ROLL_CALL_TEXT_RE.search(scope_text):
+        notes.append(
+            "roll-call text but no recognizable motion sentence — template "
+            f"drift? scope: {scope_text[:120]!r}"
+        )
     motions: list[MemoMotion] = []
     blocks: list[str] = []
     for idx, start in enumerate(starts):
