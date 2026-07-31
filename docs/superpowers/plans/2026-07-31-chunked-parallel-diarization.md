@@ -854,3 +854,106 @@ gh pr create --title "perf: chunked parallel diarization (quadratic cost, split 
 PR body must include: the measurement table that killed the six earlier hypotheses (from the spec), the quadratic-scaling evidence, the architecture in three bullets, the one-to-one stitching constraint and *why* it exists, the calibration table with DER + speedup per arm, the chosen default, and the explicit statement that the single-pass path is unchanged and remains the fallback. End with the standard Claude Code attribution line.
 
 **Deferred (explicitly):** using the overlap region to verify stitching rather than only for context; GUI exposure of the chunk flag; chunking anything other than diarization; evaluating a different diarizer (NeMo / paid pyannote API).
+
+---
+
+## REVISION (2026-07-31, after Task 1 review) — reuse the existing reconciler
+
+**Discovery:** `src/vibevoice.py` already contains a complete cross-chunk speaker
+reconciler (`reconcile_chunks`, plus `ChunkWindow`/`LocalTurn`/`ChunkResult`/`StableTurn`,
+`_cosine_similarity`, `_overlap_seconds`, `_ownership_bounds`), written for the VibeVoice
+diarizer's 50-minute windows. It is strictly better than the `src/diarize_stitch.py` this
+plan specified, and the module is pure (numpy/dataclasses only — safe to import from any
+code path):
+
+- **Temporal-overlap matching first**, before embeddings — it matches speakers by how much
+  their turns physically overlap inside the shared overlap region. This plan listed that as
+  deferred future work; it already exists and is a stronger signal than voice similarity.
+- **Greedy highest-similarity-first with a `used_globals` set** — also strictly one-to-one,
+  and *immune* to a defect the review found in the Hungarian version: sum-maximization can
+  displace a perfect 1.000 match onto a worse global when two globals are near-duplicates
+  (verified: ALICE at cos 1.000 assigned to a 0.936 global because the total was higher).
+  The docstring claim that "a greedy walk can violate one-to-one" is only true of
+  greedy-per-local; greedy-highest-first cannot.
+- **Guards this plan's version lacked:** non-finite embedding rejection, a
+  `MIN_EMBEDDING_SPEECH_SECONDS = 3.0` floor so thin evidence never sets a voiceprint, and
+  `_ownership_bounds` midpoint clipping that resolves boundary double-counting structurally.
+- Rich diagnostics (`temporal_matches` / `embedding_matches` / `new_speakers`).
+
+Two stitchers with different algorithms and different guard sets is accidental duplication.
+**Tasks 1–3 are superseded by Tasks 1R–3R below.** Consequence for the architecture: chunk
+workers now return turns over their **whole read window including overlap** (unclipped), and
+windows genuinely overlap, because that is what makes temporal matching possible;
+`_ownership_bounds` then assigns each second of audio to exactly one window at the overlap
+midpoint. This is better than the original clip-in-the-worker design, which threw away the
+overlap evidence before the stitcher could use it.
+
+### Task 1R: Extract the shared reconciler
+
+**Files:** create `src/speaker_reconcile.py`; modify `src/vibevoice.py`, `src/config.py`;
+delete `src/diarize_stitch.py` and `tests/test_diarize_stitch.py`; create
+`tests/test_speaker_reconcile.py`
+
+- [ ] **Step 1:** Move, unchanged in behaviour, from `src/vibevoice.py` into a new pure
+  module `src/speaker_reconcile.py`: `ChunkWindow`, `LocalTurn`, `ChunkResult`,
+  `StableTurn`, `ReconciliationResult`, `_overlap_seconds`, `_cosine_similarity`,
+  `_ownership_bounds`, `reconcile_chunks`, and the two constants
+  `EMBEDDING_MATCH_THRESHOLD = 0.75` / `MIN_EMBEDDING_SPEECH_SECONDS = 3.0`. Give the new
+  module a docstring explaining it is diarizer-agnostic: any backend that diarizes
+  overlapping windows uses it to turn window-local labels into meeting-wide labels.
+- [ ] **Step 2:** Add a `label_prefix: str = "SPEAKER_"` keyword to `reconcile_chunks` and
+  replace the hardcoded `f"VIBE_{next_global:02d}"` with
+  `f"{label_prefix}{next_global:02d}"`.
+- [ ] **Step 3:** In `src/vibevoice.py`, re-import those names from the new module so every
+  existing caller and test keeps working unchanged:
+  `from .speaker_reconcile import (ChunkResult, ChunkWindow, LocalTurn, ReconciliationResult, StableTurn, reconcile_chunks, EMBEDDING_MATCH_THRESHOLD, MIN_EMBEDDING_SPEECH_SECONDS, _cosine_similarity, _overlap_seconds, _ownership_bounds)`.
+  VibeVoice's own call site must pass `label_prefix="VIBE_"` so its labels are byte-identical
+  to today. Verify with `.venv/bin/pytest tests/test_vibevoice.py tests/test_vibevoice_integration.py -v` — these are the regression gate for the extraction; they must pass untouched.
+- [ ] **Step 4:** `git rm src/diarize_stitch.py tests/test_diarize_stitch.py`. Keep the
+  three config knobs added in Task 1 but replace `CHUNK_STITCH_THRESHOLD` with a comment
+  pointing at `speaker_reconcile.EMBEDDING_MATCH_THRESHOLD` as the single source of truth,
+  i.e. delete the duplicate knob.
+- [ ] **Step 5:** Create `tests/test_speaker_reconcile.py` porting the **still-relevant**
+  cases from the deleted `tests/test_diarize_stitch.py` onto the `ChunkResult`/`LocalTurn`
+  shape (same voice across windows unified; different voices reusing one local label kept
+  separate; two locals in one window never collapsing into one global; below-threshold →
+  new speaker; duration-weighted centroids), plus three the review's probing showed matter:
+  (a) a speaker whose turns overlap the seam is matched **temporally** even when their
+  embedding is missing; (b) a window whose speaker has under
+  `MIN_EMBEDDING_SPEECH_SECONDS` of speech does not poison a global voiceprint; (c) a
+  non-finite embedding is rejected without crashing. Use `SPEAKER_`-prefixed expectations.
+- [ ] **Step 6:** Full suite green; commit: `refactor: extract diarizer-agnostic speaker reconciler from vibevoice`.
+
+### Task 2R: Modal chunk worker (revised)
+
+Same as Task 2 above with three changes:
+
+- [ ] Return turns over the **entire read window** `[start_s - overlap_s, end_s + overlap_s]`
+  in absolute time, **without** clipping to `[start_s, end_s)` — the reconciler's ownership
+  midpoints handle boundaries, and the overlap turns are what temporal matching needs. Keep
+  dropping sub-50ms slivers.
+- [ ] Return `window_start_s` / `window_end_s` (the read window, i.e. what the reconciler
+  needs as `ChunkWindow.start`/`.end`) and a `window_index`, alongside `turns`, `centroids`,
+  `speech_seconds`, `elapsed_s`.
+- [ ] Compute centroids over the turns in the **canonical** span only (`[start_s, end_s)`),
+  so overlap audio informs matching but not the voiceprint of a speaker that a neighbouring
+  window owns.
+
+### Task 3R: Orchestrator (revised)
+
+Same as Task 3 above with these changes:
+
+- [ ] `plan_chunk_windows` is unchanged (canonical, abutting spans) — the worker derives its
+  read window by expanding its canonical span by the overlap.
+- [ ] Build `ChunkResult(window=ChunkWindow(index, read_start, read_end), turns=[LocalTurn(...)], embeddings=..., speech_seconds=...)` from each worker payload and call
+  `reconcile_chunks(chunks, label_prefix="SPEAKER_")`. Convert its `StableTurn`s to the
+  `segments_data` dicts.
+- [ ] `reconcile_chunks` returns turns and diagnostics but not global centroids, and the
+  pipeline needs centroids for voice-profile matching. Recompute them locally: group the
+  stable turns by global speaker and duration-weighted-average the contributing chunk
+  centroids (each `StableTurn` retains `local_speaker` and `chunk_index`, so the mapping back
+  is exact). Print the diagnostics counts (temporal vs embedding vs new) — that breakdown is
+  the operator's signal for whether stitching is working.
+- [ ] Log loudly when a global speaker ends with **no** centroid (possible when every
+  contributing window had under the speech floor): the turns still publish, and the
+  downstream voice-profile step skips unembedded labels, but it must not be silent.
