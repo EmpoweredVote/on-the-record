@@ -3,10 +3,21 @@
 The memo is authoritative for outcomes and votes: dispositions OVERWRITE
 agenda_items.outcome (this is the fix for the pass-abstention limitation —
 the chair never says "motion carries", so the LLM pass abstains on passes),
-and every substantive motion (adopt/continue/pull kinds) with a recorded
-roll call — including ones that did not carry — becomes a meetings.votes
-row. Named split votes additionally plan per-member meetings.vote_records
-rows.
+and every substantive motion (adopt/amend/continue/pull kinds) with a
+recorded roll call — including ones that did not carry — becomes a
+meetings.votes row. Named split votes additionally plan per-member
+meetings.vote_records rows. Amendment ('amend') motions get vote rows but
+never outcome updates — outcomes come only from item.disposition, which
+memo_parse keeps amendment-free.
+
+Memo items match agenda items by exact legislation_ref. When the exact ref
+misses, a guarded fallback matches by bare number ("Resolution 2026-15" ->
+"Ordinance 2026-15" for a clerk ref-type mislabel) ONLY when that number is
+unique across both all memo item refs and all agenda item refs; anything
+less unique is refused with a loud note (June 10 holds both Ordinance
+2026-12 and Resolution 2026-12 in one memo). Agenda-side uniqueness is
+counted per row, so an agenda item excluded by the duplicate-refs guard
+can never come back into reach through the fallback.
 
 vote_records.speaker_id is NOT NULL and speakers are diarization-owned, so
 a memo name with no (or an ambiguous) speaker match SKIPS that record with
@@ -15,16 +26,30 @@ plan no records (deriving members from attendance would be a guess).
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
 from .memo_parse import MemoMotion, ParsedMemo, carried
 
-#: Dispositive motion kinds -> the word used in the vote result string when
-#: the motion carried. (A FAILED-tagged or not-carried motion reads "Failed".)
-#: Also does double duty as the set of vote-eligible motion kinds.
-_CARRIED_WORDS = {"adopt": "Passed", "continue": "Continued", "pull": "Pulled"}
+#: Vote-eligible motion kinds -> the word used in the vote result string
+#: when the motion carried. (A FAILED-tagged or not-carried motion reads
+#: "Failed".) 'amend' is vote-eligible but never dispositive — it can only
+#: appear here because outcomes come from item.disposition, not this map.
+_CARRIED_WORDS = {
+    "adopt": "Passed", "amend": "Passed",
+    "continue": "Continued", "pull": "Pulled",
+}
+
+#: The bare number of a legislation ref ("Ordinance 2026-15" -> "2026-15"),
+#: mirroring memo_parse._REF_RE's number shape.
+_REF_NUMBER_RE = re.compile(r"(\d{4}-\d{1,3})\s*$")
+
+
+def _ref_number(ref: Optional[str]) -> Optional[str]:
+    match = _REF_NUMBER_RE.search(ref or "")
+    return match.group(1) if match else None
 
 
 @dataclass
@@ -149,6 +174,48 @@ def _planned_records(
     return records
 
 
+def _number_fallback(
+    memo_ref: str,
+    memo_number_counts: Counter,
+    agenda_items: list[AgendaItemRow],
+) -> tuple[Optional[AgendaItemRow], str]:
+    """Bare-number match for a memo ref with no exact agenda match (clerk
+    ref-type mislabels: "Resolution 2026-15" for Ordinance 2026-15).
+    Fires ONLY when the number is unique across both the memo item refs and
+    the agenda item refs — anything less is refused (abstain-don't-guess).
+    Returns (matched agenda item or None, loud note)."""
+    number = _ref_number(memo_ref)
+    # Candidates count agenda ROWS, not distinct refs, so a unique number
+    # also proves the matched ref isn't duplicated (the duplicate-refs
+    # guard stays airtight); two different-typed rows sharing a number is
+    # exactly the ambiguity refused below.
+    candidates = [
+        i for i in agenda_items
+        if i.legislation_ref and _ref_number(i.legislation_ref) == number
+    ] if number else []
+    if not candidates:
+        return None, (
+            f"{memo_ref}: no agenda item with this ref — "
+            "votes written unattached, no outcome update"
+        )
+    if memo_number_counts[number] == 1 and len(candidates) == 1:
+        hit = candidates[0]
+        return hit, (
+            f"{memo_ref}: no exact agenda match; matched "
+            f"{hit.legislation_ref} by bare number (clerk ref-type mislabel?)"
+        )
+    crowd = []
+    if memo_number_counts[number] > 1:
+        crowd.append(f"{memo_number_counts[number]} memo refs")
+    if len(candidates) > 1:
+        crowd.append(f"{len(candidates)} agenda refs")
+    return None, (
+        f"{memo_ref}: no exact agenda match and bare number {number} is "
+        f"not unique ({' and '.join(crowd)} share it) — refusing to guess, "
+        "votes written unattached, no outcome update"
+    )
+
+
 def build_reconcile_plan(
     memo: ParsedMemo,
     agenda_items: list[AgendaItemRow],
@@ -168,15 +235,20 @@ def build_reconcile_plan(
         for i in agenda_items
         if i.legislation_ref and i.legislation_ref not in duplicate_refs
     }
+    memo_number_counts = Counter(
+        _ref_number(item.legislation_ref) for item in memo.items
+    )
 
     for item in memo.items:
         plan.notes.extend(f"{item.legislation_ref}: {n}" for n in item.notes)
         agenda_item = by_ref.get(item.legislation_ref)
         if agenda_item is None:
-            plan.notes.append(
-                f"{item.legislation_ref}: no agenda item with this ref — "
-                "votes written unattached, no outcome update"
+            # Guarded bare-number fallback; the note is loud either way
+            # (fallback fired, refused as ambiguous, or nothing to match).
+            agenda_item, note = _number_fallback(
+                item.legislation_ref, memo_number_counts, agenda_items
             )
+            plan.notes.append(note)
         if item.disposition is not None and agenda_item is not None:
             if agenda_item.outcome and agenda_item.outcome != item.disposition:
                 plan.notes.append(
