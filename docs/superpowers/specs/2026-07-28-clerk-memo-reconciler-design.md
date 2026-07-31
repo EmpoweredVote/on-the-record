@@ -51,7 +51,35 @@ Three new units plus wiring:
    - Motion classification by action text: *introduce/read by title/synopsis* and
      *to discuss* → procedural; *be adopted* → adopt; *postpone consideration … until
      <date>* → continue (with `continued_to_date`); *table … indefinitely / be tabled* →
-     continue; *withdraw* → pull.
+     continue; *withdraw* → pull; *(v2, 2026-07-31)* *amend the agenda* → procedural;
+     *adopt Amendment NN to <ref>* → **amend** (vote-eligible, never dispositive);
+     *present <ref> for second reading at the next Regular Session to be held on <date>*
+     → continue with `continued_to_date` (first-reading referral, July 29 items 6.1/6.2;
+     the date regex anchors on both `until …` and `to be held on …` — July 22's postpone
+     contains both forms).
+   - **Multi-result association (v2, 2026-07-31 — the amendment pattern, June 10 items
+     7.2/7.4):** the clerk writes `that <ref> be adopted.` with **no vote sentence**, then
+     `to adopt Amendment 01 to <ref>.` whose block carries TWO result sentences —
+     `The motion to adopt Amendment 01 to <ref> received … Ayes: 9 …` AND `The motion to
+     adopt <ref> as amended received … Ayes: 5 (names); Nays: 4 (names) …`. v1 took only
+     the first roll call per motion block, so Ordinance 2026-12's original 5–4 passage was
+     never captured. v2 `finditer`s ALL result sentences per block and associates each by
+     classifying the result sentence's own description (never by refs inside it): empty
+     desc → block-owning motion; desc kind == owner kind and owner unvoted → owner (this
+     keeps July 22's clerk-typo result on the discuss motion); desc mentions Amendment →
+     the unvoted amend motion (owner-match is checked first — with two amendments each
+     result sits in its own block; a foreign-block amendment result with >1 unvoted amend
+     candidate abstains loudly); desc classifies adopt (`to adopt <ref> as amended`) → the
+     pending unvoted adopt motion; unmatchable → dropped with a loud note. A result that
+     would overwrite an already-recorded tally is dropped loudly.
+   - **Names/count guard (v2):** the clerk annotates quorum changes as parentheticals on
+     zero sides — `Abstain: 0 (Rosenbarger, Ruff out of the room)`. When a side's
+     name-list length ≠ its count, or any token isn't name-shaped, the side's names are
+     DROPPED with a note (tally stands). Without this, June 10's Ordinance 2026-13 7–0
+     adoption would fabricate abstain records.
+   - **Drift tripwires (v2):** per block, more `roll call vote` phrases than parsed result
+     sentences → loud note; an item scope with roll-call text but zero recognizable motion
+     sentences → loud note. (v1 lost such results silently.)
    - **Disposition = the last motion in the item's scope that has a recorded roll-call
      vote and carried.** A moved-but-unvoted motion is a non-event (July 22: Res 2026-12's
      adoption motion has no vote sentence; the subsequent table motion carried → continued).
@@ -76,8 +104,19 @@ Three new units plus wiring:
      pass-abstention fix). Items without refs are never touched. Memo refs with no
      matching item and items whose memo section had no disposition → logged, no change.
      Zero agenda_items rows (e.g. July 22, pre-poller) → zero updates, still writes votes.
-   - **Votes:** one `meetings.votes` row per *substantive* motion (adopt/continue/pull
-     kinds) with a recorded roll call — including ones that did not carry
+   - **Bare-number fallback (v2, 2026-07-31 — ref-type mislabel):** the July 29 memo
+     consistently calls Ordinance 2026-15 "Resolution 2026-15" (heading + motions). When
+     the exact ref misses, match by bare number (`2026-15`, digit-boundary-anchored) ONLY
+     if that number is unique across BOTH the memo item refs AND the agenda rows (counted
+     per row, so duplicate-ref-excluded items can never re-enter). June 10 has both
+     Ordinance 2026-12 and Resolution 2026-12 in one memo — the guard refuses there. A
+     fired fallback leaves a loud note naming both refs; a refused one says which side(s)
+     collide. Residual accepted risk: a genuinely-absent Resolution 2026-N vs an unrelated
+     Ordinance 2026-N is indistinguishable from a mislabel — the note surfaces it.
+   - **Votes:** one `meetings.votes` row per *substantive* motion (adopt/amend/continue/
+     pull kinds — amend added in v2 for the June 10 amendment rows; amend can never set an
+     outcome since outcomes derive from `item.disposition` only) with a recorded roll
+     call — including ones that did not carry
      (procedural read-by-title roll calls are noise): `resolution` = legislation_ref,
      `description` = the motion sentence verbatim (trimmed), `result` = "Passed 8–0" /
      "Failed 4–4" / "Continued 8–0" / "Pulled N–N", `vote_type` = 'roll call',
@@ -142,6 +181,28 @@ motions excluded from votes.
 Live E2E after tests are green: `--reconcile-memo 2026-07-22-bloomington-regular-session`
 → 0 outcome updates (no agenda_items rows), 4 votes rows + 8 vote_records
 (agenda_item_id NULL), verified via the ev-accounts API.
+
+## Calibration v2 (June 10 + July 29, committed fixtures 2026-07-31)
+
+The 2026-07-31 live reconciles surfaced three patterns v1 abstained on (loudly — zero
+wrong writes). Fixtures `tests/fixtures/onboard/memo_2026-06-10.{pdf,txt}` +
+`memo_2026-07-29.{pdf,txt}`; plan `docs/superpowers/plans/2026-07-31-memo-parser-v2.md`.
+
+June 10 pinned truth (9 vote rows; v1 captured 5):
+
+| ref | disposition | vote rows | records |
+|---|---|---|---|
+| Resolution 2026-10 | passed | Passed 9–0 | none |
+| Ordinance 2026-12 | passed (**5–4 as-amended adoption**, v1 missed) | Passed 5–4 + amendment Passed 9–0 | 9 named: ayes Asare, Daily, Flaherty, Rollo, Rosenbarger; nays Stosberg, Piedmont-Smith, Zulich, Ruff |
+| Resolution 2026-09 | passed (trailing "amend the agenda" motion = procedural) | Passed 9–0 | none |
+| Ordinance 2026-13 | passed (7–0 per its result sentence) | Passed 7–0 + amendment Passed 8–0 | none — "out of the room" annotations dropped by the names/count guard |
+| Resolution 2026-11 | passed | Passed 9–0 | none |
+| Resolution 2026-12 | continued → 2026-07-22 | Continued 9–0 | none |
+| Ordinance 2026-14 | passed | Passed 7–2 | 2 nay (Asare, Rosenbarger) |
+
+July 29 pinned truth: Ordinance 2026-16 + 2026-17 continued → 2026-08-05 (first-reading
+referrals, Continued 8–0 each); memo "Resolution 2026-15" (sic) → agenda **Ordinance**
+2026-15 via the bare-number fallback, outcome passed, Passed 8–0 attached, loud note.
 
 ## Out of scope (explicit)
 
