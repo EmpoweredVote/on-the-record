@@ -1346,6 +1346,123 @@ def pipeline_extract_embeddings(meeting_id: str, segments_json: str) -> str:
     return json.dumps(centroids)
 
 @app.function(
+    image=pyannote_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="A100",
+    cpu=16,
+    timeout=60 * 60 * 2,
+)
+def probe_diarize_tuning(
+    meeting_id: str, embedding_batch_size: int = 0, copy_local: bool = False
+) -> str:
+    """Diagnostic: where does pyannote's wall-clock go, and does batching help?
+
+    Runs the diarization pipeline on audio ALREADY in the volume, printing the
+    pipeline's batch-size attributes, each internal model's device, and a
+    per-stage timing breakdown. `embedding_batch_size > 0` sets that attribute
+    before running so a run can be compared against the default.
+
+    Motivation (July 2026): the pipeline call is ~99.7% of diarization
+    wall-clock and the `embeddings` stage is ~99% of that (4090s of 4125s on
+    the May 6 meeting), while GPU tier (L4 -> A100) and cpu=16 barely moved
+    it — consistent with tiny/serial embedding batches rather than a
+    compute-bound GPU. No DB, no LLM: safe to run any time.
+    """
+    import json as _json
+    import os
+    import shutil
+
+    import torch
+    from pyannote.audio import Pipeline
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(f"{wav_path} not in volume — process this meeting first.")
+
+    # pyannote reads audio slices on demand; on a network Volume every window
+    # is a remote read. Copying to container-local disk first tests whether
+    # the "embeddings" stage is really volume I/O rather than compute.
+    t_copy = 0.0
+    if copy_local:
+        local_wav = Path("/tmp") / f"{meeting_id}.wav"
+        t_copy0 = time.time()
+        shutil.copy2(wav_path, local_wav)
+        t_copy = time.time() - t_copy0
+        print(f"  [probe] copied audio to local disk in {t_copy:.1f}s")
+        wav_path = local_wav
+
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1", token=os.environ["HF_TOKEN"]
+    )
+    pipeline.to(torch.device("cuda"))
+
+    attrs = ("embedding_batch_size", "segmentation_batch_size")
+    before = {a: getattr(pipeline, a, "<absent>") for a in attrs}
+    print(f"  [probe] batch attrs BEFORE: {before}")
+    if embedding_batch_size > 0:
+        try:
+            pipeline.embedding_batch_size = embedding_batch_size
+        except Exception as exc:
+            print(f"  [probe] could not set embedding_batch_size: {exc}")
+    print(f"  [probe] batch attrs AFTER: "
+          f"{ {a: getattr(pipeline, a, '<absent>') for a in attrs} }")
+
+    # Which device does each sub-model actually sit on? A CPU-resident
+    # embedding model would explain everything.
+    for name in ("_segmentation", "_embedding", "segmentation", "embedding"):
+        obj = getattr(pipeline, name, None)
+        if obj is None:
+            continue
+        model = getattr(obj, "model", obj)
+        device = getattr(model, "device", None)
+        if device is None:
+            # pyannote objects sometimes expose `parameters` as a dict, so
+            # only trust it when it yields tensors.
+            params = getattr(model, "parameters", None)
+            try:
+                device = next(iter(params())).device if callable(params) else None
+            except Exception:
+                device = None
+        print(f"  [probe] {name} ({type(model).__name__}) device: {device}")
+
+    starts: dict[str, float] = {}
+
+    def hook(step_name, step_artifact=None, file=None, total=None, completed=None):
+        starts.setdefault(str(step_name), time.time())
+
+    t0 = time.time()
+    diarization = pipeline(str(wav_path), hook=hook)
+    total = time.time() - t0
+
+    names = list(starts)
+    stages = {
+        name: round((starts[names[i + 1]] if i + 1 < len(names) else t0 + total)
+                    - starts[name], 1)
+        for i, name in enumerate(names)
+    }
+    # Print the measurement FIRST — everything below is derived and must never
+    # be able to lose the numbers we came for.
+    print(f"  [probe] stages_s={_json.dumps(stages)} total_s={total:.1f} "
+          f"copy_s={t_copy:.1f}")
+
+    turns = _annotation_to_turns(diarization)  # handles 3.x Annotation / 4.x DiarizeOutput
+    result = {
+        "meeting_id": meeting_id,
+        "embedding_batch_size_requested": embedding_batch_size,
+        "batch_attrs_before": {k: str(v) for k, v in before.items()},
+        "copy_local": copy_local,
+        "copy_s": round(t_copy, 1),
+        "stages_s": stages,
+        "total_s": round(total, 1),
+        "turns": len(turns),
+        "speakers": len({t[2] for t in turns}),
+    }
+    print(f"  [probe] RESULT {_json.dumps(result)}")
+    return _json.dumps(result)
+
+
+@app.function(
     image=pyannote_merged_image,  # has cs_src for merge.py
     volumes={VOLUME_PATH: volume},
     secrets=[hf_secret],
