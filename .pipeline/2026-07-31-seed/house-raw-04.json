@@ -1,0 +1,158 @@
+[
+  {
+    "state": "KS",
+    "district": 1,
+    "contested": true,
+    "source": "https://ballotpedia.org/Kansas'_1st_Congressional_District_election,_2026"
+  },
+  {
+    "state": "KS",
+    "district": 2,
+    "contested": true,
+    "source": "https://ballotpedia.org/Kansas'_2nd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "KS",
+    "district": 3,
+    "contested": true,
+    "source": "https://ballotpedia.org/Kansas'_3rd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "KS",
+    "district": 4,
+    "contested": true,
+    "source": "https://ballotpedia.org/Kansas'_4th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "KY",
+    "district": 1,
+    "contested": true,
+    "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Kentucky,_2026"
+  },
+  {
+    "state": "KY",
+    "district": 2,
+    "contested": true,
+    "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Kentucky,_2026"
+  },
+  {
+    "state": "KY",
+    "district": 3,
+    "contested": true,
+    "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Kentucky,_2026"
+  },
+  {
+    "state": "KY",
+    "district": 4,
+    "contested": true,
+    "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Kentucky,_2026"
+  },
+  {
+    "state": "KY",
+    "district": 5,
+    "contested": true,
+    "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Kentucky,_2026"
+  },
+  {
+    "state": "KY",
+    "district": 6,
+    "contested": true,
+    "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Kentucky,_2026"
+  },
+  {
+    "state": "LA",
+    "district": 1,
+    "contested": true,
+    "source": "https://ballotpedia.org/Louisiana's_1st_Congressional_District_election,_2026"
+  },
+  {
+    "state": "LA",
+    "district": 2,
+    "contested": false,
+    "source": "https://ballotpedia.org/Louisiana's_2nd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "LA",
+    "district": 3,
+    "contested": true,
+    "source": "https://ballotpedia.org/Louisiana's_3rd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "LA",
+    "district": 4,
+    "contested": true,
+    "source": "https://ballotpedia.org/Louisiana's_4th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "LA",
+    "district": 5,
+    "contested": true,
+    "source": "https://ballotpedia.org/Louisiana's_5th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "LA",
+    "district": 6,
+    "contested": true,
+    "source": "https://ballotpedia.org/Louisiana's_6th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "ME",
+    "district": 1,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maine's_1st_Congressional_District_election,_2026"
+  },
+  {
+    "state": "ME",
+    "district": 2,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maine's_2nd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 1,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_1st_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 2,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_2nd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 3,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_3rd_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 4,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_4th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 5,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_5th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 6,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_6th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 7,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_7th_Congressional_District_election,_2026"
+  },
+  {
+    "state": "MD",
+    "district": 8,
+    "contested": true,
+    "source": "https://ballotpedia.org/Maryland's_8th_Congressional_District_election,_2026"
+  }
+]

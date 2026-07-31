@@ -1,0 +1,391 @@
+{
+  "lane": "la-general",
+  "generated": "2026-07-31",
+  "races": [
+    {
+      "race_label": "Los Angeles Mayor (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Karen Bass",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": "https://www.karen-bass.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        },
+        {
+          "name": "Ramit Raman",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
+      ],
+      "notes": "Top 2 from June 2, 2026 primary (Bass 34.27%, Raman 29.02%)"
+    },
+    {
+      "race_label": "Los Angeles City Attorney (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Roy",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        },
+        {
+          "name": "Michael McKinney",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Top 2 from June 2, 2026 primary (Roy 43.12%, McKinney 28.60%). UNVERIFIED: Roy's full legal name"
+    },
+    {
+      "race_label": "Los Angeles City Controller (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Kenneth Mejia",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.kennethmeija.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Kenneth Mejia won with 63.02%"
+    },
+    {
+      "race_label": "Los Angeles City Council District 1 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Eunisses Hernandez",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.eunisses.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Eunisses Hernandez won with 57.69%"
+    },
+    {
+      "race_label": "Los Angeles City Council District 3 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Nithya Gaspar",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        },
+        {
+          "name": "Isaac Girvan",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Top 2 from June 2, 2026 primary (Gaspar 46.08%, Girvan 42.51%). UNVERIFIED: full candidate names and incumbent status"
+    },
+    {
+      "race_label": "Los Angeles City Council District 5 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Katy Yaroslavsky",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.katyla.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Katy Yaroslavsky won with 64.15%"
+    },
+    {
+      "race_label": "Los Angeles City Council District 7 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Monica Rodriguez",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.monicalafor.la/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Monica Rodriguez ran unopposed with 100.00%"
+    },
+    {
+      "race_label": "Los Angeles City Council District 9 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Estela Ugarte",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        },
+        {
+          "name": "Hugo Mazariegos",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Top 2 from June 2, 2026 primary (Ugarte 39.45%, Mazariegos 26.21%). UNVERIFIED: full candidate names and incumbent status"
+    },
+    {
+      "race_label": "Los Angeles City Council District 11 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Traci Park",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.tracipark.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Traci Park won with 60.23%"
+    },
+    {
+      "race_label": "Los Angeles City Council District 13 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Hugo Soto-Martinez",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.hugosotomartinez.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Hugo Soto-Martinez won with 68.42%"
+    },
+    {
+      "race_label": "Los Angeles City Council District 15 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Tim McOsker",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338"
+      ],
+      "notes": "Resolved in primary; Tim McOsker won with 76.55%"
+    },
+    {
+      "race_label": "Los Angeles County Board of Supervisors District 1 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Maria Elena Durazo",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": "https://www.durazo.org/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
+      ],
+      "notes": "Resolved in primary; Maria Elena Durazo won with 60.58%"
+    },
+    {
+      "race_label": "Los Angeles County Board of Supervisors District 3 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Lindsey Horvath",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": "https://www.lindseyphorvath.com/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
+      ],
+      "notes": "Resolved in primary; Lindsey Horvath won with 66.35%"
+    },
+    {
+      "race_label": "Los Angeles County Sheriff (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Lynda Luna",
+          "party": "Nonpartisan",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        },
+        {
+          "name": "Robert Villanueva",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
+      ],
+      "notes": "Top 2 from June 2, 2026 primary (Luna 44.15%, Villanueva 21.70%)"
+    },
+    {
+      "race_label": "Los Angeles County Assessor (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Jeffrey Prang",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": "https://www.jeffreyprang.org/",
+          "source_url": "https://results.lavote.gov/#year=2026&election=4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
+      ],
+      "notes": "Resolved in primary; Jeffrey Prang won with 57.73%"
+    }
+  ]
+}

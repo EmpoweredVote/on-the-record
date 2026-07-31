@@ -1,0 +1,387 @@
+{
+  "lane": "monroe-general",
+  "generated": "2026-07-31",
+  "races": [
+    {
+      "race_label": "U.S. House of Representatives, Indiana 9th District (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "us_house",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Erin Houchin",
+          "party": "R",
+          "incumbent": true,
+          "website": "https://erinhouchin.com/",
+          "source_url": "https://ballotpedia.org/Indiana's_9th_Congressional_District_election,_2026"
+        },
+        {
+          "name": "Brad Meyer",
+          "party": "D",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://www.ipm.org/news/2026-05-05/brad-meyer-wins-democratic-primary-in-9th-congressional-district"
+        },
+        {
+          "name": "Tonya Hudson",
+          "party": "L",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://ballotpedia.org/Indiana's_9th_Congressional_District_election,_2026"
+        },
+        {
+          "name": "Floyd Taylor",
+          "party": "I",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://ballotpedia.org/Indiana's_9th_Congressional_District_election,_2026"
+        }
+      ],
+      "sources": [
+        "https://ballotpedia.org/Indiana's_9th_Congressional_District_election,_2026",
+        "https://www.ipm.org/news/2026-05-05/brad-meyer-wins-democratic-primary-in-9th-congressional-district"
+      ],
+      "notes": ""
+    },
+    {
+      "race_label": "Indiana House of Representatives, District 60 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Peggy Mayfield",
+          "party": "R",
+          "incumbent": true,
+          "website": "https://www.indianahouserepublicans.com/members/general/peggy-mayfield/",
+          "source_url": "https://ballotpedia.org/Indiana_House_of_Representatives_District_60"
+        },
+        {
+          "name": "Carrie Syczylo",
+          "party": "D",
+          "incumbent": false,
+          "website": "http://www.carriecareshd60.com/",
+          "source_url": "https://ballotpedia.org/Indiana_House_of_Representatives_District_60"
+        }
+      ],
+      "sources": [
+        "https://ballotpedia.org/Indiana_House_of_Representatives_District_60",
+        "https://www.wbiw.com/2026/02/05/higgs-announces-leadership-of-expanded-indiana-rural-summit-syczylo-files-as-democratic-candidate-for-house-district-60"
+      ],
+      "notes": "District 60 includes portions of Morgan, Monroe, and Johnson counties."
+    },
+    {
+      "race_label": "Indiana House of Representatives, District 61 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Matt Pierce",
+          "party": "D",
+          "incumbent": true,
+          "website": "https://www.electmattpierce.com/",
+          "source_url": "https://www.ipm.org/news/2026-05-05/matt-pierce-wins-primary-for-state-house-in-district-61"
+        }
+      ],
+      "sources": [
+        "https://ballotpedia.org/Indiana_House_of_Representatives_District_61",
+        "https://www.ipm.org/news/2026-05-05/matt-pierce-wins-primary-for-state-house-in-district-61"
+      ],
+      "notes": "Matt Pierce runs unopposed; no Republican candidate filed for general election."
+    },
+    {
+      "race_label": "Indiana House of Representatives, District 62 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Dave Hall",
+          "party": "R",
+          "incumbent": true,
+          "website": "https://www.indianahouserepublicans.com/members/general/dave-hall/",
+          "source_url": "https://ballotpedia.org/Indiana_House_of_Representatives_District_62"
+        },
+        {
+          "name": "Amy Huffman Oliver",
+          "party": "D",
+          "incumbent": false,
+          "website": "https://www.voteamyoliver.com/",
+          "source_url": "https://ballotpedia.org/Amy_Huffman_Oliver"
+        }
+      ],
+      "sources": [
+        "https://ballotpedia.org/Indiana_House_of_Representatives_District_62",
+        "https://bcdemocrat.com/2026/06/07/district-62-race-draws-national-attention-ahead-of-november"
+      ],
+      "notes": "District 62 includes all of Brown County and portions of Monroe and Jackson counties. This race is receiving national Democratic support."
+    },
+    {
+      "race_label": "Monroe County Sheriff (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Ruben Marté",
+          "party": "D",
+          "incumbent": true,
+          "website": "https://www.rubenforsheriff.com/",
+          "source_url": "https://bsquarebulletin.com/monroe-county-sheriff-candidate-ruben-marte/"
+        },
+        {
+          "name": "UNVERIFIED: Republican Candidate",
+          "party": "R",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://bsquarebulletin.com/cory-grass-picked-as-monroe-county-gop-chair-already-recruiting-for-2026-sheriffs-race"
+        }
+      ],
+      "sources": [
+        "https://bsquarebulletin.com/monroe-county-sheriff-candidate-ruben-marte/",
+        "https://bsquarebulletin.com/cory-grass-picked-as-monroe-county-gop-chair-already-recruiting-for-2026-sheriffs-race"
+      ],
+      "notes": "UNVERIFIED: Republican candidate name not confirmed in available sources; Monroe County GOP confirmed recruiting for sheriff race but specific nominee identity not found."
+    },
+    {
+      "race_label": "Monroe County Prosecuting Attorney (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Erika Oliphant",
+          "party": "D",
+          "incumbent": true,
+          "website": "https://www.erikaoliphant.com/",
+          "source_url": "https://www.ipm.org/news/2026-05-05/oliphant-wins-monroe-county-prosecutor-primary"
+        }
+      ],
+      "sources": [
+        "https://www.ipm.org/news/2026-05-05/oliphant-wins-monroe-county-prosecutor-primary",
+        "https://www.idsnews.com/article/2026/05/erika-oliphant-projected-retains-democratic-nomination-for-monroe-county-prosecutor-primary"
+      ],
+      "notes": "Oliphant runs unopposed; no Republican candidate filed."
+    },
+    {
+      "race_label": "Monroe County Assessor (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Judith A. Sharp",
+          "party": "D",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://www.ipm.org/news/2026-05-05/judith-sharp-wins-monroe-county-assessor-primary"
+        },
+        {
+          "name": "Jeneé Trimble",
+          "party": "I",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://bloomingtonian.com/2026/04/02/video-independent-assessor-hopeful-jenee-trimble-brings-property-tax-claims-to-bloomington-town-hall"
+        }
+      ],
+      "sources": [
+        "https://www.ipm.org/news/2026-05-05/judith-sharp-wins-monroe-county-assessor-primary",
+        "https://bsquarebulletin.com/trimble-clears-signature-hurdle-to-make-independent-run-for-monroe-county-assessor"
+      ],
+      "notes": "Trimble is a former Monroe County assessor's office employee running as independent candidate."
+    },
+    {
+      "race_label": "Monroe County Clerk (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Tree Martin-Lucas",
+          "party": "D",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://www.ipm.org/news/2026-05-05/tree-martin-lucas-wins-monroe-county-clerk-primary"
+        },
+        {
+          "name": "Julie M. Hays",
+          "party": "R",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://www.chamberbloomington.org/mc-clerk-candidates-2026-7279374.html"
+        }
+      ],
+      "sources": [
+        "https://www.ipm.org/news/2026-05-05/tree-martin-lucas-wins-monroe-county-clerk-primary",
+        "https://www.chamberbloomington.org/mc-clerk-candidates-2026-7279374.html"
+      ],
+      "notes": ""
+    },
+    {
+      "race_label": "Monroe County Recorder (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Beth Anne Brown",
+          "party": "D",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://votes.decisiondeskhq.com/races/2026-05-05/indiana-monroe-county-recorder-democratic-primary"
+        }
+      ],
+      "sources": [
+        "https://votes.decisiondeskhq.com/races/2026-05-05/indiana-monroe-county-recorder-democratic-primary"
+      ],
+      "notes": "Brown won Democratic primary unopposed; no Republican candidate confirmed for general election."
+    },
+    {
+      "race_label": "Monroe County Auditor (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Brianne Gregory",
+          "party": "D",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://ballotpedia.org/Brianne_Gregory_(Monroe_County_Auditor,_Indiana,_candidate_2024)"
+        }
+      ],
+      "sources": [
+        "https://www.ipm.org/2024-02-12/brianne-gregory-new-county-auditor",
+        "https://bsquarebulletin.com/dems-caucus-taps-gregory-as-monroe-county-auditor-previous-days-payroll-delay-gets-a-mention"
+      ],
+      "notes": "UNVERIFIED: Gregory selected by Democratic caucus in 2024; no Republican candidate confirmed for 2026 general election, but status requires verification."
+    },
+    {
+      "race_label": "Monroe County Commissioner, District 1 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Trent Deckard",
+          "party": "D",
+          "incumbent": false,
+          "website": "https://www.trentdeckard.com/",
+          "source_url": "https://www.ipm.org/news/2026-05-05/deckard-wins-nomination-for-monroe-county-commissioner"
+        },
+        {
+          "name": "UNVERIFIED: Republican Candidate",
+          "party": "R",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://www.chamberbloomington.org/monroe-county-comissioners-candidates-2026-786355.html"
+        }
+      ],
+      "sources": [
+        "https://ballotpedia.org/Trent_Deckard_(Monroe_County_Commissioner,_District_1,_Indiana,_candidate_2026)",
+        "https://www.ipm.org/news/2026-05-05/deckard-wins-nomination-for-monroe-county-commissioner"
+      ],
+      "notes": "UNVERIFIED: Republican candidate name not confirmed; Deckard defeated David Henry in Democratic primary with 59.7% of vote."
+    },
+    {
+      "race_label": "MCCSC School Board, District 1 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Erin Wyatt",
+          "party": "D",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
+        }
+      ],
+      "sources": [
+        "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
+      ],
+      "notes": "Wyatt runs unopposed."
+    },
+    {
+      "race_label": "MCCSC School Board, District 3 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Ashley Pirani",
+          "party": "D",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
+        }
+      ],
+      "sources": [
+        "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
+      ],
+      "notes": "Pirani runs unopposed."
+    },
+    {
+      "race_label": "MCCSC School Board, District 7 (IN, 2026-11-03)",
+      "state": "IN",
+      "office_category": "local_bloomington",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Aja Jester",
+          "party": "D",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
+        }
+      ],
+      "sources": [
+        "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
+      ],
+      "notes": "Jester runs unopposed. Cole Pospisil initially filed as a challenger but withdrew citing Hatch Act concerns."
+    }
+  ]
+}

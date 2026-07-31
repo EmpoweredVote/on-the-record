@@ -1,0 +1,479 @@
+{
+  "lane": "governor-gaps",
+  "generated": "2026-07-31",
+  "races": [
+    {
+      "race_label": "Governor of Alabama (AL, 2026-11-03)",
+      "state": "AL",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Tommy Tuberville", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Alabama_gubernatorial_election,_2026"},
+        {"name": "Doug Jones", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Alabama_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.nbcnews.com/politics/2026-primary-elections/alabama-governor-results", "https://ballotpedia.org/Alabama_gubernatorial_election,_2026"],
+      "notes": "Primary held May 19/June 16, 2026. Tuberville won Republican primary with Trump endorsement; Jones won Democratic primary."
+    },
+    {
+      "race_label": "Governor of Alaska (AK, 2026-11-03)",
+      "state": "AK",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Tom Begich", "party": "D", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"},
+        {"name": "Jonathan Kreiss-Tomkins", "party": "D", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"},
+        {"name": "Click Bishop", "party": "R", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"},
+        {"name": "David Bronson", "party": "R", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"},
+        {"name": "Bernadette Wilson", "party": "R", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"},
+        {"name": "Treg Taylor", "party": "R", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"},
+        {"name": "Bill Walker", "party": "I", "incumbent": false, "website": null, "source_url": "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"}
+      ],
+      "sources": ["https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/", "https://ballotpedia.org/Alaska_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary pending August 18, 2026. Alaska uses top-4 primary system with ranked-choice voting in general election. 17 candidates total (12 R, 2 D, 3 I). Current Gov. Mike Dunleavy (R) termed out."
+    },
+    {
+      "race_label": "Governor of Arkansas (AR, 2026-11-03)",
+      "state": "AR",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Sarah Huckabee Sanders", "party": "R", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Arkansas_gubernatorial_election,_2026"},
+        {"name": "Fredrick Love", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Arkansas_gubernatorial_election,_2026"},
+        {"name": "Colt Shelby", "party": "L", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Arkansas_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://arkansasadvocate.com/2026/03/03/love-wins-democratic-nomination-for-arkansas-governor/", "https://ballotpedia.org/Arkansas_gubernatorial_election,_2026"],
+      "notes": "Primary held March 3, 2026. Sanders unopposed in Republican primary. Love won Democratic primary with 81% of vote."
+    },
+    {
+      "race_label": "Governor of Colorado (CO, 2026-11-03)",
+      "state": "CO",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Phil Weiser", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Phil_Weiser"},
+        {"name": "Victor Marx", "party": "R", "incumbent": false, "website": null, "source_url": "https://www.cpr.org/2026/07/09/victor-marx-wins-gop-governor-primary-race/"}
+      ],
+      "sources": ["https://www.cpr.org/2026/07/09/victor-marx-wins-gop-governor-primary-race/", "https://ballotpedia.org/Phil_Weiser"],
+      "notes": "Primary held June 30, 2026 (D) and before July 31, 2026 (R). Weiser defeated Sen. Michael Bennet in Democratic primary. Marx defeated state Sen. Barbara Kirkmeyer by 2,516 votes in Republican primary."
+    },
+    {
+      "race_label": "Governor of Connecticut (CT, 2026-11-03)",
+      "state": "CT",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Ned Lamont", "party": "D", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Joshua Elliott", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Ryan Fazio", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Betsy McCaughey", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Erin Stewart", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Timothy Wilcox", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://ctmirror.org/2026/05/16/ryan-fazio-wins-the-ct-gop-nomination-for-governor/", "https://ballotpedia.org/Connecticut_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary pending August 11, 2026. Fazio won Republican state convention with 92% on May 16, 2026, but other candidates qualified for primary ballot."
+    },
+    {
+      "race_label": "Governor of Florida (FL, 2026-11-03)",
+      "state": "FL",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Byron Donalds", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Florida_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Jay Collins", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Florida_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Paul Renner", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Florida_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "David Jolly", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Florida_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Jerry Demings", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Florida_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.clickorlando.com/voters-guide/2026/07/31/2026-voters-guide-florida-governors-race-republican-primary/", "https://ballotpedia.org/Florida_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary pending August 18, 2026. Multiple candidates in both R and D primaries. Trump-backed Byron Donalds is leading R primary polling."
+    },
+    {
+      "race_label": "Governor of Georgia (GA, 2026-11-03)",
+      "state": "GA",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Keisha Lance Bottoms", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Keisha_Lance_Bottoms"},
+        {"name": "Rick Jackson", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Georgia_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.ajc.com/politics/2026/06/keisha-lance-bottoms-is-in-for-a-very-different-race-against-rick-jackson/", "https://ballotpedia.org/Georgia_gubernatorial_election,_2026"],
+      "notes": "Democratic primary held May 19, 2026 (7 candidates). Republican primary had runoff; Rick Jackson defeated Lt. Gov. Burt Jones, overcoming Trump and Gov. Kemp endorsements. Bottoms advances as Democratic nominee."
+    },
+    {
+      "race_label": "Governor of Hawaii (HI, 2026-11-03)",
+      "state": "HI",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": false,
+      "candidates": [
+        {"name": "Josh Green", "party": "D", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Joshua_Green"}
+      ],
+      "sources": ["https://ballotpedia.org/Joshua_Green", "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"],
+      "notes": "Primary pending August 8, 2026. Incumbent Democratic governor Josh Green seeking second term with 56% approval rating and strong favorability. Race rated Solid D. No major Republican opposition announced."
+    },
+    {
+      "race_label": "Governor of Idaho (ID, 2026-11-03)",
+      "state": "ID",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Brad Little", "party": "R", "incumbent": true, "website": null, "source_url": "https://ktvb.com/article/news/politics/elections/republican-primary-race-idaho-governor-results/277-17c2f74d-d105-4032-9c34-7f512780e8d3"},
+        {"name": "Terri Pickens", "party": "D", "incumbent": false, "website": null, "source_url": "https://ktvb.com/article/news/politics/elections/republican-primary-race-idaho-governor-results/277-17c2f74d-d105-4032-9c34-7f512780e8d3"}
+      ],
+      "sources": ["https://ktvb.com/article/news/politics/elections/republican-primary-race-idaho-governor-results/277-17c2f74d-d105-4032-9c34-7f512780e8d3", "https://www.foxnews.com/politics/idaho-democrats-choose-terri-pickens-uphill-race-against-gov-brad-little"],
+      "notes": "Primary held May 19, 2026. Little won R primary with 59%, Pickens won D primary with 61%. Little seeking third term in state that hasn't elected Democratic governor in 36 years."
+    },
+    {
+      "race_label": "Governor of Illinois (IL, 2026-11-03)",
+      "state": "IL",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "J.B. Pritzker", "party": "D", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Illinois_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Darren Bailey", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Illinois_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Gary Pierce", "party": "L", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Illinois_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.yahoo.com/news/articles/illinois-candidates-kickoff-2026-campaigns-214300244.html", "https://ballotpedia.org/Illinois_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary held March 17, 2026. Pritzker unopposed on D primary; Bailey won R primary (first rematch since 1986 between two gubernatorial candidates)."
+    },
+    {
+      "race_label": "Governor of Iowa (IA, 2026-11-03)",
+      "state": "IA",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Rob Sand", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Randy Feenstra", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Zach Lahn", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Eddie Andrews", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Brad Sherman", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Adam Steen", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.iowapublicradio.org/political-news/2026-03-10/iowa-governor-candidates-rob-sand-randy-feenstra-2026-primary-ballot", "https://ballotpedia.org/Iowa_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary held June 2, 2026. Sand only D on ballot; Feenstra has Trump endorsement, Lahn running on MAHA platform. Incumbent Gov. Kim Reynolds did not seek third term."
+    },
+    {
+      "race_label": "Governor of Kansas (KS, 2026-11-03)",
+      "state": "KS",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Ty Masterson", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Charlotte O'Hara", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Scott Schwab", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Vicki Schmidt", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Jeff Colyer", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Nick Reinecker", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Ethan Corson", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Cindy Holscher", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.kcur.org/politics-elections-and-government/2025-07-24/kansas-governor-race-2026-election-candidates", "https://ballotpedia.org/Kansas_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary pending August 4, 2026. Masterson has Trump endorsement. Multiple crowded fields in both parties."
+    },
+    {
+      "race_label": "Governor of Michigan (MI, 2026-11-03)",
+      "state": "MI",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Jocelyn Benson", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Michigan_gubernatorial_election,_2026_(August_4_Democratic_primary)"},
+        {"name": "John James", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Michigan_gubernatorial_election,_2026_(August_4_Republican_primary)"},
+        {"name": "Perry Johnson", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Michigan_gubernatorial_election,_2026_(August_4_Republican_primary)"}
+      ],
+      "sources": ["https://www.nbcnews.com/politics/2026-election/michigan-governors-race-john-james-perry-johnson-battle-gop-primary-rcna588717", "https://ballotpedia.org/Michigan_gubernatorial_election,_2026_(August_4_Republican_primary)"],
+      "notes": "Primary pending August 4, 2026. Benson expected to win D primary. James (R) has Trump endorsement and slight polling lead over Johnson in R primary. Dem governor Gretchen Whitmer termed out."
+    },
+    {
+      "race_label": "Governor of Minnesota (MN, 2026-11-03)",
+      "state": "MN",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Amy Klobuchar", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Lisa Demuth", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Scott Jensen", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Mike Lindell", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026", "https://ballotpedia.org/Jeff_Johnson_(Minnesota_Governor_2026_candidate)"],
+      "notes": "Primary pending August 11, 2026. Klobuchar (D, U.S. Senator) running after Gov. Tim Walz declined third term. Crowded R field includes former state Sen. Jensen, House Speaker Demuth, and MyPillow CEO Lindell."
+    },
+    {
+      "race_label": "Governor of Nebraska (NE, 2026-11-03)",
+      "state": "NE",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Jim Pillen", "party": "R", "incumbent": true, "website": null, "source_url": "https://www.foxnews.com/politics/nebraskas-pillen-wins-republican-renomination-bid-second-term-governor"},
+        {"name": "Lynne Walz", "party": "D", "incumbent": false, "website": null, "source_url": "https://www.foxnews.com/politics/nebraskas-pillen-wins-republican-renomination-bid-second-term-governor"}
+      ],
+      "sources": ["https://www.foxnews.com/politics/nebraskas-pillen-wins-republican-renomination-bid-second-term-governor", "https://www.washingtonpost.com/elections/2026/05/12/nebraska-gubernatorial-primary-election-results-2026-live-updates/"],
+      "notes": "Primary held May 12, 2026. Pillen won R primary with 76% of vote. Walz won D primary with 91% of vote. Trump state (+20) favors Pillen in general election."
+    },
+    {
+      "race_label": "Governor of New Hampshire (NH, 2026-11-03)",
+      "state": "NH",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Kelly Ayotte", "party": "R", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/New_Hampshire_gubernatorial_election,_2026"},
+        {"name": "Cinde Warmington", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/New_Hampshire_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://ballotpedia.org/New_Hampshire_gubernatorial_election,_2026", "https://www.bostonglobe.com/2026/04/24/metro/unh-survey-governor-ayotte-warmington/"],
+      "notes": "Primary pending September 8, 2026. Ayotte, former U.S. Senator, is incumbent seeking second term. She holds lead in polling (47-32% in April poll)."
+    },
+    {
+      "race_label": "Governor of New Mexico (NM, 2026-11-03)",
+      "state": "NM",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Deb Haaland", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/New_Mexico_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Gregg Hull", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/New_Mexico_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://ballotpedia.org/New_Mexico_gubernatorial_and_lieutenant_gubernatorial_election,_2026", "https://news.ballotpedia.org/2026/07/08/seventeen-candidates-compete-in-top-four-primary-for-open-alaska-governors-office/"],
+      "notes": "Primary held June 2, 2026. Haaland defeated Sam Bregman in D primary. Hull expected to be R nominee but full R primary results not verified."
+    },
+    {
+      "race_label": "Governor of New York (NY, 2026-11-03)",
+      "state": "NY",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Kathy Hochul", "party": "D", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/New_York_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Bruce Blakeman", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/New_York_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.nbcnews.com/politics/2026-primary-elections/new-york-governor-results", "https://ballotpedia.org/New_York_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Both candidates unopposed in primary elections. Hochul (D, incumbent) holds 20-point polling lead over Nassau County Executive Blakeman (June 2026 poll)."
+    },
+    {
+      "race_label": "Governor of Ohio (OH, 2026-11-03)",
+      "state": "OH",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Vivek Ramaswamy", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Ohio_gubernatorial_and_lieutenant_gubernatorial_election,_2026_(May_5_Republican_primary)"},
+        {"name": "Amy Acton", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Ohio_gubernatorial_and_lieutenant_gubernatorial_election,_2026_(May_5_Republican_primary)"}
+      ],
+      "sources": ["https://www.wkyc.com/article/news/politics/elections/ohio-governor-race-vivek-ramaswamy-and-dr-amy-acton-win-gop-democratic-nominations-in-2026-primary-election/95-0c5f63fa-168b-4b7c-8bd0-cbd1057a3445", "https://ballotpedia.org/Ohio_gubernatorial_and_lieutenant_gubernatorial_election,_2026_(May_5_Republican_primary)"],
+      "notes": "Primary held May 5, 2026. Ramaswamy (R, biotech billionaire) won R primary. Acton (D, former state health director during COVID) ran unopposed on D ballot. Gov. Mike DeWine (R) termed out."
+    },
+    {
+      "race_label": "Governor of Oklahoma (OK, 2026-11-03)",
+      "state": "OK",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Gentner Drummond", "party": "R", "incumbent": false, "website": null, "source_url": "https://news.ballotpedia.org/2026/07/01/gentner-drummond-r-and-mike-mazzei-r-campaign-on-experience-and-trump-support-in-the-august-25-republican-runoff-for-oklahoma-governor/"},
+        {"name": "Mike Mazzei", "party": "R", "incumbent": false, "website": null, "source_url": "https://news.ballotpedia.org/2026/07/01/gentner-drummond-r-and-mike-mazzei-r-campaign-on-experience-and-trump-support-in-the-august-25-republican-runoff-for-oklahoma-governor/"},
+        {"name": "Cyndi Munson", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Oklahoma_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://news.ballotpedia.org/2026/07/01/gentner-drummond-r-and-mike-mazzei-r-campaign-on-experience-and-trump-support-in-the-august-25-republican-runoff-for-oklahoma-governor/", "https://ballotpedia.org/Oklahoma_gubernatorial_election,_2026"],
+      "notes": "Republican primary held June 16 with runoff pending August 25, 2026. Drummond (OK Attorney General) and Mazzei (former budget secretary) advanced to runoff with ~25.5% each. Democratic primary held June 16; Munson appears to be D nominee. Gov. Kevin Stitt (R) termed out."
+    },
+    {
+      "race_label": "Governor of Pennsylvania (PA, 2026-11-03)",
+      "state": "PA",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Josh Shapiro", "party": "D", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Pennsylvania_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Stacy Garrity", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Pennsylvania_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.cityandstatepa.com/prediction-markets/races/pennsylvania-governor", "https://ballotpedia.org/Pennsylvania_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary held May 19, 2026. Both Shapiro (D, incumbent) and Garrity (R, state treasurer) ran unopposed in their respective primaries. Shapiro leads prediction markets at 95%, holds 60% approval and significant cash advantage."
+    },
+    {
+      "race_label": "Governor of Rhode Island (RI, 2026-11-03)",
+      "state": "RI",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Daniel McKee", "party": "D", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"},
+        {"name": "Helena Foulkes", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"},
+        {"name": "Gregory Stevens", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"},
+        {"name": "Aaron Guckian", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"},
+        {"name": "Elaine Pelino", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"},
+        {"name": "Robert Raimondo", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.bostonglobe.com/2026/07/01/metro/rhode-island-democratic-primary-dan-mckee-helena-foulkes/", "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026"],
+      "notes": "Primary pending September 8, 2026. Rematch of 2022 Democratic primary. McKee (incumbent) trails Foulkes 42-22% in July polling with only 19% approval. McKee's job approval very low at 19% with 77% disapproving."
+    },
+    {
+      "race_label": "Governor of South Carolina (SC, 2026-11-03)",
+      "state": "SC",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Justin A. Bennett", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Jermaine Johnson", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Mullins McLeod", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Billy Webster", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Pamela Evette", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Alan Wilson", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Josh Kimbrell", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Ralph Norman", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"},
+        {"name": "Nancy Mace", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://smartpolitics.lib.umn.edu/?p=459749", "https://ballotpedia.org/South_Carolina_gubernatorial_and_lieutenant_gubernatorial_election,_2026"],
+      "notes": "Primary held June 9 with runoff June 23, 2026 (first open race since 2010; incumbent Gov. Henry McMaster termed out). UNVERIFIED: General election matchup not confirmed. Trump-backed Lt. Gov. Evette in crowded R field."
+    },
+    {
+      "race_label": "Governor of South Dakota (SD, 2026-11-03)",
+      "state": "SD",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Larry Rhoden", "party": "R", "incumbent": true, "website": null, "source_url": "https://www.kotatv.com/2026/07/29/south-dakota-governor-wins-republican-nomination-seek-his-own-term-after-succeeding-noem/"},
+        {"name": "Dan Ahlers", "party": "D", "incumbent": false, "website": null, "source_url": "https://www.kotatv.com/2026/07/29/south-dakota-governor-wins-republican-nomination-seek-his-own-term-after-succeeding-noem/"}
+      ],
+      "sources": ["https://www.kotatv.com/2026/07/29/south-dakota-governor-wins-republican-nomination-seek-his-own-term-after-succeeding-noem/", "https://www.sdpb.org/politics/2026-07-28/ap-projects-rhoden-to-win-historic-gop-gubernatorial-primary-runoff/"],
+      "notes": "Republican primary runoff held July 28, 2026 (first in SD history). Rhoden defeated Toby Doeden with 73% in runoff. Rhoden seeks full term after succeeding term-limited Gov. Kristi Noem."
+    },
+    {
+      "race_label": "Governor of Tennessee (TN, 2026-11-03)",
+      "state": "TN",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Marsha Blackburn", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Republican_primary)"},
+        {"name": "John Rose", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Republican_primary)"},
+        {"name": "Monty Fritts", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Republican_primary)"},
+        {"name": "Cito Pellegra", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Republican_primary)"},
+        {"name": "Carnita Atwater", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Democratic_primary)"},
+        {"name": "Tim Cyr", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Democratic_primary)"},
+        {"name": "Jerri Green", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Democratic_primary)"},
+        {"name": "Adam Kurtz", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Democratic_primary)"}
+      ],
+      "sources": ["https://tennesseelookout.com/briefs/tennessees-2026-candidate-lists-finalized-for-state-and-federal-races/", "https://ballotpedia.org/Tennessee_gubernatorial_election,_2026_(August_6_Democratic_primary)"],
+      "notes": "Primary pending August 6, 2026. U.S. Sen. Marsha Blackburn (R) is R frontrunner. Memphis Councilmember Jerri Green considered D frontrunner. Incumbent Gov. Bill Lee (R) termed out."
+    },
+    {
+      "race_label": "Governor of Texas (TX, 2026-11-03)",
+      "state": "TX",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Greg Abbott", "party": "R", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Texas_gubernatorial_election,_2026"},
+        {"name": "Gina Hinojosa", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Texas_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.kxan.com/news/your-local-election-hq/polls-show-abbott-and-hinojosa-lead-texas-governor-primaries/", "https://ballotpedia.org/Texas_gubernatorial_election,_2026"],
+      "notes": "Primary held March 3, 2026. Abbott (R, incumbent since 2015) has $100M+ cash on hand. Hinojosa (D, 5-term state rep from Austin) holds 45-42 polling lead, 10% undecided (July 2026 poll)."
+    },
+    {
+      "race_label": "Governor of Vermont (VT, 2026-11-03)",
+      "state": "VT",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Phil Scott", "party": "R", "incumbent": true, "website": null, "source_url": "https://ballotpedia.org/Phil_Scott_(Vermont)"},
+        {"name": "Amanda Janoo", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Vermont_gubernatorial_election,_2026"},
+        {"name": "Aly Richards", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Vermont_gubernatorial_election,_2026"},
+        {"name": "Jeffery Wilson", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Vermont_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://www.vermontpublic.org/local-news/2026-07-24/vermont-governor-race-primary/", "https://ballotpedia.org/Vermont_gubernatorial_election,_2026"],
+      "notes": "Primary pending August 11, 2026. Scott (R, incumbent) seeking 6th two-year term. Housing/healthcare costs have nearly doubled under his tenure. Scott historically more popular with Democrats than Republicans."
+    },
+    {
+      "race_label": "Governor of Wyoming (WY, 2026-11-03)",
+      "state": "WY",
+      "office_category": "governor",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 3,
+      "contested": true,
+      "candidates": [
+        {"name": "Eric Barlow", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Rachel Williams", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "CJ Young", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Qwenton Eagle Oviatt", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Robert Short", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Megan Degenfelder", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Brent Bien", "party": "R", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Bryan McCarty", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"},
+        {"name": "Lisa Kinney", "party": "D", "incumbent": false, "website": null, "source_url": "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026"}
+      ],
+      "sources": ["https://ballotpedia.org/Wyoming_gubernatorial_election,_2026_(August_18_Republican_primary)", "https://projects.wyofile.com/election-guide-2026/"],
+      "notes": "Primary pending August 18, 2026. Crowded R primary (7 candidates) including former House Speaker Barlow and state Superintendent Degenfelder. D nominee will face R winner in general."
+    }
+  ]
+}
