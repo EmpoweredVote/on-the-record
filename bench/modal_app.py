@@ -1354,7 +1354,10 @@ def pipeline_extract_embeddings(meeting_id: str, segments_json: str) -> str:
     timeout=60 * 60 * 2,
 )
 def probe_diarize_tuning(
-    meeting_id: str, embedding_batch_size: int = 0, copy_local: bool = False
+    meeting_id: str,
+    embedding_batch_size: int = 0,
+    copy_local: bool = False,
+    truncate_s: int = 0,
 ) -> str:
     """Diagnostic: where does pyannote's wall-clock go, and does batching help?
 
@@ -1391,6 +1394,25 @@ def probe_diarize_tuning(
         t_copy = time.time() - t_copy0
         print(f"  [probe] copied audio to local disk in {t_copy:.1f}s")
         wav_path = local_wav
+
+    # `truncate_s` writes the first N seconds to local disk and runs on that.
+    # This is the chunking pre-test: if a 60-min slice of a 5-hour meeting
+    # runs at the s/audio-min rate of a naturally-short meeting, then the
+    # embedding stage's cost is superlinear in DURATION and splitting a long
+    # meeting into parallel chunks wins more than N×. If instead the slice
+    # runs at the long meeting's rate, duration is not the driver (speech
+    # density / speaker count is) and chunking would disappoint.
+    if truncate_s > 0:
+        import soundfile as sf
+
+        info = sf.info(str(wav_path))
+        frames = min(int(truncate_s * info.samplerate), info.frames)
+        data, sr = sf.read(str(wav_path), frames=frames, dtype="float32")
+        sliced = Path("/tmp") / f"{meeting_id}_first{truncate_s}s.wav"
+        sf.write(str(sliced), data, sr)
+        print(f"  [probe] truncated to {frames / sr:.0f}s "
+              f"(source {info.frames / info.samplerate:.0f}s)")
+        wav_path = sliced
 
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1", token=os.environ["HF_TOKEN"]
@@ -1447,14 +1469,21 @@ def probe_diarize_tuning(
           f"copy_s={t_copy:.1f}")
 
     turns = _annotation_to_turns(diarization)  # handles 3.x Annotation / 4.x DiarizeOutput
+    audio_s = _ffprobe_duration(wav_path)
+    embeddings_s = stages.get("embeddings", 0.0)
     result = {
         "meeting_id": meeting_id,
         "embedding_batch_size_requested": embedding_batch_size,
         "batch_attrs_before": {k: str(v) for k, v in before.items()},
         "copy_local": copy_local,
         "copy_s": round(t_copy, 1),
+        "truncate_s": truncate_s,
+        "audio_s": round(audio_s, 1),
         "stages_s": stages,
         "total_s": round(total, 1),
+        # The comparable number across meetings/slices.
+        "embeddings_s_per_audio_min": round(embeddings_s / (audio_s / 60), 2)
+        if audio_s else None,
         "turns": len(turns),
         "speakers": len({t[2] for t in turns}),
     }
