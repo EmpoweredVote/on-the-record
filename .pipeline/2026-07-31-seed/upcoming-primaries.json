@@ -21,7 +21,9 @@
         "https://ballotpedia.org/Michigan_gubernatorial_election,_2026_(August_4_Democratic_primary)",
         "https://www.clickondetroit.com/news/local/2026/05/25/whos-on-the-ballot-for-michigans-governor-in-the-2026-election-heres-a-list/"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Independent source (en.wikipedia.org/wiki/2026_Michigan_gubernatorial_election, not previously cited) confirms the Aug 4, 2026 date but lists only Jocelyn Benson and Chris Swanson as ballot-qualified. Kim Thomas is reported disqualified/removed after a signature review (May 2026); Kevin Hogan and Marni Sawicki are reported as not on the ballot. 3 of 5 listed candidates could not be confirmed as qualified — needs re-verification before load."
     },
     {
       "race_label": "U.S. Senate — D primary (MI, 2026-08-04)",
@@ -42,7 +44,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Michigan,_2026_(August_4_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Michigan"
       ],
-      "notes": "Mallory McMorrow suspended campaign on July 5, 2026 but will appear on ballot."
+      "notes": "Mallory McMorrow suspended campaign on July 5, 2026 but will appear on ballot.",
+      "verified": false,
+      "verify_notes": "Independent source (bridgemi.com, Bridge Michigan) confirms date and contested status and names El-Sayed and Stevens as the headline candidates, but does not mention Howard, McMorrow, or Zollner at all, so their candidacies could not be independently confirmed against a source outside the file's existing list. Flagging pending a cleaner independent check."
     },
     {
       "race_label": "Governor of Wisconsin — D primary (WI, 2026-08-11)",
@@ -61,7 +65,9 @@
         "https://ballotpedia.org/Wisconsin_gubernatorial_election,_2026_(August_11_Democratic_primary)",
         "https://www.wbay.com/2026/07/06/breakdown-whos-running-wisconsin-governor-ahead-august-primary/"
       ],
-      "notes": "Mandela Barnes and Sara Rodriguez withdrew; withdrawals occurred after filing deadline."
+      "notes": "Mandela Barnes and Sara Rodriguez withdrew; withdrawals occurred after filing deadline.",
+      "verified": false,
+      "verify_notes": "Independent source (en.wikipedia.org/wiki/2026_Wisconsin_gubernatorial_election, not previously cited) confirms the Aug 11, 2026 date but lists five declared candidates — Brennan, David Crowley, Hong, Brett Hulsey, Roys — versus the file's three (Brennan, Hong, Roys). Missing: David Crowley (Milwaukee County Executive, withdrew then re-entered July 2026) and Brett Hulsey. The withdrawn-but-on-ballot group per this source also includes Missy Hughes, not mentioned in the file's note."
     },
     {
       "race_label": "Governor of Wisconsin — R primary (WI, 2026-08-11)",
@@ -79,7 +85,9 @@
         "https://ballotpedia.org/Wisconsin_gubernatorial_election,_2026_(August_11_Republican_primary)",
         "https://www.milwaukeemag.com/candidates-wisconsin-governor-2026/"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Independent source (same Wikipedia page as the D primary) shows the declared Republican candidates are Tom Tiffany and Andy Manske — David Crowley does not appear in the Republican primary at all; he is a Democrat running in the Democratic primary (see the Governor of Wisconsin — D primary entry). This confirms Crowley is misattributed to the wrong party/race in this file, and the real second candidate, Andy Manske, is missing."
     },
     {
       "race_label": "Governor of Minnesota — D primary (MN, 2026-08-11)",
@@ -100,7 +108,9 @@
         "https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026_(August_11_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_Minnesota_gubernatorial_election"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Independent source (en.wikipedia.org/wiki/Amy_Klobuchar, distinct from the cited election-page URL) confirms Amy Klobuchar's candidacy is genuine (filed Jan 22, 2026 after Gov. Walz declined reelection) — not an error. However, cross-referencing the MN gubernatorial election page suggests Paul Ference is actually running mate (Lieutenant Governor pick) for candidate Kobey Layne, not a separate gubernatorial-primary candidate himself; this is a roster-accuracy concern that needs resolution before load. Rick DeVoe and Christopher Seymore were not independently confirmed or contradicted."
     },
     {
       "race_label": "Governor of Minnesota — R primary (MN, 2026-08-11)",
@@ -123,7 +133,9 @@
         "https://ballotpedia.org/Minnesota_gubernatorial_and_lieutenant_gubernatorial_election,_2026_(August_11_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_Minnesota_gubernatorial_election"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": true,
+      "verify_notes": "Independent source (en.wikipedia.org/wiki/Mike_Lindell, distinct from the cited election-page URL) confirms Mike Lindell's candidacy is genuine (announced Dec 2025). Cross-check against the MN gubernatorial election page shows all 7 listed candidates (Krhin, Qualls, Demuth, Loner Blue, Lindell, Estrada, Nova) match declared Republican candidates. Clean."
     },
     {
       "race_label": "U.S. Senate — D primary (MN, 2026-08-11)",
@@ -142,7 +154,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Minnesota,_2026_(August_11_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Minnesota"
       ],
-      "notes": "Incumbent Tina Smith did not seek reelection."
+      "notes": "Incumbent Tina Smith did not seek reelection.",
+      "verified": true,
+      "verify_notes": "Independent sources (en.wikipedia.org/wiki/Peggy_Flanagan and en.wikipedia.org/wiki/Angie_Craig, candidate bio pages distinct from the cited election page) confirm both are genuine 2026 Senate candidates running to succeed Tina Smith, consistent with the file's note. Date and contested status confirmed. Clean."
     },
     {
       "race_label": "U.S. Senate — R primary (MN, 2026-08-11)",
@@ -167,7 +181,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Minnesota,_2026_(August_11_Republican_primary)",
         "https://www.localcandidates.org/elections/2026-us-senate-mn/republican-primary"
       ],
-      "notes": "Adam Schwarze is the Republican Party of Minnesota endorsed candidate."
+      "notes": "Adam Schwarze is the Republican Party of Minnesota endorsed candidate.",
+      "verified": false,
+      "verify_notes": "Independent source (Wikipedia raw wikitext for the MN Senate R primary page, a URL not previously cited for this race) confirms date, contested status, Adam Schwarze as the state party-endorsed candidate, and all 9 listed candidates — but also lists Mohamad Muse as a declared Republican candidate not included in the file. Separately, the file's second existing source (localcandidates.org) could not be retrieved (403/429) during this check and looks unreliable; recommend replacing it. Flagging for the missing candidate and questionable source."
     },
     {
       "race_label": "Governor of Alaska — nonpartisan top-four primary (AK, 2026-08-18)",
@@ -188,7 +204,9 @@
         "https://ballotpedia.org/Alaska_gubernatorial_and_lieutenant_gubernatorial_election,_2026_(August_18_top-four_primary)",
         "https://alaskabeacon.com/briefs/seventeen-people-sign-up-to-run-in-2026-alaska-governor-race-top-four-advance-in-aug-18-primary/"
       ],
-      "notes": "Alaska uses a nonpartisan top-four primary system. Seventeen candidates qualified; listed are notable candidates. All 17 candidates were running in single primary regardless of party affiliation."
+      "notes": "Alaska uses a nonpartisan top-four primary system. Seventeen candidates qualified; listed are notable candidates. All 17 candidates were running in single primary regardless of party affiliation.",
+      "verified": true,
+      "verify_notes": "Independent source (en.wikipedia.org/wiki/2026_Alaska_gubernatorial_election plus a corroborating aggregation) confirms the Aug 18, 2026 date and all 5 listed candidates as genuine qualified candidates in the nonpartisan top-four primary, consistent with the file's note about seventeen total qualifiers. Clean."
     },
     {
       "race_label": "U.S. Senate — nonpartisan top-four primary (AK, 2026-08-18)",
@@ -208,7 +226,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Alaska,_2026_(August_18_top-four_primary)",
         "https://en.wikipedia.org/wiki/2026_Alaska_Senate_election"
       ],
-      "notes": "Alaska uses a nonpartisan top-four primary system; all candidates run on single ballot."
+      "notes": "Alaska uses a nonpartisan top-four primary system; all candidates run on single ballot.",
+      "verified": false,
+      "verify_notes": "Independent sources (FEC candidate API and a news aggregation citing Ballotpedia and Anchorage Daily News) confirm the date, and confirm Sullivan, Peltola, and Darden with correct party labels in a genuinely contested (13+ filer) race. However, Richard Grayson is consistently identified in independent sources as a Green Party candidate, not a Democrat as listed in the file — party mislabeled."
     },
     {
       "race_label": "Governor of Florida — D primary (FL, 2026-08-18)",
@@ -226,7 +246,9 @@
         "https://ballotpedia.org/Florida_gubernatorial_election,_2026_(August_18_Democratic_primary)",
         "https://floridaphoenix.com/2026/06/24/meet-the-florida-democrats-running-for-governor-against-david-jolly/"
       ],
-      "notes": "UNVERIFIED: Additional Democratic candidates mentioned in search results but not fully documented with names."
+      "notes": "UNVERIFIED: Additional Democratic candidates mentioned in search results but not fully documented with names.",
+      "verified": false,
+      "verify_notes": "Independent source (clickorlando.com's 2026 Florida Democratic primary voters' guide, not previously cited) lists six Democratic candidates — Evelyn Castillo-Bach, Thomas Eloy Fernandez, Dayna Marie Foster, David Jolly, Dotie Joseph, and Kenneth Stephann Norman — versus the file's two (Jolly, Foster). Contested status still holds, but the candidate list is materially incomplete, missing four qualified candidates. This confirms the researcher's original UNVERIFIED flag."
     },
     {
       "race_label": "Governor of Florida — R primary (FL, 2026-08-18)",
@@ -253,7 +275,9 @@
         "https://ballotpedia.org/Florida_gubernatorial_election,_2026_(August_18_Republican_primary)",
         "https://www.clickorlando.com/voters-guide/2026/07/31/2026-voters-guide-florida-governors-race-republican-primary/"
       ],
-      "notes": "Governor Ron DeSantis term-limited and unable to seek re-election."
+      "notes": "Governor Ron DeSantis term-limited and unable to seek re-election.",
+      "verified": true,
+      "verify_notes": "Independent source (en.wikipedia.org/wiki/2026_Florida_gubernatorial_election) lists the same 11 Republican candidates as the file and confirms the Aug 18 date and DeSantis's term limit. Minor caveat: secondary aggregated snippets reference a possible 12th qualified candidate that could not be independently confirmed by name."
     },
     {
       "race_label": "U.S. Senate (Special) — D primary (FL, 2026-08-18)",
@@ -268,7 +292,9 @@
         "https://ballotpedia.org/United_States_Senate_special_election_in_Florida,_2026_(August_18_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_special_election_in_Florida"
       ],
-      "notes": "UNVERIFIED: Special election to replace Marco Rubio (sworn in as Secretary of State). Specific Democratic candidates not identified in search results."
+      "notes": "UNVERIFIED: Special election to replace Marco Rubio (sworn in as Secretary of State). Specific Democratic candidates not identified in search results.",
+      "verified": false,
+      "verify_notes": "Independent sources (FEC candidate API and a news aggregation citing Ballotpedia: 'Angela Nixon and Alex Vindman are running in the special Democratic primary for U.S. Senate Florida on August 18, 2026') confirm this race is genuinely contested with at least Angie Nixon and Alexander Vindman as qualified candidates (a third filer, Joey Atkins, appears in FEC data but ballot qualification is unconfirmed). The file's empty candidate array is incorrect — this confirms the researcher's original UNVERIFIED flag and shows the race is real but undocumented in the file."
     },
     {
       "race_label": "U.S. Senate (Special) — R primary (FL, 2026-08-18)",
@@ -285,7 +311,9 @@
         "https://ballotpedia.org/United_States_Senate_special_election_in_Florida,_2026_(August_18_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_special_election_in_Florida"
       ],
-      "notes": "UNVERIFIED: Ashley Moody is appointed by Governor DeSantis to fill vacancy but contested nature of R primary not confirmed. Specific candidates not fully documented."
+      "notes": "UNVERIFIED: Ashley Moody is appointed by Governor DeSantis to fill vacancy but contested nature of R primary not confirmed. Specific candidates not fully documented.",
+      "verified": false,
+      "verify_notes": "Independent sources (FEC candidate API and a news aggregation citing Ballotpedia and a local outlet) show incumbent Ashley Moody facing at least three challengers — Chris Gleason, Neelam/Taneja Perry, and Ernie Rivera — explicitly described as a contested Republican primary. The file's single-candidate list (Moody only) is incorrect; this race should be marked contested with a fuller candidate list. Confirms the researcher's original UNVERIFIED flag."
     },
     {
       "race_label": "Governor of Wyoming — R primary (WY, 2026-08-18)",
@@ -304,7 +332,9 @@
         "https://ballotpedia.org/Wyoming_gubernatorial_election,_2026_(August_18_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_Wyoming_gubernatorial_election"
       ],
-      "notes": "Incumbent Governor Gordon term-limited."
+      "notes": "Incumbent Governor Gordon term-limited.",
+      "verified": false,
+      "verify_notes": "Independent source: Wyoming Secretary of State's official 2026 Primary Election Candidate Roster (sos.wyo.gov, PDF dated 2026-07-24, not previously cited) shows 4 filed Republican candidates, not 3: Eric Barlow, Brent Bien, Curt Blake, and Megan Degenfelder — none withdrawn. The file is missing Curt Blake. Date and Gordon's term-limited status confirmed; race remains contested either way."
     },
     {
       "race_label": "U.S. Senate — R primary (WY, 2026-08-18)",
@@ -322,7 +352,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Wyoming,_2026_(August_18_Republican_primary)",
         "https://politics1.com/wy.htm"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official WY SOS roster shows 5 Republican Senate candidates, not 2: Harriet Hageman, Jill M. Edwards, Jimmy Skovgard, John Holtz, and Sam Mead. The file omits Edwards, Holtz, and Mead. Checked the flagged dual-candidacy concern: the SOS roster confirms Hageman filed for Senate only (announced Dec 23, 2025 she would run for the seat vacated by Sen. Lummis's retirement, not for House reelection), so no conflict with the House race. Date confirmed."
     },
     {
       "race_label": "U.S. House WY-AL — R primary (WY, 2026-08-18)",
@@ -343,7 +375,9 @@
         "https://ballotpedia.org/United_States_House_election_in_Wyoming,_2026_(August_18_Republican_primary)",
         "https://politics1.com/wy.htm"
       ],
-      "notes": "Wyoming has single at-large House seat."
+      "notes": "Wyoming has single at-large House seat.",
+      "verified": false,
+      "verify_notes": "Same official WY SOS roster shows 9 Republican U.S. House candidates, not 5: Jillian Balow, Bo Biteman, Kevin Christensen, Richard Dodson, Steve Friess, David Giralt, Keith B. Goodenough, Chuck Gray, and Reid Rasner. The file omits Biteman, Dodson, Friess, and Goodenough. Hageman correctly does not appear on this list (she filed for Senate, see above). Date confirmed."
     },
     {
       "race_label": "Governor of Massachusetts — D primary (MA, 2026-09-01)",
@@ -362,7 +396,9 @@
         "https://ballotpedia.org/Massachusetts_gubernatorial_election,_2026_(September_1_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_Massachusetts_gubernatorial_election"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": true,
+      "verify_notes": "Independent sources (Wikipedia overview page and news summaries, distinct from the cited race-specific page) confirm Healey is the incumbent seeking a second term, the Sept 1, 2026 date, and no evidence of additional candidates beyond Healey, Dewar, and James. Clean."
     },
     {
       "race_label": "Governor of Massachusetts — R primary (MA, 2026-09-01)",
@@ -381,7 +417,9 @@
         "https://ballotpedia.org/Massachusetts_gubernatorial_election,_2026_(September_1_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_Massachusetts_gubernatorial_election"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Multiple independent sources, including Boston Herald convention coverage, confirm Mike Kennealy suspended his campaign on April 26, 2026 after failing to reach the 15% convention threshold, and endorsed Minogue — he is not on the primary ballot. The actual ballot has two candidates: Michael Minogue and Brian Shortsleeve. The file wrongly includes Kennealy as a third candidate. Still contested; date confirmed."
     },
     {
       "race_label": "U.S. Senate — D primary (MA, 2026-09-01)",
@@ -401,7 +439,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Massachusetts,_2026_(September_1_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Massachusetts"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": true,
+      "verify_notes": "Independent source (FEC candidate database) confirms Seth Moulton has an active 2026 Senate campaign committee — a genuine primary challenge to incumbent Ed Markey. A Wikipedia overview page confirms the contested status, Sept 1 date, and three Democratic challengers consistent with Gates/Moulton/Rikleen. Clean."
     },
     {
       "race_label": "U.S. Senate — R primary (MA, 2026-09-01)",
@@ -419,7 +459,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Massachusetts,_2026_(September_1_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Massachusetts"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": true,
+      "verify_notes": "Independent source (FEC candidate database) confirms Nathan Alexander Bech and John Deaton as active Republican Senate candidates for the 2026 cycle; Boston Herald convention coverage separately confirms Deaton accepted the MA GOP Senate nomination bid. Date confirmed. Clean."
     },
     {
       "race_label": "Governor of New Hampshire — R primary (NH, 2026-09-08)",
@@ -437,7 +479,9 @@
         "https://ballotpedia.org/New_Hampshire_gubernatorial_election,_2026_(September_8_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_New_Hampshire_gubernatorial_election"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Independent source: New Hampshire Secretary of State's official Cumulative Candidate Filing (accessed via Wayback Machine snapshot dated 2026-07-16, since the live site blocks automated access), a source not previously cited. Confirms the Sept 8, 2026 date, but shows 3 filed Republican Governor candidates, not 2: Kelly Ayotte, Shaun Fife, and Bob Wayne McClory. The file is missing McClory. Separately confirmed: the NH Governor Democratic primary has only one filer (Cinde Warmington) and is genuinely not contested, so its absence from the file is correct, not a gap."
     },
     {
       "race_label": "U.S. Senate — D primary (NH, 2026-09-08)",
@@ -455,7 +499,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_New_Hampshire,_2026_(September_8_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_New_Hampshire"
       ],
-      "notes": "Incumbent Jeanne Shaheen did not seek re-election."
+      "notes": "Incumbent Jeanne Shaheen did not seek re-election.",
+      "verified": false,
+      "verify_notes": "Same official NH SOS filing record shows 5 Democratic Senate candidates, not 2: David Jarvis, Karishma Manzur, Chris Pappas, Maxwell L. Saal, and John Vail. The file is missing Jarvis, Saal, and Vail. Date confirmed."
     },
     {
       "race_label": "U.S. Senate — R primary (NH, 2026-09-08)",
@@ -475,7 +521,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_New_Hampshire,_2026_(September_8_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_New_Hampshire"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official NH SOS filing record confirms the file's 'John E. Sununu' correctly identifies the former U.S. Senator (not a different Sununu) as a genuine filer. However, the full roster is wrong: the official filing lists 8 Republican Senate candidates (Tom Alciere, Scott P. Brown, Sky Danley, Andy Martin, Mary Maxwell, Richard A. McMenamon II, Sabrina Ann Smith, John E. Sununu), and the file's 'Tejasinha Sivalingam' and 'Charlie Hough' do not appear anywhere in the official filing — likely erroneous/fabricated names."
     },
     {
       "race_label": "U.S. House NH-01 — R primary (NH, 2026-09-08)",
@@ -496,7 +544,9 @@
         "https://ballotpedia.org/New_Hampshire's_1st_Congressional_District_election,_2026_(September_8_Republican_primary)",
         "https://en.wikipedia.org/wiki/New_Hampshire's_1st_congressional_district"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official NH SOS filing record lists the District 1 Republican House candidates as Lindsey Anderson, Melissa Bailey, Brian D. Cole, Anthony DiLorenzo, and Hollie Noveletsky. The file's 'Elizabeth Girard' does not appear in this filing (a 'Dale Girard' exists but for a different, county-level office); the file is also missing Lindsey Anderson, the actual fifth candidate. Date confirmed."
     },
     {
       "race_label": "U.S. House NH-02 — D primary (NH, 2026-09-08)",
@@ -516,7 +566,9 @@
         "https://ballotpedia.org/New_Hampshire's_2nd_Congressional_District_election,_2026_(September_8_Democratic_primary)",
         "https://en.wikipedia.org/wiki/New_Hampshire's_2nd_congressional_district"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official NH SOS filing record shows only 2 Democratic candidates filed for District 2: Paige Beauchemin and Maggie Goodlander. Still contested (2 candidates), but the file's 'Dean Pennington' does not appear anywhere in the filing, and 'Chris Tardif' is a real filer — for NH State Senate District 22, not U.S. House. Both names should be removed from this race's roster. Date confirmed."
     },
     {
       "race_label": "Governor of Rhode Island — D primary (RI, 2026-09-09)",
@@ -535,7 +587,9 @@
         "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026_(September_9_Democratic_primary)",
         "https://vote.sos.ri.gov/forms/elections/ElectionPage/PPPEng.html"
       ],
-      "notes": "Primary date listed variously as September 8 or 9; official source indicates September 9."
+      "notes": "Primary date listed variously as September 8 or 9; official source indicates September 9.",
+      "verified": false,
+      "verify_notes": "Independent source: Rhode Island Department of State's live Declared Candidates export (vote.sos.ri.gov, not previously cited). Resolves the file's own flagged date ambiguity — RI's official election-date selector lists only Sept 9, 2026 as the statewide primary, confirming Sept 9 is correct. However, the candidate list is incomplete: official records show 5 Democratic Governor candidates — Daniel J. McKee, Helena Buonanno Foulkes, Jonathan Coker, Steven R. Gregersen, and Gregory Stevens — versus the file's 3. Missing: Coker and Gregersen."
     },
     {
       "race_label": "Governor of Rhode Island — R primary (RI, 2026-09-09)",
@@ -554,7 +608,9 @@
         "https://ballotpedia.org/Rhode_Island_gubernatorial_election,_2026_(September_9_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_Rhode_Island_gubernatorial_election"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official RI Declared Candidates export shows 5 Republican Governor candidates: Aaron C. Guckian, Elaine M. Pelino, Frank R. Gallucci, Amy Ferreira, and Emmanuel Adjei. 'Robert Raimondo,' as listed in the file, does not appear anywhere in RI's official candidate database (full export searched) — likely a fabricated or misattributed name (possibly conflated with former Gov. Gina Raimondo). The file is missing Gallucci, Ferreira, and Adjei, and should drop Raimondo."
     },
     {
       "race_label": "U.S. Senate — D primary (RI, 2026-09-09)",
@@ -572,7 +628,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Rhode_Island,_2026_(September_9_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Rhode_Island"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official RI export shows 3 Democratic Senate candidates: John F. (Jack) Reed, Connor F. Burbridge, and Luis Daniel Munoz — versus the file's 2. Missing: Munoz. Still contested; date confirmed."
     },
     {
       "race_label": "U.S. Senate — R primary (RI, 2026-09-09)",
@@ -590,7 +648,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Rhode_Island,_2026_(September_9_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Rhode_Island"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Same official RI export shows only 1 Republican Senate candidate filed: Raymond T. McKay. This race is NOT actually contested. 'Allen Waters,' as listed in the file, is a real RI filer, but for Mayor (as an Independent) and Republican Ward Committee — not U.S. Senate. As filed, there is no genuine 2+ candidate GOP Senate primary in Rhode Island for 2026; the file's contested=true and candidate list are both incorrect."
     },
     {
       "race_label": "U.S. Senate — D primary (DE, 2026-09-15)",
@@ -608,7 +668,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Delaware,_2026_(September_15_Democratic_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Delaware"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Independent source: Delaware Department of Elections' official statewide filed-candidates table (elections.delaware.gov, not previously cited for this race). Confirms the Sept 15, 2026 date. The official Democratic U.S. Senate row lists 4 qualified candidates: Jeff Appelhans, Chris Coons, E. No-Trump Hansen, and Mary Louve. 'Christopher Beardsley,' as listed in the file, does not appear as a U.S. Senate candidate anywhere on the official page — he is listed as a Democratic candidate for Delaware State Senate District 14, a different office. The race is genuinely contested (4 candidates), but the file's Coons-vs-Beardsley pairing is wrong, and Appelhans/Hansen/Louve are missing."
     },
     {
       "race_label": "U.S. Senate — R primary (DE, 2026-09-15)",
@@ -626,7 +688,9 @@
         "https://ballotpedia.org/United_States_Senate_election_in_Delaware,_2026_(September_15_Republican_primary)",
         "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Delaware"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": true,
+      "verify_notes": "Same official Delaware Department of Elections table lists exactly two qualified Republican U.S. Senate candidates — Michael 'Dr. Mike' Katz and John Shulli — an exact match to the file. Date confirmed. Clean."
     },
     {
       "race_label": "U.S. House DE-AL — R primary (DE, 2026-09-15)",
@@ -645,7 +709,9 @@
         "https://ballotpedia.org/United_States_House_election_in_Delaware,_2026_(September_15_Republican_primary)",
         "https://elections.delaware.gov/candidates/candidatelist/prim_fcddt_2026.html"
       ],
-      "notes": "Delaware has single at-large House seat."
+      "notes": "Delaware has single at-large House seat.",
+      "verified": false,
+      "verify_notes": "Independent sources (Wikipedia's 2026 U.S. House election in Delaware page, cross-checked against the official Delaware Dept of Elections filed-candidates table) show the Republican field as Joseph Arminio, Earl Cooper, Lee Murphy, and John J. Whalen (Wikipedia; Murphy not yet showing filed in the state's snapshot). Both sources agree Cooper is real, but neither lists 'Donyale Hall' anywhere — likely erroneous/fabricated — and the file omits Arminio and Whalen. Race is genuinely contested, but the candidate list is wrong. Separately confirmed: Delaware has no 2026 gubernatorial race (Gov. Meyer elected 2024, next election 2028), so its absence from the file is correct, not a gap."
     }
   ]
 }

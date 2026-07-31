@@ -149,8 +149,9 @@
   {
    "state": "CA",
    "district": 4,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -161,14 +162,16 @@
   {
    "state": "CA",
    "district": 6,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
    "district": 7,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -191,14 +194,16 @@
   {
    "state": "CA",
    "district": 11,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
    "district": 12,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -209,8 +214,9 @@
   {
    "state": "CA",
    "district": 14,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -299,8 +305,9 @@
   {
    "state": "CA",
    "district": 29,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -329,8 +336,9 @@
   {
    "state": "CA",
    "district": 34,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -347,8 +355,9 @@
   {
    "state": "CA",
    "district": 37,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -365,8 +374,9 @@
   {
    "state": "CA",
    "district": 40,
-   "contested": false,
-   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_California,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "CA",
@@ -1445,14 +1455,16 @@
   {
    "state": "NH",
    "district": 1,
-   "contested": false,
-   "source": "https://ballotpedia.org/New_Hampshire's_1st_Congressional_District_election,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/New_Hampshire's_1st_Congressional_District_election,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "NH",
    "district": 2,
-   "contested": false,
-   "source": "https://ballotpedia.org/New_Hampshire's_2nd_Congressional_District_election,_2026"
+   "contested": true,
+   "source": "https://ballotpedia.org/New_Hampshire's_2nd_Congressional_District_election,_2026",
+   "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
   },
   {
    "state": "NJ",

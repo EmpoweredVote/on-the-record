@@ -44,7 +44,9 @@
         "https://ballotpedia.org/Indiana's_9th_Congressional_District_election,_2026",
         "https://www.ipm.org/news/2026-05-05/brad-meyer-wins-democratic-primary-in-9th-congressional-district"
       ],
-      "notes": ""
+      "notes": "",
+      "verified": false,
+      "verify_notes": "Federal biennial race, legitimately on the 2026 ballot with high structural confidence (no doubt about office/date). Could not independently reconfirm the specific candidate roster against a source outside the existing two: FEC.gov's 2026 IN-09 candidate table returned no populated rows for this tool, and Indiana Capital Chronicle blocked the fetch (403). No independent confirmation obtained for Hudson (L) or Taylor (I) as qualified general-election candidates."
     },
     {
       "race_label": "Indiana House of Representatives, District 60 (IN, 2026-11-03)",
@@ -74,7 +76,9 @@
         "https://ballotpedia.org/Indiana_House_of_Representatives_District_60",
         "https://www.wbiw.com/2026/02/05/higgs-announces-leadership-of-expanded-indiana-rural-summit-syczylo-files-as-democratic-candidate-for-house-district-60"
       ],
-      "notes": "District 60 includes portions of Morgan, Monroe, and Johnson counties."
+      "notes": "District 60 includes portions of Morgan, Monroe, and Johnson counties.",
+      "verified": false,
+      "verify_notes": "Biennial IN House seat, legitimately on the 2026 ballot. Attempted independent reconfirmation via ipm.org (guessed article URLs 404'd) and Ballotpedia (fetch tool returned blocked/empty content for this and adjacent pages this session); unable to reach a working new source, so Mayfield/Syczylo matchup is not independently reconfirmed this pass."
     },
     {
       "race_label": "Indiana House of Representatives, District 61 (IN, 2026-11-03)",
@@ -97,7 +101,9 @@
         "https://ballotpedia.org/Indiana_House_of_Representatives_District_61",
         "https://www.ipm.org/news/2026-05-05/matt-pierce-wins-primary-for-state-house-in-district-61"
       ],
-      "notes": "Matt Pierce runs unopposed; no Republican candidate filed for general election."
+      "notes": "Matt Pierce runs unopposed; no Republican candidate filed for general election.",
+      "verified": false,
+      "verify_notes": "Biennial IN House seat, legitimately on the 2026 ballot. Could not reach an independent third source this pass (Ballotpedia blocked/empty via fetch tool, Herald-Times Online unreachable, WFYI had no relevant coverage); the 'unopposed' claim is not independently reconfirmed beyond the two sources already cited."
     },
     {
       "race_label": "Indiana House of Representatives, District 62 (IN, 2026-11-03)",
@@ -127,7 +133,9 @@
         "https://ballotpedia.org/Indiana_House_of_Representatives_District_62",
         "https://bcdemocrat.com/2026/06/07/district-62-race-draws-national-attention-ahead-of-november"
       ],
-      "notes": "District 62 includes all of Brown County and portions of Monroe and Jackson counties. This race is receiving national Democratic support."
+      "notes": "District 62 includes all of Brown County and portions of Monroe and Jackson counties. This race is receiving national Democratic support.",
+      "verified": false,
+      "verify_notes": "Biennial IN House seat, legitimately on the 2026 ballot. Attempted ipm.org (guessed URLs 404'd) and Ballotpedia (blocked/empty via fetch tool) for independent reconfirmation; unable to reach a working new source, so Hall/Oliver matchup is not independently reconfirmed this pass."
     },
     {
       "race_label": "Monroe County Sheriff (IN, 2026-11-03)",
@@ -157,7 +165,9 @@
         "https://bsquarebulletin.com/monroe-county-sheriff-candidate-ruben-marte/",
         "https://bsquarebulletin.com/cory-grass-picked-as-monroe-county-gop-chair-already-recruiting-for-2026-sheriffs-race"
       ],
-      "notes": "UNVERIFIED: Republican candidate name not confirmed in available sources; Monroe County GOP confirmed recruiting for sheriff race but specific nominee identity not found."
+      "notes": "UNVERIFIED: Republican candidate name not confirmed in available sources; Monroe County GOP confirmed recruiting for sheriff race but specific nominee identity not found.",
+      "verified": false,
+      "verify_notes": "Dug into this specifically as requested. Two problems found: (1) the candidate-level source_url cited for Marté (bsquarebulletin's 'monroe-county-sheriff-candidate-ruben-marte') is actually 2022 election coverage -- Marté vs. Hale/Purdie/Stalcup/Thomas in the 2022 D primary, with Nathan Williamson unopposed on the R side that cycle -- not 2026 coverage; it does not itself support the 2026 race and should be re-sourced. (2) Independently re-read the GOP-chair article (already cited, so not a new source, but content-checked directly): it confirms recruitment is underway but names no candidate, so the 'UNVERIFIED: Republican Candidate' placeholder and the contested:true flag remain unconfirmed by any source found. Indiana allows a county party to caucus-select a candidate when no one files in the primary, so a named R nominee may still emerge before ballot certification, but as of this pass none exists in the record. Recommend keeping this UNVERIFIED and re-sourcing the Marté citation."
     },
     {
       "race_label": "Monroe County Prosecuting Attorney (IN, 2026-11-03)",
@@ -180,7 +190,9 @@
         "https://www.ipm.org/news/2026-05-05/oliphant-wins-monroe-county-prosecutor-primary",
         "https://www.idsnews.com/article/2026/05/erika-oliphant-projected-retains-democratic-nomination-for-monroe-county-prosecutor-primary"
       ],
-      "notes": "Oliphant runs unopposed; no Republican candidate filed."
+      "notes": "Oliphant runs unopposed; no Republican candidate filed.",
+      "verified": false,
+      "verify_notes": "Office is on the county row-office cycle (same as Sheriff/Commissioner, last contested 2022) with high structural confidence. Could not reach an independent new source this pass: IDS News section browse returned no relevant articles, Ballotpedia was blocked/empty via fetch tool. 'Unopposed' status not independently reconfirmed beyond the two sources already cited."
     },
     {
       "race_label": "Monroe County Assessor (IN, 2026-11-03)",
@@ -210,7 +222,9 @@
         "https://www.ipm.org/news/2026-05-05/judith-sharp-wins-monroe-county-assessor-primary",
         "https://bsquarebulletin.com/trimble-clears-signature-hurdle-to-make-independent-run-for-monroe-county-assessor"
       ],
-      "notes": "Trimble is a former Monroe County assessor's office employee running as independent candidate."
+      "notes": "Trimble is a former Monroe County assessor's office employee running as independent candidate.",
+      "verified": false,
+      "verify_notes": "Attempted independent reconfirmation via bloomingtonian.com (403 blocked to this tool) and IDS News (no relevant hits); could not reach a working new source. No independent confirmation that Trimble actually cleared ballot-access signature requirements to appear as an independent in November, beyond the sources already cited."
     },
     {
       "race_label": "Monroe County Clerk (IN, 2026-11-03)",
@@ -240,7 +254,9 @@
         "https://www.ipm.org/news/2026-05-05/tree-martin-lucas-wins-monroe-county-clerk-primary",
         "https://www.chamberbloomington.org/mc-clerk-candidates-2026-7279374.html"
       ],
-      "notes": ""
+      "notes": "",
+      "verify_notes": "Re-fetched the already-cited chamberbloomington.org article directly (not a new source, since it's already in this race's sources list, but content-checked it): it confirms a Martin-Lucas (D) vs. Hays (R) general-election matchup, consistent with the file. Could not reach a genuinely independent third source (Ballotpedia blocked/empty, Herald-Times unreachable) to satisfy the 'source not already in this race's sources list' requirement.",
+      "verified": false
     },
     {
       "race_label": "Monroe County Recorder (IN, 2026-11-03)",
@@ -262,7 +278,9 @@
       "sources": [
         "https://votes.decisiondeskhq.com/races/2026-05-05/indiana-monroe-county-recorder-democratic-primary"
       ],
-      "notes": "Brown won Democratic primary unopposed; no Republican candidate confirmed for general election."
+      "notes": "Brown won Democratic primary unopposed; no Republican candidate confirmed for general election.",
+      "verified": false,
+      "verify_notes": "This race has only one source total, and that source only covers the primary, not the general -- weaker sourcing than every other race in this file. Attempted independent reconfirmation via decisiondeskhq.com direct refetch (403 blocked), a bsquarebulletin tag page (404), and IDS News (no relevant hits); could not reach a working new source. Whether a Republican ultimately filed or was caucus-selected for the November Recorder race remains unconfirmed -- recommend treating 'contested: false' here with the same caution as the Sheriff/Commissioner UNVERIFIED flags and adding a second, general-election-focused source before publish."
     },
     {
       "race_label": "Monroe County Auditor (IN, 2026-11-03)",
@@ -285,7 +303,9 @@
         "https://www.ipm.org/2024-02-12/brianne-gregory-new-county-auditor",
         "https://bsquarebulletin.com/dems-caucus-taps-gregory-as-monroe-county-auditor-previous-days-payroll-delay-gets-a-mention"
       ],
-      "notes": "UNVERIFIED: Gregory selected by Democratic caucus in 2024; no Republican candidate confirmed for 2026 general election, but status requires verification."
+      "notes": "UNVERIFIED: Gregory selected by Democratic caucus in 2024; no Republican candidate confirmed for 2026 general election, but status requires verification.",
+      "verified": false,
+      "verify_notes": "Both existing sources are from 2024 (the caucus appointment) and neither confirms Gregory filed for or won a 2026 primary/nomination for a full term, nor that Auditor is genuinely on the 2026 ballot rather than mid-term. Attempted independent reconfirmation via a bsquarebulletin tag page (404, page does not exist) and general site fetches (no relevant 2026 Auditor coverage surfaced); could not reach a working new source. This is the same open question the original researcher flagged -- unresolved, not just unconfirmed by a new source."
     },
     {
       "race_label": "Monroe County Commissioner, District 1 (IN, 2026-11-03)",
@@ -315,7 +335,9 @@
         "https://ballotpedia.org/Trent_Deckard_(Monroe_County_Commissioner,_District_1,_Indiana,_candidate_2026)",
         "https://www.ipm.org/news/2026-05-05/deckard-wins-nomination-for-monroe-county-commissioner"
       ],
-      "notes": "UNVERIFIED: Republican candidate name not confirmed; Deckard defeated David Henry in Democratic primary with 59.7% of vote."
+      "notes": "UNVERIFIED: Republican candidate name not confirmed; Deckard defeated David Henry in Democratic primary with 59.7% of vote.",
+      "verified": false,
+      "verify_notes": "Dug into this specifically as requested. Independently fetched chamberbloomington.org's commissioner-candidates article directly -- a genuinely new source, not already in this race's 'sources' list (it was only cited as a per-candidate source_url, not a race-level source). It confirms: District 1 is the only Monroe County commissioner seat up in 2026 (incumbent Lee Jones not seeking reelection) -- so the office/date placement checks out -- and confirms the Deckard (59%) vs. Henry (40%) Democratic primary split matches the file. However, this independent source also names no Republican candidate, corroborating rather than resolving the researcher's UNVERIFIED flag. Recommend keeping the placeholder name out of production and re-checking closer to ballot certification."
     },
     {
       "race_label": "MCCSC School Board, District 1 (IN, 2026-11-03)",
@@ -337,7 +359,9 @@
       "sources": [
         "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
       ],
-      "notes": "Wyatt runs unopposed."
+      "notes": "Wyatt runs unopposed.",
+      "verified": false,
+      "verify_notes": "Re-fetched the sole existing source directly and it does support the claim (three named incumbents, Wyatt/Pirani/Jester, running unopposed in 2026), but that's the same source already cited, not new -- this race has only one source total. Attempted ipm.org and IDS News for a second, independent source; neither yielded relevant coverage. Recommend adding a genuinely second source before publish, per this lane's own sourcing bar."
     },
     {
       "race_label": "MCCSC School Board, District 3 (IN, 2026-11-03)",
@@ -359,7 +383,9 @@
       "sources": [
         "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
       ],
-      "notes": "Pirani runs unopposed."
+      "notes": "Pirani runs unopposed.",
+      "verified": false,
+      "verify_notes": "Same single-source situation as MCCSC District 1 -- the one cited source does support the claim on direct re-fetch, but no independent second source was reachable this pass (ipm.org, IDS News turned up nothing relevant). Recommend adding a second source before publish."
     },
     {
       "race_label": "MCCSC School Board, District 7 (IN, 2026-11-03)",
@@ -381,7 +407,9 @@
       "sources": [
         "https://bsquarebulletin.com/3-mccsc-board-incumbents-to-run-unopposed-in-2026"
       ],
-      "notes": "Jester runs unopposed. Cole Pospisil initially filed as a challenger but withdrew citing Hatch Act concerns."
+      "notes": "Jester runs unopposed. Cole Pospisil initially filed as a challenger but withdrew citing Hatch Act concerns.",
+      "verified": false,
+      "verify_notes": "Same single-source situation as MCCSC Districts 1 and 3. Direct re-fetch of the cited source supports the claim, but no independent second source was reachable this pass. The added Pospisil-withdrawal detail is plausible and specific enough to suggest real reporting, but is also unconfirmed by any second source; recommend adding one before publish."
     }
   ]
 }

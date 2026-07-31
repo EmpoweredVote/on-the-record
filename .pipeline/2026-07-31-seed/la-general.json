@@ -31,7 +31,9 @@
         "https://results.lavote.gov/#year=2026&election=4338",
         "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
       ],
-      "notes": "Top 2 from June 2, 2026 primary (Bass 34.27%, Raman 29.02%)"
+      "notes": "Top 2 from June 2, 2026 primary (Bass 34.27%, Raman 29.02%)",
+      "verified": false,
+      "verify_notes": "November runoff status and vote shares confirmed (Bass 34.27%/Raman 29.02% closely match Wikipedia's 2026 Los Angeles mayoral election page, which reports 34.3%/29.0%), but the second candidate's name is likely wrong: en.wikipedia.org/wiki/2026_Los_Angeles_mayoral_election identifies the runner-up as Nithya Raman (sitting LA City Councilmember, CD4), not 'Ramit Raman.' Recommend correcting the candidate name before publishing."
     },
     {
       "race_label": "Los Angeles City Attorney (CA, 2026-11-03)",
@@ -61,7 +63,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Top 2 from June 2, 2026 primary (Roy 43.12%, McKinney 28.60%). UNVERIFIED: Roy's full legal name"
+      "notes": "Top 2 from June 2, 2026 primary (Roy 43.12%, McKinney 28.60%). UNVERIFIED: Roy's full legal name",
+      "verified": false,
+      "verify_notes": "Runoff status and vote shares confirmed (43.12%/28.60% matches Wikipedia's 2026 Los Angeles City Attorney election page). The previously-UNVERIFIED name resolves cleanly: 'Roy' is Marissa Roy (a Deputy Attorney General), corroborated across Wikipedia, ABC7, Fox11, and MyNewsLA. However, a new discrepancy was found: 'Michael McKinney' appears incorrect — independent sources consistently name the second-place candidate 'John McKinney,' not Michael. Recommend correcting both names before publishing."
     },
     {
       "race_label": "Los Angeles City Controller (CA, 2026-11-03)",
@@ -84,7 +88,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Kenneth Mejia won with 63.02%"
+      "notes": "Resolved in primary; Kenneth Mejia won with 63.02%",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Kenneth Mejia confirmed via LAist's LA City Controller voter guide; winner and no-runoff status match. The exact 63.02% figure wasn't reproduced to the decimal independently (LAist's mid-count figures were ~58.8-59.0%), consistent with normal progress toward certification, not a substantive discrepancy."
     },
     {
       "race_label": "Los Angeles City Council District 1 (CA, 2026-11-03)",
@@ -107,7 +113,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Eunisses Hernandez won with 57.69%"
+      "notes": "Resolved in primary; Eunisses Hernandez won with 57.69%",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Eunisses Hernandez confirmed via NBC Los Angeles; winner and no-runoff status match. Exact 57.69% not reproduced to the decimal (source showed ~52-54% in an earlier count), consistent with later certification, not a substantive discrepancy."
     },
     {
       "race_label": "Los Angeles City Council District 3 (CA, 2026-11-03)",
@@ -137,7 +145,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Top 2 from June 2, 2026 primary (Gaspar 46.08%, Girvan 42.51%). UNVERIFIED: full candidate names and incumbent status"
+      "notes": "Top 2 from June 2, 2026 primary (Gaspar 46.08%, Girvan 42.51%). UNVERIFIED: full candidate names and incumbent status",
+      "verified": false,
+      "verify_notes": "Runoff status and vote shares confirmed as genuinely close/contested (46.14%/42.50% vs. the file's 46.08%/42.51%, per losangelescountypolitics.com and LAist's CD3 voter guide). However, BOTH candidate names and the incumbent flag appear wrong: independent sources name the candidates 'Tim Gaspar' (not 'Nithya Gaspar,' which appears to conflate this race with Nithya Raman, the CD4 councilmember running for mayor) and 'Barri Worth Girvan' (not 'Isaac Girvan'). Neither candidate is the incumbent — sitting CD3 councilmember Bob Blumenfield is termed out and not running in this race, so incumbent:true on the first candidate is likely an error. Recommend correcting the candidate names and incumbent flag before publishing."
     },
     {
       "race_label": "Los Angeles City Council District 5 (CA, 2026-11-03)",
@@ -160,7 +170,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Katy Yaroslavsky won with 64.15%"
+      "notes": "Resolved in primary; Katy Yaroslavsky won with 64.15%",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Katy Yaroslavsky confirmed via aggregated reporting citing LAist's CD5 voter guide; ~66.1% reported vs. the file's 64.15% — same range, comfortably over 50%, no substantive discrepancy."
     },
     {
       "race_label": "Los Angeles City Council District 7 (CA, 2026-11-03)",
@@ -183,7 +195,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Monica Rodriguez ran unopposed with 100.00%"
+      "notes": "Resolved in primary; Monica Rodriguez ran unopposed with 100.00%",
+      "verified": true,
+      "verify_notes": "Unopposed outright win by incumbent Monica Rodriguez (100%) confirmed via LA Public Press."
     },
     {
       "race_label": "Los Angeles City Council District 9 (CA, 2026-11-03)",
@@ -213,7 +227,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Top 2 from June 2, 2026 primary (Ugarte 39.45%, Mazariegos 26.21%). UNVERIFIED: full candidate names and incumbent status"
+      "notes": "Top 2 from June 2, 2026 primary (Ugarte 39.45%, Mazariegos 26.21%). UNVERIFIED: full candidate names and incumbent status",
+      "verified": false,
+      "verify_notes": "Runoff status and vote shares roughly confirmed (39.76%/25.59% in a later independent count per thelalocal.org vs. the file's 39.45%/26.21% — same range). However, BOTH candidate names and the incumbent flag appear wrong: independent sources name the candidates 'Jose Ugarte' (not 'Estela Ugarte') and 'Estuardo Mazariegos' (not 'Hugo Mazariegos'). Neither is the incumbent — sitting CD9 councilmember Curren D. Price Jr. is termed out and not running, so incumbent:true on the first candidate is likely an error. Recommend correcting the candidate names and incumbent flag before publishing."
     },
     {
       "race_label": "Los Angeles City Council District 11 (CA, 2026-11-03)",
@@ -236,7 +252,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Traci Park won with 60.23%"
+      "notes": "Resolved in primary; Traci Park won with 60.23%",
+      "verified": true,
+      "verify_notes": "Confirmed via Ballotpedia (ballotpedia.org/Traci_Park): outright win, incumbent, 60.2% vs. the file's 60.23% — matches almost exactly."
     },
     {
       "race_label": "Los Angeles City Council District 13 (CA, 2026-11-03)",
@@ -259,7 +277,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Hugo Soto-Martinez won with 68.42%"
+      "notes": "Resolved in primary; Hugo Soto-Martinez won with 68.42%",
+      "verified": true,
+      "verify_notes": "Confirmed via Ballotpedia (ballotpedia.org/Hugo_Soto-Martinez): outright win, incumbent, 68.4% vs. the file's 68.42% — matches. (Some stale election-night reporting elsewhere showed ~64%, superseded by the certified figure the file reflects.)"
     },
     {
       "race_label": "Los Angeles City Council District 15 (CA, 2026-11-03)",
@@ -282,7 +302,9 @@
         "https://results.lavote.gov/text-results/4338",
         "https://results.lavote.gov/#year=2026&election=4338"
       ],
-      "notes": "Resolved in primary; Tim McOsker won with 76.55%"
+      "notes": "Resolved in primary; Tim McOsker won with 76.55%",
+      "verified": false,
+      "verify_notes": "Outright win and 76.55% figure confirmed via Ballotpedia and Wikipedia (76.5%). However, the incumbent flag is wrong: both sources list Tim McOsker as the incumbent (elected Dec 2022, running for re-election in 2026); the file marks incumbent:false. Recommend correcting to incumbent:true before publishing."
     },
     {
       "race_label": "Los Angeles County Board of Supervisors District 1 (CA, 2026-11-03)",
@@ -306,7 +328,9 @@
         "https://results.lavote.gov/#year=2026&election=4338",
         "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
       ],
-      "notes": "Resolved in primary; Maria Elena Durazo won with 60.58%"
+      "notes": "Resolved in primary; Maria Elena Durazo won with 60.58%",
+      "verified": false,
+      "verify_notes": "Outright win and 60.58% figure confirmed via Ballotpedia (ballotpedia.org/Maria_Elena_Durazo: 60.6%). However, the incumbent flag is wrong: Ballotpedia states explicitly that there were no incumbents in this race — Durazo is a sitting CA State Senator succeeding termed-out Supervisor Hilda Solis in an open seat, not the incumbent county supervisor. Recommend correcting the incumbent flag to false before publishing."
     },
     {
       "race_label": "Los Angeles County Board of Supervisors District 3 (CA, 2026-11-03)",
@@ -330,7 +354,9 @@
         "https://results.lavote.gov/#year=2026&election=4338",
         "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
       ],
-      "notes": "Resolved in primary; Lindsey Horvath won with 66.35%"
+      "notes": "Resolved in primary; Lindsey Horvath won with 66.35%",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Lindsey Horvath confirmed via LAist (66.3% vs. the file's 66.35%). Note: Ballotpedia's own candidate page shows a stale/inconsistent 'general election' placeholder for this race that conflicts with its own primary results table; treated as a page-freshness artifact, not a real discrepancy, since LAist is unambiguous that D3 was resolved outright."
     },
     {
       "race_label": "Los Angeles County Sheriff (CA, 2026-11-03)",
@@ -361,7 +387,9 @@
         "https://results.lavote.gov/#year=2026&election=4338",
         "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
       ],
-      "notes": "Top 2 from June 2, 2026 primary (Luna 44.15%, Villanueva 21.70%)"
+      "notes": "Top 2 from June 2, 2026 primary (Luna 44.15%, Villanueva 21.70%)",
+      "verified": false,
+      "verify_notes": "Runoff status confirmed as genuine (neither candidate over 50%), but BOTH candidate names appear swapped/garbled: independent sources (Ballotpedia, Wikipedia, LAist) identify the actual incumbent as Robert G. Luna (Sheriff since Dec 2022) and the challenger as Alex (Alejandro) Villanueva (Sheriff 2018-2022, Luna's predecessor) — the file's 'Robert Villanueva' and 'Lynda Luna' appear to conflate the two men's first and last names. Vote shares in independent sources (44.6%/22.3%) are close to but not identical to the file's 44.15%/21.70%, consistent with later count progression. Recommend correcting both candidate names and the incumbent flag before publishing."
     },
     {
       "race_label": "Los Angeles County Assessor (CA, 2026-11-03)",
@@ -385,7 +413,9 @@
         "https://results.lavote.gov/#year=2026&election=4338",
         "https://content.lavote.gov/docs/rrcc/svc/4338_final_svc_districts_v3.pdf"
       ],
-      "notes": "Resolved in primary; Jeffrey Prang won with 57.73%"
+      "notes": "Resolved in primary; Jeffrey Prang won with 57.73%",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Jeffrey Prang confirmed via Ballotpedia (ballotpedia.org/Jeffrey_Prang): 57.7% vs. the file's 57.73% — matches almost exactly."
     }
   ]
 }
