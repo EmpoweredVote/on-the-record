@@ -335,6 +335,109 @@ def test_names_count_mismatch_drops_names_keeps_tally():
     assert any("names" in n.lower() for n in item.notes)
 
 
+def test_two_amendments_keep_their_own_tallies():
+    # Each amendment's result sits in its OWN block — the block owner must
+    # win over any last-unvoted-amend fallback, or the tallies swap.
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-92\n"
+        "Daily moved and Ruff seconded that Ordinance 2026-92 be adopted.\n"
+        "Daily moved and Ruff seconded to adopt Amendment 01 to Ordinance 2026-92. "
+        "The motion to adopt Amendment 01 to Ordinance 2026-92 received a roll call "
+        "vote of Ayes: 9, Nays: 0, Abstain: 0.\n"
+        "Daily moved and Ruff seconded to adopt Amendment 02 to Ordinance 2026-92. "
+        "The motion to adopt Amendment 02 to Ordinance 2026-92 received a roll call "
+        "vote of Ayes: 5, Nays: 4, Abstain: 0. "
+        "The motion to adopt Ordinance 2026-92 as amended received a roll call vote "
+        "of Ayes: 8, Nays: 1, Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    assert [m.kind for m in item.motions] == ["adopt", "amend", "amend"]
+    amend1, amend2 = item.motions[1], item.motions[2]
+    assert (amend1.tally.ayes, amend1.tally.nays, amend1.tally.abstain) == (9, 0, 0)
+    assert (amend2.tally.ayes, amend2.tally.nays, amend2.tally.abstain) == (5, 4, 0)
+    adopt = item.motions[0]
+    assert (adopt.tally.ayes, adopt.tally.nays, adopt.tally.abstain) == (8, 1, 0)
+    assert item.disposition == "passed" and item.disposition_motion == 0
+
+
+def test_ambiguous_foreign_block_amendment_result_abstains():
+    # An amendment result stranded in a foreign block, with TWO unvoted
+    # amend motions that could claim it, must be dropped loudly.
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-91\n"
+        "Daily moved and Ruff seconded to adopt Amendment 01 to Ordinance 2026-91.\n"
+        "Daily moved and Ruff seconded to adopt Amendment 02 to Ordinance 2026-91.\n"
+        "Daily moved and Ruff seconded that Ordinance 2026-91 be adopted. "
+        "The motion to adopt Amendment 01 to Ordinance 2026-91 received a roll call "
+        "vote of Ayes: 9, Nays: 0, Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    assert [m.kind for m in item.motions] == ["amend", "amend", "adopt"]
+    assert all(m.tally is None for m in item.motions if m.kind == "amend")
+    assert any("ambiguous" in n for n in item.notes)
+
+
+def test_unparsed_roll_call_text_leaves_drift_note():
+    # v1 matched any bare "roll call vote of Ayes:" text; the stricter
+    # result frame must not fail SILENTLY — a desc containing "U.S."
+    # breaks the no-period bound, leaving the motion unvoted.
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-90\n"
+        "Daily moved and Ruff seconded that the U.S. 46 agreement for "
+        "Ordinance 2026-90 be approved. The motion to approve the U.S. 46 "
+        "agreement received a roll call vote of Ayes: 8, Nays: 0, Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    assert item.motions[0].tally is None
+    assert item.disposition is None
+    assert any("template drift" in n for n in item.notes)
+
+
+def test_non_name_tokens_on_nonzero_side_drop_names():
+    # A quorum annotation on a NON-zero side splits to the right length —
+    # the guard must also check the tokens are name-shaped, or Rosenbarger
+    # gets a minted abstain record.
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-89\n"
+        "Daily moved and Ruff seconded that Ordinance 2026-89 be adopted. "
+        "The motion received a roll call vote of Ayes: 6, Nays: 0, "
+        "Abstain: 2 (Rosenbarger, Ruff out of the room).\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    motion = item.motions[0]
+    assert (motion.tally.ayes, motion.tally.nays, motion.tally.abstain) == (6, 0, 2)
+    assert motion.abstain_names == []
+    assert item.disposition == "passed"
+    assert any("names" in n.lower() for n in item.notes)
+
+
+def test_duplicate_result_keeps_first_tally_and_notes_the_drop():
+    text = (
+        "5. Legislation [7:00pm]\n"
+        "5.1. Ordinance 2026-88\n"
+        "Daily moved and Ruff seconded that Ordinance 2026-88 be adopted. "
+        "The motion received a roll call vote of Ayes: 8, Nays: 0, Abstain: 0. "
+        "The motion received a roll call vote of Ayes: 3, Nays: 5, Abstain: 0.\n"
+    )
+    memo = parse_memo(text)
+    item = memo.items[0]
+    motion = item.motions[0]
+    assert (motion.tally.ayes, motion.tally.nays, motion.tally.abstain) == (8, 0, 0)
+    assert item.disposition == "passed"
+    # The note must identify BOTH the dropped tally and the target motion.
+    assert any(
+        "overwrite" in n and "Ayes 3" in n and "2026-88" in n for n in item.notes
+    )
+
+
 def test_pdf_round_trip_matches_frozen_text():
     from src.pdf_text import extract_text
     pdf = FIXTURE.with_suffix(".pdf")

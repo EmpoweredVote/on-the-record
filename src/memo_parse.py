@@ -19,18 +19,21 @@ Rules calibrated on those fixtures:
   in the ITEM scope by classifying its own description clause, never by
   refs inside it (June 10's amendment blocks carry both the amendment vote
   and the deferred as-amended adoption vote in one block; the July 22
-  clerk-typo desc stays with its block's discuss motion). An unmatchable
-  description drops the result with a loud note; a result whose target
-  already holds a tally is dropped, loudly, rather than overwritten.
+  clerk-typo desc stays with its block's discuss motion; the block owner
+  outranks any fallback so multi-amendment items keep per-amendment
+  tallies). An unmatchable or ambiguous description drops the result with
+  a loud note; a result whose target already holds a tally is dropped,
+  loudly, rather than overwritten; roll-call text the result frame fails
+  to recognize trips a loud template-drift note instead of vanishing.
 - Kind "amend" ("to adopt Amendment NN to <ref>") gets a vote row but is
   NEVER dispositive; "amend the agenda ..." is procedural housekeeping.
 - "for second reading" clauses (first-reading referral to the next
   session) are continuances; the continued-to date follows "until" or
   "to be held on".
 - Names/count guard: the clerk annotates quorum changes as a parenthetical
-  on a zero side ("Abstain: 0 (Rosenbarger, Ruff out of the room)"). When
-  a side's name-list length differs from its count, the names are dropped
-  (tally stands) with a note.
+  on a side ("Abstain: 0 (Rosenbarger, Ruff out of the room)"). When a
+  side's name-list length differs from its count, or any token is not
+  name-shaped, the names are dropped (tally stands) with a note.
 - Disposition = the LAST motion in the item's scope that has a recorded
   roll-call vote and either carried, or — for an adoption motion — was
   tagged FAILED (a failed adoption IS the disposition). A moved-but-unvoted
@@ -82,6 +85,9 @@ _RESULT_RE = re.compile(
 _CONTINUED_DATE_RE = re.compile(
     r"(?:until|to\s+be\s+held\s+on)\b.*?\b([A-Z][a-z]+ \d{1,2}, \d{4})"
 )
+# Bare roll-call phrase, for the drift tripwire (a result the _RESULT_RE
+# frame failed to recognize must not vanish silently).
+_ROLL_CALL_TEXT_RE = re.compile(r"roll\s+call\s+vote", re.IGNORECASE)
 
 
 @dataclass
@@ -173,37 +179,65 @@ def _classify_result_desc(desc: str) -> str:
 
 
 def _associate_result(
-    desc: str, owner: MemoMotion, motions: list[MemoMotion]
+    desc: str, owner: MemoMotion, motions: list[MemoMotion], notes: list[str]
 ) -> Optional[MemoMotion]:
     """Pick the motion a result sentence belongs to — by classifying its
     description, NEVER by refs inside it (clerk typos put wrong refs there).
-    Returns None when no target can be defended (abstain-don't-guess)."""
+    Leaves a loud note and returns None when no target can be defended
+    (abstain-don't-guess)."""
     if not desc:
         return owner
     kind = _classify_result_desc(desc)
-    if kind == "amend":
-        unvoted = [m for m in motions if m.kind == "amend" and m.tally is None]
-        return unvoted[-1] if unvoted else None
-    # Same kind as the block owner and the owner still unvoted → the owner,
-    # whatever ref the desc names (July 22's "to discuss Ordinance 2026-13"
-    # typo inside 2026-15's discuss block). "unknown" never equals anything.
+    # Owner match comes FIRST — it is load-bearing: an amendment's own
+    # result must settle its own (block-owning) amend motion. Were the
+    # amend fallback checked first, two amendments in one item would hand
+    # each block's result to the OTHER amendment (last-unvoted), swapping
+    # tallies. Same rule keeps July 22's "to discuss Ordinance 2026-13"
+    # typo on 2026-15's discuss motion, whatever ref the desc names.
+    # "unknown" never equals anything.
     if kind != "unknown" and kind == owner.kind and owner.tally is None:
         return owner
-    if kind == "adopt":
+    if kind == "amend":
+        # Only amendment results stranded in a FOREIGN block reach this
+        # fallback; with several unvoted amend motions the claim is
+        # ambiguous — abstain.
+        unvoted = [m for m in motions if m.kind == "amend" and m.tally is None]
+        if len(unvoted) == 1:
+            return unvoted[0]
+        if unvoted:
+            notes.append(
+                f"result desc {desc[:120]!r} could claim {len(unvoted)} unvoted "
+                f"amendment motions — dropped (ambiguous)"
+            )
+            return None
+    elif kind == "adopt":
         # "to adopt <ref> as amended" lands after the amendment vote, in the
         # amendment's block — it settles the pending unvoted adoption motion.
         unvoted = [m for m in motions if m.kind == "adopt" and m.tally is None]
-        return unvoted[-1] if unvoted else None
+        if unvoted:
+            return unvoted[-1]
+    notes.append(f"result sentence matches no pending motion (dropped): {desc[:120]!r}")
     return None
 
 
+# _NAME with the second char optional: vote lists may carry initials ("A")
+# alongside surnames; used to reject annotation prose ("Ruff out of the
+# room") that comma-splits into a count-matching token.
+_NAME_TOKEN_RE = re.compile(r"[A-Z][\w'’.-]*(?:\s[A-Z][\w'’.-]*)?")
+
+
 def _guarded_names(names: list[str], count: int, side: str, notes: list[str]) -> list[str]:
-    # Quorum annotations ride zero sides ("Abstain: 0 (Rosenbarger, Ruff
-    # out of the room)") — a name list that disagrees with its count is not
-    # a vote record. Keep the tally, drop the names.
-    if names and len(names) != count:
+    # Quorum annotations ride the sides ("Abstain: 0 (Rosenbarger, Ruff
+    # out of the room)") — a name list that disagrees with its count, or
+    # that holds a non-name-shaped token, is not a vote record. Keep the
+    # tally, drop the names.
+    if names and (
+        len(names) != count
+        or not all(_NAME_TOKEN_RE.fullmatch(n) for n in names)
+    ):
         notes.append(
-            f"{side} names {names!r} disagree with count ({count}) — names dropped"
+            f"{side} names {names!r} fail the names/count guard "
+            f"(count {count}) — names dropped"
         )
         return []
     return names
@@ -268,21 +302,32 @@ def _parse_motions(scope_text: str, notes: list[str]) -> list[MemoMotion]:
     # vote). Results are matched in scope order so earlier ones consume
     # their targets before later ones look for pending unvoted motions.
     for owner, block in zip(motions, blocks):
+        n_results = 0
         for roll in _RESULT_RE.finditer(block):
+            n_results += 1
             desc = roll.group("desc").strip()
-            target = _associate_result(desc, owner, motions)
+            target = _associate_result(desc, owner, motions, notes)
             if target is None:
-                notes.append(
-                    f"result sentence matches no pending motion (dropped): {desc[:120]!r}"
-                )
-                continue
+                continue  # _associate_result left the note
             if target.tally is not None:
                 notes.append(
-                    f"result sentence would overwrite a recorded vote (dropped): "
-                    f"{desc[:120]!r}"
+                    f"result sentence (Ayes {roll.group('ayes')}, "
+                    f"Nays {roll.group('nays')}, Abstain {roll.group('abstain')}) "
+                    f"would overwrite the recorded vote on "
+                    f"{target.raw_text[:80]!r} — dropped"
                 )
                 continue
             _apply_result(target, roll, notes)
+        # Drift tripwire: v1 matched ANY bare roll-call text; the stricter
+        # result frame must never fail silently (e.g. a desc containing
+        # "U.S." breaks the no-period bound). Each parsed result consumes
+        # exactly one "roll call vote" phrase — a surplus means phrasing
+        # the frame did not recognize.
+        if len(_ROLL_CALL_TEXT_RE.findall(block)) > n_results:
+            notes.append(
+                "roll-call text without a parsed result sentence — template "
+                f"drift? block: {block[:120]!r}"
+            )
     return motions
 
 
