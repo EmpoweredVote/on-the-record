@@ -1492,6 +1492,133 @@ def probe_diarize_tuning(
 
 
 @app.function(
+    image=pyannote_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    # Measured: GPU tier does not matter for this workload (the dominant cost
+    # is single-threaded CPU clustering), so take the cheap card. Chunking is
+    # what buys the speedup — see docs/superpowers/plans/2026-07-31-chunked-
+    # parallel-diarization.md.
+    gpu="L4",
+    timeout=60 * 60,
+)
+def diarize_chunk_window(
+    meeting_id: str,
+    start_s: float,
+    end_s: float,
+    overlap_s: float = 60.0,
+    window_index: int = 0,
+) -> str:
+    """Diarize ONE overlapping window of a meeting; return turns + centroids.
+
+    Reads only `[start_s - overlap_s, end_s + overlap_s]` out of the volume
+    WAV (soundfile start/frames — no full-file load, no re-upload). Turns are
+    returned over the ENTIRE read window in ABSOLUTE meeting time, UNCLIPPED
+    (only sub-50ms slivers are dropped) — the local orchestrator's
+    `src.speaker_reconcile.reconcile_chunks` needs turns inside the overlap
+    region from both neighbouring windows to match speakers temporally, and
+    it clips ownership to the overlap midpoint itself. Centroids and
+    speech_seconds are computed over the CANONICAL span `[start_s, end_s)`
+    only, so overlap audio can inform matching but never shapes the
+    voiceprint of a speaker a neighbouring window owns.
+
+    Returns JSON: {"window_index", "window_start_s", "window_end_s",
+    "turns": [[start, end, label], ...], "centroids": {label: [float, ...]},
+    "speech_seconds": {label: float}, "elapsed_s": float}, all times in
+    ABSOLUTE meeting seconds.
+    """
+    import json as _json
+    import os
+    import time as _time
+
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from pyannote.audio import Inference, Model, Pipeline
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(
+            f"Audio not found in Modal volume: {wav_path}. "
+            "Run src.modal_compute.upload_audio() first."
+        )
+
+    info = sf.info(str(wav_path))
+    sr = info.samplerate
+    read_start = max(0.0, start_s - overlap_s)
+    read_end = min(info.frames / sr, end_s + overlap_s)
+    frames = int((read_end - read_start) * sr)
+    samples, _ = sf.read(
+        str(wav_path), start=int(read_start * sr), frames=frames, dtype="float32"
+    )
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+
+    device = torch.device("cuda")
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1", token=os.environ["HF_TOKEN"]
+    )
+    pipeline.to(device)
+
+    t0 = _time.time()
+    waveform = torch.tensor(samples, dtype=torch.float32).unsqueeze(0)
+    diarization = pipeline({"waveform": waveform, "sample_rate": sr})
+    elapsed = _time.time() - t0
+
+    # Window-relative -> absolute. No clipping to the canonical span: the
+    # reconciler owns boundary resolution via overlap-midpoint ownership.
+    turns: list[tuple[float, float, str]] = []
+    for rel_start, rel_end, speaker in _annotation_to_turns(diarization):
+        abs_start = read_start + rel_start
+        abs_end = read_start + rel_end
+        if abs_end - abs_start > 0.05:  # drop slivers
+            turns.append((round(abs_start, 3), round(abs_end, 3), str(speaker)))
+
+    # Canonical-span-only speech seconds and centroids: overlap audio informs
+    # matching but must not shape a voiceprint or duration weight owned by a
+    # neighbouring window.
+    speech_seconds: dict[str, float] = {}
+    for start, end, label in turns:
+        c0 = max(start, start_s)
+        c1 = min(end, end_s)
+        if c1 > c0:
+            speech_seconds[label] = speech_seconds.get(label, 0.0) + (c1 - c0)
+
+    emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
+    inference = Inference(emb_model, window="whole", device=device)
+    per_speaker: dict[str, list] = {}
+    for start, end, label in turns:
+        c0 = max(start, start_s)
+        c1 = min(end, end_s)
+        if c1 - c0 < 0.3:  # too little canonical audio to embed
+            continue
+        i0 = int((c0 - read_start) * sr)
+        i1 = int((c1 - read_start) * sr)
+        clip = samples[i0:i1]
+        if len(clip) < int(sr * 0.3):
+            continue
+        wf = torch.tensor(clip, dtype=torch.float32).unsqueeze(0).to(device)
+        per_speaker.setdefault(label, []).append(inference({"waveform": wf, "sample_rate": sr}))
+    centroids = {
+        label: np.mean(vectors, axis=0).tolist()
+        for label, vectors in per_speaker.items()
+    }
+
+    print(f"  [chunk {window_index} @ {start_s:.0f}-{end_s:.0f}s "
+          f"(read {read_start:.0f}-{read_end:.0f}s)] {len(turns)} turns, "
+          f"{len(centroids)} speakers, {elapsed:.1f}s")
+    return _json.dumps({
+        "window_index": window_index,
+        "window_start_s": read_start,
+        "window_end_s": read_end,
+        "turns": turns,
+        "centroids": centroids,
+        "speech_seconds": speech_seconds,
+        "elapsed_s": round(elapsed, 1),
+    })
+
+
+@app.function(
     image=pyannote_merged_image,  # has cs_src for merge.py
     volumes={VOLUME_PATH: volume},
     secrets=[hf_secret],
