@@ -95,8 +95,8 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 DIARIZE_CHUNK_MINUTES = 0
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # Cosine similarity required to call a chunk-local speaker the same person as
-# an already-seen global speaker. Same scale as SPEAKER_MERGE_THRESHOLD.
-CHUNK_STITCH_THRESHOLD = 0.80
+# an already-seen global speaker. The single source of truth for this is
+# src.speaker_reconcile.EMBEDDING_MATCH_THRESHOLD, not a config knob here.
 
 # --- Post-identification segment merging ---
 SEGMENT_MERGE_GAP = 2.0  # merge adjacent same-speaker segments with gap < this (seconds)
