@@ -1349,7 +1349,11 @@ def pipeline_extract_embeddings(meeting_id: str, segments_json: str) -> str:
     image=pyannote_merged_image,  # has cs_src for merge.py
     volumes={VOLUME_PATH: volume},
     secrets=[hf_secret],
-    gpu="L4",
+    # A100 over L4: the July 22 run took ~46 min wall-clock on L4 for a ~3h
+    # meeting; an A100 is a 2-4x speedup on this workload for ~$2.10/hr vs
+    # $0.80/hr — still well under $2/meeting. The bench model functions above
+    # stay on L4 so their recorded $/run comparisons remain apples-to-apples.
+    gpu="A100",
     timeout=60 * 60 * 2,
 )
 def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
@@ -1389,6 +1393,7 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
 
     t0 = time.time()
     diarization = pipeline(str(wav_path))
+    t_diarize = time.time() - t0
     turns = _annotation_to_turns(diarization)
 
     # Convert to plain dicts (no Segment dataclass dependency here).
@@ -1405,6 +1410,7 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
     ]
 
     # --- Extract per-speaker centroid embeddings ---
+    t1 = time.time()
     emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
     inference = Inference(emb_model, window="whole", device=device)
 
@@ -1427,8 +1433,10 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
         label: np.mean(vecs, axis=0).tolist()
         for label, vecs in embs_per_speaker.items()
     }
+    t_embed = time.time() - t1
 
     # --- Optional speaker merge (mirrors src/merge.py logic) ---
+    t2 = time.time()
     if use_merge:
         sys.path.insert(0, "/root")
         from cs_src.merge import merge_similar_speakers
@@ -1460,7 +1468,17 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
         ]
         centroids = {k: v.tolist() for k, v in merged_centroids.items()}
 
+    t_merge = time.time() - t2
+
+    # Stage timing breakdown (issue: is the pipeline or the serial
+    # per-segment embedding loop the wall-clock hog?) — read these off the
+    # streamed logs of the next run before optimizing further.
     elapsed = time.time() - t0
+    print(f"  [timing] diarization pipeline: {t_diarize:.1f}s")
+    print(f"  [timing] embedding extraction: {t_embed:.1f}s "
+          f"({len(segments_data)} segments)")
+    if use_merge:
+        print(f"  [timing] speaker merge: {t_merge:.1f}s")
     print(f"  Diarization + embeddings done in {elapsed:.1f}s "
           f"({len(segments_data)} segments, {len(centroids)} speakers)")
 
