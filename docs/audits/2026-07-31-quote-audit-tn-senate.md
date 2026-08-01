@@ -1,0 +1,74 @@
+# Quote Audit — U.S. Senate Tennessee (TN, 2026-08-06)
+
+**22 findings** — 16 high, 6 medium, 0 low
+
+## Summary by race
+- **race b6eaaf04-8901-43bb-b682-69f24d23f976** — 22 findings (16 high, 6 med, 0 low)
+
+## race b6eaaf04-8901-43bb-b682-69f24d23f976
+- `high` · `decision-required` · **source-summary** (quote) — Civil Miller-Watkins / abortion [664893db-b211-4532-a515-d65d6ac32320]
+    - deidentified_text/quote_text is 'A Woman's Right to Choose' — reads as a webpage section heading/slogan from civil4tn.com, not a verbatim first-person sentence the candidate wrote asserting a position.
+    - fix: Pull the actual sentence(s) under this heading on the source page and re-quote from that verbatim text, or find a spoken source.
+- `high` · `decision-required` · **source-summary** (quote) — Kevin Lee McCants / healthcare [6c30b6c8-f051-4080-8a6b-89ef9f5a5066]
+    - deidentified_text/quote_text is 'healthcare control from employers to consumers' — lowercase, no verb, not a grammatical sentence; reads as a curator-paraphrased label from kevinleemccants.com rather than something the candidate wrote as a sentence.
+    - fix: Locate the actual sentence on the source site and re-quote verbatim.
+- `high` · `decision-required` · **source-summary** (quote) — Diana Onyejiaka / redistricting [d0973d70-34f0-46a0-b709-e05e46f96b9b]
+    - deidentified_text/quote_text is the bare noun phrase 'independent redistricting commission' — not a complete sentence the candidate wrote; looks like a curator-extracted term from the substack post rather than verbatim prose.
+    - fix: Re-quote the full sentence from the substack post where this phrase appears.
+- `high` · `decision-required` · **source-summary** (quote) — Civil Miller-Watkins / school-vouchers [eb013cf5-7b45-4896-85eb-b4403b7d81e3]
+    - deidentified_text/quote_text is 'Public Schools a First-Best-Choice' — same civil4tn.com page pattern as the abortion quote; reads as a section heading, not a sentence the candidate wrote.
+    - fix: Pull the actual sentence(s) under this heading and re-quote from verbatim text.
+- `high` · `decision-required` · **source-summary** (quote) — Diana Onyejiaka / voting-rights [86010f62-1a7f-43cb-a134-f189bcf23ef9]
+    - deidentified_text/quote_text is the fragment 'the right to vote in every form' — same substack source as the redistricting quote; not a complete sentence.
+    - fix: Re-quote the full sentence from the substack post where this phrase appears.
+- `high` · `guided` · **note-missing** (quote) — Civil Miller-Watkins / abortion [664893db-b211-4532-a515-d65d6ac32320]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Maria Brewer / healthcare [505da7f8-7922-4239-bfd1-3147268c7595]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Marquita Bradshaw / healthcare [449099e0-b278-4a13-a0ac-9c9cb403fb44]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Kevin Lee McCants / healthcare [6c30b6c8-f051-4080-8a6b-89ef9f5a5066]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **deid-dishonest** (quote) — Marquita Bradshaw / healthcare [449099e0-b278-4a13-a0ac-9c9cb403fb44]
+    - deidentified_text substitutes 'Tennesseans' → 'people' without the required [brackets] marking (quote_text: '...ensure Tennesseans going bankrupt...' → deidentified_text: '...ensure people going bankrupt...'). Per QUOTE-CURATION-PRINCIPLES §4.5, any substituted word must be bracketed.
+    - fix: Mark the substitution: '...ensure [people] going bankrupt from seeking needed medical care...'.
+- `high` · `guided` · **note-missing** (quote) — Marquita Bradshaw / immigration [316dbb0a-55f2-4b4c-be94-d17b501ddecf]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Diana Onyejiaka / redistricting [d0973d70-34f0-46a0-b709-e05e46f96b9b]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Civil Miller-Watkins / school-vouchers [eb013cf5-7b45-4896-85eb-b4403b7d81e3]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Maria Brewer / taxes [9e6cd27e-a3f8-46f8-9b3e-d026cfe6ce51]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Marquita Bradshaw / taxes [874aed3c-ab25-45a6-bc54-57236f6f4c96]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Diana Onyejiaka / voting-rights [86010f62-1a7f-43cb-a134-f189bcf23ef9]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / abortion [abortion]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Kevin Lee McCants / healthcare [6c30b6c8-f051-4080-8a6b-89ef9f5a5066]
+    - Quote argues for shifting healthcare control 'from employers to consumers' — a move away from employer-based coverage — which sits oddly against the candidate's value=4.0 chair text ('leave everyone else to employers and private insurance'). The quote's thrust reads closer to a value-5 consumer-directed/market position than a reinforcement of an employer-based value-4 stance.
+    - fix: Recheck whether the Compass value (4.0) matches this quote's actual direction, or whether a different quote better illustrates the value-4 stance.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / immigration [immigration]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / redistricting [redistricting]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / school-vouchers [school-vouchers]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / voting-rights [voting-rights]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
