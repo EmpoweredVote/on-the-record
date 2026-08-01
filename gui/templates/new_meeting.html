@@ -53,13 +53,13 @@
       <div class="fieldwrap" data-field="race">
         <label>Race — links the meeting to an essentials race
           <div class="race-search" id="f-race" data-search-url="/api/races/search">
-            <input type="text" id="f-race-input" placeholder="Search a race… (e.g. Governor, Senate)" autocomplete="off">
+            <input type="text" id="f-race-input" placeholder="Search a race… (e.g. KS governor GOP primary)" autocomplete="off">
             <div class="race-results" id="f-race-results"></div>
             <div class="race-chosen" id="f-race-chosen" hidden></div>
           </div>
           <input type="hidden" name="race_id" id="f-race-id">
           <input type="hidden" name="race_slug" id="f-race-slug">
-          <small class="help">Optional. Sets the race for publishing and adds it to the id/URL.</small>
+          <small class="help">Optional. Sets the race for publishing and adds it to the id/URL. Party primaries and the general are separate races — add "gop"/"dem" or "primary"/"general" to narrow.</small>
         </label>
       </div>
 
