@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=bDVP3yQUrJQ",
+    "event": "Hawai'i State of the State Address 2026 (Gov. Josh Green)",
+    "date": "2026-01-26",
+    "candidates_covered": ["Josh Green"],
+    "why": "35-minute prepared-remarks speech covering housing, homelessness, healthcare, cost of living, and climate/energy. Only mined Green via the Civil Beat written Q&A so far (tier 3/4, text); ingesting the transcript would let us pull verbatim, timestamped quotes from a stronger source tier (prepared remarks), especially for healthcare and climate-change topics that the Q&A only touches lightly."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=eOTQFMKDXu8",
+    "event": "Hawaii News Now Spotlight Now: \"Gov. Josh Green discusses immigration and health care in Hawaii\" (full episode)",
+    "date": "2026-01-27",
+    "candidates_covered": ["Josh Green"],
+    "why": "Tier-2 probed news interview specifically on immigration and healthcare — two topics (deportation/local-immigration, healthcare) not represented in our staged batch at all. Could not pull a transcript via web fetch (YouTube transcript not accessible outside the ingestion pipeline); worth ingesting to check for on-question, forward-looking Green quotes on either topic with a real timestamp deep-link."
+  },
+  {
+    "url": "https://www.hawaiinewsnow.com/2026/07/21/spotlight-now-gov-green-lt-gov-candidate-john-choi-discuss-hawaii-priorities/",
+    "event": "Hawaii News Now Spotlight Now: \"Gov. Green and Lt. Gov. Candidate John Choi discuss Hawaii priorities\"",
+    "date": "2026-07-21",
+    "candidates_covered": ["Josh Green"],
+    "why": "Article text only surfaces soundbites about the lieutenant-governor race and National Guard deployment (not usable as Compass position quotes — one is an attack-adjacent aside about an opponent's tone, not Green's own policy position). The segment is tagged as covering 'Hawaii priorities' more broadly, so the full video likely contains additional cost-of-living/housing remarks the article didn't excerpt. Could not locate a direct YouTube link in a bounded search (video not embedded in the fetched article HTML) — on-the-record would need to locate the actual video (Hawaii News Now video site or its YouTube channel) before ingesting."
+  }
+]

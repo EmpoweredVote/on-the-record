@@ -1,0 +1,30 @@
+{
+  "politician_name": "Philip Sarnecki",
+  "source_url": "https://www.youtube.com/watch?v=ZOYzHwRPWpk",
+  "topic_key": "data-centers",
+  "quotes": [
+    {
+      "text": "I don't believe the people in Johnson County should tell the people in Lincoln or Goodland whether or not they should have a data center, and vice versa. I think the people locally should decide. Our plan has parameters: no undue burden on water resources, no increase in electricity, and no eminent domain.",
+      "timestamp_seconds": 2829,
+      "editor_note": "Verbatim from the June 5, 2026 JCCC Republican gubernatorial debate (Debate Night in Kansas, moderator John Holt) — a tier-1 debate source. Cut an opening line naming Ty Masterson and calling him a 'career politician' responsible for data centers 'pouring in,' which read as attack-adjacent rather than his own position; the retained text is his own local-control mechanism, unchanged in substance. Source spells his name 'Sarnicki' in the auto-transcript — official filings and his campaign site use 'Sarnecki.' No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "For three straight years, … career politicians have promised property tax relief, and for three straight years, the people at home have received none. However, green energy wind farms, Panasonic, and foreign companies have all gotten property tax relief. … I would do both because you can't just do the appraisal — you have to cap the spending side as well.",
+      "topic_key": "taxes",
+      "timestamp_seconds": 3547,
+      "editor_note": "Verbatim from the same debate; the first … marks a dropped reference to Masterson by name (so the position reads as his own rather than naming an opponent), the second … cuts a line accusing Masterson of having lobbyists in his 'back pocket' — a character attack, not a policy critique. Answers the cap-appraisals-vs-vote-on-spending question with 'both.' No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "The Supreme Court is a massive issue. … Until we change the makeup of that court, nothing is going to pass muster with them, but anything that will reduce the number of abortions, I will sign as governor.",
+      "topic_key": "abortion",
+      "timestamp_seconds": 4173,
+      "editor_note": "Verbatim from the same debate (… cuts a description of the current court's makeup and the ballot amendment on judicial selection, kept out as background rather than his abortion position). States a clear forward commitment: sign any bill that would reduce abortions, pending a court makeup that would uphold it. No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "The largest deal ever done in the history of sports stadiums was $1.2 billion, by the Tennessee Titans; our state is giving the Chiefs about $3 billion to do this deal. Missouri had about $1.4 billion on the table. We could have done a lot better in negotiating the deal.",
+      "topic_key": "economic-development",
+      "timestamp_seconds": 3281,
+      "editor_note": "Verbatim, one contiguous answer, from the same debate's Chiefs-stadium-deal segment (a moderator follow-up about the Chiefs' economic benefit precedes it, so this is his full answer to that follow-up). Frames a distinct position from the other debate participants: not opposed to the deal itself, but to how it was negotiated relative to Missouri's competing offer. No Compass stance on file yet for this new candidate; judgment call flagged for a human reviewer, same as for the other debate participants on this topic."
+    }
+  ]
+}

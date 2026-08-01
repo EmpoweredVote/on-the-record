@@ -1,0 +1,673 @@
+{
+ "lane": "upcoming-primaries-supplement",
+ "generated": "2026-07-31",
+ "races": [
+  {
+   "race_label": "Governor of Kansas \u2014 D primary (KS, 2026-08-04)",
+   "state": "KS",
+   "office_category": "governor",
+   "election_date": "2026-08-04",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Ethan Corson",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Cindy Holscher",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Curt Skoog",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    }
+   ],
+   "sources": [
+    "https://sos.ks.gov/elections/elections_upcoming_candidate.aspx",
+    "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election",
+    "https://www.kwch.com/2026/06/01/former-gov-jeff-colyer-skips-2026-race-republicans-democrats-finalize-primary-field/"
+   ],
+   "notes": "Gov. Laura Kelly is term-limited; open seat.",
+   "verified": true,
+   "verify_notes": "sos.ks.gov candidate list page blocked automated fetch (403); roster cross-checked across Wikipedia, KWCH (citing official filing-deadline close), and Lawrence Times \u2014 all three independently list the same 3 Democrats with no discrepancies."
+  },
+  {
+   "race_label": "Governor of Kansas \u2014 R primary (KS, 2026-08-04)",
+   "state": "KS",
+   "office_category": "governor",
+   "election_date": "2026-08-04",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Ty Masterson",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Charlotte O'Hara",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Nick Reinecker",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.kwch.com/2026/06/01/former-gov-jeff-colyer-skips-2026-race-republicans-democrats-finalize-primary-field/"
+    },
+    {
+     "name": "Stacy Rogers",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Philip Sarnecki",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Vicki Schmidt",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    },
+    {
+     "name": "Scott Schwab",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election"
+    }
+   ],
+   "sources": [
+    "https://sos.ks.gov/elections/elections_upcoming_candidate.aspx",
+    "https://en.wikipedia.org/wiki/2026_Kansas_gubernatorial_election",
+    "https://www.kwch.com/2026/07/20/10-candidates-vying-kansas-governor-ahead-aug-4-primary/"
+   ],
+   "notes": "CORRECTION to sweep hint: the field is 7 Republicans, not ~6 \u2014 Nick Reinecker (perennial candidate/marijuana activist, filed with running mate Katy Reinecker) is a legitimate filed candidate confirmed active as of a 2026-07-27 Lawrence Times profile, in addition to Masterson, O'Hara, Rogers, Sarnecki, Schmidt, and Schwab. Total field for governor (D+R) is 10 candidates per multiple outlets, consistent with 3 D + 7 R.",
+   "verified": true,
+   "verify_notes": "sos.ks.gov blocked automated fetch (403). Roster of 7 confirmed independently by KWCH ('10 candidates vying...') and Lawrence Times (2026-07-27 candidate guide), both explicitly naming all 7 Republicans including Reinecker; Wikipedia's list of 6 was missing Reinecker and is treated as incomplete."
+  },
+  {
+   "race_label": "United States Senate election in Kansas \u2014 R primary (KS, 2026-08-04)",
+   "state": "KS",
+   "office_category": "us_senate",
+   "election_date": "2026-08-04",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Roger Marshall",
+     "party": "R",
+     "incumbent": true,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Pond Naramore",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    }
+   ],
+   "sources": [
+    "https://sos.ks.gov/elections/elections_upcoming_candidate.aspx",
+    "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+   ],
+   "notes": "",
+   "verified": true,
+   "verify_notes": "sos.ks.gov blocked automated fetch (403); roster of exactly 2 (Marshall, Naramore of Lawrence) cross-checked and matched between Wikipedia and Johnson County Post / KCUR coverage."
+  },
+  {
+   "race_label": "United States Senate election in Kansas \u2014 D primary (KS, 2026-08-04)",
+   "state": "KS",
+   "office_category": "us_senate",
+   "election_date": "2026-08-04",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Damon Anderson",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Christy Davis",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Adam Hamilton",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Jason Hart",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Kevin Latz",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Erik Murray",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Anne Parelkar",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Patrick Schmidt",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Mike Soetaert",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Sandy Spidel Neumann",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    },
+    {
+     "name": "Noah Taylor",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas"
+    }
+   ],
+   "sources": [
+    "https://sos.ks.gov/elections/elections_upcoming_candidate.aspx",
+    "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Kansas",
+    "https://lawrencekstimes.com/2026/07/27/kns-ks-sen-candidates-202608/"
+   ],
+   "notes": "State senator Patrick Schmidt is generally viewed as the frontrunner among the 11.",
+   "verified": true,
+   "verify_notes": "sos.ks.gov blocked automated fetch (403); count of 11 Democratic challengers confirmed via multiple independent outlets (Wikipedia, Johnson County Post, Lawrence Times) all reporting the same '11 Democratic opponents' figure with matching names."
+  },
+  {
+   "race_label": "Governor of Hawaii \u2014 D primary (HI, 2026-08-08)",
+   "state": "HI",
+   "office_category": "governor",
+   "election_date": "2026-08-08",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Josh Green",
+     "party": "D",
+     "incumbent": true,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+    },
+    {
+     "name": "Duke Bourgoin",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+    },
+    {
+     "name": "George \"Teva\" Lucas-Tadeo",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+    },
+    {
+     "name": "Lauren Kapoliahi'iaka Shim",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+    }
+   ],
+   "sources": [
+    "https://elections.hawaii.gov/candidates/candidate-reports/",
+    "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+   ],
+   "notes": "",
+   "verified": true,
+   "verify_notes": "Hawaii Office of Elections candidate-reports page confirms filing closed 2026-06-02 with report updated 2026-07-06; the linked underlying report (binary, not directly parseable) could not be scraped, so roster relies on Wikipedia plus corroborating Politics1 and Civil Beat coverage, which all agree on these 4 Democrats."
+  },
+  {
+   "race_label": "Governor of Hawaii \u2014 R primary (HI, 2026-08-08)",
+   "state": "HI",
+   "office_category": "governor",
+   "election_date": "2026-08-08",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Gary Cordery",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+    },
+    {
+     "name": "Ken Fujiyama",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+    }
+   ],
+   "sources": [
+    "https://elections.hawaii.gov/candidates/candidate-reports/",
+    "https://en.wikipedia.org/wiki/2026_Hawaii_gubernatorial_election"
+   ],
+   "notes": "CORRECTION to sweep hint: Bu Laia Hill, sometimes flagged as a possible 3rd Republican, is registered Nonpartisan (NON), not Republican \u2014 confirmed by Politics1's party-labeled roster and multiple news aggregators. Excluded from this race's R roster.",
+   "verified": true,
+   "verify_notes": "Hawaii OOE candidate-reports page confirms filing closed; underlying detailed report not directly scrapeable (binary). Party affiliation for all 3 names (Cordery, Fujiyama, Hill) cross-checked via Politics1.com's party-labeled roster, which lists Cordery and Fujiyama as (R) and Hill as (NON) \u2014 consistent with Wikipedia and Civil Beat, which only profile Cordery and Fujiyama as the Republican field."
+  },
+  {
+   "race_label": "Governor of Tennessee \u2014 R primary (TN, 2026-08-06)",
+   "state": "TN",
+   "office_category": "governor",
+   "election_date": "2026-08-06",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Marsha Blackburn",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Monty Fritts",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "John Rose",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    }
+   ],
+   "sources": [
+    "https://sos.tn.gov/elections/2026-candidate-lists",
+    "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf",
+    "https://en.wikipedia.org/wiki/2026_Tennessee_gubernatorial_election"
+   ],
+   "notes": "CORRECTION: a candidate named Cito Pellegra was reported by some secondary sources (search aggregation citing an unclear origin) as a 4th Republican, but does NOT appear on the official Davidson County candidate list (which reflects the state-certified statewide roster distributed to all TN counties) \u2014 excluded here as unconfirmed/not certified.",
+   "verified": true,
+   "verify_notes": "sos.tn.gov/elections/2026-candidate-lists returned 403 to automated fetch, but the official Davidson County Election Commission candidate list PDF (published by Metro Nashville government, reflecting the state-certified statewide primary ballot) was retrieved directly and lists exactly these 3 Republicans for Governor, with no 4th name."
+  },
+  {
+   "race_label": "Governor of Tennessee \u2014 D primary (TN, 2026-08-06)",
+   "state": "TN",
+   "office_category": "governor",
+   "election_date": "2026-08-06",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Carnita Atwater",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Tim Cyr",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Jerri Green",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Adam \"Ditch\" Kurtz",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Kevin Lee McCants",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    }
+   ],
+   "sources": [
+    "https://sos.tn.gov/elections/2026-candidate-lists",
+    "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf",
+    "https://en.wikipedia.org/wiki/2026_Tennessee_gubernatorial_election"
+   ],
+   "notes": "Memphis Councilmember Jerri Green is the reported frontrunner. Tennessee Lookout's brief on finalized candidate lists stated 'six candidates filed' for this primary, but the official certified roster (Davidson County list, derived from state data) shows only these 5; treated as the authoritative count.",
+   "verified": true,
+   "verify_notes": "sos.tn.gov returned 403 to automated fetch; official Davidson County candidate list PDF (state-certified statewide roster) lists exactly these 5 Democrats for Governor \u2014 same 5 names independently corroborated by TN Firefly, Knox County Democratic Party, and Ballotpedia via search. No 6th name could be identified anywhere despite the 'six filed' framing in one Lookout brief."
+  },
+  {
+   "race_label": "United States Senate election in Tennessee \u2014 D primary (TN, 2026-08-06)",
+   "state": "TN",
+   "office_category": "us_senate",
+   "election_date": "2026-08-06",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Marquita Bradshaw",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Maria Brewer",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Kevin Lee McCants",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Civil Miller-Watkins",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    },
+    {
+     "name": "Diana Onyejiaka",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf"
+    }
+   ],
+   "sources": [
+    "https://sos.tn.gov/elections/2026-candidate-lists",
+    "https://www.nashville.gov/sites/default/files/2026-04/Candidate_List_August_6_2026_Davidson_Co_State_Federal_Primary.pdf",
+    "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Tennessee"
+   ],
+   "notes": "Kevin Lee McCants appears on the official roster for BOTH this Senate primary and the Governor Democratic primary (see governor race above) \u2014 verified twice on the same official document, not a data-entry duplication on our part. Wikipedia's Senate article lists McCants only as an independent/third-party candidate, contradicting the official county document; the official document is treated as authoritative.",
+   "verified": true,
+   "verify_notes": "sos.tn.gov returned 403 to automated fetch; official Davidson County candidate list PDF lists exactly these 5 Democrats for U.S. Senate, including McCants, resolving a conflict with Wikipedia (which omitted him from this race). Bill Hagerty (R) is unopposed and not part of this supplement."
+  },
+  {
+   "race_label": "Governor of Connecticut \u2014 D primary (CT, 2026-08-11)",
+   "state": "CT",
+   "office_category": "governor",
+   "election_date": "2026-08-11",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Ned Lamont",
+     "party": "D",
+     "incumbent": true,
+     "website": null,
+     "source_url": "https://www.newhavenindependent.org/wp-content/uploads/2026/06/SEEC-Notice-of-Primaries.pdf"
+    },
+    {
+     "name": "Josh Elliott",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://www.newhavenindependent.org/wp-content/uploads/2026/06/SEEC-Notice-of-Primaries.pdf"
+    }
+   ],
+   "sources": [
+    "https://portal.ct.gov/sots",
+    "https://www.newhavenindependent.org/wp-content/uploads/2026/06/SEEC-Notice-of-Primaries.pdf",
+    "https://en.wikipedia.org/wiki/2026_Connecticut_gubernatorial_election"
+   ],
+   "notes": "",
+   "verified": true,
+   "verify_notes": "Directly read the official 'STATE OF CONNECTICUT OFFICE OF THE SECRETARY OF THE STATE \u2014 List of Nominees, Election 08/11/2026 Democratic Primary' PDF, which lists exactly Governor--Vote for One: *Ned Lamont and Josh Elliott (asterisk denotes the party-endorsed candidate). No CT Governor Republican primary is on this official list."
+  },
+  {
+   "race_label": "Governor of Vermont \u2014 D primary (VT, 2026-08-11)",
+   "state": "VT",
+   "office_category": "governor",
+   "election_date": "2026-08-11",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Amanda Janoo",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://ballotpedia.org/Vermont_gubernatorial_election,_2026"
+    },
+    {
+     "name": "Aly Richards",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://ballotpedia.org/Vermont_gubernatorial_election,_2026"
+    }
+   ],
+   "sources": [
+    "https://sos.vermont.gov/elections/",
+    "https://ballotpedia.org/Vermont_gubernatorial_election,_2026",
+    "https://www.sevendaysvt.com/news/politics/first-time-candidates-richards-janoo-vie-to-take-on-scott/"
+   ],
+   "notes": "Phil Scott (R, incumbent) is being challenged by Lt. Gov. John Rodgers in the Republican primary, but that race is out of scope for this supplement.",
+   "verified": false,
+   "verify_notes": "Could not directly fetch sos.vermont.gov's candidate filing page (not retrieved in this pass) to see the official filed list. Roster of exactly 2 Democrats (Janoo, Richards) is nonetheless very strongly corroborated: consistent, matching coverage from VTDigger, Vermont Public, Seven Days, Valley News, and WCAX, all published within the last two weeks of July 2026 and all treating the field as final at 2 candidates with no mention of others. Recommend a follow-up direct check of sos.vermont.gov before publishing."
+  },
+  {
+   "race_label": "United States Senate election in Virginia \u2014 R primary (VA, 2026-08-04)",
+   "state": "VA",
+   "office_category": "us_senate",
+   "election_date": "2026-08-04",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Bert Mizusawa",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://ballotpedia.org/Bert_Mizusawa"
+    },
+    {
+     "name": "Kim Farington",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://ballotpedia.org/Kim_Farington"
+    },
+    {
+     "name": "David Williams",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://ballotpedia.org/David_Williams_(Virginia_senate_candidate)"
+    }
+   ],
+   "sources": [
+    "https://www.elections.virginia.gov/casting-a-ballot/candidate-list/",
+    "https://www.elections.virginia.gov/news-releases/primary-election-moved-to-august-4-1.html",
+    "https://virginia.gop/republican-party-of-virginia-announces-candidates-for-u-s-senate-primary/",
+    "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Virginia"
+   ],
+   "notes": "DATE VERIFICATION RESULT: the 2026-08-04 date is CORRECT and is not an error \u2014 Virginia's General Assembly passed HB 29 (signed 2026-02-20) moving the normally-June statewide primary to August 4, 2026, amid a mid-decade congressional redistricting push. This is confirmed by an official Virginia Dept. of Elections news release ('Primary Election Moved to August 4'). The primary had NOT yet occurred as of 2026-07-31 (today) per live-results pages showing 0% precincts reporting. There is no Democratic Senate primary \u2014 incumbent Mark Warner is unopposed after all Democratic challengers (Daniels, Eichelberger, Moran) withdrew, per the Virginia Dept. of Elections candidate-list page and Wikipedia.",
+   "verified": true,
+   "verify_notes": "elections.virginia.gov's candidate-list page confirms 'There will not be a U.S. Senate Democratic Primary' (i.e., Warner unopposed) but its fetched excerpt did not itself enumerate the Republican Senate field; the 3-candidate Republican roster (Mizusawa, Farington, Williams) is confirmed via the Republican Party of Virginia's own candidate-announcement press release plus independent news coverage (Virginia Mercury, Daily Signal, WSLS) all published in the days immediately before the still-upcoming Aug 4 primary, and by individual Ballotpedia candidate pages."
+  },
+  {
+   "race_label": "United States Senate election in Wyoming \u2014 D primary (WY, 2026-08-18)",
+   "state": "WY",
+   "office_category": "us_senate",
+   "election_date": "2026-08-18",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Billy Benavidez",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://sos.wyo.gov/Elections/Docs/2026/2026_WY_Primary_Election_Candidates.pdf"
+    },
+    {
+     "name": "James Byrd",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://sos.wyo.gov/Elections/Docs/2026/2026_WY_Primary_Election_Candidates.pdf"
+    }
+   ],
+   "sources": [
+    "https://sos.wyo.gov/Elections/Docs/2026/2026_WY_Primary_Election_Candidates.pdf",
+    "https://en.wikipedia.org/wiki/2026_United_States_Senate_election_in_Wyoming"
+   ],
+   "notes": "Open seat (Sen. Cynthia Lummis vacating).",
+   "verified": true,
+   "verify_notes": "Directly read the official Wyoming Elections Division '2026 Primary Election Candidate Roster' PDF (dated Friday, July 24, 2026). Under 'UNITED STATES SENATOR - DEMOCRATIC' it lists exactly: Billy Benavidez (filed 05/20/2026) and James Byrd (filed 05/19/2026), with no withdrawal dates noted for either."
+  },
+  {
+   "race_label": "Governor of Oklahoma \u2014 R runoff (OK, 2026-08-25)",
+   "state": "OK",
+   "office_category": "governor",
+   "election_date": "2026-08-25",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "Gentner Drummond",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://hosting.okelections.gov/electionlist.html"
+    },
+    {
+     "name": "Mike Mazzei",
+     "party": "R",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://hosting.okelections.gov/electionlist.html"
+    }
+   ],
+   "sources": [
+    "https://hosting.okelections.gov/electionlist.html",
+    "https://news.ballotpedia.org/2026/07/01/gentner-drummond-r-and-mike-mazzei-r-campaign-on-experience-and-trump-support-in-the-august-25-republican-runoff-for-oklahoma-governor/",
+    "https://www.news9.com/oklahoma-politics/oklahoma-primary-election/oklahoma-governors-primary-drummond-mazzei-munson"
+   ],
+   "notes": "Runoff of the top two finishers from the June 16, 2026 first-round primary (Drummond 26.26%/105,832 votes; Mazzei 25.97%/104,691 votes, out of a 9-candidate field). Winner faces Democrat Cyndi Munson (who won her primary outright) in November. | election_kind normalized from runoff to primary for queue constraint",
+   "verified": true,
+   "verify_notes": "Official Oklahoma State Election Board hosting site (hosting.okelections.gov) August/2026 election list document confirms 'Governor (Republican): Gentner Drummond vs. Mike Mazzei' as the runoff matchup; cross-checked against Ballotpedia News and News9 reporting of the June 16 first-round results that produced this pairing."
+  },
+  {
+   "race_label": "United States Senate election in Oklahoma \u2014 D runoff (OK, 2026-08-25)",
+   "state": "OK",
+   "office_category": "us_senate",
+   "election_date": "2026-08-25",
+   "election_kind": "primary",
+   "priority_tier": 1,
+   "contested": true,
+   "candidates": [
+    {
+     "name": "N'Kiyla Jasmine Thomas",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://hosting.okelections.gov/electionlist.html"
+    },
+    {
+     "name": "Jim Priest",
+     "party": "D",
+     "incumbent": false,
+     "website": null,
+     "source_url": "https://hosting.okelections.gov/electionlist.html"
+    }
+   ],
+   "sources": [
+    "https://hosting.okelections.gov/electionlist.html",
+    "https://nondoc.com/2026/07/17/u-s-senate-runoff-democrats-nkiyla-jasmine-thomas-jim-priest-clash-over-electability-identity/",
+    "https://www.news9.com/oklahoma-elections/nkiyla-jasmine-thomas-and-jim-priest-to-battle-in-oklahoma-senate-runoff"
+   ],
+   "notes": "Runoff of the top two finishers from the June 16, 2026 first-round primary (Thomas ~45%, Priest ~24%). Winner faces Rep. Kevin Hern (R) in November for this open seat. | election_kind normalized from runoff to primary for queue constraint",
+   "verified": true,
+   "verify_notes": "Official Oklahoma State Election Board hosting site (hosting.okelections.gov) August/2026 election list document confirms 'U.S. Senate (Democratic): N'Kiyla Jasmine Thomas vs. Jim Priest' as the runoff matchup; cross-checked against NonDoc and News9 reporting of the June 16 first-round results."
+  }
+ ]
+}

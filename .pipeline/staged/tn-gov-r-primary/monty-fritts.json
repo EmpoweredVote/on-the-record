@@ -1,0 +1,21 @@
+{
+  "politician_name": "Monty Fritts",
+  "topic_key": "school-vouchers",
+  "source_url": "https://www.wvlt.tv/2026/07/24/tennessee-gop-governor-candidates-education-public-safety-immigration/",
+  "quotes": [
+    {
+      "text": "I intend to cancel the school voucher program. I think it's unconstitutional.",
+      "editor_note": "From a WVLT sit-down interview alongside his two primary opponents (2026-07-23) on school choice; Fritts is the only one of the three who would end the Education Freedom Scholarship program, citing the Tennessee Constitution's education article, against Blackburn's and Rose's expansion stances in the same interview. Verbatim, no edits."
+    },
+    {
+      "text": "I am a deport all illegals person.",
+      "topic_key": "deportation",
+      "editor_note": "From the same WVLT sit-down interview, on how aggressively the state should pursue deportation; Fritts states an unequivocal deport-everyone stance, matching Blackburn's enforcement-first answer in the same segment. Dropped the leading filler word 'So' silently; otherwise verbatim."
+    },
+    {
+      "text": "We should not expect our National Guardsmen to spend their entire careers in Memphis.",
+      "topic_key": "public-safety-approach",
+      "editor_note": "From the same WVLT interview, on how the state should fund and operate public safety; Fritts argues the extended Memphis National Guard deployment isn't sustainable, implicitly calling for building permanent local capacity instead, contrasting with Rose's staffing-and-resources answer. Verbatim, no edits."
+    }
+  ]
+}

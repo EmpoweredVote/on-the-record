@@ -1,0 +1,142 @@
+[
+ {
+  "state": "MT",
+  "district": 1,
+  "contested": true,
+  "source": "https://ballotpedia.org/United_States_House_of_Representatives_elections_in_Montana,_2026"
+ },
+ {
+  "state": "MT",
+  "district": 2,
+  "contested": true,
+  "source": "https://ballotpedia.org/Montana's_2nd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NE",
+  "district": 1,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nebraska's_1st_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NE",
+  "district": 2,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nebraska's_2nd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NE",
+  "district": 3,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nebraska's_3rd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NV",
+  "district": 1,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nevada's_1st_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NV",
+  "district": 2,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nevada's_2nd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NV",
+  "district": 3,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nevada's_3rd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NV",
+  "district": 4,
+  "contested": true,
+  "source": "https://ballotpedia.org/Nevada's_4th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NH",
+  "district": 1,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Hampshire's_1st_Congressional_District_election,_2026",
+  "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
+ },
+ {
+  "state": "NH",
+  "district": 2,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Hampshire's_2nd_Congressional_District_election,_2026",
+  "verify_note": "corrected by verification 2026-07-31: CA top-two same-party pair / NH SOS filings show contested"
+ },
+ {
+  "state": "NJ",
+  "district": 1,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_1st_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 2,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_2nd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 3,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_3rd_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 4,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_4th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 5,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_5th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 6,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_6th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 7,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_7th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 8,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_8th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 9,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_9th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 10,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_10th_Congressional_District_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 11,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_11th_Congressional_District_special_election,_2026"
+ },
+ {
+  "state": "NJ",
+  "district": 12,
+  "contested": true,
+  "source": "https://ballotpedia.org/New_Jersey's_12th_Congressional_District_election,_2026"
+ }
+]

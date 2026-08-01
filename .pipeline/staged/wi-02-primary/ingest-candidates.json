@@ -1,0 +1,30 @@
+[
+  {
+    "url": "http://podcast.wclo.com/tsthub07302026.mp3",
+    "event": "WCLO 'Your Talk Show' — Congressional District Two Debate (Pocan phoned in, Alexander in-studio)",
+    "date": "2026-07-30",
+    "candidates_covered": ["Mark Pocan", "Douglas Alexander"],
+    "why": "Only tier-1 head-to-head debate found for this race — direct MP3 confirmed (found in page source, not just a player embed). Radio format, no transcript published; ingesting would let the transcript pipeline pull verbatim, timestamped quotes from both candidates across whatever topics the hosts raised, which is the single biggest potential unlock for this race's rankable-topic coverage."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=W4-PYt3rVLA",
+    "event": "Representative Mark Pocan Town Hall in Madison",
+    "date": "2025-01-29",
+    "candidates_covered": ["Mark Pocan"],
+    "why": "Full-length constituent town hall video (Madison Labor Temple, per the same event reported in Isthmus's Jan. 31, 2025 article). Likely covers Medicaid/Social Security, immigration enforcement, and other topics beyond what the news writeups excerpted. Too long to mine by hand here; a transcript ingest would surface additional on-question, forward-looking Pocan quotes with timestamps."
+  },
+  {
+    "url": "https://www.c-span.org/program/newsmakers/representative-mark-pocan/533568",
+    "event": "C-SPAN Newsmakers interview with Rep. Mark Pocan",
+    "date": null,
+    "candidates_covered": ["Mark Pocan"],
+    "why": "Tier-2 sit-down news interview; C-SPAN maintains video + closed captions. Page redirected to a paywall-style host (tollbit.c-span.org) that blocked automated fetch, so content wasn't mined here. Worth ingesting directly from C-SPAN's video/caption archive rather than the web page."
+  },
+  {
+    "url": "https://www.wortfm.org/rep-mark-pocan-discusses-iran-ukraine-and-growing-concerns-from-wisconsin-constituents/",
+    "event": "WORT-FM 89.9 interview with Rep. Mark Pocan (Iran, Ukraine, and constituent concerns)",
+    "date": null,
+    "candidates_covered": ["Mark Pocan"],
+    "why": "Local Madison community-radio interview; page returned HTTP 403 to automated fetch so neither the embedded audio nor a transcript could be pulled here. Likely touches domestic topics (the title mentions 'growing concerns from Wisconsin constituents') beyond the foreign-policy headline; worth ingesting audio directly if accessible to the pipeline."
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "politician_name": "Ty Masterson",
+  "source_url": "https://www.youtube.com/watch?v=ZOYzHwRPWpk",
+  "topic_key": "data-centers",
+  "quotes": [
+    {
+      "text": "Ultimately, the decision has to be made at the local level; the final state needs to rest there. They should provide for their own power or pay in excess for it. The key is to have no cost come off on any of the locals in the area, that they don't use resources unduly, and you would never allow for eminent domain for private usage.",
+      "timestamp_seconds": 2647,
+      "editor_note": "Verbatim (cut only a preamble about the US-China tech-competition context, so the quote now opens at a clean clause boundary) from the June 5, 2026 JCCC Republican gubernatorial debate (Debate Night in Kansas, moderator John Holt) — a tier-1 debate source. States his approach to data-center siting: decisions rest at the local level, with power self-sufficiency and no eminent domain for private use. No Compass stance on file yet for this new candidate; selected as his clearest, most mechanism-specific answer to the local-vs-state-control question."
+    },
+    {
+      "text": "All of the above — you have to do both. When you don't cap either the assessed value or the appraisal, you're taxing somebody on an unrealized gain. … Property tax is something that has to be tackled: you have to have a front door cap on the appraisals or assessed value, and you also have to let the voters stop outrageous spending.",
+      "topic_key": "taxes",
+      "timestamp_seconds": 3723,
+      "editor_note": "Verbatim from the same June 5, 2026 JCCC debate (…marks a cut anecdote about a neighbor's tax bill, kept out as supporting color rather than the claim itself). Answers the debate's cap-appraisals-vs-let-voters-block-spending multiple-choice question with 'both,' naming the concrete mechanism (front-door cap on assessed value plus voter power over spending). No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "We will continue whittling around the edges to save as many lives as we can through parental consent, informed consent, counseling, and funding pregnancy crisis centers to get more information to women so they'll make a different decision.",
+      "topic_key": "abortion",
+      "timestamp_seconds": 4342,
+      "editor_note": "Verbatim from the same debate; cut only an opening line touting his Kansans for Life endorsement (record/self-touting, not a position) so the quote starts at his actual forward statement. Names his specific incremental mechanisms (parental/informed consent, counseling, crisis-pregnancy-center funding) within the current legal framework. No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "It's about the jobs and the billions of investment, the hundreds of millions of new tax revenue coming in because our kids need opportunity. … We didn't have to raise a single tax to bring the NFL to Kansas.",
+      "topic_key": "economic-development",
+      "timestamp_seconds": 2975,
+      "editor_note": "Verbatim from the same debate's Chiefs-stadium-deal segment (… cuts a sentence about the Trump endorsement, kept out as scaffolding). His position on the ongoing STAR-bonds Chiefs deal doubles as his general approach to state-backed economic-development incentives — a live policy question he'd continue to own as governor, not mere record. No Compass stance on file yet for this new candidate; judgment call flagged for a human reviewer since it reads a current-deal defense as forward-looking philosophy."
+    }
+  ]
+}

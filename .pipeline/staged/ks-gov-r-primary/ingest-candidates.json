@@ -1,0 +1,58 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=ZOYzHwRPWpk",
+    "event": "\"Debate Night in Kansas\" — Republican gubernatorial primary debate, Johnson County Community College, moderated by FOX4's John Holt, aired by KSN TV/Nexstar and Republican Party of Kansas",
+    "date": "2026-06-05",
+    "candidates_covered": ["Ty Masterson", "Scott Schwab", "Charlotte O'Hara", "Philip Sarnecki"],
+    "why": "Primary source for 18 of the 21 quotes staged this pass (data-centers, taxes, abortion, transportation-priorities, economic-development — all four participants). We only had a third-party transcript (wichitaliberty.org, with rough mm:ss markers) to work from, not our own ingested transcript. Ingesting this video into meetings.segments would let the audit's source-verification checks (source-unverified, source-speaker-mismatch, source-timestamp-drift) confirm exact wording and timestamps against our own pipeline instead of relying on a third party's transcription, and would surface any additional on-question material we didn't mine this pass (e.g. the school-consolidation and medical-marijuana segments, which had no matching canonical topic_key this race and so were left unstaged)."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=oYpT2QAU2Eg",
+    "event": "WIBW/KWCH Republican gubernatorial forum (Kansas Republican Party co-sponsored), Topeka",
+    "date": "2026-07-09",
+    "candidates_covered": ["Scott Schwab", "Charlotte O'Hara", "Philip Sarnecki"],
+    "why": "Covered taxes, rural healthcare, data centers/solar farms, and marijuana legalization for three of our seven candidates. Not mined this pass — the only text coverage found (wibw.com, kwch.com articles) described the topics and format but did not reproduce any verbatim quotes, so this needs the transcript pipeline to extract anything usable. Would add a second tier-1 source for Schwab/O'Hara/Sarnecki and could unlock healthcare/marijuana topics that the June 5 debate covered too thinly to stage."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Ov5qEd4vqYA",
+    "event": "Kansas GOP convention gubernatorial debate #1 (first debate of the cycle)",
+    "date": "2026-01-30",
+    "candidates_covered": ["Ty Masterson", "Scott Schwab", "Charlotte O'Hara", "Philip Sarnecki"],
+    "why": "Earliest debate of the cycle; also included Jeff Colyer (withdrew) and Joy Eakins (a running mate, not a gubernatorial candidate in our roster), so only partially relevant to this race's active roster. Not mined this pass (bounded effort; the June 5 debate already gave 4-way coverage on 5 topics). Worth ingesting as a second/earlier data point for the four still-active candidates and to check for position drift between January and June."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=n6K1CS8frEM",
+    "event": "\"FULL INTERVIEW: Vicki Schmidt running for Kansas Governor\"",
+    "date": "unknown — 2026 campaign",
+    "candidates_covered": ["Vicki Schmidt"],
+    "why": "Schmidt did not appear in either GOP debate we found, and is the thinnest-covered major candidate in this batch (1 quote staged, and that one leans heavily on record before reaching a forward pledge — see the editor_note in vicki-schmidt.json). This full interview is the best lead we found for additional Schmidt material, but WebFetch could only retrieve YouTube's static footer chrome (JS-rendered page), not the description or a transcript, so content/length/date are unconfirmed. Needs the ingestion pipeline to pull it."
+  },
+  {
+    "url": "https://kvoe.com/2026/04/23/kansas-insurance-commissioner-vicki-schmidt-details-run-for-governor-during-kvoe-news-interview/",
+    "event": "KVOE News interview with Vicki Schmidt (audio, not video — embedded .wav clips titled schmidt-fiscal-hawk, schmidt-buy-down, schmidt-affordability, schmidt-pbms)",
+    "date": "2026-04-23",
+    "candidates_covered": ["Vicki Schmidt"],
+    "why": "Four distinct audio clips on fiscal policy/property tax relief, affordability, and healthcare/PBM policy — exactly the kind of on-record spoken material this race needs more of for Schmidt. Flagging even though it's audio rather than video in case the ingestion pipeline can take an audio source directly; if not, treat as a lead to search for a matching video/rebroadcast."
+  },
+  {
+    "url": "https://www.wibw.com/2026/07/21/election-2026-nick-reinecker-r-kansas-governor-candidate/",
+    "event": "WIBW \"Election 2026\" candidate interview — Nick Reinecker",
+    "date": "2026-07-21",
+    "candidates_covered": ["Nick Reinecker"],
+    "why": "Reinecker is covered in this batch only via a KCTV5 written compilation (2 quotes, no timestamps). This is a dedicated on-record video interview; the article text only described the interview's existence without reproducing quotes. Could add or corroborate his positions with a real timestamped source, and might surface additional topics (e.g. his cannabis-decriminalization position, mentioned in secondary coverage but never sourced to his own words this pass)."
+  },
+  {
+    "url": "https://www.kwch.com/video/2026/07/15/nick-reinecker-interview/",
+    "event": "KWCH candidate interview — Nick Reinecker (interviewer Dylan Domangue)",
+    "date": "2026-07-15",
+    "candidates_covered": ["Nick Reinecker"],
+    "why": "A second, earlier on-record video interview with Reinecker from a different station. Same rationale as the WIBW interview above — not mined this pass (JS-rendered video page, no transcript retrievable via WebFetch)."
+  },
+  {
+    "url": "https://www.wibw.com/2026/07/21/election-2026-stacy-rogers-r-kansas-governor-candidate/",
+    "event": "WIBW \"Election 2026\" candidate interview — Stacy Rogers",
+    "date": "2026-07-21",
+    "candidates_covered": ["Stacy Rogers"],
+    "why": "Rogers is the one candidate on this race's roster with no staged quotes at all. Every written source found for her (this WIBW piece, a KCTV5 economy Q&A, a KCTV5 Chiefs-deal Q&A) either withheld quotable text behind an embedded video or, where text was extracted, had her explicitly saying she hadn't settled on a position yet ('I don't know that I have the answer to that today... it's something I'm going to explore,' re: the Chiefs STAR bonds) or offering only vague process talk ('it's going to take a combination of multiple things,' re: property tax) with no stated mechanism of her own. This video is the highest-value unmined lead for her — if the interview contains an actual forward position, it would resolve her current absence from every topic in this race."
+  }
+]

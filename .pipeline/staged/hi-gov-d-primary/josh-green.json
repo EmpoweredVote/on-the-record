@@ -1,0 +1,22 @@
+{
+ "source_url": "https://www.civilbeat.org/2026/07/candidate-qa-governor-josh-green-2/",
+ "quotes": [
+  {
+   "text": "Housing is the heart of our affordability crisis, and the answer is to build. \u2026 My goal is deliberately ambitious. I want to build the affordable homes we need so our children do not have to leave home.",
+   "topic_key": "housing",
+   "editor_note": "Verbatim from Green's written Civil Beat 2026 primary Q&A answering what steps he'd take to make housing more affordable \u2014 a campaign Q&A (text, not video-verifiable); consistent with his build-more, deregulate-to-build approach to housing. Cut the middle sentences reciting his first-term proclamations and unit counts (record, not a forward position), marked with one ellipsis; the framing and forward-commitment sentences are otherwise untouched."
+  },
+  {
+   "text": "Prevention matters, too. That means rapid re-housing, mental health and addiction support, and building more affordable housing.",
+   "topic_key": "homelessness-response",
+   "editor_note": "Verbatim from Green's written Civil Beat 2026 Q&A on his strategy to reduce homelessness \u2014 a campaign Q&A (text, not video-verifiable); consistent with his service-expansion approach (kauhale villages, treatment, housing). The quote begins at a genuine sentence boundary after the preceding record recitation (unsheltered-homelessness statistics, village counts) was dropped, so no leading ellipsis is needed; otherwise verbatim."
+  },
+  {
+   "text": "Families here pay some of the highest electricity bills in the nation while we still burn imported oil from unreliable sources. That is why I have kept every option on the table to bring costs down and improve reliability, including using LNG as a bridge. It means less oil, lower bills, and fewer emissions than what we burn today, while we aggressively scale up solar, storage and renewables. The destination is 100% renewable. The bridge is simply how we protect families on the way there.",
+   "topic_key": "fossil-fuels",
+   "editor_note": "Verbatim from Green's written Civil Beat 2026 Q&A responding to Hawai'i's LNG-bridge question, which engages the same fossil-fuels-role axis as the Compass question but frames it locally; consistent with his all-of-the-above/bridge-fuel approach to lowering costs on the way to 100% renewable. No edits to the canonical quote.",
+   "deidentified": "Families here pay some of the highest electricity bills in the nation while we still burn imported oil from unreliable sources. [Every option should stay] on the table to bring costs down and improve reliability, including using LNG as a bridge. It means less oil, lower bills, and fewer emissions than what we burn today, while we aggressively scale up solar, storage and renewables. The destination is 100% renewable. The bridge is simply how we protect families on the way there."
+  }
+ ],
+ "politician_id": "76307cf7-47dd-4b0a-ac4b-ed218095bf47"
+}
