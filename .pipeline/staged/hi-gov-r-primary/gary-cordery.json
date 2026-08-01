@@ -1,0 +1,26 @@
+{
+  "politician_name": "Gary Cordery",
+  "source_url": "https://www.civilbeat.org/2026/07/candidate-qa-governor-gary-cordery-2/",
+  "quotes": [
+    {
+      "text": "We will employ many strategies to reduce the cost of housing. Utilizing state lands to provide 15k fee simple homes between 400k-600k.",
+      "topic_key": "housing",
+      "editor_note": "Verbatim, two contiguous sentences from Cordery's written Civil Beat 2026 Q&A answering what steps he'd take on housing affordability — a campaign Q&A (text, not video-verifiable). States a supply-side, state-land approach (building fee-simple homes on state land in the $400-600k range), a legible contrast with a demand-side or deregulation-only approach. No edits."
+    },
+    {
+      "text": "Yes, I am committed to these cuts. We will enhance tax relief beyond current measures.",
+      "topic_key": "taxes",
+      "editor_note": "Verbatim from Cordery's written Civil Beat 2026 Q&A committing to protect the 2026 income tax cuts and go further — a campaign Q&A (text, not video-verifiable). States a cut-taxes-further position on the tax/spending balance axis. No edits."
+    },
+    {
+      "text": "LNG is subject to global supply chains and costing taxpayers $1 billion. I am not necessarily opposed, but considering new technologies like Hydrogen, Fission and SNR's are solutions for the future.",
+      "topic_key": "fossil-fuels",
+      "editor_note": "Verbatim from Cordery's written Civil Beat 2026 Q&A responding to Hawai'i's LNG-bridge question, which engages the same fossil-fuels-role axis as the Compass question but frames it locally — a campaign Q&A (text, not video-verifiable). States an LNG-wary, technology-diversifying position (open to LNG short term but pushes hydrogen/fission/small-reactor tech as the real future), contrasting with a straightforward LNG-bridge or pure-renewables stance. No edits (his own spelling, 'SNR's', preserved verbatim)."
+    },
+    {
+      "text": "Remove department incentives which grow programs, then invest in the people. Incentivize work programs creating pathways to prosperity and dignity for all, including workforce participation for all who are able as a condition for entitlements.",
+      "topic_key": "homelessness-response",
+      "editor_note": "Verbatim from Cordery's written Civil Beat 2026 Q&A on his primary homelessness strategy — a campaign Q&A (text, not video-verifiable). States a work-requirement/conditional-entitlement approach. Currently the only qualifying quote staged on this topic for this race: Fujiyama's Q&A answer only describes the diversity of homeless people's needs without naming a comparable strategy of his own, so this topic is not yet rankable. Staged for the record rather than forcing a weak match on the other side."
+    }
+  ]
+}

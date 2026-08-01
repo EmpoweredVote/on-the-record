@@ -1,0 +1,16 @@
+[
+  {
+    "url": "https://www.youtube.com/playlist?list=PLgtCNXcKcBMw1ib6bnikLU60BpFAJCdxu",
+    "event": "\"Gary Cordery For Governor 2026\" YouTube playlist (campaign channel)",
+    "date": "2026",
+    "candidates_covered": ["Gary Cordery"],
+    "why": "Cordery's own campaign channel, reported to include a special online Town Hall plus other 2026 campaign videos. Only mined via the Civil Beat written Q&A so far (tier 4, text); a Town Hall is spoken, unprobed prepared remarks (tier 3) or better if it takes voter questions, and could add timestamped verbatim quotes on topics the Q&A only touches lightly (e.g. campaign-finance/corruption, climate change) that we could not stage from text alone this pass. Could not pull individual video titles/transcripts via web search/fetch — needs the ingestion pipeline to enumerate and mine."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Qdec6mPnzKE",
+    "event": "\"Gary Cordery for Governor of Hawaii\" — standalone YouTube video (likely part of the campaign playlist above)",
+    "date": "unknown — 2026 campaign",
+    "candidates_covered": ["Gary Cordery"],
+    "why": "Surfaced independently in search alongside the playlist; WebFetch could not retrieve YouTube's rendered title, description, or transcript (JS-rendered page, only footer nav returned), so content/length/date are unconfirmed. Flagging as an ingest candidate specifically because it is unminable outside the transcript pipeline."
+  }
+]

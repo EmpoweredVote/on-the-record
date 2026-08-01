@@ -1,0 +1,71 @@
+{
+  "race": "Governor of Kansas — D primary (KS, 2026-08-04)",
+  "race_id": "41cfa9f7-6cf3-4e79-abd9-2473492f8935",
+  "note": "Video/audio events identified during quote sourcing. None of these were mined for exact timestamps this pass (no confirmed &t= deep-link was verifiable), so all staged quotes cite the text article that covers them, with timestamp_seconds omitted. Listed here as ingest candidates for a future meetings.meetings-style transcript pass, which would let quotes deep-link to source video per QUOTE-CURATION-PRINCIPLES.md's source hierarchy.",
+  "events": [
+    {
+      "event": "FOX4/KSNT Kansas Democratic gubernatorial primary debate",
+      "date": "2026-07-31",
+      "candidates": ["Ethan Corson", "Cindy Holscher", "Curt Skoog"],
+      "moderator": "John Holt (FOX4)",
+      "tier": 1,
+      "text_coverage": "https://www.ksnt.com/elections/four-key-takeaways-from-the-democratic-primary-debate-for-kansas-governor/",
+      "video_status": "Article references a debate replay hosted by FOX4; no direct video URL located/verified this pass."
+    },
+    {
+      "event": "Kansas Democratic Party candidate forum, Aztec Shawnee Theater (Shawnee, KS)",
+      "date": "2026-04-26",
+      "candidates": ["Ethan Corson", "Cindy Holscher"],
+      "note": "Curt Skoog was not part of this Johnson County-focused forum.",
+      "tier": 1,
+      "text_coverage": [
+        "https://kansasreflector.com/2026/04/26/kansas-democrats-running-for-governor-clash-on-corecivic-party-establishment-in-forum/",
+        "https://johnsoncountypost.com/2026/04/27/corson-holscher-democratic-governor-debate-284978/ (paywalled)"
+      ],
+      "video_status": "No video URL located; JoCo Post article has an audio narration of the article itself (not the event recording)."
+    },
+    {
+      "event": "KCUR \"Up To Date\" live gubernatorial forum",
+      "date": "2026-06-11",
+      "candidates": ["Ethan Corson", "Cindy Holscher", "Curt Skoog"],
+      "topics": ["tax reform", "data centers", "marijuana legalization"],
+      "tier": 2,
+      "text_coverage": "https://www.kcur.org/podcast/up-to-date/2026-06-11/kansas-democratic-gubernatorial-candidates-on-tax-reform-data-centers-and-marijuana-legalization",
+      "video_status": "KCUR podcast page - has embedded audio player; not independently timestamped this pass."
+    },
+    {
+      "event": "KCTV5 \"2026 Kansas Governor Candidate Guide\" video interviews",
+      "date": "2026-07-13 to 2026-07-21 (per-candidate segments, published across several dated articles)",
+      "candidates": ["Ethan Corson", "Cindy Holscher", "Curt Skoog", "plus all other 2026 KS gubernatorial candidates"],
+      "tier": 2,
+      "text_coverage": [
+        "https://www.kctv5.com/2026/07/15/what-kansas-gubernatorial-candidates-will-do-address-rural-healthcare-crisis/",
+        "https://www.kctv5.com/2026/07/15/what-kansas-gubernatorial-candidates-said-about-their-plan-address-economy/",
+        "https://www.kctv5.com/2026/07/17/how-candidates-kansas-governor-will-address-issue-access-abortion/"
+      ],
+      "video_status": "Per-candidate video pages exist, e.g. https://www.kctv5.com/video/2026/07/14/2026-kansas-governor-candidate-guide-curt-skoog/ - the written articles used to source quotes in this batch are full transcripts of these videos (confirmed by natural spoken cadence/fillers in the text), so the video counterpart should carry the same lines and could be timestamped in a future pass."
+    },
+    {
+      "event": "KWCH candidate guide video interview - Curt Skoog",
+      "date": "2026-07-13",
+      "candidates": ["Curt Skoog"],
+      "tier": 2,
+      "video_status": "https://www.kwch.com/video/2026/07/13/curt-skoog-interview/ - not mined as text this pass."
+    },
+    {
+      "event": "YouTube - \"FULL INTERVIEW: Mayor Curt Skoog\"",
+      "candidates": ["Curt Skoog"],
+      "tier": "unknown (not yet classified)",
+      "video_status": "https://www.youtube.com/watch?v=RNF3TCAjR6A - not mined this pass."
+    },
+    {
+      "event": "WIBW televised Kansas Democratic gubernatorial forum",
+      "date": "2026-07-21 (aired)",
+      "candidates": ["Ethan Corson", "Cindy Holscher", "Curt Skoog"],
+      "tier": 1,
+      "text_coverage": "https://www.wibw.com/2026/07/22/kansas-democratic-gubernatorial-debate-candidates-face-off-wibw-forum/",
+      "video_status": "Not independently verified/mined this pass; used only for one Holscher data-centers quote (economic-development topic, not staged - see holscher.md notes) that read as borderline off-axis for the growth question."
+    }
+  ],
+  "excluded_source_note": "A note relayed secondhand during this task mentioned a 'WCLO' source among these videos. WCLO is a La Crosse, Wisconsin radio station with no connection found to this race; it does not appear in any of the underlying research and was not used or verified. Flagging so it isn't propagated as a real source in a future pass."
+}

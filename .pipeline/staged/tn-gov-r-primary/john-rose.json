@@ -1,0 +1,28 @@
+{
+  "politician_name": "John Rose",
+  "topic_key": "taxes",
+  "source_url": "https://www.wkrn.com/news/tennessee-news/republican-gubernatorial-candidates-address-public-safety-affordability-ahead-of-election-day/",
+  "quotes": [
+    {
+      "text": "I am open to reforming the grocery sales tax, but I believe that we should first reform property tax.",
+      "editor_note": "From a WKRN interview on affordability (WKRN's own page blocks automated fetches; text confirmed via a syndicated Yahoo News copy, wording is the publisher's direct quotation) where Rose was asked about cutting the grocery tax; he backs cuts but sequences property-tax reform first, a distinct prioritization from Fritts's grocery-tax-first pledge and Blackburn's spending-review-first answer. Dropped his preceding generic 'cut taxes anywhere I can' sentence as non-distinctive filler; this sentence reads complete on its own, so no ellipsis is needed."
+    },
+    {
+      "text": "We've got to have a governor who will work hard to make sure that our local law enforcement agencies have the support and the manpower they need.",
+      "topic_key": "public-safety-approach",
+      "editor_note": "From the same WKRN interview, on how the state should fund and operate public safety; Rose frames the governor's role as ensuring local police departments get adequate staffing and resources, distinct from Fritts's National Guard critique in the same race. Verbatim, no edits."
+    },
+    {
+      "text": "The overwhelming majority of Tennesseans want parents to have options.",
+      "topic_key": "school-vouchers",
+      "source_url": "https://www.wvlt.tv/2026/07/24/tennessee-gop-governor-candidates-education-public-safety-immigration/",
+      "editor_note": "From a WVLT sit-down interview alongside his two primary opponents (2026-07-23) on school choice; Rose backs continuing the Education Freedom Scholarship voucher program on parental-choice grounds, unlike Fritts who would cancel it. Verbatim, no edits."
+    },
+    {
+      "text": "We cannot allow Wall Street investment firms to buy up our housing supply [and] convert them to rentals.",
+      "topic_key": "housing",
+      "source_url": "https://nashvillebanner.com/2026/07/28/tennessee-governor-primary-marsha-blackburn-john-rose/",
+      "editor_note": "From Rose's written answer to the Nashville Banner's July 2026 candidate questionnaire on housing affordability — a campaign written statement (text, not video-verifiable), flagged as a lower-tier source. His fix targets corporate/institutional buyers rather than permitting rules, a different mechanism than Blackburn's deregulation-first answer in the same questionnaire. Bracketed '[and]' to join two reported clauses into one grammatical sentence; otherwise verbatim."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "politician_name": "Ethan Corson",
+  "topic_key": "medicare/aid",
+  "source_url": "https://www.kctv5.com/2026/07/15/what-kansas-gubernatorial-candidates-will-do-address-rural-healthcare-crisis/",
+  "quotes": [
+    {
+      "text": "I am absolutely determined to get Medicaid expansion done as governor. That is a moral and economic imperative for our state. We are one of only 10 states that has not expanded Medicaid. So I'm going to pick up where Governor Kelly left off and continue the fight for Medicaid expansion until I get that done.",
+      "editor_note": "KCTV5's 2026 Candidate Guide put all governor candidates on the record with the same rural-healthcare question; verbatim transcript of Corson's answer, verified directly against the article. No edits. Establishes his position: Medicaid expansion as a moral/economic imperative, continuing Gov. Kelly's push.",
+      "deidentified": "I am absolutely determined to get Medicaid expansion done. That is a moral and economic imperative for our state. We are one of only 10 states that has not expanded Medicaid. So I'm going to pick up where [the outgoing governor] left off and continue the fight for Medicaid expansion until I get that done."
+    },
+    {
+      "text": "We freeze property taxes for more of our fixed-income seniors. We have a really good program in place right now. The challenge is, not enough of our seniors qualify for it. We want to expand the parameters, so more folks can be included in that.",
+      "topic_key": "taxes",
+      "source_url": "https://www.kcur.org/podcast/up-to-date/2026-06-11/kansas-democratic-gubernatorial-candidates-on-tax-reform-data-centers-and-marijuana-legalization",
+      "editor_note": "KCUR's Up To Date live forum, 2026-06-11; verbatim, verified directly against the article, no edits. States his approach to property-tax relief: expand the existing seniors' freeze program's eligibility rather than a blanket cap."
+    },
+    {
+      "text": "The decisions around reproductive health in Kansas should be made between a woman and her doctor. As governor, I will veto any legislation that gets in the way of these decisions being made by a woman and her healthcare provider.",
+      "topic_key": "abortion",
+      "source_url": "https://www.ksnt.com/elections/four-key-takeaways-from-the-democratic-primary-debate-for-kansas-governor/",
+      "editor_note": "FOX4/KSNT televised Democratic primary debate, 2026-07-31 (moderator-probed, all three candidates on stage) - the highest-tier source available for this race. Verbatim, verified directly against the article, no edits. States his position: legislative non-interference in the patient-doctor decision, with a veto commitment.",
+      "deidentified": "The decisions around reproductive health in Kansas should be made between a woman and her doctor. I will veto any legislation that gets in the way of these decisions being made by a woman and her healthcare provider."
+    },
+    {
+      "text": "Kansans have my word that I will veto any voucher legislation that diverts public dollars to private schools.",
+      "topic_key": "school-vouchers",
+      "source_url": "https://johnsoncountypost.com/2026/07/14/kansas-governor-candidates-on-the-issues-public-schools-special-education-and-vouchers-291084/",
+      "editor_note": "Johnson County Post ran the same written questionnaire question on vouchers to all three Democratic candidates (2026-07-14); this is a tier-4 written source (justified: it's a direct, verbatim, single-claim sentence from his own submitted answer, not a curator summary). Verified directly against the article, no edits. States his opposition to diverting public funds to private-school vouchers."
+    },
+    {
+      "text": "We need to focus on bringing good paying jobs and new businesses into Kansas. … So, we ultimately have more revenue coming in that's going to allow us to provide the kind of tax relief we need to make Kansas more affordable.",
+      "topic_key": "economic-development",
+      "source_url": "https://psucollegio.com/2026/04/27/ethan-corson-building-kansas/",
+      "editor_note": "The Collegio (Pittsburg State), 2026-04-27 candidate interview; verified directly against the article. Cut (marked …) a middle passage where he touted his own U.S. Department of Commerce resume, which is record, not position - kept the forward-looking jobs/revenue/tax-relief chain intact. States his approach: grow jobs and business first, using the resulting revenue to fund tax relief."
+    },
+    {
+      "text": "I believe that private prisons have no place in our carceral system. I will never support a private prison being built in Kansas. I will never support an ICE detention facility being built in Kansas.",
+      "topic_key": "local-immigration",
+      "source_url": "https://kansasreflector.com/2026/04/26/kansas-democrats-running-for-governor-clash-on-corecivic-party-establishment-in-forum/",
+      "editor_note": "Kansas Democratic Party candidate forum, Aztec Shawnee Theater, 2026-04-26 (tier-1 candidate forum, moderator-submitted questions). Verbatim, verified directly against the article, no edits. This is a critique of a policy/facility-siting decision (Leavenworth's CoreCivic permit), not an attack on a person - states his own position: opposition to private prisons and ICE detention facilities in Kansas."
+    }
+  ]
+}

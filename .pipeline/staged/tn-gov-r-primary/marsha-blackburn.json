@@ -1,0 +1,28 @@
+{
+  "politician_name": "Marsha Blackburn",
+  "topic_key": "school-vouchers",
+  "source_url": "https://www.wvlt.tv/2026/07/24/tennessee-gop-governor-candidates-education-public-safety-immigration/",
+  "quotes": [
+    {
+      "text": "We want to make certain that we continue with school choice because that provides parents options.",
+      "editor_note": "From a WVLT sit-down interview alongside her two primary opponents (2026-07-23) on school choice; Blackburn pledges to keep and grow Tennessee's Education Freedom Scholarship voucher program, the opposite of Fritts's cancel-the-program stance in the same interview. Verbatim, no edits."
+    },
+    {
+      "text": "We have some of our state leaders who want to do a Tennessee DOGE. I support that. Let's take that big red marker to programs that have outlived their usefulness.",
+      "topic_key": "taxes",
+      "source_url": "https://www.wkrn.com/news/tennessee-news/republican-gubernatorial-candidates-address-public-safety-affordability-ahead-of-election-day/",
+      "editor_note": "From a WKRN interview on affordability (WKRN's own page blocks automated fetches; text confirmed via a syndicated Yahoo News copy, wording is the publisher's direct quotation) where Blackburn was asked about cutting the grocery tax; she answers with a spending-review-first approach — cut programs before cutting taxes — a leaner-government stance on the tax-vs-spending tradeoff."
+    },
+    {
+      "text": "Let's make certain our communities are safe, our schools are safe, let's pick up the pace deporting illegal aliens.",
+      "topic_key": "deportation",
+      "editor_note": "From the same WVLT sit-down interview, on how aggressively the state should pursue deportation; Blackburn ties faster deportation directly to community and school safety, an enforcement-first stance. Verbatim, no edits."
+    },
+    {
+      "text": "We must reduce the barriers to developing and building homes, which means limited and simplified permitting.",
+      "topic_key": "housing",
+      "source_url": "https://nashvillebanner.com/2026/07/28/tennessee-governor-primary-marsha-blackburn-john-rose/",
+      "editor_note": "From Blackburn's written answer to the Nashville Banner's July 2026 candidate questionnaire on housing affordability — a campaign written statement (text, not video-verifiable), flagged here as a lower-tier source. Her fix is supply-side deregulation (simpler permitting), not public intervention. Verbatim, no edits."
+    }
+  ]
+}

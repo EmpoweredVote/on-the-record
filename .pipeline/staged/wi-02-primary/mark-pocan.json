@@ -1,0 +1,24 @@
+{
+  "politician_name": "Mark Pocan",
+  "topic_key": "data-centers",
+  "source_url": "https://wisconsinwatch.org/2026/01/wisconsin-data-centers-politics-ai-port-washington-federal-lawmakers/",
+  "quotes": [
+    {
+      "text": "The focus should be more on if they're going to build something, they should have to pay for all the infrastructure costs related to it. That means power lines, that means a lot of other infrastructure.",
+      "editor_note": "Wisconsin Watch news interview (Jan. 22, 2026) on data-center growth. States his mechanism directly — developers should bear infrastructure costs — contrasting with primary opponent Douglas Alexander's local-community-input mechanism on the same question. Verbatim, no edits."
+    },
+    {
+      "text": "House Republicans voted to rip healthcare away from 13.7 million people on Medicaid, cut $500 billion from Medicare, and take food away from hungry people—all to give a tax break to their billionaire buddies, like Donald Trump & Elon Musk. … It must not be allowed to become law and must be stopped by the Senate.",
+      "editor_note": "Official House press release (May 22, 2025) opposing the 2025 reconciliation bill — his position is preserving health/nutrition spending over funding tax cuts for the wealthy, the same trade-off the taxes question asks about. Edited: cut a CBO-citation clause and a paragraph of procedural complaints (marked …); flagging as source-weak since it's a written statement, not spoken/probed.",
+      "topic_key": "taxes",
+      "source_url": "https://pocan.house.gov/media-center/press-releases/pocan-slams-big-beautiful-bill-billionaires",
+      "deidentified": "House Republicans voted to rip healthcare away from 13.7 million people on Medicaid, cut $500 billion from Medicare, and take food away from hungry people—all to give a tax break to [a handful of billionaires]. … It must not be allowed to become law and must be stopped by the Senate."
+    },
+    {
+      "text": "If ICE comes in and tries to do something that I think is blatantly against the law, we need to speak out. … We are prepared to fight like hell as we need to protect people.",
+      "editor_note": "WKOW news report (Jan. 20, 2026) on a press conference about ICE enforcement in Wisconsin. Forward commitment to challenge unlawful ICE actions and protect residents — a position on how aggressively enforcement should proceed. Ellipsis marks a cut aside referencing a Minneapolis incident, a separate claim.",
+      "topic_key": "deportation",
+      "source_url": "https://www.wkow.com/news/top-stories/rep-pocan-discusses-ice-enforcement-in-wisconsin-dhs-spending-bill-under-negotiation/article_0705bc4a-651f-4d1c-b71e-6492e4ba3c90.html"
+    }
+  ]
+}

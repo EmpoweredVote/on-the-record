@@ -1,0 +1,58 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=Y-DjXiNobxE",
+    "event": "WISN 12 'UpFront' — Rep. Gwen Moore discusses the Republican health care crisis (ACA subsidies, BadgerCare)",
+    "date": "2025-10-19",
+    "candidates_covered": ["Gwen Moore"],
+    "why": "Local Milwaukee tier-2 news-interview video, healthcare/ACA/BadgerCare focus. Only a paraphrase of content was recoverable this pass (no transcript found), so no quote was staged from it even though it's exactly the kind of source (recent, local, spoken, probed) preferred over her written press releases. Ingesting would likely surface a stronger, video-verified healthcare quote and possibly a Medicaid/BadgerCare angle not covered by the currently staged Spectrum News quote."
+  },
+  {
+    "url": "https://c-span.org/video/?c4720274%2Fuser-clip-rep-moore-uphold-aca=",
+    "event": "C-SPAN user clip: 'Rep. Moore: I say we need to uphold the ACA'",
+    "date": null,
+    "candidates_covered": ["Gwen Moore"],
+    "why": "C-SPAN floor-speech clip; page blocked automated fetch (403) so content/date could not be confirmed here. C-SPAN maintains closed captions/transcripts for congressional floor speeches, so this is a strong tier-3 candidate for direct ingest rather than a web-fetch pass."
+  },
+  {
+    "url": "https://www.wispolitics.com/2026/moore-warns-against-party-division-ahead-of-november/",
+    "event": "Wisconsin Democratic Party 2026 State Convention speech, Milwaukee (unity/'magic numbers' address)",
+    "date": "2026-06-13",
+    "candidates_covered": ["Gwen Moore"],
+    "why": "Recent full speech at the state party convention; write-up is paywalled/blocked (WisPolitics and WORT-FM both returned 403), so no quote could be pulled. A speech of this kind typically ranges across multiple issues (economy, healthcare, voting rights) in one continuous address — exactly the kind of multi-topic source that's valuable once transcribed, and could add topics (e.g. climate-change, fossil-fuels) where no usable Moore quote was found this pass."
+  },
+  {
+    "url": "https://youtu.be/F8d6WopnXfo?si=S-KaQwe7WoesaG3C",
+    "event": "Purnima Nath interview with Mayra Joli — Al Pairo TV Miami, 'Illegal Immigration'",
+    "date": null,
+    "candidates_covered": ["Purnima Nath"],
+    "why": "Listed on her own campaign site's 'Speeches & Talks' page as an immigration-focused interview. No transcript available; the only immigration quote staged this pass comes from a 2024 WPR interview, so this could supply a more current (if datable), video-verified immigration statement."
+  },
+  {
+    "url": "https://www.youtube.com/live/aLwf0KzHscg?si=d4b9awfE-gg_WVlz",
+    "event": "Purnima Nath interview with Will Martin — WNOV 860AM/106.5FM Milwaukee, 'Education and Economic Development'",
+    "date": null,
+    "candidates_covered": ["Purnima Nath"],
+    "why": "Local Milwaukee radio interview specifically on education and economic development — topics where the only material found on her campaign site was slogan-level and too agreeable/mechanism-free to stage (e.g. 'Education is not just a slogan... it is the foundation of a nation's future'). A probed radio interview could yield a real, mechanism-bearing position on school choice/vouchers or economic policy that the written platform page doesn't have."
+  },
+  {
+    "url": "https://citizenmedianews.com/2024/07/14/wi-04-candidate-purnima-bash/",
+    "event": "Purnima Nath interview with Citizen Media News, 'Border Crisis'",
+    "date": "2024-07-14",
+    "candidates_covered": ["Purnima Nath"],
+    "why": "Another immigration/border-focused interview from her own 'Speeches & Talks' list, not mined this pass (article/video not fetched). Same rationale as the Al Pairo TV entry — could corroborate or improve on the single 2024 WPR immigration quote currently staged."
+  },
+  {
+    "url": "https://nathpurnima.com/press-release",
+    "event": "'Mar 28, 2026 Speech at the RPCD WI-4' — full remarks to the Republican Party of ... County WI-4, posted as scanned image pages (4 pages) on her own press-release page",
+    "date": "2026-03-28",
+    "candidates_covered": ["Purnima Nath"],
+    "why": "Not a video, but flagging because it's the single most likely source of a real, current, multi-topic Nath speech and it could not be read at all this pass — the pages are posted as images (base64 GIF), not selectable text, so no OCR/text extraction was possible via a web fetch. If ingested (screenshot OCR or a copy obtained directly from the campaign), this is the best lead for filling the healthcare, school-vouchers, and economic-development gaps in her coverage."
+  },
+  {
+    "url": "http://wpr-podcast.streamguys1.com",
+    "event": "Tim Rogers on WPR 'The Morning Show'",
+    "date": "2020-10-21",
+    "candidates_covered": ["Tim Rogers"],
+    "why": "Audio-only, no transcript, and from the 2020 cycle (an earlier race, not this 2026 primary) — lower priority than the other entries here, but included for completeness since it's the only spoken/interview-format Rogers source identified. Would need to be checked for whether his positions still hold before any quote drawn from it could be used."
+  }
+]

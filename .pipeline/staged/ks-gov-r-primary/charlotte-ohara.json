@@ -1,0 +1,36 @@
+{
+  "politician_name": "Charlotte O'Hara",
+  "source_url": "https://www.youtube.com/watch?v=ZOYzHwRPWpk",
+  "topic_key": "data-centers",
+  "quotes": [
+    {
+      "text": "We need to have the moratorium until we get a hold of these tax incentives because they need to pay their fair share. Go to another state if they want to hand out all of these goodies; it isn't going to be good for Kansas.",
+      "timestamp_seconds": 2771,
+      "editor_note": "Verbatim, one contiguous answer, from the June 5, 2026 JCCC Republican gubernatorial debate (Debate Night in Kansas, moderator John Holt) — a tier-1 debate source; a moderator follow-up ('permanent or short-term?') precedes it, so this is her full answer to that follow-up, not stitched to her earlier answer. States her proposed mechanism: a moratorium on new data centers until the SB 98 tax-incentive structure is fixed. No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "I would do neither. I would abolish the property tax and go with a use tax because our property tax system is broken.",
+      "topic_key": "taxes",
+      "timestamp_seconds": 3516,
+      "editor_note": "Verbatim from the same debate, her direct answer to its cap-appraisals-vs-let-voters-block-spending multiple-choice question. States the most structurally distinct position in the field: replace the property tax with a use tax rather than cap or vote on it. No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "I agree that we are very limited because of the makeup of the court, but crisis pregnancy centers are a light in Kansas. … We need to focus on crisis pregnancy centers to make sure mothers and fathers know there is help.",
+      "topic_key": "abortion",
+      "timestamp_seconds": 4354,
+      "editor_note": "Verbatim from the same debate (… cuts a statistic and a description of a 2019 court ruling, kept out as background rather than her position). Flagging for a human reviewer that this leans more on shared goal (crisis-pregnancy-center support) than a distinct mechanism, unlike Masterson's more itemized answer in the same debate — a preference issue, not a responsiveness problem. No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "I think our Highway 69 toll project is the worst boondoggle we have had in decades; nobody is using the toll lane. We spent hundreds of millions on that project, yet I drive out to Garden City on Highway 83 South and there's not one passing lane or turn lane despite semis being all over the place. The misallocation of money in KDOT is breathtaking.",
+      "topic_key": "transportation-priorities",
+      "timestamp_seconds": 4772,
+      "editor_note": "Verbatim from the same debate. Reads as institution/policy critique (KDOT's allocation choices), not a personal attack, and implies a clear investment priority — redirect money from underused toll projects to rural highway safety needs — that legibly contrasts with Schwab's build-a-specific-corridor answer in the same debate. No Compass stance on file yet for this new candidate."
+    },
+    {
+      "text": "Absolutely, this is a bad deal. We're going to own a stadium where we get $7 million a year that goes into the maintenance of that stadium, and we're getting nothing out of it while being responsible for it. There are no property taxes coming to the state. It's the sweetest deal that's been given to any sports team in the United States.",
+      "topic_key": "economic-development",
+      "timestamp_seconds": 3162,
+      "editor_note": "Verbatim, one contiguous answer, from the same debate's Chiefs-stadium-deal segment (a moderator follow-up about NFL public-private partnerships precedes it, so this is her full answer to that follow-up, not stitched to her earlier answer). Her position on the ongoing STAR-bonds Chiefs deal doubles as her general stance on state-backed development incentives — a live policy question she'd continue to own as governor. No Compass stance on file yet for this new candidate; judgment call flagged for a human reviewer, same as for the other debate participants on this topic."
+    }
+  ]
+}

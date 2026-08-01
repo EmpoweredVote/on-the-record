@@ -1,0 +1,16 @@
+[
+  {
+    "url": "https://newschannel9.com/news/local/john-rose-adam-ditch-kurtz-outline-priorities-in-tennessee-governors-race",
+    "event": "NewsChannel9 (WTVC, Chattanooga) local-news segment on TN governor candidates' priorities",
+    "date": "2026",
+    "candidates_covered": ["Adam \"Ditch\" Kurtz"],
+    "why": "Local TV-affiliate news segment with on-camera Kurtz soundbites on minimum wage, marijuana legalization/taxation, road funding, and school funding. Only mined so far via a text-summarizing fetch, which returned run-on sentences mixing multiple sub-claims (e.g. minimum wage + marijuana + roads in one breath) that don't cleanly split into single-claim quotes, plus a healthcare line too thin to use standalone. Ingesting the actual video/transcript with timestamps would let us split this into clean, video-sourced (tier 2) single-claim quotes — stronger than the written-questionnaire source currently staged for him — and would surface a minimum-wage/education angle not otherwise covered. Not yet confirmed whether the video is hosted directly on newschannel9.com or also mirrored to YouTube; the article URL is the lead to start from."
+  },
+  {
+    "url": "https://www.yahoo.com/news/articles/tennessee-candidate-governor-jerri-green-105034364.html",
+    "event": "WJHL (Tri-Cities TV affiliate) interview with Jerri Green during a Kingsport, TN campaign stop — \"Tennessee candidate for governor Jerri Green speaks on policies\"",
+    "date": "2026-02",
+    "candidates_covered": ["Jerri Green"],
+    "why": "WJHL is a TV station, so this article likely accompanies a broadcast segment, but we could only reach a Yahoo News syndicated TEXT mirror of the story this pass (native wjhl.com blocks automated fetch, and the web-search budget was exhausted before a direct video URL could be located). The four Green quotes staged this pass (healthcare, school-vouchers, local-immigration, childcare) are sourced from this text copy and independently re-verified twice, but they are NOT video-verified. If the underlying WJHL broadcast video can be located (on wjhl.com or a WJHL YouTube channel) and ingested, it would let us confirm these quotes against audio/video and likely pull additional on-topic material (e.g. abortion, taxes, economic-development) that a short news write-up wouldn't have room to include."
+  }
+]
