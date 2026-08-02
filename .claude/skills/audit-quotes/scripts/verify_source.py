@@ -277,8 +277,12 @@ def starts_midsentence(quote_text, page_text):
     prefix = page_text[:span[0]]
     if not prefix.strip():
         return False                                 # excerpt opens the page
-    if "\n" in prefix[len(prefix.rstrip()):]:
-        return False                                 # excerpt opens a block
+    # Excerpt opens a block. Testing only the trailing whitespace for a newline missed the case
+    # where a bullet marker sits between the line break and the text — "…ready to:\n👉 End
+    # Inflation…". 7 of the 42 clip findings in the first live sweep were exactly that (👉, 〰️),
+    # so anything after the last newline that carries no word character still counts as a start.
+    if "\n" in prefix and not re.search(r"\w", prefix.rsplit("\n", 1)[-1]):
+        return False
     if prefix.rstrip()[-1:] in _QUOTE_CHARS:
         return False                                 # the source itself opened the quotation here
     core = prefix.rstrip(_OPENERS)

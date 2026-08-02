@@ -286,6 +286,21 @@ def test_starts_midsentence_false_at_a_block_boundary():
     page = extract_page_text("<p>A heading with no period</p><p>Taxes are too high today.</p>")
     assert starts_midsentence("Taxes are too high today.", page) is False
 
+def test_starts_midsentence_false_when_a_bullet_marker_precedes_the_block():
+    # Regression from the first live sweep: a bulleted platform line is a block start, but the
+    # marker sits between the newline and the text, so testing trailing whitespace alone missed
+    # it. Emoji bullets are what campaign sites actually use.
+    for marker in ("👉", "〰️", "•", "-", "*", "▶"):
+        page = f"He is ready to:\n{marker} End inflation by stopping reckless deficit spending."
+        assert starts_midsentence("End inflation by stopping reckless deficit spending.",
+                                  page) is False, marker
+
+def test_starts_midsentence_still_true_for_a_real_cut_after_a_line_break():
+    # The block-start exemption must not swallow a genuine mid-sentence cut: here the text after
+    # the newline carries words before the excerpt begins.
+    page = "His plan is broad.\nHe supports cutting red tape to build more housing statewide."
+    assert starts_midsentence("cutting red tape to build more housing statewide", page) is True
+
 def test_starts_midsentence_false_after_an_introducing_colon():
     page = "His position is simple: taxes are too high and must come down."
     assert starts_midsentence("taxes are too high and must come down", page) is False
