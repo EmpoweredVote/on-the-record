@@ -2,11 +2,12 @@
 Modes:
   (default)         resolve scope, run mechanical checks, write context bundles + mechanical report
 Flags: --candidate NAME  --topic KEY  --ids id1,id2  --include-drafts  --out DIR  --scope-label LABEL
+       --verify-written / --verify-sources (opt into fetching written sources)
 """
 import argparse, json, pathlib, datetime
 from scripts.db import connect, fetch_rows, fetch_stance
 from scripts.checks import run_mechanical
-from scripts.verify_source import run_source_checks
+from scripts.verify_source import run_source_checks, make_page_fetcher
 from scripts.report import render
 
 def main():
@@ -14,6 +15,11 @@ def main():
     ap.add_argument("--candidate"); ap.add_argument("--topic"); ap.add_argument("--ids")
     ap.add_argument("--race", help="Scope to one race_id (uuid). Find race_ids in a default run's report.")
     ap.add_argument("--include-drafts", action="store_true")
+    ap.add_argument("--verify-written", "--verify-sources", dest="verify_written",
+                    action="store_true",
+                    help="Also verify non-video sources by fetching the cited page (network I/O; "
+                         "pages cached under .runs/.source-cache). Off by default: the audit is "
+                         "otherwise DB-only.")
     ap.add_argument("--out", default=None)
     ap.add_argument("--scope-label", default="all races")
     a = ap.parse_args()
@@ -29,13 +35,26 @@ def main():
     print(f"SCOPE: {len(rows)} quotes | {len(races)} races | {len(topics)} race-topic groups | "
           f"drafts={'yes' if a.include_drafts else 'no'}")
 
-    findings = run_mechanical(rows)
-    findings += run_source_checks(conn, rows)
-    print(f"MECHANICAL+SOURCE FINDINGS: {len(findings)}")
-
     # Default output dir resolves relative to this skill (cwd-independent), so it always lands
     # under audit-quotes/.runs/ (which .gitignore covers) no matter where the CLI is invoked.
     skill_root = pathlib.Path(__file__).resolve().parents[1]  # .../.claude/skills/audit-quotes
+
+    # The page cache is deliberately shared across runs (not per-run): a sweep and its follow-up
+    # re-runs should hit each cited URL once, not once per invocation.
+    fetch_page = None
+    if a.verify_written:
+        written = sum(1 for r in rows
+                      if "youtube.com" not in (r.get("source_url") or "")
+                      and "youtu.be" not in (r.get("source_url") or ""))
+        print(f"WRITTEN-SOURCE VERIFICATION: on — up to {written} pages may be fetched "
+              f"(cached in .runs/.source-cache; repeated URLs and cache hits cost nothing, "
+              f"and requests to one host are spaced 1s apart)")
+        fetch_page = make_page_fetcher(skill_root / ".runs" / ".source-cache")
+
+    findings = run_mechanical(rows)
+    findings += run_source_checks(conn, rows, fetch_page=fetch_page)
+    print(f"MECHANICAL+SOURCE FINDINGS: {len(findings)}")
+
     run_dir = pathlib.Path(a.out) if a.out else skill_root / ".runs" / str(datetime.date.today())
     (run_dir / "context").mkdir(parents=True, exist_ok=True)
     by_race = {}
