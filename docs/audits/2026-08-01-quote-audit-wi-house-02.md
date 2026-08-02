@@ -10,8 +10,8 @@
 | | |
 |---|---|
 | Findings at open | 6 (3 high, 3 medium) |
-| Fixed and committed | 3 (`note-missing`) |
-| Open, decision-required | 3 (`not-rankable`) + 2 raised by this audit |
+| Fixed and committed | 4 (3 × `note-missing`, 1 × meaning-altering clip) |
+| Open, decision-required | 3 (`not-rankable`) + 1 stance question |
 
 ## Fixed — `note-missing` (high, guided)
 
@@ -39,9 +39,9 @@ race cannot render a comparison at all ("a topic with one voice is not a compari
 **Recommendation:** source Pocan on taxes, climate-change and campaign-finance, or drop the race
 from the live set until he is covered.
 
-## Open — raised by this audit (decision-required)
+## Fixed — meaning-altering clip on the campaign-finance quote
 
-### 1. The campaign-finance quote is a meaning-altering clip
+### What was wrong
 
 Stored text:
 
@@ -60,11 +60,34 @@ no ellipsis marking the cut, and drops the candidate's actual, distinctive posit
 Constitution to overturn Citizens United. As stored it reads as a bare assertion rather than a
 policy proposal.
 
-**Recommendation:** re-cut to carry the amendment framing, e.g. "The best and only sure way to
-overturn Citizens United is to craft a Constitutional Amendment … that unlimited corporate money
-cannot be spent to sway elections, even without coordination with a particular candidate."
+### What was done
 
-### 2. Possible campaign-finance stance mismatch
+Re-cut and committed. `quote_text` and `deidentified_text` are now both:
+
+> The best and only sure way to overturn Citizens United is to craft a Constitutional Amendment …
+> that unlimited corporate money cannot be spent to sway elections, even without coordination with
+> a particular candidate.
+
+The single elision drops `that places language "in stone" (so that no future SCOTUS can
+misinterpret it)` — a mechanics aside about drafting, which is exactly the kind of material idea
+triage is meant to cut. Removing it also avoids nesting quotation marks inside the quote.
+
+Checked before applying:
+
+- Both spans either side of the elision are contiguous verbatim runs of the source sentence, so
+  nothing reads across the edit (validated with `verbatim_runs` from `verify_source.py`).
+- 33 words, at the p90 of live quotes (median 17). The untrimmed sentence would have been 46.
+- `…` (U+2026) with surrounding spaces matches house style — 59 live quotes use it, 47 use `...`.
+- Blind text and revealed text remain identical; there is nothing here to de-identify, and the
+  passage carries no party tell within a Democratic primary.
+
+The `editor_note` was rewritten to describe the trim and then tightened to two sentences after the
+first version tripped `note-too-long` (the check is a hard two-sentence limit — the "unless heavy
+editing must be explained" carve-out lives only in the suggested-fix text, not the rule).
+
+## Open — raised by this audit (decision-required)
+
+### Possible campaign-finance stance mismatch
 
 Recorded Compass stance is **1** — "ban all private money in politics and publicly fund
 campaigns". The source passage argues for barring unlimited *corporate* spending via constitutional

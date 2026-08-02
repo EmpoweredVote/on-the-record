@@ -49,7 +49,7 @@ human to resolve even though the *detection* is mechanical.
 |---|---|---|---|---|
 | `note-missing` | quote | `editor_note` required | high | guided |
 | `note-section-ref` | quote | notes are self-contained (no §-refs/jargon) | medium | guided |
-| `note-too-long` | quote | `editor_note` ≤ 2 sentences | low | guided |
+| `note-too-long` | quote | `editor_note` ≤ 3 sentences (2 preferred) | low | guided |
 | `deid-missing` | quote | blind text required | high | guided |
 | `trailing-ellipsis` | quote | no trailing ellipsis | low | **mechanical** (auto-fix: regex strip) |
 | `partisan-tell` | quote | no partisan/side tell on blind card | high | guided |
