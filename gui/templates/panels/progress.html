@@ -5,6 +5,26 @@
   <div id="error-banner" class="error-banner" hidden></div>
   <h2>Log</h2>
   <pre id="log" class="runlog">(waiting for output…)</pre>
+  {% if not ingest_complete %}
+  <section class="continue">
+    <h2>Re-run ingestion</h2>
+    <p class="mid">Stage 1 never produced audio for this meeting. Every stage action
+      needs <code>audio.wav</code>, so none of them can run — re-run ingestion instead.
+      It replays the original launch (same source, same settings) into this same meeting.</p>
+    {% if can_reingest %}
+    <div class="continue-buttons">
+      <form method="post" action="/meetings/{{ meeting_id }}/reingest">
+        <button type="submit" class="enroll">Re-run ingestion</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="mid">This meeting predates the launch settings being recorded, so it
+      can't be replayed automatically. Start it again from
+      <a href="/new">Process a meeting</a> — the same source lands back in this
+      same meeting.</p>
+    {% endif %}
+  </section>
+  {% else %}
   <section class="continue">
     <h2>Continue processing</h2>
     <p class="mid">Run the remaining stages (e.g. summary) from where this meeting stopped.
@@ -30,4 +50,5 @@
       {% endfor %}
     </div>
   </details>
+  {% endif %}
 </div>

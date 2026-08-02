@@ -275,3 +275,79 @@ def test_workspace_attention_dot_present_but_hidden_when_zero(tagged_meeting_dir
     body = TestClient(create_app()).get("/meetings/2026-02-04-council").text
     m = re.search(r'id="attn-dot"([^>]*)>', body)
     assert m and "hidden" in m.group(1)       # element present, hidden until attention appears
+
+
+# ── Re-run ingestion (progress panel) ───────────────────────────────────────
+
+def _record_launch(mdir, argv):
+    import json
+    (mdir / "gui_run.json").write_text(json.dumps(
+        {"pid": 1, "cmd": ["py", "s", "--resume", mdir.name], "status": "running",
+         "launch_cmd": argv}), encoding="utf-8")
+
+
+def test_progress_panel_offers_reingest_when_audio_missing(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=0)
+    _record_launch(mdir, ["py", "s", "--input", "https://youtu.be/Z", "--meeting-id", mdir.name])
+    ctx = panel_context("progress", "2026-02-04-council")
+    assert ctx["ingest_complete"] is False
+    assert ctx["can_reingest"] is True
+
+
+def test_progress_panel_hides_reingest_once_ingested(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=3)
+    _record_launch(mdir, ["py", "s", "--input", "https://youtu.be/Z", "--meeting-id", mdir.name])
+    ctx = panel_context("progress", "2026-02-04-council")
+    assert ctx["ingest_complete"] is True
+    assert ctx["can_reingest"] is False
+
+
+def test_progress_panel_keeps_stage_actions_for_media_cleaned_meeting(tagged_meeting_dir, tmp_meetings_dir):
+    """A finished meeting whose WAV was removed by cleanup must not be mistaken
+    for a failed ingest and offered a re-download."""
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    _record_launch(mdir, ["py", "s", "--input", "https://youtu.be/Z", "--meeting-id", mdir.name])
+    assert not (mdir / "audio.wav").exists()
+    ctx = panel_context("progress", "2026-02-04-council")
+    assert ctx["ingest_complete"] is True
+    assert ctx["can_reingest"] is False
+
+
+def test_progress_panel_cannot_reingest_legacy_meeting(tagged_meeting_dir, tmp_meetings_dir):
+    """No recorded launch argv -> offer the explanation, not a broken button."""
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=0)
+    ctx = panel_context("progress", "2026-02-04-council")
+    assert ctx["ingest_complete"] is False
+    assert ctx["can_reingest"] is False
+
+
+def test_progress_page_renders_reingest_button(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=0)
+    _record_launch(mdir, ["py", "s", "--input", "https://youtu.be/Z", "--meeting-id", mdir.name])
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council?tab=progress").text
+    assert "/meetings/2026-02-04-council/reingest" in body
+    assert "Re-run ingestion" in body
+    # the stage actions can't work without audio.wav, so they must not be offered
+    assert "/meetings/2026-02-04-council/redo" not in body
+    assert "/meetings/2026-02-04-council/continue" not in body
+
+
+def test_progress_page_keeps_stage_actions_once_ingested(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=3)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council?tab=progress").text
+    assert "/meetings/2026-02-04-council/redo" in body
+    assert "/meetings/2026-02-04-council/continue" in body
+    assert "Re-run ingestion" not in body
+
+
+def test_reingest_route_404s_when_not_replayable(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=0)
+    r = TestClient(create_app()).post("/meetings/2026-02-04-council/reingest",
+                                      follow_redirects=False)
+    assert r.status_code == 404

@@ -420,6 +420,13 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
 
+    @app.post("/meetings/{meeting_id}/reingest")
+    def reingest_route(meeting_id: str):
+        if runner.launch_reingest(meeting_id, python_exe=sys.executable,
+                                  script=_RUN_LOCAL) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/run", status_code=303)
+
     @app.post("/meetings/{meeting_id}/continue")
     def continue_route(meeting_id: str, override: str = Form("")):
         if runner.launch_resume(meeting_id, override_gate=bool(override.strip()),
