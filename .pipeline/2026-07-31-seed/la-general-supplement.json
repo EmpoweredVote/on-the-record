@@ -1,0 +1,540 @@
+{
+  "lane": "la-general-supplement",
+  "generated": "2026-07-31",
+  "races": [
+    {
+      "race_label": "LAUSD Board of Education District 2 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Rocío Rivas",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://ballotpedia.org/Los_Angeles_Unified_School_District,_California,_elections"
+      ],
+      "notes": "Won outright in the June 2, 2026 nonpartisan primary (Rivas 64.36% vs. Raquel Zamora 35.64%, 100,102 votes cast); the November 3, 2026 general election for this seat was canceled.",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Rocío Rivas and canceled November race confirmed via LAist's LAUSD voter guide (all three LAUSD board races were decided outright in the primary under the majority-wins nonpartisan rule). An independent mid-count tally (thelalocal.org) showed 63.24%/36.76%, close to but not identical to the file's final 64.36%/35.64% — consistent with later certification, not a substantive discrepancy."
+    },
+    {
+      "race_label": "LAUSD Board of Education District 4 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Nick Melvoin",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://ballotpedia.org/Los_Angeles_Unified_School_District,_California,_elections"
+      ],
+      "notes": "Won outright in the June 2, 2026 nonpartisan primary (Melvoin 61.58% vs. Ankur Patel 38.42%, 169,171 votes cast); the November 3, 2026 general election for this seat was canceled.",
+      "verified": true,
+      "verify_notes": "Outright win by incumbent Nick Melvoin confirmed via LAist's LAUSD voter guide; challenger Ankur Patel's concession (June 22, 2026) independently corroborates the outcome. The exact 61.58%/38.42% split wasn't reproduced to the decimal by independent sources found, but the outcome/no-November-race conclusion is solid."
+    },
+    {
+      "race_label": "LAUSD Board of Education District 6 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Kelly Gonez",
+          "party": "Nonpartisan",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://results.lavote.gov/#year=2026&election=4338",
+        "https://ballotpedia.org/Los_Angeles_Unified_School_District,_California,_elections"
+      ],
+      "notes": "Unopposed; won outright in the June 2, 2026 nonpartisan primary with 100.00% (69,372-82,231 votes reported across sources); the November 3, 2026 general election for this seat was canceled.",
+      "verified": true,
+      "verify_notes": "Unopposed outright win by incumbent Kelly Gonez confirmed via LAist and her Ballotpedia bio; no November race. The exact vote total wasn't pinned to one number independently, but that doesn't affect the unopposed/outright conclusion."
+    },
+    {
+      "race_label": "CA State Assembly District 40 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Pilar Schiavo",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Rickey Tracy Hayes II",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "Top 2 of 4 from June 2, 2026 primary (Schiavo 55.63%, Hayes II 22.31%; also-rans Ahlers 13.96%, Farmakalidis 8.11%). District covers the northeast San Fernando Valley portion of the City of Los Angeles plus Santa Clarita.",
+      "verified": false,
+      "verify_notes": "Runoff status, candidate names, and vote shares (55.63%/22.31%) confirmed exactly via independent sources (Schiavo's official Assembly bio, Wikipedia, SignalSCV). However, the geography claim is backwards: AD40 covers the NORTHWEST San Fernando Valley (Chatsworth, Northridge, Granada Hills, Porter Ranch) plus Santa Clarita, not 'northeast' as stated in the notes. Recommend correcting 'northeast' to 'northwest.'"
+    },
+    {
+      "race_label": "CA State Assembly District 43 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Celeste Rodriguez",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Ricardo Benitez",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "Only 2 candidates filed; both advance automatically from the June 2, 2026 primary (Rodriguez 74.90%, Benitez 25.10%). District covers the eastern San Fernando Valley, jutting into central Los Angeles.",
+      "verified": true,
+      "verify_notes": "Confirmed via Wikipedia (California's 43rd State Assembly district): candidates, 74.90%/25.10% vote shares, and geography description ('eastern San Fernando Valley... jutting southward into Central Los Angeles') all match."
+    },
+    {
+      "race_label": "CA State Assembly District 46 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Jesse Gabriel",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Tracey Schroeder",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "Only 2 candidates filed; both advance automatically from the June 2, 2026 primary (Gabriel 66.31%, Schroeder 33.69%). District covers the central/southeastern San Fernando Valley (Van Nuys, Sherman Oaks, Studio City, North Hollywood, Reseda, etc.), all within the City of Los Angeles.",
+      "verified": true,
+      "verify_notes": "Confirmed via Wikipedia (California's 46th State Assembly district): candidates and ~66.2%/33.8% vote shares match (file: 66.31%/33.69%); geography description matches verbatim. Minor immaterial nuance: the district also contains unincorporated Universal City, so 'entirely within the City of Los Angeles' is very slightly imprecise, but this doesn't affect the substance of the entry."
+    },
+    {
+      "race_label": "CA State Assembly District 51 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Rick Chavez Zbur",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Colin D. Hernandez",
+          "party": "Democratic",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/90-state-senator.xlsx",
+        "https://ballotpedia.org/California_State_Assembly_District_51"
+      ],
+      "notes": "Top 2 of 5 from June 2, 2026 primary, both Democrats (Zbur 54.07%, Hernandez 22.09%; also-rans Head 11.70% R, Geraghty 9.45% R, Lucas 2.70% NPP). District covers western Los Angeles (Hollywood, Los Feliz, west side) plus Beverly Hills and West Hollywood.",
+      "verified": true,
+      "verify_notes": "Confirmed via aggregated 2026 CA Assembly election data (opencampaign.com): candidates and final 54.07%/22.09% vote shares match exactly (an earlier partial Daily Bruin count of 54.2%/20.6% was superseded). 'Colin D. Hernandez' full name not found beyond the middle initial already in the file."
+    },
+    {
+      "race_label": "CA State Assembly District 52 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Jessica Caloza",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Andrea Lee Anderson",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "Only 2 candidates filed; both advance automatically from the June 2, 2026 primary (Caloza 85.76%, Anderson 14.24%). District covers Echo Park, Silver Lake, Highland Park, East Hollywood, East LA, Eagle Rock and other northeast/east LA neighborhoods, entirely within the City of Los Angeles (plus unincorporated East LA).",
+      "verified": true,
+      "verify_notes": "Confirmed via Assemblymember Caloza's official district page (caloza.asmdc.org): candidates, ~85.8%/14.2% vote shares (file: 85.76%/14.24%), and geography (Echo Park, Silver Lake, Highland Park, East Hollywood, East LA, Eagle Rock) all match."
+    },
+    {
+      "race_label": "CA State Assembly District 54 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Mark Gonzalez",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "UNVERIFIED: ran unopposed on the LA County-certified tally (Gonzalez 100.00%, 48,751 votes), but the CA SOS statewide statement of vote lists a write-in, Alexandra Briseno (R), with 137 votes (0.3%) statewide that does not appear in the LA County breakdown — unclear whether this write-in formally qualifies for the November ballot. District covers Boyle Heights, Downtown LA, Chinatown, Echo Park, Silver Lake, East Hollywood, Los Feliz, and Koreatown.",
+      "verified": false,
+      "verify_notes": "The previously-flagged write-in question is now resolved with more detail, but this changes the picture rather than closing it: the CA SOS's Certified List of Write-In Candidates (elections.cdn.sos.ca.gov/statewide-elections/2026-primary/certified-list-write-in.pdf) confirms Alexandra Briseno (R) as a certified write-in for AD54, and under California's top-two 'voter-nominated office' rules there is no majority-wins threshold — unlike the LAUSD races, the top two vote-getters always advance to November regardless of margin. Since Briseno and Mark Gonzalez are the only two contestants, this is likely a genuine (if lopsided) two-candidate November race rather than an uncontested seat, meaning 'contested: false' and the single-candidate array here may both be incomplete. Recommend adding Briseno as a second candidate (pending final printed-ballot confirmation, which wasn't independently verified past the certified-write-in stage) and reconsidering the contested flag."
+    },
+    {
+      "race_label": "CA State Assembly District 55 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Isaac G. Bryan",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Ashley M. Brown",
+          "party": "Democratic",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "Top 2 of 4 from June 2, 2026 primary, both Democrats (Bryan 64.55%, Brown 18.90%; third-place Cascio 15.32% R did not advance; also-ran Campbell 1.23% NPP). District covers Crenshaw, Baldwin Hills, Mid-City, Culver City, Mar Vista, Del Rey, Pico-Robertson and much of South Los Angeles.",
+      "verified": true,
+      "verify_notes": "Confirmed via Wikipedia (California's 55th State Assembly district): candidates (Isaac G. Bryan's full legal name is Isaac Gregory Bryan, consistent with the file's abbreviated form), 64.55%/18.90% vote shares (Brown's 23,242 votes = 18.9% exactly), and geography all match."
+    },
+    {
+      "race_label": "CA State Assembly District 57 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Sade Elhawary",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Constance Jewel Menzies",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx",
+        "https://ballotpedia.org/Sade_Elhawary"
+      ],
+      "notes": "Only 2 candidates filed; both advance automatically from the June 2, 2026 primary (Elhawary 85.70%, Menzies 14.30%). District covers Skid Row, Downtown LA, Historic South-Central, and Watts, per the incumbent's own district description; post-2021-redistricting boundary, not to be confused with the pre-2022 AD57 (Gateway Cities/Whittier).",
+      "verified": true,
+      "verify_notes": "Confirmed via LA Public Press coverage of Elhawary's district: candidates, ~85.7%/14.3% vote shares (file: 85.70%/14.30%), and geography (Skid Row, DTLA, Historic South-Central, Watts) match."
+    },
+    {
+      "race_label": "CA State Assembly District 61 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [
+        {
+          "name": "Tina Simone McKinnor",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "UNVERIFIED: ran unopposed on the LA County-certified tally (McKinnor 100.00%, 79,047 votes), but the CA SOS statewide statement of vote lists a write-in, Brian Lockwood (R), with 1,104 votes (1.4%) statewide that does not appear in the LA County breakdown — unclear whether this write-in formally qualifies for the November ballot. District covers Inglewood, Lennox, Hawthorne, Lawndale, and a partial slice of the City of Los Angeles (Westchester area).",
+      "verified": false,
+      "verify_notes": "Same pattern as AD54: the CA SOS's Certified List of Write-In Candidates confirms Brian Lockwood (R) as a certified write-in for AD61, and California's top-two rules mean both McKinnor and Lockwood likely advance to November as the only two contestants, regardless of Lockwood's small vote share. Lockwood is also actively campaigning (electbrianlockwood.com). Recommend adding Lockwood as a second candidate and reconsidering the contested flag, pending confirmation of final printed-ballot status."
+    },
+    {
+      "race_label": "CA State Assembly District 62 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "José Luis Solache",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Paul Irving Jones",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx"
+      ],
+      "notes": "Only 2 candidates filed; both advance automatically from the June 2, 2026 primary (Solache 73.12%, Jones 26.88%). District is centered on LAX and the South Bay, and per Wikipedia district-profile data includes a partial slice (~3.5%) of the City of Los Angeles (Venice, Westchester, Marina del Rey area).",
+      "verified": true,
+      "verify_notes": "Confirmed via Wikipedia (California's 62nd State Assembly district): candidates and 73.1%/26.9% vote shares (file: 73.12%/26.88%) match; district is directionally confirmed as LAX/South Bay-centered with a small LA sliver (Venice, Westchester, Marina del Rey, Playa del Rey, LAX), consistent with the claimed ~3.5% overlap, though that exact percentage wasn't independently pinned down."
+    },
+    {
+      "race_label": "CA State Senate District 20 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Caroline Menjivar",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Tony Rodriguez",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/90-state-senator.xlsx"
+      ],
+      "notes": "Top 2 of 3 from June 2, 2026 primary (Menjivar 62.05%, Rodriguez 27.85%; third-place LaCarra 10.11% D did not advance). District covers most of the San Fernando Valley portion of the City of Los Angeles (Van Nuys, Reseda, Pacoima, Sylmar, Sun Valley, etc.) plus Burbank and San Fernando.",
+      "verified": true,
+      "verify_notes": "Confirmed via Wikipedia (California's 20th senatorial district): candidates, exact 62.05%/27.85% vote shares, and geography (SFV portion of City of LA plus Burbank/San Fernando) all match."
+    },
+    {
+      "race_label": "CA State Senate District 24 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "John M. Erickson",
+          "party": "Democratic",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Brian Goldsmith",
+          "party": "Democratic",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/90-state-senator.xlsx"
+      ],
+      "notes": "Open seat (no incumbent among the 10 candidates who filed). Top 2 from June 2, 2026 primary, both Democrats (Erickson 20.50%, Goldsmith 18.28%; nearest also-rans Marshall 17.53% R and Irwin 14.11% R did not advance). District covers Westside LA neighborhoods (Venice, West LA, Pacific Palisades, Brentwood, Bel Air, Century City, Hollywood, Miracle Mile) plus Santa Monica Mountains cities and part of the South Bay.",
+      "verified": true,
+      "verify_notes": "Confirmed via final results (Santa Monica Daily Press, Daily Bruin): candidates and exact 20.50%/18.28% vote shares match. Worth noting for context (not a file error): election-night returns briefly showed Republican Rick Marshall in 2nd place, which would have produced a different (D-vs-R) matchup; later mail-ballot counting reversed this to the all-Democrat result the file correctly reflects."
+    },
+    {
+      "race_label": "CA State Senate District 26 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Sara Hernandez",
+          "party": "Democratic",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Sarah Rascón",
+          "party": "Democratic",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/90-state-senator.xlsx"
+      ],
+      "notes": "Open seat (no incumbent among the 8 candidates who filed, including current Assemblymember Wendy Carrillo, who placed third and did not advance). Top 2 from June 2, 2026 primary, both Democrats (Hernandez 31.17%, Rascón 19.43%; Carrillo 13.72% did not advance). District covers central/eastern LA neighborhoods (Los Feliz, East Hollywood, Silver Lake, Echo Park, Koreatown, Eagle Rock, Lincoln Heights, Chinatown, Boyle Heights, El Sereno).",
+      "verified": true,
+      "verify_notes": "Confirmed via The Eastsider LA: candidates, vote shares (31.17%/19.43%/13.72% for third-place Carrillo) match almost exactly, and geography matches."
+    },
+    {
+      "race_label": "CA State Senate District 28 (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": true,
+      "candidates": [
+        {
+          "name": "Lola Smallwood-Cuevas",
+          "party": "Democratic",
+          "incumbent": true,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        },
+        {
+          "name": "Joe Lisuzzo",
+          "party": "Republican",
+          "incumbent": false,
+          "website": null,
+          "source_url": "https://results.lavote.gov/text-results/4338"
+        }
+      ],
+      "sources": [
+        "https://results.lavote.gov/text-results/4338",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/90-state-senator.xlsx"
+      ],
+      "notes": "Top 2 of 3 from June 2, 2026 primary (Smallwood-Cuevas 77.51%, Lisuzzo 16.20%; third-place Bradford 6.29% NPP did not advance). District covers Downtown LA and most of South Los Angeles (Park La Brea, Pico-Union, Mid City, West Adams, Baldwin Hills, Crenshaw, Leimert Park, Exposition Park, Skid Row).",
+      "verified": true,
+      "verify_notes": "Confirmed via Wikipedia (California's 28th State Senate district): candidates and 77.51%/16.20% vote shares match almost exactly; geography matches. Minor immaterial nuance: sources disagreed on the identity of the non-advancing third-place candidate, which doesn't affect the top-2 verification."
+    },
+    {
+      "race_label": "COVERAGE NOTE (CA, 2026-11-03)",
+      "state": "CA",
+      "office_category": "local_la",
+      "election_date": "2026-11-03",
+      "election_kind": "general",
+      "priority_tier": 2,
+      "contested": false,
+      "candidates": [],
+      "sources": [
+        "https://www.sos.ca.gov/elections/prior-elections/statewide-election-results/primary-election-june-2-2026/statement-vote",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/95-state-assembly.xlsx",
+        "https://elections.cdn.sos.ca.gov/sov/2026-primary/sov/90-state-senator.xlsx",
+        "https://results.lavote.gov/text-results/4338",
+        "https://en.wikipedia.org/wiki/California%27s_51st_State_Assembly_district"
+      ],
+      "notes": "Coverage method: started from the task's candidate district lists, then verified each district's overlap with the City of LA using Wikipedia district-profile city lists (cross-checked against the CA SOS 2026 primary statement-of-vote XLSX files and, where available, the LA County RR/CC consolidated results page at results.lavote.gov/text-results/4338, election=4338 — the same source/ID used by the sibling la-general.json lane). Included 10 of 20 candidate Assembly districts and 4 of 9 candidate Senate districts as substantially overlapping the City of LA. SKIPPED (Assembly, no City-of-LA overlap found): AD39 (Antelope Valley/High Desert — Lancaster, Palmdale, Adelanto, Victorville, Hesperia), AD41 (Pasadena-anchored foothill communities — Altadena, La Cañada Flintridge, Sierra Madre, Rancho Cucamonga/Upland), AD42 (Inland Empire/California desert), AD44 (Burbank/Glendale-based per available sources; could not confirm a City-of-LA portion — flagged for follow-up rather than assumed), AD48 (eastern San Gabriel Valley — Azusa, Baldwin Park, Covina, El Monte, West Covina), AD53 (Pomona/Montclair/Chino/Ontario/Upland), AD58 (Riverside/San Bernardino Inland Empire), AD59 (Orange County), AD64 (Bell, Bell Gardens, Cudahy, Downey, Norwalk, La Mirada, La Habra — no LA city portion in SOV county breakdown), AD65 (Orange County — Anaheim, Buena Park, Cypress, Fullerton, Garden Grove). SKIPPED (Senate): SD18 (San Diego/Imperial County border), SD22 (San Gabriel/Pomona Valley plus San Bernardino County), SD30 (Gateway Cities — Downey, Norwalk, Bellflower, Whittier — no LA city portion). SD33 and SD35 were on the task's candidate list but are ODD-numbered districts; the CA SOS 2026 primary explicitly covers 'State Senator by District (even-numbered districts only)' this cycle, so neither was on the November 2026 ballot at all (this is separate from the geography question — SD33 is ~0.9% City-of-LA/mostly Long Beach and SD35 is ~6.2% City-of-LA/Watts-San Pedro per Wikipedia, for reference if a future odd-year cycle needs them). Also note: AD54 and AD61 show as unopposed (100%) in the LA County RR/CC breakdown but carry small named write-in vote totals in the CA SOS statewide SOV not reflected in the county breakdown; flagged UNVERIFIED on those two race entries rather than resolved here.",
+      "verified": false,
+      "verify_notes": "coverage note, not a race. AD44 verdict (per task): independent sources (a syndicated LAist/Yahoo district guide and Ballotpedia's community list for CA Assembly District 44) confirm AD44 DOES include City of Los Angeles territory — a Sunland-Tujunga/Lake View Terrace/Shadow Hills foothill corridor and a separate North Hollywood/Toluca Lake/Studio City/Sherman Oaks pocket — alongside its Burbank/Glendale core (cross-checked to make sure this wasn't confused with neighboring AD46, which covers a distinct non-overlapping west-Valley area). The 'flagged for follow-up' item should be resolved as confirmed-overlap, not left unconfirmed."
+    }
+  ]
+}

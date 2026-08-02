@@ -1,0 +1,41 @@
+{
+  "politician_name": "Cindy Holscher",
+  "topic_key": "medicare/aid",
+  "source_url": "https://www.kctv5.com/2026/07/15/what-kansas-gubernatorial-candidates-said-about-their-plan-address-economy/",
+  "quotes": [
+    {
+      "text": "In terms of health care, expanding Medicaid would make a huge difference. We would have those taxpayer funds that we're already paying into the system coming back to us, helping our communities, helping our people, and also helping our economy. And that would help keep some of those hospitals open that might be facing potential closure and those types of risks.",
+      "editor_note": "KCTV5's 2026 Candidate Guide affordability/economy question, verified directly against the article. Silently cleaned a filler \"you know\" - no substantive change. States her position: Medicaid expansion returns taxpayer money already flowing to Washington and props up at-risk rural hospitals."
+    },
+    {
+      "text": "We have to fund schools, because when we don't do that again, it shifts the burden to the local level, that makes the property taxes go up.",
+      "topic_key": "taxes",
+      "source_url": "https://www.kcur.org/podcast/up-to-date/2026-06-11/kansas-democratic-gubernatorial-candidates-on-tax-reform-data-centers-and-marijuana-legalization",
+      "editor_note": "KCUR's Up To Date live forum, 2026-06-11; verbatim, verified directly against the article, no edits. States her view that state under-funding of schools is what's actually driving local property-tax increases, framing her tax approach around school funding rather than a rate cap."
+    },
+    {
+      "text": "I think Kansans spoke very loudly and clearly in August of 2022 … saying that they wanted to preserve access to reproductive health care. And, of course, I would uphold that. … And bills that would come forward that would take away those rights, I would veto.",
+      "topic_key": "abortion",
+      "source_url": "https://www.kctv5.com/2026/07/17/how-candidates-kansas-governor-will-address-issue-access-abortion/",
+      "editor_note": "KCTV5 candidate guide, 2026-07-17; verified directly against the article for the opening and closing clauses, with a middle passage (an intervening approval-percentage figure and a repeated filler \"you know\") cut and marked. States her position: uphold the 2022 vote's outcome and veto any bill rolling back reproductive-healthcare access."
+    },
+    {
+      "text": "I oppose diverting taxpayer dollars to private school voucher programs. Public dollars should support public schools that serve every child, regardless of ZIP code, income, or ability.",
+      "topic_key": "school-vouchers",
+      "source_url": "https://johnsoncountypost.com/2026/07/14/kansas-governor-candidates-on-the-issues-public-schools-special-education-and-vouchers-291084/",
+      "editor_note": "Johnson County Post ran the same written questionnaire question on vouchers to all three Democratic candidates (2026-07-14); this is a tier-4 written source (justified: verbatim, single-claim sentences from her own submitted answer, not a curator summary). Verified directly against the article, no edits. States her opposition to diverting public dollars to private-school vouchers."
+    },
+    {
+      "text": "We need to become more competitive to keep our graduates here. … Some of the things the Legislature has focused on in the past few years, these cultural wars, certainly have not helped. Instead, I want to focus on affordability and creating opportunities. Those are the kinds of things that will do more to attract young people and encourage them to stay here.",
+      "topic_key": "economic-development",
+      "source_url": "https://www.kansan.com/news/q-a-sen-cindy-holscher-on-affordability-education-and-her-run-for-kansas-governor/article_b1aafcba-6daf-44a9-af13-28b6a9d16c81.html",
+      "editor_note": "The Kansan (University Daily Kansan), mid-2026 interview; verified directly against the article. Cut (marked …) an intervening sentence about college retention mechanics to keep the through-line concise. \"The Legislature\" critique targets an institution, not a person. States her approach: compete for young workers on affordability/opportunity rather than culture-war fights."
+    },
+    {
+      "text": "If we're talking about people who have prior convictions or have been involved in crimes, that's something different. But what Kansans do not like, they do not like people being taken off the streets without due process.",
+      "topic_key": "local-immigration",
+      "source_url": "https://www.kwch.com/2025/11/18/kansas-senator-calls-limited-immigration-enforcement/",
+      "editor_note": "KWCH news interview, 2025-11-18; verbatim, verified directly against the article, no edits. States her position on how local/state law enforcement should relate to federal immigration enforcement: due-process protection for people without criminal convictions."
+    }
+  ]
+}

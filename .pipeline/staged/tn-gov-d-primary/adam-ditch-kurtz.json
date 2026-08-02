@@ -1,0 +1,21 @@
+{
+  "politician_name": "Adam \"Ditch\" Kurtz",
+  "topic_key": "abortion",
+  "source_url": "https://nashvillebanner.com/2026/07/16/ditch-kurtz-tennessee-democratic-primary/",
+  "quotes": [
+    {
+      "text": "There should not be an abortion ban at all. … Government has no role in the middle of a doctor and a patient.",
+      "editor_note": "From a Nashville Banner written candidate Q&A (verbatim answers, not a curator summary). Full answer was: \"There should not be an abortion ban at all. How dare the TN GOP think they know best about what people should do with their own bodies. I can't believe it's 2026 and we're still debating this, but here we are. Government has no role in the middle of a doctor and a patient.\" Kept the opening position and closing mechanism (keep government out of the doctor-patient relationship); cut the middle two sentences (a dig at 'the TN GOP' and a rhetorical aside) since they add no position, marked with an ellipsis. States a clear no-restriction position and why, without attacking a person."
+    },
+    {
+      "text": "I will expand Medicaid to bring federal tax dollars back into Tennessee, and I will create a Rural Hospital Stabilization Fund to make sure rural hospitals and ERs stay open.",
+      "topic_key": "healthcare",
+      "editor_note": "Same Nashville Banner Q&A, verbatim, no edits. His clearest forward, mechanism-bearing healthcare position — expand Medicaid and fund a rural-hospital stabilization program to keep access open — a more-government-role stance. Left out two weaker follow-on sentences in the same answer (a self-promotional documentary plug, and a vaguer 'want universal Medicare for all... will figure out how' aspiration with no stated mechanism)."
+    },
+    {
+      "text": "I say we entice businesses in, but once they are established, we have to tax them fairly, meaning their fair share. I propose closing many of the tax loopholes after, say, 5 years, or whatever we determine the best length of time to be. I am not for indefinite tax incentives.",
+      "topic_key": "taxes",
+      "editor_note": "Same Nashville Banner Q&A, verbatim, no edits. A single coherent position on business tax incentives: use them to attract business, but sunset them (roughly 5 years) rather than letting them run indefinitely — a specific mechanism, not just a general 'tax fairness' sentiment."
+    }
+  ]
+}

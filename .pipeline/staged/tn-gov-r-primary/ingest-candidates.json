@@ -1,0 +1,30 @@
+[
+  {
+    "url": "https://www.wvlt.tv/2026/07/24/tennessee-gop-governor-candidates-education-public-safety-immigration/",
+    "event": "WVLT sit-down interviews with Marsha Blackburn, Monty Fritts, and John Rose on education, public safety, and immigration",
+    "date": "2026-07-23",
+    "candidates_covered": ["Marsha Blackburn", "Monty Fritts", "John Rose"],
+    "why": "This is our single richest source for the staged batch — it supplied quotes for all three candidates across school-vouchers, deportation, and public-safety-approach. It's reported only as text (byline Jared Austin); no video player or transcript was reachable by web fetch, so every quote in this batch sourced to it is one step removed from the actual footage. Ingesting the underlying video would let us verify exact wording, recover full answers (the article likely trims context), and get real timestamp deep-links instead of the article URL for every quote currently citing it."
+  },
+  {
+    "url": "https://www.newschannel5.com/plus/inside-politics/tennessee-primary-republican-governor-candidates",
+    "event": "NewsChannel5 \"Inside Politics\" extended sit-down interviews with John Rose and Monty Fritts (Blackburn declined to participate)",
+    "date": "2026-07-27",
+    "candidates_covered": ["John Rose", "Monty Fritts"],
+    "why": "Described as full, unedited long-form interviews (companion write-up: https://www.newschannel5.com/news/newschannel-5-investigates/rose-and-fritts-make-their-case-for-governor-as-blackburn-declines-interview, byline Ben Hall). Only a handful of soundbites were excerpted in the write-up — including a strong, unused Rose growth-and-development quote (\"Growth is driving up the cost, making it unaffordable for Tennesseans... to afford a home\" / \"more fairly divide the cost of growth... focus more of that cost on people moving here\") and a nuanced vouchers-equity aside (\"if the promise of vouchers... is to be realized, it's got to lift all boats\") that we did not stage because we couldn't verify its exact wording/boundaries. Ingesting the full episode would very likely unlock a rankable growth-and-development topic (Rose currently has no counterpart there) and a cleaner, better-sourced vouchers quote for Rose than the one we staged from WVLT."
+  },
+  {
+    "url": "https://www.wkrn.com/news/tennessee-news/republican-gubernatorial-candidates-address-public-safety-affordability-ahead-of-election-day/",
+    "event": "WKRN interview(s) with Blackburn, Rose, and Fritts on public safety and affordability (grocery tax, property tax, housing)",
+    "date": "2026-07-17",
+    "candidates_covered": ["Marsha Blackburn", "John Rose", "Monty Fritts"],
+    "why": "wkrn.com returns HTTP 403 to automated fetches, so every quote in our batch sourced to this outlet (Blackburn's taxes quote, Rose's taxes and public-safety quotes) was actually verified through a syndicated Yahoo News copy (byline Lexi Wilson), not the original page — we could not confirm whether the underlying interviews were on-camera video or phone/written. If video, ingesting would upgrade these from secondary-text-confirmed to a real timestamped tier-2 source; it would also let us check Fritts's grocery-tax quote, which the Yahoo copy only paraphrased (\"ending the sales tax on groceries\" — no verbatim text), so we could not stage a Fritts taxes quote at all despite taxes being his signature issue."
+  },
+  {
+    "url": "https://www.wkrn.com/news/tennessee-news/marsha-blackburn-rare-interview/",
+    "event": "WKRN \"Sen. Blackburn addresses Tennessee issues in rare interview amid governor's race\"",
+    "date": "2026-07-07",
+    "candidates_covered": ["Marsha Blackburn"],
+    "why": "Reported as a rare sit-down interview (Blackburn has otherwise declined debates/interviews this cycle per WSMV/WPLN reporting), so this and its sister-station companion (https://www.actionnews5.com/2026/07/07/rare-interview-sen-marsha-blackburn-talks-age-debates-why-she-wants-be-tennessee-governor/) are likely one of the only extended on-camera sources for her this race. We could not access the video or a transcript; ingesting could surface additional forward-looking, on-question material beyond the four topics we managed to source for her from other outlets."
+  }
+]

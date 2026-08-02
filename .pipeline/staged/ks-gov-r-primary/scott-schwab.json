@@ -1,0 +1,36 @@
+{
+  "politician_name": "Scott Schwab",
+  "source_url": "https://www.youtube.com/watch?v=ZOYzHwRPWpk",
+  "topic_key": "data-centers",
+  "quotes": [
+    {
+      "text": "What's good for Eastern Kansas or South Central may not be good for Western Kansas. Every time you try to do a monolith policy out of Topeka, it works about as good as when you do a federal monolith policy coming out of DC — it just doesn't work. … If that county commissioner or those city officials are duly elected, they can be held accountable for the decisions they make.",
+      "timestamp_seconds": 2565,
+      "editor_note": "Verbatim from the June 5, 2026 JCCC Republican gubernatorial debate (Debate Night in Kansas, moderator John Holt) — a tier-1 debate source (… cuts a sentence noting some communities embrace data centers and some don't, kept out as restating the premise). States his local-accountability rationale for keeping data-center siting decisions out of Topeka. Politician row already exists (id e752a957-c776-4942-9aae-63ebf23174ac); no Compass stance recorded yet for this race."
+    },
+    {
+      "text": "You do not want a static cap on appraisals — it's anti-free market and it's going to hurt real estate development and opportunities to grow our economy. In my plan, every time a local jurisdiction wants to raise the mil levy, let the people in that jurisdiction vote on it. If it passes, clearly they are okay with their property taxes going up; if it fails, then you have to rein in spending. It's a win-win.",
+      "topic_key": "taxes",
+      "timestamp_seconds": 3658,
+      "editor_note": "Verbatim from the same debate, his direct answer to its cap-appraisals-vs-let-voters-block-spending question. Names a specific mechanism — voter approval required for any mil-levy increase — distinct from a hard appraisal cap. No Compass stance recorded yet for this race."
+    },
+    {
+      "text": "On the front side, you can do a lot for crisis pregnancy centers. … I would reintroduce a third-trimester abortion ban and a partial-birth abortion ban.",
+      "topic_key": "abortion",
+      "timestamp_seconds": 4251,
+      "editor_note": "Verbatim from the same debate (… cuts a critique of the sitting governor's stance on crisis-pregnancy-center funding and a line about co-equal branches, kept out as scaffolding around his actual policy proposals). Names the two specific bills he'd reintroduce. No Compass stance recorded yet for this race."
+    },
+    {
+      "text": "Our rural communities need good roads. Right now, we need to define in statute what a shoulder is, and any highway with speed limits of 50 or above needs to be shouldered for safety. Second, we need to finish Highway 50 going east out of Liberal, and then start focusing on a north-south four-lane corridor going from Liberal all the way up to I-70 so rural farmers can get products to market faster.",
+      "topic_key": "transportation-priorities",
+      "timestamp_seconds": 4903,
+      "editor_note": "Verbatim from the same debate, his full answer on 10-year transportation-plan priorities. Names concrete, specific mechanisms (statutory shoulder standards, two named highway projects) — the most mechanism-rich answer on this topic in the debate. No Compass stance recorded yet for this race."
+    },
+    {
+      "text": "When people say we're giving the Chiefs this money, that's not true. There is no upfront cost. … We didn't take anybody's land away from them. Right now, we get no sales tax from that area because it's just grass. … If you want to get out of a perceived recession in the state of Kansas, you have to make investments in deals like this. This costs no State General Fund money; nobody's taxes are going up.",
+      "topic_key": "economic-development",
+      "timestamp_seconds": 3337,
+      "editor_note": "Verbatim, one contiguous answer, from the same debate's Chiefs-stadium-deal segment; the two … mark cuts of a Kansas-Speedway comparison and a naming of the Chiefs' owner, kept out as supporting examples rather than the claim itself ('SGF' expanded to 'State General Fund' for clarity, no substance change). His position on the ongoing STAR-bonds Chiefs deal doubles as his general stance on state-backed development incentives. No Compass stance recorded yet for this race; judgment call flagged for a human reviewer, same as for the other debate participants on this topic."
+    }
+  ]
+}

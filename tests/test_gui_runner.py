@@ -516,3 +516,132 @@ def test_build_run_command_omits_body_when_absent():
     from gui.runner import RunParams, build_run_command
     p = RunParams(input="x", date="2026-02-04", meeting_type="Regular", event_kind="council")
     assert "--body" not in build_run_command("py", "s", p, "m")
+
+
+# ── Re-run ingestion ────────────────────────────────────────────────────────
+# Stage 1 is not a rewind (rewind_to clamps at DIARIZED and never deletes
+# audio.wav; --resume requires audio.wav). A failed ingest is therefore only
+# recoverable by replaying the original --input launch.
+
+def _launch(tmp_meetings_dir, **kw):
+    """Do a real launch_run through _FakePopen so the sidecar gets written, then
+    write the pipeline_state.json that run_local.py would have written at startup
+    (a failed ingest still leaves one behind, at completed_stage 0)."""
+    from gui import runner
+    from src.checkpoint import PipelineState
+    runner._RUNS.clear()
+    p = runner.RunParams(input="https://youtu.be/ZZZ", date="2026-02-10",
+                         meeting_type="Regular", event_kind="council",
+                         title="Budget Hearing", event_orgs=["PBS"], compute="modal", **kw)
+    mid = runner.launch_run(p, python_exe="py", script="run_local.py", popen=_FakePopen)
+    PipelineState(tmp_meetings_dir / mid).save()
+    return mid
+
+
+def test_launch_records_launch_cmd_in_sidecar(tmp_meetings_dir):
+    import json
+    mid = _launch(tmp_meetings_dir)
+    side = json.loads((tmp_meetings_dir / mid / "gui_run.json").read_text())
+    assert "--input" in side["launch_cmd"]
+    assert side["launch_cmd"] == side["cmd"]
+
+
+def test_redo_preserves_launch_cmd(tmp_meetings_dir):
+    """A redo overwrites `cmd`; it must NOT lose the original launch argv —
+    --title/--event-org/--compute live nowhere else."""
+    import json
+    from gui import runner
+    mid = _launch(tmp_meetings_dir)
+    runner.launch_redo(mid, "diarize", python_exe="py", script="run_local.py", popen=_FakePopen)
+    side = json.loads((tmp_meetings_dir / mid / "gui_run.json").read_text())
+    assert "--redo" in side["cmd"] and "--input" not in side["cmd"]
+    assert "--input" in side["launch_cmd"]
+    assert side["launch_cmd"][side["launch_cmd"].index("--title") + 1] == "Budget Hearing"
+
+
+def test_build_reingest_command_replays_launch_with_current_interpreter(tmp_meetings_dir):
+    from gui import runner
+    mid = _launch(tmp_meetings_dir)
+    runner.launch_redo(mid, "diarize", python_exe="py", script="run_local.py", popen=_FakePopen)
+    cmd = runner.build_reingest_command("/new/venv/python", "/new/repo/run_local.py", mid)
+    assert cmd[:2] == ["/new/venv/python", "/new/repo/run_local.py"]   # not the stale path
+    assert cmd[cmd.index("--input") + 1] == "https://youtu.be/ZZZ"
+    assert cmd[cmd.index("--title") + 1] == "Budget Hearing"
+    assert cmd[cmd.index("--compute") + 1] == "modal"
+
+
+def test_build_reingest_command_none_without_recorded_launch(tagged_meeting_dir):
+    from gui import runner
+    tagged_meeting_dir("x", meeting_id="legacy-meeting", completed_stage=0)
+    assert runner.build_reingest_command("py", "s", "legacy-meeting") is None
+
+
+def test_launch_reingest_respawns_when_audio_missing(tmp_meetings_dir):
+    from gui import runner
+    mid = _launch(tmp_meetings_dir)
+    runner.launch_redo(mid, "diarize", python_exe="py", script="run_local.py", popen=_FakePopen)
+    assert runner.launch_reingest(mid, python_exe="py", script="run_local.py",
+                                  popen=_FakePopen) == mid
+    assert "--input" in runner._RUNS[mid].cmd
+
+
+def test_launch_reingest_refuses_once_ingest_recorded(tmp_meetings_dir):
+    """Re-downloading a meeting that already ingested is not this action."""
+    from gui import runner
+    from src.checkpoint import PipelineStage, PipelineState
+    mid = _launch(tmp_meetings_dir)
+    st = PipelineState(tmp_meetings_dir / mid)
+    st.completed_stage = PipelineStage.INGESTED
+    st.save()
+    assert runner.launch_reingest(mid, python_exe="py", script="run_local.py",
+                                  popen=_FakePopen) is None
+
+
+def test_launch_reingest_rejects_unsafe_and_unknown(tmp_meetings_dir):
+    from gui import runner
+    assert runner.launch_reingest("../etc", python_exe="py", script="s", popen=_FakePopen) is None
+    assert runner.launch_reingest("nope", python_exe="py", script="s", popen=_FakePopen) is None
+
+
+def test_ingest_complete_reads_state_not_the_wav(tagged_meeting_dir, tmp_meetings_dir):
+    """src/cleanup.py deletes audio.wav (keeping audio.opus) on processed
+    meetings — a file probe would call a finished meeting never-ingested."""
+    from gui import runner
+    assert runner.ingest_complete(tagged_meeting_dir("x", meeting_id="fresh", completed_stage=0)) is False
+    assert runner.ingest_complete(tagged_meeting_dir("x", meeting_id="ingested", completed_stage=1)) is True
+    cleaned = tagged_meeting_dir("x", meeting_id="cleaned", completed_stage=7)  # media_cleaned: no wav
+    assert not (cleaned / "audio.wav").exists()
+    assert runner.ingest_complete(cleaned) is True
+
+
+def test_ingest_complete_false_on_unreadable_state(tmp_meetings_dir):
+    from gui import runner
+    d = tmp_meetings_dir / "broken"; d.mkdir()
+    (d / "pipeline_state.json").write_text("{not json", encoding="utf-8")
+    assert runner.ingest_complete(d) is False
+
+
+def test_build_reingest_command_falls_back_to_legacy_sidecar_cmd(tagged_meeting_dir, tmp_meetings_dir):
+    """Sidecars written before launch_cmd existed still hold the launch argv in
+    `cmd` if no redo has overwritten it — those meetings stay recoverable."""
+    import json
+    from gui import runner
+    mdir = tagged_meeting_dir("x", meeting_id="legacy-launch", completed_stage=0)
+    (mdir / "gui_run.json").write_text(json.dumps({
+        "pid": 1, "status": "running",
+        "cmd": ["old/py", "old/run_local.py", "--input", "https://youtu.be/L",
+                "--meeting-id", "legacy-launch", "--title", "Forum"]}), encoding="utf-8")
+    cmd = runner.build_reingest_command("py", "s", "legacy-launch")
+    assert cmd[cmd.index("--input") + 1] == "https://youtu.be/L"
+    assert cmd[cmd.index("--title") + 1] == "Forum"
+
+
+def test_build_reingest_command_ignores_legacy_redo_cmd(tagged_meeting_dir, tmp_meetings_dir):
+    import json
+    from gui import runner
+    mdir = tagged_meeting_dir("x", meeting_id="legacy-redo", completed_stage=0)
+    (mdir / "gui_run.json").write_text(json.dumps({
+        "pid": 1, "status": "running",
+        "cmd": ["old/py", "old/run_local.py", "--resume", "legacy-redo", "--redo", "diarize"]}),
+        encoding="utf-8")
+    assert runner.build_reingest_command("py", "s", "legacy-redo") is None

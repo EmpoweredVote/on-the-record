@@ -1,0 +1,35 @@
+{
+  "politician_name": "Curt Skoog",
+  "topic_key": "medicare/aid",
+  "source_url": "https://www.kctv5.com/2026/07/15/what-kansas-gubernatorial-candidates-will-do-address-rural-healthcare-crisis/",
+  "quotes": [
+    {
+      "text": "We have 28 rural hospitals that are at imminent threat of closure today. 28. And so we need to expand Medicaid, number one. We have to build consensus to get that done. … We need everyone to have access to quality health care. No matter if you're in Alma, or if you're in Colby, or if you're in Wyandotte County, or if you're in Gardner. Everybody needs access to quality health care. And that will be a priority.",
+      "editor_note": "KCTV5's 2026 Candidate Guide rural-healthcare question, verified directly against the article. Cut (marked …) a passage criticizing \"the dysfunctional legislature\" as an aside, keeping the affirmative plan. States his position: expand Medicaid to address rural hospital closures, framed around statewide access."
+    },
+    {
+      "text": "I would work [to] build a consensus, unlike this dysfunctional legislature, [so] we can move forward with a plan that addresses property taxes. Property taxes is not as easy as a cap.",
+      "topic_key": "taxes",
+      "source_url": "https://www.kcur.org/podcast/up-to-date/2026-06-11/kansas-democratic-gubernatorial-candidates-on-tax-reform-data-centers-and-marijuana-legalization",
+      "editor_note": "KCUR's Up To Date live forum, 2026-06-11; verified directly against the article. Silently dropped a dangling \"as I said\" filler referencing an earlier point in the interview, and bracketed two connector words (\"to\", \"so\") to bridge the resulting sentence honestly - no change to substance. \"This dysfunctional legislature\" is an institutional critique, not a personal attack. States his position: property-tax reform needs a negotiated plan, not a simple rate cap."
+    },
+    {
+      "text": "The legislature should not be in the doctor's office between a doctor's conversation with the patient. I believe in local control. … I support continuing to allow a choice to be made between a doctor and a patient and what is the right health choice for that situation.",
+      "topic_key": "abortion",
+      "source_url": "https://www.kctv5.com/2026/07/17/how-candidates-kansas-governor-will-address-issue-access-abortion/",
+      "editor_note": "KCTV5 candidate guide, 2026-07-17; verified directly against the article, with a short connecting aside cut and marked. \"The legislature\" critique targets an institution, not a person. States his position: keep abortion decisions between doctor and patient, framed as opposition to legislative intrusion."
+    },
+    {
+      "text": "On vouchers, my answer is no. I oppose diverting public dollars to private-school vouchers. … It does nothing for the many rural counties with no private school, and it largely subsidizes families already enrolled in private school.",
+      "topic_key": "school-vouchers",
+      "source_url": "https://johnsoncountypost.com/2026/07/14/kansas-governor-candidates-on-the-issues-public-schools-special-education-and-vouchers-291084/",
+      "editor_note": "Johnson County Post ran the same written questionnaire question on vouchers to all three Democratic candidates (2026-07-14); tier-4 written source (justified: verbatim, single-claim sentences from his own submitted answer, not a curator summary). Cut (marked …) a sentence about this session's veto-override to keep the standalone-policy sentences together. States his opposition to diverting public dollars to private-school vouchers."
+    },
+    {
+      "text": "We need economic growth, we need jobs, we need private investment across the state, so our kids and grandkids can have a place to stay and work in their hometown and their community, and aren't forced to leave their hometown or their local county to have a career.",
+      "topic_key": "economic-development",
+      "source_url": "https://www.kcur.org/podcast/up-to-date/2026-06-11/kansas-democratic-gubernatorial-candidates-on-tax-reform-data-centers-and-marijuana-legalization",
+      "editor_note": "KCUR's Up To Date live forum, 2026-06-11; verbatim, verified directly against the article, no edits. States his approach: broad-based growth/jobs/investment aimed at keeping young Kansans from leaving their home communities."
+    }
+  ]
+}

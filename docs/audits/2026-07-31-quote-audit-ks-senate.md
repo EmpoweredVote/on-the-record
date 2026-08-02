@@ -1,0 +1,203 @@
+# Quote Audit — U.S. Senate Kansas (KS, 2026-08-04)
+
+**65 findings** — 49 high, 16 medium, 0 low
+
+## Summary by race
+- **race 2680c3c2-9e5f-4c97-abd7-0557ae02c3c2** — 65 findings (49 high, 16 med, 0 low)
+
+## race 2680c3c2-9e5f-4c97-abd7-0557ae02c3c2
+- `high` · `decision-required` · **source-summary** (quote) — Jason Hart / abortion [06132e41-df78-42d0-8de4-53ab1ab55aeb]
+    - 'Support Kansans' 2022 Vote' is a short campaign-site heading/slogan, not a sentence Hart wrote or said about the legal framework he supports.
+    - fix: Re-source to an actual sentence from his platform or public statements that states his abortion-legality position, not a section title.
+- `high` · `decision-required` · **off-question** (quote) — Jason Hart / abortion [06132e41-df78-42d0-8de4-53ab1ab55aeb]
+    - 'Support Kansans' 2022 Vote' names no legal framework (no trimester line, no exceptions) — a reader can't tell where Hart lands among the five chairs from this alone.
+    - fix: Replace with a quote that states an actual position on what should be legal, not a reference to a past vote.
+- `high` · `decision-required` · **source-summary** (quote) — Patrick Schmidt / abortion [d2bd4312-8449-4bc6-adfd-9cec79a095ed]
+    - 'the most pro-choice legislator' (deid adds '[in his delegation]') reads as a third-party description of Schmidt from a news article about him breaking from his party to add a provision to a fetal-child-support bill — not a first-person statement of his own position.
+    - fix: Verify who is actually speaking in the source article; if it's a journalist's or colleague's characterization rather than Schmidt's own words, re-source to an actual Schmidt statement on abortion legality.
+- `high` · `decision-required` · **off-question** (quote) — Patrick Schmidt / abortion [d2bd4312-8449-4bc6-adfd-9cec79a095ed]
+    - A label ('the most pro-choice legislator') states no legal framework — doesn't answer what abortion policy he supports.
+    - fix: Same as source-summary fix: needs an actual position statement, not an accolade/label.
+- `high` · `decision-required` · **source-summary** (quote) — Kevin Latz / abortion [830d0f55-abab-4f9e-bcaa-8e454b1d751b]
+    - 'Protecting the right to safe, legal reproductive care as a public health and economic imperative for all Kansans' is a gerund-phrase heading typical of an issues-page bullet/section title, not authored first-person prose.
+    - fix: Check the source page for an actual sentence (not a heading) stating this position, or confirm this literally is body prose before treating it as quotable.
+- `high` · `decision-required` · **source-summary** (quote) — Jason Hart / ai-regulation [f01bd48d-ee1b-4343-b4c6-79f454121968]
+    - 'Provide Rational Guardrails for the AI Arms Race' is an issues-page section heading, not a sentence Hart said or wrote.
+    - fix: Re-source to actual prose stating his AI-oversight position.
+- `high` · `decision-required` · **source-summary** (quote) — Jason Hart / campaign-finance [b4cb5d4d-2067-4e1e-baa5-197f06698b7f]
+    - 'Provide for Publicly Funded Elections' is an issues-page heading, not authored prose, even though it substantively names a mechanism (public financing).
+    - fix: Confirm whether the site has actual sentence-form language stating this, and use that instead of the section title.
+- `high` · `decision-required` · **source-summary** (quote) — Adam Hamilton / healthcare [2029dbf8-7b00-42e0-bc01-3d10e46d0585]
+    - 'Reverse Medicaid cuts and restore ACA subsidies' is an issues-page bullet heading, not authored prose.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `decision-required` · **not-forward** (quote) — Christy Davis / healthcare [c74b6783-8075-4a08-b89c-c09961c0a274]
+    - 'Federal cuts are putting lives at risk and forcing hospitals to close' diagnoses current harm from federal cuts but states no forward healthcare-access position of her own.
+    - fix: Pair with or replace by a quote stating what she'd do on healthcare access going forward, not just the consequence of cuts.
+- `high` · `decision-required` · **source-summary** (quote) — Jason Hart / healthcare [e2f99824-3229-452b-b2ee-a03eaf82a415]
+    - 'Expand Medicare and Medicaid' is a 3-word issues-page heading, not authored prose.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `decision-required` · **source-summary** (quote) — Adam Hamilton / housing [b6c64523-35b7-431a-86c1-756ed1f9b61e]
+    - 'Create tax credits for first-time buyers and public servants' is an issues-page bullet heading, not authored first-person prose.
+    - fix: Confirm against the source page whether sentence-form language exists; use that instead of the bullet fragment.
+- `high` · `decision-required` · **off-question** (quote) — Anne Parelkar / immigration [241cb79a-151e-4719-94b3-ff26b877f146]
+    - 'I don't want children taken away from their mothers' addresses enforcement humanity, not the axis this topic's chairs measure (how open/restrictive legal immigration and public-service access should be) — doesn't indicate where she lands among the five chairs.
+    - fix: Prefer a quote that states her position on immigration levels/legal-pathway access, or re-home this quote to a family-separation/enforcement-conduct topic if one exists.
+- `high` · `decision-required` · **source-summary** (quote) — Kevin Latz / immigration [f6250db5-4dfc-4343-9c11-d487b9b7f5e4]
+    - 'Advocating for secure borders paired with opportunities for those who meet the nation's needs' is a gerund-phrase heading style typical of an issues-page bullet, not authored first-person prose.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `decision-required` · **off-question** (quote) — Jason Hart / immigration [efeffc82-b562-4bf1-867c-66a83257df98]
+    - 'Cruelty Is Not an American Solution' is a pure values slogan that names no position on immigration levels or legal-pathway access — doesn't indicate where Hart lands among the chairs.
+    - fix: Replace with a quote stating an actual immigration-policy position.
+- `high` · `decision-required` · **source-summary** (quote) — Jason Hart / immigration [efeffc82-b562-4bf1-867c-66a83257df98]
+    - 'Cruelty Is Not an American Solution' is a slogan-style issues-page title, not authored prose stating a position.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `decision-required` · **source-summary** (quote) — Adam Hamilton / medicare/aid [ce91c4b6-d203-42a3-acc1-a03f9337022b]
+    - 'Expand Medicare to cover vision and dental care' is an issues-page bullet heading, not authored prose.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `decision-required` · **source-summary** (quote) — Adam Hamilton / tariffs [5869f5fb-95e0-4f15-afcf-07be4b4ea587]
+    - 'End self-destructive tariffs and unnecessary wars' is an issues-page heading (and mixes an unrelated foreign-policy clause into a tariffs-topic quote).
+    - fix: Confirm against the source page for sentence-form, tariffs-only language; use that instead.
+- `high` · `decision-required` · **source-summary** (quote) — Sandy Spidel Neumann / tariffs [7cd41c36-a401-4c09-be32-21129b5b4eb4]
+    - 'Reverse tariffs immediately' is an issues-page bullet heading, not authored prose.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `decision-required` · **not-forward** (quote) — Erik Murray / tariffs [17992212-c1c6-4459-86ba-6ee2b9e6a2b8]
+    - 'Tariffs are a tax, and the American public has borne the brunt of those taxes' diagnoses the effect of current tariffs but states no forward tariff policy of his own.
+    - fix: Pair with or replace by a quote stating which tariffs he'd keep, cut, or impose and why.
+- `high` · `decision-required` · **source-summary** (quote) — Jason Hart / tariffs [89ecdae1-4211-49d2-bebf-61083ebf800c]
+    - 'Stop Tariff and Market Destabilizing Chaos' is an issues-page heading, not authored prose.
+    - fix: Confirm against the source page for sentence-form language; use that instead.
+- `high` · `guided` · **note-missing** (quote) — Damon Anderson / abortion [fc8df42c-3d43-4264-aea4-26d54e5ccc78]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Jason Hart / abortion [06132e41-df78-42d0-8de4-53ab1ab55aeb]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Patrick Schmidt / abortion [d2bd4312-8449-4bc6-adfd-9cec79a095ed]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Kevin Latz / abortion [830d0f55-abab-4f9e-bcaa-8e454b1d751b]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Jason Hart / ai-regulation [f01bd48d-ee1b-4343-b4c6-79f454121968]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Jason Hart / campaign-finance [b4cb5d4d-2067-4e1e-baa5-197f06698b7f]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Damon Anderson / campaign-finance [4c30178a-99e5-418c-88bc-77c3b3513407]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Noah Taylor / campaign-finance [e12c22d1-c5da-43b9-aff6-fc1667aab51d]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Anne Parelkar / healthcare [1b343fb8-1cb4-4843-9985-341063098b52]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Damon Anderson / healthcare [9450d37f-ca72-4377-9d66-3dc37c9e6c77]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Adam Hamilton / healthcare [2029dbf8-7b00-42e0-bc01-3d10e46d0585]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Erik Murray / healthcare [bd935614-ff3c-492c-a2bf-cf4cb988fe2f]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Kevin Latz / healthcare [0f72a4a6-dd2a-4bae-933a-b80e84358d2d]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Christy Davis / healthcare [c74b6783-8075-4a08-b89c-c09961c0a274]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Jason Hart / healthcare [e2f99824-3229-452b-b2ee-a03eaf82a415]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Adam Hamilton / housing [b6c64523-35b7-431a-86c1-756ed1f9b61e]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Anne Parelkar / immigration [241cb79a-151e-4719-94b3-ff26b877f146]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Kevin Latz / immigration [f6250db5-4dfc-4343-9c11-d487b9b7f5e4]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Jason Hart / immigration [efeffc82-b562-4bf1-867c-66a83257df98]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Christy Davis / immigration [c20652a8-a5cf-49c1-9662-db1f8beeef1c]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Erik Murray / immigration [0118e37b-340d-4791-82b2-15f0f1371c80]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Adam Hamilton / medicare/aid [ce91c4b6-d203-42a3-acc1-a03f9337022b]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Christy Davis / medicare/aid [4907aabb-22a4-4a9f-9d2b-7e7c0580b8e4]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Christy Davis / social-security [97732a17-34db-483d-a410-0b1a670f8d6f]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Adam Hamilton / tariffs [5869f5fb-95e0-4f15-afcf-07be4b4ea587]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Sandy Spidel Neumann / tariffs [7cd41c36-a401-4c09-be32-21129b5b4eb4]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Erik Murray / tariffs [17992212-c1c6-4459-86ba-6ee2b9e6a2b8]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Jason Hart / tariffs [89ecdae1-4211-49d2-bebf-61083ebf800c]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `high` · `guided` · **note-missing** (quote) — Erik Murray / taxes [b4bb8e58-947d-485b-93c2-fc733cd0a18b]
+    - editor_note is empty.
+    - fix: Write a 1-2 sentence note: why this quote + Compass-stance alignment + any edits.
+- `medium` · `decision-required` · **coverage-skew** (portfolio) —  /  [2680c3c2-9e5f-4c97-abd7-0557ae02c3c2]
+    - Coverage across the race's 10 topics is lopsided: Jason Hart is live on 6/10 (abortion, ai-regulation, campaign-finance, healthcare, immigration, tariffs); Adam Hamilton, Erik Murray, and Christy Davis are each live on 4/10; Damon Anderson and Kevin Latz on 3/10; Anne Parelkar on 2/10; Patrick Schmidt, Noah Taylor, and Sandy Spidel Neumann are each live on only 1/10.
+    - fix: Signal to investigate, not a defect to correct on its own: check whether Schmidt/Taylor/Neumann simply have thinner public records this cycle, or whether curation effort for them lagged behind Hart's.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / ai-regulation [ai-regulation]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Jason Hart / ai-regulation [f01bd48d-ee1b-4343-b4c6-79f454121968]
+    - 'Rational guardrails' is a goal no candidate would contest and names no actual oversight mechanism (no disclosure rule, no testing requirement, no ban).
+    - fix: Prefer language naming a specific oversight mechanism if one exists on the source page.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Damon Anderson / healthcare [9450d37f-ca72-4377-9d66-3dc37c9e6c77]
+    - 'I will support all policies that ensure every American has access to affordable health care and prescription drugs' is a broadly agreeable pledge with no named mechanism (no program, no funding source, no structural approach).
+    - fix: Prefer a quote naming an actual mechanism (public option, subsidy structure, etc.) if the campaign site has one.
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Kevin Latz / healthcare [0f72a4a6-dd2a-4bae-933a-b80e84358d2d]
+    - 'a government-paying program is the most moral and cost-effective way to go' reads closer to the public-sector-run v1 chair than the synthesized value=2 (mix of public programs + regulated private insurance).
+    - fix: Check whether the Compass value should move toward 1, or whether surrounding context (not captured in the excerpt) tempers this toward the mix position.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / housing [housing]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Kevin Latz / immigration [f6250db5-4dfc-4343-9c11-d487b9b7f5e4]
+    - 'Secure borders paired with opportunities for those who meet the nation's needs' is a centrist platitude almost any candidate would endorse, naming no specific visa/pathway/enforcement mechanism.
+    - fix: Prefer language naming an actual immigration-levels mechanism.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Jason Hart / immigration [efeffc82-b562-4bf1-867c-66a83257df98]
+    - 'Cruelty Is Not an American Solution' is a goal no candidate would contest (nobody campaigns for cruelty) and names no mechanism whatsoever.
+    - fix: Same as off-question fix — needs a substantive position statement.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Erik Murray / immigration [0118e37b-340d-4791-82b2-15f0f1371c80]
+    - 'We can have strong, secure, orderly borders and a humane, efficient immigration system. These are not in conflict' is a bridging framing nearly any candidate could say, naming no concrete policy (no pathway, no enforcement specifics, no levels).
+    - fix: Prefer a quote naming an actual mechanism if one exists in the source article.
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Adam Hamilton / medicare/aid [ce91c4b6-d203-42a3-acc1-a03f9337022b]
+    - Proposing new Medicare benefit categories (vision/dental) reads closer to the more expansive v1/v2 chairs than the synthesized value=3 ('improve current programs while controlling costs').
+    - fix: Check whether the Compass value should move, or whether this quote should be paired with cost-control context.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Christy Davis / medicare/aid [4907aabb-22a4-4a9f-9d2b-7e7c0580b8e4]
+    - Same 'I'll defend Social Security, Medicare, Medicaid, and public education from cuts and privatization' quote reused for this topic states only an agreeable defensive goal with no Medicare/Medicaid-specific funding or structural mechanism.
+    - fix: Prefer a quote naming an actual Medicare/Medicaid structural approach; note this exact sentence is also used for the social-security topic, which may itself be worth a second look.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / social-security [social-security]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Christy Davis / social-security [97732a17-34db-483d-a410-0b1a670f8d6f]
+    - 'I'll defend Social Security, Medicare, Medicaid, and public education from cuts and privatization' states only an agreeable defensive goal (opposing cuts) and names no funding/structural mechanism for how Social Security itself would be structured going forward.
+    - fix: Prefer a quote (if one exists) that states a specific funding approach (e.g. raising the payroll-tax cap, benefit formula changes).
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Erik Murray / tariffs [17992212-c1c6-4459-86ba-6ee2b9e6a2b8]
+    - 'Tariffs are a tax, and the American public has borne the brunt of those taxes' frames tariffs as a straightforward public burden, pulling toward the anti-tariff v1/v2 chairs rather than the synthesized value=3 ('use tariffs selectively to protect key industries').
+    - fix: Check whether the value should move, or pair with a quote that shows the 'selective use' side of his position.
+- `medium` · `decision-required` · **non-differentiating-goal** (quote) — Jason Hart / tariffs [89ecdae1-4211-49d2-bebf-61083ebf800c]
+    - 'Stop Tariff and Market Destabilizing Chaos' is a goal nobody would contest (nobody favors 'chaos') and names no actual tariff-level mechanism.
+    - fix: Prefer a quote naming an actual tariff position (which to cut/keep).
+- `medium` · `decision-required` · **not-rankable** (topic) —  / taxes [taxes]
+    - Only 1 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.

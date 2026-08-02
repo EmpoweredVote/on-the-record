@@ -25,6 +25,15 @@ what's already there.
       `mechanical_report.md`. Show the user both printed lines and **confirm before the judgment
       fan-out** — state roughly one subagent per race. The mechanical pass is free and read-only,
       so run it first regardless.
+- [ ] **Offer `--verify-written`** (a.k.a. `--verify-sources`). Without it, quotes from candidate
+      sites, op-eds and news articles are never compared to their cited source — the gap that let
+      the WI-02 clip through (CHECKS.md §2.2). This is the highest-severity blind spot in the
+      pipeline: a quote can be fabricated, paraphrased, or cut to mean the opposite, and every
+      other check still passes it. It fetches each cited page (cached, rate-limited), so it is off
+      by default: **ask before enabling it on a wide scope**, since a full sweep hits hundreds of
+      third-party sites. On a single race it's cheap — just turn it on.
+      (`source-nested-quotation` is the exception: it runs on video transcripts and on every
+      quote's own text without the flag — see CHECKS.md §2.3.)
 - [ ] **Judgment fan-out.** For each `.runs/<date>/context/<race>.json` bundle, dispatch a
       parallel `Agent`-tool subagent using the judgment-agent prompt template in CHECKS.md §4
       (fill in `{context_bundle_json}` with the bundle; the agent also needs the principles doc).
@@ -54,12 +63,16 @@ cd .claude/skills/audit-quotes
 ../../../.venv/bin/python -m scripts.audit --candidate "Steve Hilton" --topic housing
 ../../../.venv/bin/python -m scripts.audit --ids id1,id2 --include-drafts
 ../../../.venv/bin/python -m scripts.audit --scope-label "CA governor" --out .runs/ca-gov
+../../../.venv/bin/python -m scripts.audit --race RACE_ID --verify-written   # also check written sources
 ```
 
 Flags: `--race RACE_ID` (scope to one race — both candidates; needed for the portfolio pass on a
 single race; find race_ids in a default run's report), `--candidate NAME`, `--topic KEY`,
 `--ids id1,id2`, `--include-drafts` (drafts are excluded by default), `--out DIR` (default resolves
-relative to the skill, cwd-independent), `--scope-label LABEL` (used in the rendered report heading).
+relative to the skill, cwd-independent), `--scope-label LABEL` (used in the rendered report heading),
+`--verify-written` / `--verify-sources` (**network I/O** — fetch each non-video `source_url` and
+verify the quote against the live page: is the text there, whose words are they, and was it cut
+defensibly; see CHECKS.md §2.2–2.3).
 
 Fixes file for `scripts/apply_fixes.py` (dry-run by default; `--commit` persists):
 
@@ -84,6 +97,9 @@ Allowed `field` values for `set_field`/`regex_sub`: `editor_note`, `deidentified
 
 - **Read-only until the gated fix step.** Every write goes through `apply_fixes.py`'s
   dry-run-then-explicit-OK flow — this is a production DB.
+- **The audit is DB-only unless the user opts into `--verify-written`.** That flag is the only
+  thing in this skill that reaches the public internet. It only ever issues GETs to already-cited
+  `source_url`s, but on a wide scope that's hundreds of third-party sites — confirm first.
 - **Never auto-apply `decision-required` findings.** Those are for the user to resolve; list them,
   don't act on them.
 - **The report is the primary deliverable.** Even a run with zero applied fixes is a success if

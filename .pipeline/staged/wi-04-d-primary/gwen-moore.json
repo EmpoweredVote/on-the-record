@@ -1,0 +1,30 @@
+{
+  "politician_name": "Gwen Moore",
+  "topic_key": "abortion",
+  "source_url": "https://urbanmilwaukee.com/pressrelease/congresswoman-gwen-moore-applauds-state-supreme-court-decision-striking-down-wisconsin-abortion-ban/",
+  "quotes": [
+    {
+      "text": "… women should be able to control their own bodies. … At the same time, women's health care is still under attack, and is happening right now in this Congress. As this Republican-led Congress works to gut Planned Parenthood and deprive patients of critical preventative health care, I will do what I can to push back and stand up for women.",
+      "editor_note": "From her July 2025 statement after the Wisconsin Supreme Court struck down the state's 1849 abortion ban — her clearest current position: women should retain control over abortion decisions, and she'll keep opposing Planned Parenthood defunding in Congress. Verbatim; cut her reaction to the court ruling itself (the Dobbs/1849-law history), marked with ellipses, to keep the forward-looking position rather than the news recap."
+    },
+    {
+      "text": "ICE is operating like a rogue agency, and its abuses make clear that serious reforms are long overdue. This is exactly why I refused to give this out-of-control agency one more penny. My constituents should know they are entitled to due process in our country. Every person has rights, no matter their status. As Wisconsin's Fourth District representative, I will continue conducting oversight and doing everything in my power to protect my constituents.",
+      "deidentified": "ICE is operating like a rogue agency, and its abuses make clear that serious reforms are long overdue. This is exactly why I refused to give this out-of-control agency one more penny. My constituents should know they are entitled to due process in our country. Every person has rights, no matter their status. … I will continue conducting oversight and doing everything in my power to protect my constituents.",
+      "topic_key": "deportation",
+      "source_url": "https://urbanmilwaukee.com/pressrelease/congresswoman-gwen-moore-statement-on-violent-reckless-ice-arrests-in-milwaukee/",
+      "editor_note": "From a July 2026 statement on ICE enforcement in Milwaukee's South Side — her current position on immigration-enforcement tactics: due process for everyone regardless of status, and continued funding/oversight pushback against tactics she calls rogue. Verbatim, no words changed. The blind version drops her explicit 'as Wisconsin's Fourth District representative' self-identification, which doesn't change the position itself."
+    },
+    {
+      "text": "No matter who you are, whether you're the poorest of the poor or the richest of the rich, your health care premiums are gonna go up. … Republicans, do the right thing. Keep the government open and help people keep their lifesaving health insurance.",
+      "topic_key": "healthcare",
+      "source_url": "https://urbanmilwaukee.com/pressrelease/congresswoman-gwen-moore-calls-on-republicans-to-address-health-care-crisis/",
+      "editor_note": "From a September 2025 video statement during the government-shutdown fight over expiring ACA premium tax credits — ties her position (keep the government open, protect people's insurance and premiums) directly to the healthcare-access question. Verbatim; cut a specific dollar-amount example in the middle (marked), keeping the core position."
+    },
+    {
+      "text": "… Hospitals will close if they take the Medicaid away from states. Nursing homes will be understaffed if they take away Medicaid. People will not be able to stay in their homes because they won't have community support, which Medicaid pays for. I think it's delusional on their part to think that they could just nip here and nip there, that they can take away benefits from people and it not have an impact on everybody.",
+      "topic_key": "medicare/aid",
+      "source_url": "https://spectrumnews1.com/wi/green-bay/news/2025/05/12/gwen-moore-medicaid-cuts-republicans",
+      "editor_note": "From a May 2025 Spectrum News interview responding to proposed federal Medicaid cuts — her clearest statement opposing structural Medicaid cuts, with the concrete harms she argues follow (hospital closures, understaffed nursing homes, lost home-based care). Verbatim; trimmed her opening dig at Republicans' rural-constituent rhetoric (marked), keeping the substantive consequences she lays out."
+    }
+  ]
+}

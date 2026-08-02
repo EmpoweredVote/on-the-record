@@ -1,0 +1,26 @@
+{
+  "politician_name": "Jerri Green",
+  "topic_key": "healthcare",
+  "source_url": "https://www.yahoo.com/news/articles/tennessee-candidate-governor-jerri-green-105034364.html",
+  "quotes": [
+    {
+      "text": "We should not be playing Russian Roulette with people's lives. There are ways and spaces that a governor's budget can stand in the gap and help people in need; can prioritize people over profits.",
+      "editor_note": "From a WJHL local-news interview during a Kingsport campaign stop (syndicated to Yahoo News; wjhl.com blocks automated verification, but the text was byte-identical across repeated independent fetches of the syndicated copy). Verbatim, no edits. Green's clearest forward statement on healthcare: she'd use the state budget to expand access and put people ahead of profit, a more-government-role position rather than a market-first one."
+    },
+    {
+      "text": "We're not going to put any money in the budget for vouchers; we're going to put all of that money back in public schools.",
+      "topic_key": "school-vouchers",
+      "editor_note": "Same WJHL/Yahoo interview, verbatim, no edits. A direct, forward commitment to zero out voucher funding and redirect it to public schools — a clear anti-voucher, pro-public-school-funding position with a stated mechanism (budget redirection), not just a general pro-schools sentiment."
+    },
+    {
+      "text": "We don't need to be in any way working with ICE. ICE needs to be defunded, abolished and we need to be putting those resources to actually help people; we're spending billions of dollars to terrorize communities when we could be building them up.",
+      "topic_key": "local-immigration",
+      "editor_note": "Same WJHL/Yahoo interview, verbatim, no edits. Specifically about ending state/local cooperation with federal ICE enforcement (287(g)-style agreements), not general immigration policy, so it's filed under the local-enforcement-cooperation topic rather than general immigration welcomingness. 'ICE needs to be defunded, abolished' targets a federal agency/policy, not a person, so it stays within the policy-critique carve-out."
+    },
+    {
+      "text": "We can create subsidies for people who are below the poverty level to help get them quality, affordable childcare and make sure those childcare centers are paying their workers a living wage.",
+      "topic_key": "childcare",
+      "editor_note": "Same WJHL/Yahoo interview, verbatim, no edits. A forward, mechanism-bearing position: income-targeted childcare subsidies paired with a living-wage floor for childcare workers, not just a general 'childcare should be affordable' sentiment."
+    }
+  ]
+}

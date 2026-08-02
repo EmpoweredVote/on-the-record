@@ -1,0 +1,27 @@
+{
+  "politician_name": "Carnita Atwater",
+  "topic_key": "housing",
+  "source_url": "https://www.atwater4governor.com/issues",
+  "quotes": [
+    {
+      "text": "As the next potential Governor of the State of Tennessee, I will stop the hemorrhage of Tennesseans losing their family homes and being displaced from their traditional neighborhoods by aggressive, rich investors, developers, and greedy politicians signing on to this economic and housing genocide.",
+      "deidentified": "I will stop the hemorrhage of Tennesseans losing their family homes and being displaced from their traditional neighborhoods by aggressive, rich investors, developers, and greedy politicians signing on to this economic and housing genocide.",
+      "editor_note": "No debate, forum, or news-interview footage of Atwater turned up this cycle for a first-time statewide candidate, so this is sourced from her official 2026 campaign platform page as a verbatim, complete sentence (not a heading or bullet fragment). It's her clearest forward statement on housing: opposing investor/developer-driven displacement, i.e. favoring more government intervention against market-driven displacement rather than a hands-off approach. Blind copy only drops the self-identifying 'As the next potential Governor...' opening clause; the position itself is untouched."
+    },
+    {
+      "text": "Despite the high cost of groceries during this inflation, we can no longer sit on the sidelines and watch Tennesseans struggle to feed their families without considering the option of cutting the grocery sales tax.",
+      "topic_key": "taxes",
+      "editor_note": "Same campaign platform page, verbatim, no edits needed (no self-identifying or third-party material to strip). Immediately follows her mention that the 2026 state budget passed without a permanent grocery-tax cut, so her forward position here is that Tennessee should act on cutting that tax to ease food costs — a cut-taxes-to-ease-burden stance, not a services-first one."
+    },
+    {
+      "text": "As the next Governor of the State of Tennessee, I will cease the harm and criminalization of unhoused individuals on day one.",
+      "deidentified": "I will cease the harm and criminalization of unhoused individuals on day one.",
+      "editor_note": "Same campaign platform page, verbatim sentence. Her clearest forward statement on homelessness strategy: a 'day one' commitment against criminalizing unhoused people, i.e. a harm-reduction rather than enforcement-first approach. Blind copy drops the self-identifying 'As the next Governor...' opening clause only; position unchanged."
+    },
+    {
+      "text": "I believe that it is cruel to treat any human being, undocumented or not, in such a fashion as it is happening in Tennessee.",
+      "topic_key": "immigration",
+      "editor_note": "Same campaign platform page, verbatim, no edits. Follows her mention of having advocated for immigrants' rights in Tennessee for 20 years (record as scaffolding), but the quoted sentence is her own current belief statement, explicitly extending concern to undocumented immigrants specifically — a more-welcoming, less-restrictive-leaning position, not a recitation of her record."
+    }
+  ]
+}
