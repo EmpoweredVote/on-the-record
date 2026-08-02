@@ -40,6 +40,7 @@ Run with the on-the-record venv:
 import argparse
 import json
 import os
+import pathlib
 import re
 import sys
 from urllib.parse import urlparse, urlsplit
@@ -48,18 +49,29 @@ import psycopg2
 import psycopg2.extras
 
 # ev-accounts is where essentials.quotes lives — DIFFERENT DB from the on-the-record pipeline.
-DEFAULT_ENV = "/Users/chrisandrews/Documents/GitHub/ev-accounts/backend/.env"
+# Locating its .env is shared with audit-quotes, and has to cope with this skill running from
+# a git worktree, where the repo root is not a fixed number of levels up.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "_shared"))
+from ev_env import EvAccountsEnvNotFound, ev_accounts_database_url, parse_database_url
 
 
-def load_database_url(env_file):
+def load_database_url(env_file=None):
+    """Precedence: DATABASE_URL in the environment > an explicit --env-file > the
+    ev-accounts checkout alongside whichever repo root this file sits under."""
     if os.environ.get("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
-    if env_file and os.path.exists(env_file):
-        with open(env_file) as fh:
-            for line in fh:
-                if line.startswith("DATABASE_URL="):
-                    return line.split("=", 1)[1].strip()
-    sys.exit(f"No DATABASE_URL in env or {env_file}")
+    if env_file:
+        path = pathlib.Path(env_file)
+        if not path.is_file():
+            sys.exit(f"--env-file {path} does not exist")
+        url = parse_database_url(path.read_text())
+        if url:
+            return url
+        sys.exit(f"No DATABASE_URL in {path}")
+    try:
+        return ev_accounts_database_url(__file__)
+    except EvAccountsEnvNotFound as exc:
+        sys.exit(str(exc))
 
 
 def with_timestamp(source_url, seconds):
@@ -107,7 +119,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("batch", help="Path to JSON batch file")
     ap.add_argument("--commit", action="store_true", help="Actually write (default: dry run)")
-    ap.add_argument("--env-file", default=DEFAULT_ENV, help="Path to .env with DATABASE_URL")
+    ap.add_argument("--env-file", default=None,
+                    help="Path to .env with DATABASE_URL (default: the ev-accounts checkout "
+                         "alongside this repo)")
     args = ap.parse_args()
 
     with open(args.batch) as fh:
