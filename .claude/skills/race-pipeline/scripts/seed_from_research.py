@@ -11,19 +11,32 @@ of position_name formats like 'U.S. Representative District 9', 'U.S. House MA-0
 'U.S. Representative At-Large'.
 Always dry-runs unless --commit.
 """
-import argparse, json, os, re, sys
+import argparse, json, os, pathlib, re, sys
 import psycopg2, psycopg2.extras
 
-DEFAULT_ENV = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".env")
+# The queue lives in the ev-accounts DB. Locating its .env is shared with audit-quotes and
+# publish-quotes, and has to cope with this skill running from a git worktree, where the repo
+# root is not a fixed number of levels up.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "_shared"))
+from ev_env import EvAccountsEnvNotFound, ev_accounts_database_url, parse_database_url
 
-def load_database_url(env_file):
+def load_database_url(env_file=None):
+    """Precedence: DATABASE_URL in the environment > an explicit --env-file > the ev-accounts
+    checkout alongside whichever repo root this file sits under."""
     if os.environ.get("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
-    with open(env_file) as f:
-        for line in f:
-            if line.startswith("DATABASE_URL="):
-                return line.split("=", 1)[1].strip()
-    sys.exit(f"No DATABASE_URL in env or {env_file}")
+    if env_file:
+        path = pathlib.Path(env_file)
+        if not path.is_file():
+            sys.exit(f"--env-file {path} does not exist")
+        url = parse_database_url(path.read_text())
+        if url:
+            return url
+        sys.exit(f"No DATABASE_URL in {path}")
+    try:
+        return ev_accounts_database_url(__file__)
+    except EvAccountsEnvNotFound as exc:
+        sys.exit(str(exc))
 
 def district_of(position_name):
     m = re.search(r"District\s+(\d+)", position_name, re.I)
@@ -115,7 +128,9 @@ def classify_house(cur, data):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("artifact"); ap.add_argument("--commit", action="store_true")
-    ap.add_argument("--env-file", default=DEFAULT_ENV)
+    ap.add_argument("--env-file", default=None,
+                    help="Path to .env with DATABASE_URL (default: the ev-accounts checkout "
+                         "alongside this repo)")
     args = ap.parse_args()
     data = json.load(open(args.artifact))
     conn = psycopg2.connect(load_database_url(args.env_file))

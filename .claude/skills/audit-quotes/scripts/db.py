@@ -1,21 +1,14 @@
 """Thin DB layer for the audit. Read-only except apply_fixes.py."""
-import os, re, pathlib
+import pathlib, sys
 import psycopg2, psycopg2.extras
 
-def _database_url() -> str:
-    if os.environ.get("DATABASE_URL"):
-        return os.environ["DATABASE_URL"]
-    here = pathlib.Path(__file__).resolve()
-    repo = here.parents[4]  # .../on-the-record
-    env = repo.parent / "ev-accounts" / "backend" / ".env"
-    for line in env.read_text().splitlines():
-        m = re.match(r'\s*DATABASE_URL\s*=\s*"?([^"\n]+)"?', line)
-        if m:
-            return m.group(1)
-    raise RuntimeError("DATABASE_URL not found in env or ev-accounts/backend/.env")
+# The ev-accounts .env lookup is shared with publish-quotes; it has to cope with this skill
+# running from a git worktree, where the repo root is not a fixed number of levels up.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "_shared"))
+from ev_env import ev_accounts_database_url
 
 def connect():
-    return psycopg2.connect(_database_url(), sslmode="require")
+    return psycopg2.connect(ev_accounts_database_url(__file__), sslmode="require")
 
 # Each quote maps to one race (lowest race_id) for grouping; a politician in multiple races is
 # audited once (not once per race) since essentials.race_candidates has no uniqueness on politician_id.
