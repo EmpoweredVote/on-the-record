@@ -88,16 +88,153 @@ delete-on-sight would have cost 10 races and 55 topics for no sourcing gain; the
 defects — stale-cycle answers and text not on the cited page — are curation calls a host-list check
 can't see.
 
-Source-verification checks (`scripts/verify_source.py`) — also deterministic, run against the
-ingested transcript for any `source_url` that's a YouTube link; non-video/written sources are out
-of scope here (see `source-tier-4` above):
+Source-verification checks (`scripts/verify_source.py`) — also deterministic. **Video sources**
+(YouTube `source_url`) are matched against the ingested transcript in `meetings.segments`; this
+runs always and is DB-only. **Written sources** (campaign issue pages, op-eds, news articles) are
+matched against the live page, which costs network I/O, so that path is **opt-in** via
+`scripts/audit --verify-written` (`--verify-sources` is accepted as a synonym; see §2.2).
 
-| id | level | principle | severity | fix-class |
-|---|---|---|---|---|
-| `source-unverified` | quote | quote must appear in its cited source | high | decision-required |
-| `source-speaker-mismatch` | quote | quote must be spoken by the candidate | high | decision-required |
-| `source-not-ingested` | quote | source must be verifiable | medium | decision-required |
-| `source-timestamp-drift` | quote | deep-link should point at the quote | low | decision-required |
+| id | level | principle | severity | fix-class | source kind |
+|---|---|---|---|---|---|
+| `source-unverified` | quote | quote must appear in its cited source | high | decision-required | both |
+| `source-speaker-mismatch` | quote | quote must be spoken by the candidate | high | decision-required | video |
+| `source-nested-quotation` | quote | a quote must be the candidate's own words, not words they relay | high | decision-required | both (always on) |
+| `source-not-ingested` | quote | source must be verifiable | medium | decision-required | video |
+| `source-timestamp-drift` | quote | deep-link should point at the quote | low | decision-required | video |
+| `source-midsentence-clip` | quote | an excerpt must not misrepresent by where it is cut | medium | decision-required | written |
+| `source-unfetchable` | quote | source must be verifiable | medium | decision-required | written |
+
+### 2.2 Written-source verification (`--verify-written`)
+
+Before 2026-08-01, `check_source` returned `None` for every non-YouTube `source_url`, so a quote
+from a candidate website or news article passed the source pass **without ever being compared to
+its cited source**. The WI-02 audit found the cost of that gap by hand
+(`docs/audits/2026-08-01-quote-audit-wi-house-02.md`): three quotes reported zero source findings,
+and one of them was a meaning-altering clip.
+
+With `--verify-written`, the cited page is fetched, reduced to visible prose, and run through the
+same span-matching machinery the transcript path uses (`verbatim_runs` →
+`longest_verbatim_match`, threshold `MIN_RUN_WORDS`). Matching is punctuation-insensitive by
+construction — `normalize` drops `…`, `[bracketed]` insertions and every non-alphanumeric
+character, so smart vs. straight quotes, em-dashes and stray whitespace can never cause a false
+`source-unverified`, and a quote that elides across `…` is checked as its separate verbatim runs
+rather than as one impossible contiguous string. Three things can then go wrong:
+
+- **`source-unverified`** — no distinctive contiguous run of the quote appears on the page. In
+  practice this catches curator **paraphrase sold as verbatim** ("Reverse Medicaid cuts and
+  restore ACA subsidies" vs. the page's "Reverse the cuts to Medicaid and restore the ACA
+  subsidies that hold premiums down") and text that is **simply not on the cited page at all**.
+- **`source-nested-quotation`** — the words are in the source and are the candidate's *utterance*,
+  but not their *position*: they are relaying what someone else says. Not written-only, and not
+  gated on the flag — see §2.3.
+- **`source-midsentence-clip`** — the run *is* verbatim, but it starts in the middle of a sentence
+  with no `…` marking the cut, so the clause before it may carry the candidate's actual position.
+  This is the WI-02 defect, and a plain verbatim check cannot see it. It also catches bare
+  noun-phrase fragments stored as quotes ("independent redistricting commission").
+
+The three are ordered by severity, and the nested-quotation check runs **before** the clip check.
+A relayed quote is almost always also a mid-sentence cut, so without that ordering the TN defect
+below would surface as `source-midsentence-clip` at medium — the wrong defect, understated.
+
+The clip check is deliberately conservative and stays silent when it can't be sure: when the
+curator marked the cut with a leading `…`, when the run isn't on the page, when the run opens the
+page or a block, when it follows `. ! ? … :`, and — importantly — **when the source itself opened
+a quotation right before it**. That last exemption is what keeps ordinary journalism (`…adding
+that "a government-paying program is the most moral…"`) from flooding the report: there the cut is
+the *source's*, faithfully reproduced. A cut that falls *inside* the source's quotation still flags.
+
+**`source-unfetchable` is not a soft `source-unverified`.** A JS-rendered campaign site, a 403
+(Ballotpedia blocks the fetcher), or a paywall yields no prose to match against. Calling that
+"quote not in its source" would be a false accusation, so it is reported separately, at medium,
+meaning *go read the page yourself*. Roughly a quarter of written sources in the first sample
+landed here.
+
+What these checks **cannot** do: judge whether a verbatim, well-bounded excerpt is the candidate's
+*distinctive* position, whether it is a curator summary of a bulleted platform (`source-summary`,
+a judgment check), or whether the page is a legitimate source at all (`source-tier-4`,
+`invalid-source`, `unquotable-source`). They answer a narrow question: is this text on that page,
+whose words are they, and was it cut somewhere defensible.
+
+Operationally: pages are cached under `.runs/.source-cache` (sha1 of the URL, 7-day TTL) so a
+sweep fetches each URL once rather than once per quote, and failed fetches are cached too so a
+dead host isn't re-hit for every quote citing it. Live requests to the same host are spaced one
+second apart. The cache directory is inside the gitignored `.runs/`.
+
+### 2.3 `source-nested-quotation` — words the candidate is relaying
+
+**The defect.** On 2026-08-02 a manual pass on the TN Governor R primary
+(race `ea27533a-f24a-4f9e-b804-cd11c34698dd`) found a Marsha Blackburn quote that was **perfectly
+verbatim on its source page and still an invention of her position**. The page had her relaying
+what voters tell her:
+
+> Blackburn: "People will say, 'Hey, let's make certain our communities are safe … let's pick up
+> the pace deporting illegal aliens.'"
+
+The inner sentence was curated as her own pledge. Every other check in this file passes it: the
+text *is* on the page, it *is* in her mouth, it *is* on-topic and single-claim. Only the
+punctuation and framing *around* the match reveal that the opinion is not hers. That is why this
+is high severity — a false `source-unverified` wastes a re-read, but a missed nested quotation
+publishes a policy position the candidate never took, under their name, on a ranking page.
+
+**How it is detected.** Three independent signals, any one of which flags (`nested_quotation`):
+
+1. **Self-framing** — the stored quote *itself* opens with a third-party frame and then opens a
+   quotation ("People will say, 'Hey, …"). Needs no source at all.
+2. **Nesting** — the matched text sits inside a `'…'` span, itself inside the `"…"` span of the
+   candidate's own quotation. Quote depth is tracked across straight and curly marks, and is
+   scoped to the current block (paragraph on a page, segment in a transcript).
+3. **Adjacent frame** — a third-party frame ("People will say", "they tell me", "critics argue")
+   sits within 100 characters before the match, in the same sentence and the same block.
+
+**Which sources it runs against.** All of them, and unlike the rest of §2.2 it is **not gated on
+`--verify-sources`**:
+
+- **Signal 1 needs no source**, so `check_source` runs it up front for every quote regardless of
+  source kind — including the cases nothing else can inspect: an un-ingested video, a 403ing
+  page, an aggregator URL the fetcher deliberately skips, or a written source when the caller
+  never opted into network I/O. It costs nothing and the defect is real either way.
+- **Video sources** run signals 2 and 3 against the candidate's **own transcript segments**,
+  joined with newlines. Restricting to their own segments matters: otherwise a moderator asking
+  "People will say we should deport everyone — is that your view?" would be read as framing the
+  candidate's answer. The newline join then stops a frame reaching across a segment boundary.
+- **Written sources** run signals 2 and 3 against the fetched page, so those two need the flag.
+
+The two paths do not carry equal weight. ASR seldom transcribes quotation marks, so on video it
+is signal 3 that does the work and signal 2 almost never fires; on a page both are live.
+
+**Why it does not fire on ordinary journalism.** The subject list contains only speakers who are
+demonstrably *not* the candidate (people, voters, folks, constituents, they, critics, opponents,
+the report/bill/ad …). The candidate's own name and a bare "he/she" are deliberately excluded, so
+`Blackburn said, "I will secure the border"` — the single most common shape in the corpus — can
+never flag. Apostrophes are not mistaken for quotation marks: a mark only opens a quotation after
+whitespace and before a word, so `let's` is inert and a possessive (`workers'`) reads as a *close*,
+which can only ever suppress a finding. Signal 1 additionally requires an inner opening mark, so a
+candidate's own rhetorical setup ("People say we can't fix this. They're wrong.") stays silent.
+A frame in a *previous* sentence is ignored — a `.`/`!`/`?` between the frame and the match means
+that sentence closed.
+
+**Measured noise.** The always-on path (signal 1 for all quotes, plus signals 2–3 against the
+transcript for the 70 video-sourced ones) was swept over all 3,272 live quotes in
+`essentials.quotes`: **zero** hits, with the pre-existing `source-not-ingested` ×4 and
+`source-speaker-mismatch` ×1 unchanged. A live `--verify-sources` run over the 11 TN Governor
+quotes produced zero nested findings across 8 fetchable pages (verbatim runs of 7–27 words on
+pages of 1.1k–12k words).
+
+That sweep is also what calibrated the apostrophe handling. Its first run produced two findings,
+**both false positives**, and both from the same cause: a `'` that opens no quotation but looks
+like one — `'cause` in one transcript, and Whisper splitting `o'clock` into `o 'clock` in
+another. Never being closed, each marked every later match in its transcript as nested. Hence
+two rules that matter more than they look: a single mark followed by a known elision
+(`'cause`, `'em`, `'til`, `'clock`, …) or by a digit (`the '90s`) does not open a quotation, and
+quote depth resets at every block boundary so one misread mark cannot poison a whole document.
+
+**Known limits.** It is a punctuation-and-framing heuristic, not comprehension. It will miss a
+relayed quote that the source paraphrased without quotation marks ("Voters tell her the border
+must be secured, and she agrees" carries no inner quote to find), and it does not check *whether
+the candidate endorsed* what they relayed — a human still has to read the passage. On video it
+leans almost entirely on signal 3, so a relayed quote spoken without any framing verb ("the
+border is broken, that's what I hear") will pass. The third-party subject list is closed, so an
+unusual framing subject is invisible to it.
 
 ## 3. Judgment checks
 
