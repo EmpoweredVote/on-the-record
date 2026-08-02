@@ -148,6 +148,29 @@ _SIDE_NAME = "gui_run.json"
 REDO_STAGES = ("diarize", "transcribe", "identify", "summary")
 
 
+def _read_sidecar(meeting_dir: Path) -> dict:
+    """The sidecar as a dict, or {} if absent/corrupt."""
+    try:
+        return json.loads((meeting_dir / _SIDE_NAME).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def ingest_complete(meeting_dir: Path) -> bool:
+    """True once the meeting has recorded stage 1.
+
+    Deliberately reads state rather than probing for audio.wav: `src/cleanup.py`
+    deletes the WAV (keeping audio.opus) on processed meetings, so a file check
+    would flag a finished, media-cleaned meeting as never-ingested and offer to
+    re-download it. Unreadable state counts as not ingested — that's the failed
+    -ingest case this guards."""
+    from src.checkpoint import PipelineStage, PipelineState
+    try:
+        return int(PipelineState(meeting_dir).completed_stage) >= PipelineStage.INGESTED
+    except Exception:
+        return False
+
+
 def _spawn(meeting_id: str, meeting_dir: Path, cmd: list[str], popen) -> str:
     """Spawn cmd as the background pipeline process for meeting_id: capture
     stdout+stderr to gui_run.log, run unbuffered + non-interactive, register the
@@ -169,10 +192,15 @@ def _spawn(meeting_id: str, meeting_dir: Path, cmd: list[str], popen) -> str:
             env=env,
         )
     _RUNS[meeting_id] = proc
-    (meeting_dir / _SIDE_NAME).write_text(
-        json.dumps({"pid": getattr(proc, "pid", None), "cmd": cmd, "status": "running"}),
-        encoding="utf-8",
-    )
+    side = {"pid": getattr(proc, "pid", None), "cmd": cmd, "status": "running"}
+    # Remember the ORIGINAL launch argv separately. `cmd` is overwritten by every
+    # redo/resume, which loses the only record of --title/--event-org/--compute
+    # (they aren't in pipeline_state.json) — so a failed ingest became
+    # unrecoverable from the GUI. A launch carries --input; redo/resume don't.
+    launch_cmd = cmd if "--input" in cmd else _read_sidecar(meeting_dir).get("launch_cmd")
+    if launch_cmd:
+        side["launch_cmd"] = launch_cmd
+    (meeting_dir / _SIDE_NAME).write_text(json.dumps(side), encoding="utf-8")
     return meeting_id
 
 
@@ -222,6 +250,47 @@ def launch_redo(meeting_id: str, stage: str, *, python_exe: str, script: str,
     if not (meeting_dir / "pipeline_state.json").exists():
         return None
     cmd = build_redo_command(python_exe, script, meeting_id, stage)
+    return _spawn(meeting_id, meeting_dir, cmd, popen)
+
+
+def build_reingest_command(python_exe: str, script: str, meeting_id: str) -> Optional[list[str]]:
+    """Replay the meeting's original launch argv, or None if it wasn't recorded.
+
+    Stage 1 is not a rewind: `rewind_to` clamps at DIARIZED and never deletes
+    audio.wav, and `--resume` needs audio.wav to already exist. So re-ingesting
+    means re-running the original `--input` launch, which lands in the same
+    directory (source_key matches -> `_unique_meeting_id` reuses the id).
+
+    python_exe/script are re-derived from the CURRENT process so a moved venv or
+    checkout doesn't replay a stale interpreter path."""
+    side = _read_sidecar(config.MEETINGS_DIR / meeting_id)
+    # Fall back to `cmd` for sidecars written before launch_cmd existed: if no
+    # redo/resume has overwritten it yet, it still holds the launch argv. The
+    # --input check below rejects it when it doesn't.
+    stored = side.get("launch_cmd") or side.get("cmd") or []
+    if not (isinstance(stored, list) and all(isinstance(a, str) for a in stored)):
+        return None
+    if "--input" not in stored or len(stored) < 2:
+        return None                       # not a launch argv — nothing to replay
+    return [python_exe, script, *stored[2:]]
+
+
+def launch_reingest(meeting_id: str, *, python_exe: str, script: str,
+                    popen=subprocess.Popen) -> Optional[str]:
+    """Re-run stage 1 for a meeting whose ingest never produced audio. Returns the
+    meeting_id, or None on unsafe id / unknown meeting / no recorded launch argv /
+    ingestion already recorded (re-downloading a processed meeting is not this
+    action)."""
+    if not is_safe_meeting_id(meeting_id):
+        return None
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    if not (meeting_dir / "pipeline_state.json").exists():
+        return None
+    if ingest_complete(meeting_dir):
+        return None
+    cmd = build_reingest_command(python_exe, script, meeting_id)
+    if cmd is None:
+        return None
     return _spawn(meeting_id, meeting_dir, cmd, popen)
 
 

@@ -67,6 +67,13 @@ def panel_context(name: str, meeting_id: str) -> Optional[dict]:
         base["stages"] = [(s.value, stage_label(s.value))
                           for s in PipelineStage if s.value >= 1]
         base["redo_stages"] = list(runner.REDO_STAGES)
+        # Before stage 1 produces audio, every redo/continue action fails with
+        # "Cannot resume: no audio.wav found" — so offer re-ingestion instead.
+        base["ingest_complete"] = runner.ingest_complete(meeting_dir)
+        base["can_reingest"] = (
+            not base["ingest_complete"]
+            and runner.build_reingest_command("py", "s", meeting_id) is not None
+        )
         return base
 
     # review / details / publish need the processed meeting (transcript_named.json).
