@@ -135,3 +135,22 @@ def test_watch_channel_calls_flywheel(monkeypatch):
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/watch-channel", follow_redirects=False)
     assert resp.status_code == 303 and "watching" in resp.headers["location"]
+
+
+def test_new_form_prefills_from_query(monkeypatch):
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    client = TestClient(create_app())
+    resp = client.get("/new", params={
+        "input": "https://www.youtube.com/watch?v=abc12345678",
+        "date": "2026-08-01", "title": "Full debate", "event_kind": "debate",
+        "meeting_type": "Debate", "race_id": "r1",
+        "race_label": "TX · U.S. Senate · General · 2026", "event_orgs": "KXAN",
+    })
+    body = resp.text
+    assert 'value="https://www.youtube.com/watch?v=abc12345678"' in body
+    assert 'value="2026-08-01"' in body
+    assert 'value="Full debate"' in body
+    assert 'value="KXAN"' in body
+    assert 'value="r1"' in body
+    assert 'value="us-senate-tx-general"' in body
+    assert "TX · U.S. Senate" in body

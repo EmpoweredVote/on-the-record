@@ -372,13 +372,26 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.get("/new", response_class=HTMLResponse)
-    def new_meeting_form(request: Request, flash: str = "", label: str = "") -> HTMLResponse:
+    def new_meeting_form(request: Request, flash: str = "", label: str = "",
+                         input: str = "", date: str = "", title: str = "",
+                         event_kind: str = "", meeting_type: str = "",
+                         race_id: str = "", race_slug: str = "",
+                         race_label: str = "", event_orgs: str = "",
+                         guest: str = "") -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
                                    CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS,
                                    FIELDS_BY_KIND, DEFAULT_COMPUTE, DEFAULT_DIARIZER)
         from gui.rosters import list_cached_rosters
         from gui import batch
+        if race_id and not race_slug:
+            from gui import discovery
+            race_slug = discovery.race_slug_for(race_id)
+        prefill = {"input": input, "date": date, "title": title,
+                   "event_kind": event_kind, "meeting_type": meeting_type,
+                   "race_id": race_id, "race_slug": race_slug,
+                   "race_label": race_label, "event_orgs": event_orgs,
+                   "guest": guest}
         return _templates.TemplateResponse(
             request, "new_meeting.html",
             {
@@ -395,6 +408,7 @@ def create_app() -> FastAPI:
                 "flash": flash,
                 "flash_label": label,
                 "batch_counts": batch.status()["counts"],
+                "prefill": prefill,
             },
         )
 

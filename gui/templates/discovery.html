@@ -66,6 +66,11 @@
         </select>
         <button type="submit" class="delete-btn">Reject</button>
       </form>
+      <a class="pill" href="/new?{{ {'input': r.url,
+          'date': (r.published_at or '')[:10], 'title': r.title or '',
+          'event_kind': r.event_kind_guess or 'news_clip',
+          'race_id': r.race_id or '', 'race_label': r.race_label or '',
+          'event_orgs': r.channel_name or ''}|urlencode }}">Edit first</a>
       {% if not r.outlet_id and r.channel_id %}
       <form method="post" action="/discovery/{{ r.id }}/watch-channel">
         <button type="submit" title="Add this channel to the watchlist">
