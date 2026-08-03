@@ -406,3 +406,54 @@ entire 0.24–0.40 grid**, so 0.32 is not fitted to the two gate meetings.
   table above was produced.
 - **Centroids are turn-count-weighted, not duration-weighted** (see the architecture note).
   Untested effect on voice-profile match rates; revisit if they move.
+
+## Post-calibration correction (2026-08-03, later the same day)
+
+May 6's human review was **completed** after the calibration above ran, which promoted its
+`transcript_named.json` from untrustworthy (21 human-review segments, 150 unnamed) to a full
+reference: 852 `voice_profile` + 142 `human_review`, 40 labels, 40 names, **nothing unnamed**,
+no name spanning two labels. Re-scoring May 6 on the real accuracy axis then exposed a defect
+the DER gate could not see.
+
+**Finding: the seam temporal must-link had no minimum-overlap floor.** `seed_clusters` accepted
+any overlap `> 0`. Of May 6's 12 seam joins, the 10 correct ones overlapped **1.1–71.0 s**; the
+2 that joined *different people* overlapped **0.6 s and 0.3 s**, and together they chained three
+real people (Kerr → Toothman → Sturbaum) into one cluster. Because a must-link is applied
+before, and independently of, the embedding threshold, no threshold could undo it — which is
+exactly why May 6's conflation count sat at 4 across the entire 0.30–0.40 grid, and why the
+shipped sequential path exhibits the same merge (`src/speaker_reconcile` also takes any
+`score > 0`).
+
+`MIN_SEAM_OVERLAP_SECONDS = 1.0`. A sub-second overlap is two windows disagreeing about a
+boundary by a few hundred milliseconds, not evidence of one speaker; and dropping a weak join
+is safe, because the pair can still merge on voice similarity — the signal that *should* decide
+when temporal evidence is thin.
+
+### Final measured state, all three meetings scored against completed human review
+
+| meeting | reviewed people | single-pass | this change @0.32 | DER | drift |
+|---|---|---|---|---|---|
+| June 10 (298 min) | 40 | 41 labels, 1 fragmented, 0 conflated | **41 labels, 1 fragmented, 0 conflated** | 0.0060 | 0.0% |
+| May 6 (244 min) | 40 | 42 labels, 2 fragmented, 1 conflated | **43 labels, 2 fragmented, 3 conflated** | 0.0087 | +2.4% |
+| July 29 (82 min, 45-min windows) | 13 | 14 labels, 2 fragmented, 1 conflated | **13 labels, 0 fragmented, 1 conflated** | 0.0062 | −7.1% |
+
+- **People fragmented now equals or beats single-pass on all three** (1 vs 1, 2 vs 2, 0 vs 2).
+- **All three of May 6's residual conflations are INHERITED from pyannote's own within-window
+  labels** — `Duffy 143 s + Piedmont-Smith 5 s`, `Asare 35 s + Daily 4 s`,
+  `Richardson 22 s + Rollo 4 s`, each a 4–5 s bleed inside one window. No identity clustering
+  can fix a window whose own segmentation already merged two voices, and chunking exposes
+  slightly more of this because each window clusters independently. After the floor, the
+  identity pass introduces **zero cross-window conflation on all three meetings**.
+- Single-pass is not clean either: it conflates 1 label on May 6 and 1 on July 29. "Zero
+  conflation" was never achievable on these meetings — parity with whole-meeting clustering is.
+
+**Honest note on the earlier "at or below single-pass" target.** The floor moved May 6 from 41
+labels to 43, one *above* single-pass's 42, because two nodes that a 0.3–0.6 s overlap had been
+forcing together now stand apart. The trade is right and taken deliberately: it removes a
+110.5 s two-person merge in exchange for slivers that do not register as a fragmented person at
+all (the fragmentation count stays 2, equal to single-pass). Conflation misattributes quotes
+silently; fragmentation surfaces at the review gate. Both gates still pass with wide margin.
+
+**Follow-up worth doing:** `src/speaker_reconcile.reconcile_chunks` has the same missing floor
+and is used by the VibeVoice path with its own tuned 0.75. It was left untouched here (fallback
+paths stay untouched during a calibration), but the same one-line floor would likely improve it.
