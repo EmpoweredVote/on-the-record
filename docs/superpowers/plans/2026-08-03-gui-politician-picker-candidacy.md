@@ -1401,17 +1401,28 @@ In `gui/static/style.css`, append after line 59 (the
 
 ```css
 /* Two lines per result: identity, then which races the person is a candidate in.
+   Scoped to .link-results — the speaker-link picker — because new_meeting.js:126
+   reuses the bare .link-result class for the race picker's buttons (inside
+   .race-results) and wants the shared base look above WITHOUT the stacking.
    Warning colour and 0.78rem match the existing .thin ("short sample") caution
    chip rather than inventing a second one; #b32020 is reserved for errors. */
-button.link-result { display: flex; flex-direction: column; gap: 0.1rem; }
-.link-result .pr-name { display: block; }
-.link-result .pr-cand { display: block; font-size: 0.78rem; color: #5c6b82; }
-.link-result .pr-warn { color: #9a6a00; }
-.link-result .pr-dupe { display: block; font-size: 0.78rem; font-weight: 600; }
+.link-results button.link-result { display: flex; flex-direction: column; gap: 0.1rem; }
+.link-results .pr-name { display: block; }
+.link-results .pr-cand { display: block; font-size: 0.78rem; color: #5c6b82; }
+.link-results .pr-warn { color: #9a6a00; }
+.link-results .pr-dupe { display: block; font-size: 0.78rem; font-weight: 600; }
 ```
 
 `button.link-result` already sets `text-align: left; width: 100%`, so adding
 `display: flex; flex-direction: column` stacks the lines without touching the rest.
+
+The new rules are scoped to `.link-results` rather than left on bare
+`button.link-result`, because the race picker in `gui/static/new_meeting.js:126`
+also does `b.className = "link-result"` for its own buttons — it wants the shared
+border/padding/background from the base rule, but not the column stacking. (The
+plan earlier claimed the race picker was unaffected because its *container* is
+`.race-search`/`.race-results`; that is true of the container but not of the
+button, which shares the class.)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
