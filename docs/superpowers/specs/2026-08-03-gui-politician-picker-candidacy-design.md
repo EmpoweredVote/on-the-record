@@ -288,8 +288,11 @@ job is only to stop the curator from picking on autopilot.
   `gui.politicians.search_politicians_safe`. When `DATABASE_URL` is absent it
   falls back to today's HTTP path, so a GUI run without DB access degrades to the
   current behaviour (name + office, no candidacy line) instead of returning
-  nothing. The response gains `district_label`, `candidacies`,
-  `display`, `candidacy_display` and `duplicate_note`; existing keys are kept.
+  nothing. The response gains `candidacies`, `display`, `candidacy_display` and
+  `duplicate_note`; all six existing keys are kept. Note `district_label` is
+  already in the response today — the renderer simply never used it, which is why
+  the 39 identically-titled `U.S. Representative` rows are currently
+  indistinguishable.
 - `gui/static/workspace.js` — render the two-line button from `display` /
   `candidacy_display` / `duplicate_note` instead of re-joining fields in JS. The
   server owns the label; the client just prints it.
@@ -297,10 +300,14 @@ job is only to stop the curator from picking on autopilot.
   a `.link-result .pr-warn` treatment for `no candidacies` and the duplicate
   marker.
 
-The `/api/politicians/search` route and the link POST are unchanged, so the race
-picker (which points at the same widget via `data-search-url`) keeps working with
-no change: its payload simply has no `candidacy_display`, and the renderer omits
-line 2 when absent.
+The `/api/politicians/search` route and the link POST are unchanged.
+
+The race picker is **not** affected: it uses a separate `.race-search` widget in
+`gui/templates/new_meeting.html` rendered by `gui/static/new_meeting.js`. The
+`.link-search` class that `workspace.js` handles is used only by the speaker card
+macro in `gui/templates/panels/_macros.html`, so the politician picker is the sole
+consumer of the changed renderer. The renderer still omits line 2 when
+`candidacy_display` is absent, which keeps the HTTP-fallback payload working.
 
 ## Error handling
 
