@@ -172,8 +172,25 @@ def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
 
 
 def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
-    """Best-effort essentials name search. Returns {"results": [...], "error": None|str}
-    — never raises, so a network/HTTP/short-query failure just yields no results."""
+    """Best-effort politician search for the link picker.
+
+    Prefers gui.politicians (direct DB), which is the only path that can show
+    which races a person is actually a candidate in — the thing a curator needs,
+    because publish derives a meeting's races solely from politician_id ->
+    race_candidates. Falls back to the ev-accounts HTTP search when DATABASE_URL
+    isn't set, so a GUI run without DB access degrades to name + office instead
+    of returning nothing. Never raises.
+    """
+    from gui import politicians
+    if politicians.db_configured():
+        return politicians.search_politicians_safe(q, limit=limit)
+    return _search_politicians_http(q, limit=limit)
+
+
+def _search_politicians_http(q: str, *, limit: int = 10) -> dict:
+    """The pre-direct-DB path: ev-accounts /candidates/search-by-name. Carries no
+    candidacy data, so `candidacy_display` is '' and the renderer omits line 2."""
+    from gui import politicians
     from src.essentials_client import EssentialsClientError, search_politicians
     try:
         raw = search_politicians(q, limit=limit)
@@ -181,17 +198,24 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
         return {"results": [], "error": str(exc)}
     except Exception as exc:  # transport/unexpected — stay best-effort
         return {"results": [], "error": f"search failed: {exc}"}
-    results = [
-        {
-            "politician_slug": r.get("politician_slug"),
-            "politician_id": r.get("politician_id"),
-            "full_name": r.get("full_name"),
-            "office_title": r.get("office_title"),
-            "district_label": r.get("district_label"),
-            "government_name": r.get("government_name"),
+    results = []
+    for r in raw:
+        rec = {
+            "politician_slug": r.get("politician_slug") or r.get("slug"),
+            "politician_id": r.get("politician_id") or r.get("id"),
+            "full_name": r.get("full_name") or "",
+            "office_title": r.get("office_title") or "",
+            "district_label": r.get("district_label") or "",
+            "government_name": r.get("government_name") or "",
+            "candidacies": [],
         }
-        for r in raw
-    ]
+        rec["display"] = politicians.politician_display(rec)
+        rec["candidacy_display"] = ""
+        # False, not True: without a DB we never looked, so we must not claim the
+        # person has no candidacies.
+        rec["candidacy_warn"] = False
+        rec["duplicate_note"] = ""
+        results.append(rec)
     return {"results": results, "error": None}
 
 

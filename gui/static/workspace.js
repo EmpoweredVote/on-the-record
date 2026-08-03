@@ -149,14 +149,26 @@
       let action = widget.getAttribute("data-link-action") || "";
       if (!action.endsWith("/link")) action += "/link";
       const esc = (s) => String(s == null ? "" : s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
-      results.innerHTML = list.map((r) => (
-        '<form method="post" action="' + action + '">' +
-        '<input type="hidden" name="politician_slug" value="' + esc(r.politician_slug) + '">' +
-        '<input type="hidden" name="politician_id" value="' + esc(r.politician_id) + '">' +
-        '<button type="submit" class="link-result">' +
-        esc([r.full_name, r.office_title, r.government_name].filter(Boolean).join(" · ")) +
-        "</button></form>"
-      )).join("");
+      results.innerHTML = list.map((r) => {
+        // The server composes both lines: it's the only side that knows the
+        // candidacy data, and a wrong pick here silently detaches the meeting
+        // from its race (publish derives races from politician_id alone).
+        const cand = r.candidacy_display || "";
+        const warn = !!r.candidacy_warn;
+        let inner = '<span class="pr-name">' + esc(r.display || r.full_name) + "</span>";
+        if (r.duplicate_note) {
+          inner += '<span class="pr-warn pr-dupe">' + esc(r.duplicate_note) + "</span>";
+        }
+        if (cand) {
+          inner += '<span class="pr-cand' + (warn ? " pr-warn" : "") + '">' + esc(cand) + "</span>";
+        }
+        return (
+          '<form method="post" action="' + action + '">' +
+          '<input type="hidden" name="politician_slug" value="' + esc(r.politician_slug) + '">' +
+          '<input type="hidden" name="politician_id" value="' + esc(r.politician_id) + '">' +
+          '<button type="submit" class="link-result">' + inner + "</button></form>"
+        );
+      }).join("");
     }, DEBOUNCE);
   });
 

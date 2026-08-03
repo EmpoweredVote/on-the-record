@@ -433,6 +433,10 @@ def test_load_review_page_populates_link_fields(tagged_meeting_dir, tmp_meetings
 from gui.review_api import apply_link, apply_unlink, search_politicians_safe
 
 
+# These two now exercise review_api._search_politicians_http, not the direct-DB
+# path: conftest's autouse _no_real_db_env strips DATABASE_URL from every test, so
+# search_politicians_safe always takes the fallback branch here. The direct-DB
+# branch is covered in tests/test_gui_politicians.py.
 def test_search_politicians_safe_success(monkeypatch):
     import src.essentials_client as ec
     monkeypatch.setattr(ec, "search_politicians", lambda q, **kw: [

@@ -12,10 +12,20 @@ for the bloomington roster fixture JSON.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+# Captured HERE, at conftest import, which is the only moment that can tell
+# "the developer deliberately provided a database" from "run_local leaked one".
+# pytest imports conftest before any test module; 29 test modules then do a
+# module-level `import run_local`, which os.environ.setdefault()s every key in
+# <repo>/.env.local — DATABASE_URL included. A test module reading os.environ at
+# its OWN import time therefore sees the leaked value and would run live tests
+# against production on a bare `pytest tests/`. See LIVE_DB_URL's consumers.
+LIVE_DB_URL = os.environ.get("DATABASE_URL")
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +37,20 @@ def _no_real_db_env(monkeypatch):
     """
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("RENDER_DEPLOY_HOOK_URL", raising=False)
+
+
+@pytest.fixture
+def live_db(monkeypatch):
+    """Opt back in to the real database for a test that deliberately needs it.
+
+    Skips unless DATABASE_URL was exported before pytest started (see
+    LIVE_DB_URL), then re-injects it for this test only — function-scoped and not
+    autouse, so `_no_real_db_env` still shields every other test. Returns the URL.
+    """
+    if not LIVE_DB_URL:
+        pytest.skip("needs DATABASE_URL exported before pytest (live essentials schema)")
+    monkeypatch.setenv("DATABASE_URL", LIVE_DB_URL)
+    return LIVE_DB_URL
 
 
 @pytest.fixture(autouse=True)
