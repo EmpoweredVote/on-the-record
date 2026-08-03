@@ -56,7 +56,9 @@ matching fails, and that the failure is not a threshold choice:
 
 - **7 of 86 node centroids are non-finite.** `pyannote/embedding` returns NaN on some turns
   and `diarize_chunk_window` averages turn vectors **without filtering** — one bad turn
-  poisons the whole node. (`pipeline_extract_embeddings` does filter; the chunk worker was
+  poisons the whole node. (Independently confirmed during review: replaying the cached June
+  10 payloads through the new consumer dropped 161 of 2541 vectors as non-finite, traceable
+  to exactly those 7 nodes.) (`pipeline_extract_embeddings` does filter; the chunk worker was
   not given the same guard.) Those 7 nodes cannot match by embedding at *any* threshold, so
   they fragment by construction. This is a bug, not a tuning problem.
 - Same-person pairs: median 0.773, p05 0.321. Different-person pairs: p95 0.274, **max
@@ -162,9 +164,13 @@ cluster_global_identities(
    numbering is deterministic and the chair lands at `SPEAKER_00`.
 6. **Turns.** Clipped through the existing `_ownership_bounds`, so each second of audio
    belongs to exactly one window — unchanged from today.
-7. **Centroids.** Duration-weighted mean of the cluster's own **turn** vectors — a strictly
-   better voiceprint than today's average-of-per-window-averages, and it replaces the
-   recomputation currently done in `stitch_chunk_payloads`.
+7. **Centroids.** Mean of the cluster's own **turn** vectors (unit-normalised at node build,
+   so this is turn-count-weighted rather than duration-weighted) — still a better voiceprint
+   than today's average-of-per-window-averages, and it replaces the recomputation currently
+   done in `stitch_chunk_payloads`. Duration weighting is a deliberate deferral: it needs
+   turn durations threaded alongside the vector rows, and centroid quality feeds
+   voice-profile matching downstream rather than anything this change's gate measures. Worth
+   revisiting if profile match rates move.
 8. **Diagnostics.** `temporal_matches` / `embedding_matches` / `new_speakers` — the same
    three keys the operator print in `stitch_chunk_payloads` already consumes, so that print
    needs no change — plus `cannot_link_blocks`, `clusters`,
@@ -253,14 +259,23 @@ ground truth. New pure module `bench/identity_score.py` scores against June 10's
 29's **human-reviewed named** transcripts:
 
 - map each hypothesis label to the reviewed person owning most of its speech;
-- **fragmentation** = reviewed people split across ≥2 hypothesis labels (seconds-weighted,
-  with a small floor so boundary noise is not counted);
+- **fragmentation** = reviewed people split across ≥2 hypothesis labels;
 - **conflation** = hypothesis labels spanning ≥2 reviewed people;
 - **named DER**: reviewed names as the reference annotation.
 
-Single-pass is scored the same way, so the report reads "chunked+global vs single-pass vs
-the ceiling" on the same axis. This is reporting *added alongside* the gate, never a
-substitute for it.
+Both error modes need a floor, because diarization routinely bleeds a word across a turn
+edge. A fixed seconds floor is not enough: at 3.0 s, single-pass on June 10 scores 5
+"conflated" labels of which 4 are 3–14 s bleeds against a person holding 500–1700 s of the
+same label. So a side counts only if it holds **≥ 3.0 s and ≥ 2 % of that label's (or that
+person's) attributed speech**, applied symmetrically to both axes, and the largest minority
+share is reported alongside each count so a 4 s bleed can never be mistaken for a real
+merge. The floor was set from the *reference's own* behaviour before any new-path result
+existed, and single-pass is scored under the identical floor.
+
+**The measured bar (June 10, this floor):** single-pass produces **41 labels for 40 real
+people, 1 person fragmented** (Zulich, split 265.9 s / 15.9 s — a 5.6 % minority share) and
+**0 conflated**. That is what chunked+global has to match or beat. This is reporting *added
+alongside* the gate, never a substitute for it.
 
 ### Seam spot-check
 
