@@ -73,3 +73,60 @@ def decode_turn_vectors(block: dict[str, Any]) -> dict[int, np.ndarray]:
         for row, index in enumerate(indices)
         if np.all(np.isfinite(matrix[row]))
     }
+
+
+@dataclass
+class IdentityNode:
+    """One window-local speaker: the atom of global identity.
+
+    A window's own clustering already decided these turns are one person, and
+    that decision is trusted (measured: 1 of 86 nodes on June 10 was less than
+    75% pure against the human-reviewed reference). ``vectors`` is (k, dim),
+    unit-normalised, one row per turn that produced a usable embedding — so it
+    can legitimately be empty for a node whose turns all fell in a
+    neighbouring window's canonical span.
+    """
+
+    chunk_index: int
+    local_speaker: str
+    turns: list[LocalTurn]
+    vectors: np.ndarray
+    speech_seconds: float
+
+
+def build_nodes(
+    chunks: list[ChunkResult],
+    turn_vectors: dict[int, dict[int, np.ndarray]],
+) -> list[IdentityNode]:
+    """Build one IdentityNode per (window, local speaker), in window order.
+
+    `turn_vectors` is {chunk_index: {turn_index: vector}} where turn_index
+    indexes that chunk's `turns` list (the worker only embeds turns inside its
+    canonical span, so overlap-only turns are absent by design).
+    """
+    nodes: list[IdentityNode] = []
+    for chunk in sorted(chunks, key=lambda c: c.window.index):
+        by_local: dict[str, list[tuple[int, LocalTurn]]] = {}
+        for position, turn in enumerate(chunk.turns):
+            by_local.setdefault(turn.local_speaker, []).append((position, turn))
+        available = turn_vectors.get(chunk.window.index, {})
+        # dim comes from any vector present in this window, so a local whose
+        # own turns had no vector still gets an (0, dim) matrix rather than
+        # (0, 0) — shape-compatible with its window siblings' vectors.
+        dim = len(next(iter(available.values()))) if available else 0
+        for local in sorted(by_local):
+            entries = by_local[local]
+            rows = [available[position] for position, _ in entries if position in available]
+            matrix = np.asarray(rows, dtype=float) if rows else np.zeros((0, dim))
+            if matrix.size:
+                norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+                norms[norms == 0] = 1.0
+                matrix = matrix / norms
+            nodes.append(IdentityNode(
+                chunk_index=chunk.window.index,
+                local_speaker=local,
+                turns=[turn for _, turn in entries],
+                vectors=matrix,
+                speech_seconds=sum(t.end - t.start for _, t in entries),
+            ))
+    return nodes

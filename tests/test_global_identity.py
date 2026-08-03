@@ -64,3 +64,53 @@ def test_decode_turn_vectors_drops_non_finite_rows():
 def test_decode_turn_vectors_handles_an_empty_block():
     block = {"dim": 4, "dtype": "float32", "turn_indices": [], "b64": ""}
     assert decode_turn_vectors(block) == {}
+
+
+from src.global_identity import IdentityNode, build_nodes
+from src.speaker_reconcile import ChunkResult, ChunkWindow, LocalTurn
+
+
+def _chunk(index, start, end, turns, speech=None):
+    return ChunkResult(
+        window=ChunkWindow(index, start, end),
+        turns=[LocalTurn(index, s, e, label) for s, e, label in turns],
+        embeddings={},
+        speech_seconds=speech or {},
+    )
+
+
+def test_build_nodes_groups_turns_by_window_and_local_label():
+    chunks = [
+        _chunk(0, 0.0, 60.0, [(0.0, 10.0, "SPEAKER_00"), (20.0, 25.0, "SPEAKER_01"),
+                              (30.0, 40.0, "SPEAKER_00")]),
+        _chunk(1, 60.0, 120.0, [(70.0, 80.0, "SPEAKER_00")]),
+    ]
+    vectors = {
+        0: {0: np.array([2.0, 0.0]), 2: np.array([0.0, 4.0])},
+        1: {0: np.array([1.0, 1.0])},
+    }
+
+    nodes = build_nodes(chunks, vectors)
+
+    assert [(n.chunk_index, n.local_speaker) for n in nodes] == [
+        (0, "SPEAKER_00"), (0, "SPEAKER_01"), (1, "SPEAKER_00"),
+    ]
+    assert nodes[0].speech_seconds == pytest.approx(20.0)   # 10s + 10s
+    assert nodes[0].vectors.shape == (2, 2)
+    # vectors are unit-normalised so later cosines are plain dot products
+    np.testing.assert_allclose(np.linalg.norm(nodes[0].vectors, axis=1), [1.0, 1.0])
+    assert nodes[1].vectors.shape == (0, 2)   # SPEAKER_01's turn had no vector
+
+
+def test_build_nodes_survives_a_window_with_no_vectors_at_all():
+    chunks = [_chunk(0, 0.0, 60.0, [(0.0, 10.0, "SPEAKER_00")])]
+    nodes = build_nodes(chunks, {0: {}})
+    assert len(nodes) == 1
+    assert nodes[0].vectors.shape == (0, 0)
+    assert nodes[0].speech_seconds == pytest.approx(10.0)
+
+
+def test_build_nodes_ignores_a_vector_for_a_turn_index_that_does_not_exist():
+    chunks = [_chunk(0, 0.0, 60.0, [(0.0, 10.0, "SPEAKER_00")])]
+    nodes = build_nodes(chunks, {0: {0: np.array([1.0, 0.0]), 99: np.array([0.0, 1.0])}})
+    assert nodes[0].vectors.shape == (1, 2)
