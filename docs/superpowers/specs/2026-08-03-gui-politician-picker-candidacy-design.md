@@ -238,8 +238,26 @@ Run by hand against the live DB (not automated — there is no test DB):
 | `hong` | both Francesca Hong rows returned and now distinguishable — one carries the WI Governor Democratic primary, the other carries none |
 | `smith` | all ten returned rows carry a candidacy; office-less non-candidates correctly ranked out |
 
-Cost on the worst case (`smith`): planning 7 ms, execution **101 ms**. Comfortably
-inside the existing 250 ms input debounce.
+Cost on the worst case (`smith`): planning 7 ms, server-side execution **101 ms**.
+
+**Corrected after implementation.** That figure is SQL execution only and was
+misleading as a latency claim. Measured end-to-end on the finished module:
+
+| | min | avg |
+|---|---|---|
+| `connect()` + `close()` alone | 461 ms | 473 ms |
+| query on an already-open connection | 176 ms | 217 ms |
+| a full `search_politicians_safe()` call | 642 ms | 660 ms |
+
+So ~470 ms of every keystroke's ~650 ms is connection setup to the Supabase
+pooler, not the query — and the query cost barely varies between a 1-row result
+and the worst-case surname. With the 250 ms debounce the curator waits ~900 ms.
+
+That is sluggish but it is **not a regression**: `gui/races.py` opens and closes a
+connection per call in exactly the same way, so the race picker already behaves
+this way. Reusing a module-level connection would cut it to ~430 ms, but it needs
+thread-safety (FastAPI runs sync endpoints in a threadpool) and stale-connection
+retry, so it is left as a follow-up rather than smuggled into this change.
 
 ### Row rendering
 
@@ -381,3 +399,14 @@ the running GUI before merge, and recorded in the PR.
    ev-accounts PR (`DISTINCT ON` alone) if it bothers users there.
 4. **`resolve_races_for_politicians` ignores `candidate_status`**, so a withdrawn
    candidate still pulls a meeting into a race. Pre-existing, unexamined here.
+5. **Connection reuse for the pickers.** ~470 ms of each picker keystroke is
+   `connect()`, not the query (see the table above). A shared connection or small
+   pool would roughly halve perceived latency for both this picker and the race
+   picker, but needs a lock and stale-connection retry.
+6. **Nickname variants escape the duplicate marker.** `dan brotman` and
+   `daniel brotman` are different keys, so the 21 such pairs in prod go unflagged —
+   9 of them with one row holding a race edge and its twin holding none
+   (Dan/Daniel Brotman, Mike/Michael Thompson, Rick/Richard Bennett, ...). The
+   candidacy line still distinguishes them, which is the safeguard that matters.
+   Closing it needs a nickname map; keying on the first initial instead would
+   group "Angela Davis" with "Andrew Davis".
