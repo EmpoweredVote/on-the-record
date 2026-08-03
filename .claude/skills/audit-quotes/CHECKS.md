@@ -57,6 +57,7 @@ human to resolve even though the *detection* is mechanical.
 | `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
 | `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
 | `scorecard-source` | quote | a scorecard publishes votes and ratings, not utterances — **re-source** | high | decision-required |
+| `stance-label` | quote | a quote must state a position, not name a topic (≤4 words) | medium | decision-required |
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
@@ -112,6 +113,38 @@ delete-on-sight would have cost 10 races and 55 topics for no sourcing gain; the
 `docs/audits/2026-07-25-ballotpedia-triage.md` resolved it row by row instead. The real Ballotpedia
 defects — stale-cycle answers and text not on the cited page — are curation calls a host-list check
 can't see.
+
+### 2.1a `stance-label` — a topic name is not a position
+
+101 live quotes are four words or fewer: *"Universal Healthcare"*, *"Abolish ICE"*, *"Medicare For
+All"*, *"Protect the unborn"*, *"Tax the rich"*, *"Theft."*. Read & Rank asks a reader to weigh one
+candidate's answer against another's, and a row like this offers nothing to weigh — it names the
+topic and stops. No mechanism, no direction beyond the topic itself.
+
+**These are not curator inventions.** That was the initial theory and the data refuted it: **26 of
+the 49 shortest verify clean against their cited source**, i.e. the text really is on the
+candidate's own platform page. What went wrong is that a *bullet was harvested as if it were an
+utterance*. That is why severity is medium rather than high — the text is usually genuine, it is
+just too thin to rank — and why the suggested fix is to find a real sentence on the same page
+rather than to delete.
+
+**Why a word count, of all things.** It is the only signal here with no judgment in it, which is
+the price of admission to the mechanical pass. Distinguishing a bare noun phrase from an
+imperative bullet needs part-of-speech tagging (the venv has no `nltk`/`spacy`, and this does not
+warrant a new dependency), and hand-rolled verb lists fail immediately on an open word class —
+a draft list missed *Achieve*, *Enforce*, *Modernize*, and could not see the verb in
+*"Billionaires shouldn't exist."* at all.
+
+Four is calibrated, not guessed: every one of the 101 rows at ≤4 words reads as a slogan or a
+platform bullet, while the 5–6 word band already contains real mechanism-bearing sentences
+(*"Lower Medicare eligibility to Age 55."*, *"Rein in private insurers managing Medicaid."*).
+Raising the bar would start flagging good quotes.
+
+**The ambiguous middle is deliberately left to the judgment pass**, which is better equipped for
+it: `source-summary` (§3, high) already covers a platform page rendered as a curator-summarized
+bullet list, and `non-differentiating-goal` (§3, medium) covers an agreeable goal stated with no
+mechanism. `stance-label` is only the mechanical floor beneath them — the cases so short that no
+reading rescues them.
 
 Source-verification checks (`scripts/verify_source.py`) — also deterministic. **Video sources**
 (YouTube `source_url`) are matched against the ingested transcript in `meetings.segments`; this
