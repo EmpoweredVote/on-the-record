@@ -111,10 +111,16 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 #   June 10 (298 min): DER 0.0060, 41 speakers vs single-pass's 41 (drift
 #     0.0%), 1 person fragmented — the SAME person single-pass itself splits —
 #     and 0 conflated. Slowest window 109s vs 7100s single-pass (65x).
-#   May 6 (244 min): DER 0.0210, 41 speakers vs 42 (drift -2.4%).
+#   May 6 (244 min): DER 0.0087, 43 speakers vs 42 (drift +2.4%), 2 people
+#     fragmented — same as single-pass — and 3 conflated, ALL THREE inherited
+#     from pyannote's own within-window labels (single-pass conflates 1 here).
 #   July 29 (82 min): does not chunk at 60 min (a meeting under ~90 minutes is
 #     one window, i.e. byte-identical single-pass output, zero risk). Checked
 #     separately at 45 min: 0 people fragmented where single-pass fragments 2.
+# People fragmented therefore equals or beats single-pass on all three, and the
+# identity pass introduces no cross-window conflation on any of them (see
+# global_identity.MIN_SEAM_OVERLAP_SECONDS for the defect that had to be fixed
+# before that was true).
 # Before this change the same meetings gave 49 and 43 labels with 6 people
 # fragmented on June 10. Fragmentation is what blocked the default, and it is
 # gone.
