@@ -6,7 +6,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-03-source-discovery-v2-design.md` (approved 2026-08-03).
 
-**Architecture:** Slice 0 first — one new DB table (`essentials.discovery_runs`), run-record wiring in `scripts/poll_discovery.py`, and a generalized `scripts/run_scheduled_poll.sh` that runs any `scripts/*.py` from the automation-checkout clone. Ride-alongs are small, independent changes to prefilter/search/eval/GUI. Slice 1 adds a generic `web_rss` outlet kind: one RSS/Atom parser + robots.txt gate in `feeds.py`, a page-text peek replacing the captions peek for web items (rename `captions_fetcher` → `peek_fetcher`), and a yt-dlp extractability probe on approve→ingest.
+**Architecture:** Slice 0 first — one new DB table (`essentials.source_discovery_runs`), run-record wiring in `scripts/poll_discovery.py`, and a generalized `scripts/run_scheduled_poll.sh` that runs any `scripts/*.py` from the automation-checkout clone. Ride-alongs are small, independent changes to prefilter/search/eval/GUI. Slice 1 adds a generic `web_rss` outlet kind: one RSS/Atom parser + robots.txt gate in `feeds.py`, a page-text peek replacing the captions peek for web items (rename `captions_fetcher` → `peek_fetcher`), and a yt-dlp extractability probe on approve→ingest.
 
 **Tech Stack:** Python 3 (`.venv/bin/python` ALWAYS — system python3 lacks deps), pytest, psycopg2, yt-dlp, FastAPI + Jinja2 (existing GUI), launchd, ev-accounts Postgres (Supabase; `DATABASE_URL` from `.env.local`, auto-loaded by `gui.env.load_env_local`).
 
@@ -18,15 +18,16 @@
 - Commit after every task (not every step) unless a task says otherwise.
 
 **Deviations from spec wording (deliberate, small):**
-1. The `discovery_runs` column is named `trigger_kind`, not `trigger` (`TRIGGER` is a Postgres keyword; avoids quoting hazards).
+1. The `source_discovery_runs` column is named `trigger_kind`, not `trigger` (`TRIGGER` is a Postgres keyword; avoids quoting hazards).
 2. The spec said the new table is "the only new DDL" — extending `web_rss` into `source_outlets.kind` requires swapping that CHECK constraint too (v1's migration constrained the "open enum"). Both ride in one migration file.
+3. Discovered during Task 1: prod already has an unrelated `essentials.discovery_runs` (migration 070, candidate-discovery run log, 549 rows) and migration number 1534 is claimed by an uncommitted file — the v2 table is `essentials.source_discovery_runs`, migration `1535_source_discovery_runs_web_rss.sql`. Every reference in this plan has been updated.
 
 ---
 
 ## File structure
 
 **ev-accounts repo (`../ev-accounts`):**
-- Create: `backend/migrations/1534_discovery_runs_web_rss.sql` — run-record table + kind check swap.
+- Create: `backend/migrations/1535_source_discovery_runs_web_rss.sql` — run-record table + kind check swap.
 
 **on-the-record repo:**
 
@@ -55,10 +56,10 @@
 
 # Slice 0 — operational trust
 
-### Task 1: Migration 1534 — `discovery_runs` table + `web_rss` outlet kind
+### Task 1: Migration 1535 — `source_discovery_runs` table + `web_rss` outlet kind
 
 **Files:**
-- Create: `../ev-accounts/backend/migrations/1534_discovery_runs_web_rss.sql`
+- Create: `../ev-accounts/backend/migrations/1535_source_discovery_runs_web_rss.sql`
 
 - [ ] **Step 1: Confirm the kind CHECK constraint's actual name**
 
@@ -85,7 +86,7 @@ Expected: a row like `('source_outlets_kind_check', "CHECK (kind = ANY (ARRAY['y
 
 - [ ] **Step 2: Write the migration**
 
-Create `../ev-accounts/backend/migrations/1534_discovery_runs_web_rss.sql`:
+Create `../ev-accounts/backend/migrations/1535_source_discovery_runs_web_rss.sql`:
 
 ```sql
 -- Source discovery v2, slice 0: run records (unattended-operation evidence)
@@ -93,7 +94,7 @@ Create `../ev-accounts/backend/migrations/1534_discovery_runs_web_rss.sql`:
 -- Spec: on-the-record/docs/superpowers/specs/2026-08-03-source-discovery-v2-design.md
 -- Column is trigger_kind, not trigger: TRIGGER is a Postgres keyword.
 
-create table if not exists essentials.discovery_runs (
+create table if not exists essentials.source_discovery_runs (
   id uuid primary key default gen_random_uuid(),
   started_at timestamptz not null default now(),
   finished_at timestamptz,          -- null on a crashed run: itself a signal
@@ -107,8 +108,8 @@ create table if not exists essentials.discovery_runs (
   failures text                      -- newline-joined summaries, truncated
 );
 
-create index if not exists discovery_runs_started_idx
-  on essentials.discovery_runs (started_at desc);
+create index if not exists source_discovery_runs_started_idx
+  on essentials.source_discovery_runs (started_at desc);
 
 alter table essentials.source_outlets
   drop constraint if exists source_outlets_kind_check;
@@ -125,13 +126,13 @@ import os, psycopg2
 from pathlib import Path
 from gui.env import load_env_local
 load_env_local()
-sql = Path("../ev-accounts/backend/migrations/1534_discovery_runs_web_rss.sql").read_text()
+sql = Path("../ev-accounts/backend/migrations/1535_source_discovery_runs_web_rss.sql").read_text()
 conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
 cur = conn.cursor()
 cur.execute(sql)
 conn.commit()
-cur.execute("select count(*) from essentials.discovery_runs")
-print("discovery_runs rows:", cur.fetchone()[0])
+cur.execute("select count(*) from essentials.source_discovery_runs")
+print("source_discovery_runs rows:", cur.fetchone()[0])
 cur.execute("savepoint s")
 cur.execute("insert into essentials.source_outlets (name, kind, feed_url, added_via) "
             "values ('__kindtest__','web_rss','https://kindtest.invalid/rss','manual')")
@@ -142,13 +143,13 @@ conn.close()
 PY
 ```
 
-Expected: `discovery_runs rows: 0` and `web_rss kind accepted`. If the insert raises a check-constraint error, a second (differently-named) old check survived — re-run Step 1, drop it by its real name, re-apply.
+Expected: `source_discovery_runs rows: 0` and `web_rss kind accepted`. If the insert raises a check-constraint error, a second (differently-named) old check survived — re-run Step 1, drop it by its real name, re-apply.
 
 - [ ] **Step 4: Commit (ev-accounts repo)**
 
 ```bash
-git -C ../ev-accounts add backend/migrations/1534_discovery_runs_web_rss.sql
-git -C ../ev-accounts commit -m "migration 1534: discovery_runs table + web_rss outlet kind
+git -C ../ev-accounts add backend/migrations/1535_source_discovery_runs_web_rss.sql
+git -C ../ev-accounts commit -m "migration 1535: source_discovery_runs table + web_rss outlet kind
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
@@ -178,7 +179,7 @@ def test_insert_run_returns_id_and_binds_trigger_kind():
     run_id = db.insert_run(cur, "scheduled")
     assert run_id == "run-1"
     sql, params = cur.executed[0]
-    assert "essentials.discovery_runs" in sql
+    assert "essentials.source_discovery_runs" in sql
     assert "trigger_kind" in sql
     assert params == ("scheduled",)
 
@@ -232,7 +233,7 @@ def insert_run(cur, trigger_kind: str) -> str:
     """Open a run record; the caller commits immediately so a crashed run
     still leaves its started row (null finished_at = crashed)."""
     cur.execute(
-        "insert into essentials.discovery_runs (trigger_kind) "
+        "insert into essentials.source_discovery_runs (trigger_kind) "
         "values (%s) returning id::text", (trigger_kind,))
     return cur.fetchone()[0]
 
@@ -240,7 +241,7 @@ def insert_run(cur, trigger_kind: str) -> str:
 def finish_run(cur, run_id: str, stats) -> None:
     failures_text = "\n".join(stats.failures)[:4000] or None
     cur.execute("""
-        update essentials.discovery_runs
+        update essentials.source_discovery_runs
         set finished_at = now(), items_examined = %s, classified = %s,
             inserted_pending = %s, inserted_auto_filtered = %s,
             spend_capped = %s, failure_count = %s, failures = %s
@@ -348,7 +349,7 @@ from gui.env import load_env_local
 load_env_local()
 conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
 cur = conn.cursor()
-cur.execute("select count(*) from essentials.discovery_runs")
+cur.execute("select count(*) from essentials.source_discovery_runs")
 print("runs after dry-run:", cur.fetchone()[0])
 conn.close()
 PY
@@ -367,7 +368,7 @@ load_env_local()
 conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
 cur = conn.cursor()
 cur.execute("select trigger_kind, finished_at is not null, items_examined, spend_capped "
-            "from essentials.discovery_runs order by started_at desc limit 1")
+            "from essentials.source_discovery_runs order by started_at desc limit 1")
 print(cur.fetchone())
 cur.execute("select count(*) from essentials.discovery_race_state where last_alarm_at is not null")
 print("alarmed races persisted:", cur.fetchone()[0])
@@ -549,7 +550,7 @@ def health() -> dict:
                            to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS'),
                            trigger_kind, items_examined, classified,
                            inserted_pending, spend_capped, failure_count
-                    from essentials.discovery_runs
+                    from essentials.source_discovery_runs
                     order by started_at desc limit 1
                 """)
                 r = cur.fetchone()
@@ -560,7 +561,7 @@ def health() -> dict:
                                 "queued": r[5], "capped": r[6], "failures": r[7]}
                 cur.execute("""
                     select not exists (
-                        select 1 from essentials.discovery_runs
+                        select 1 from essentials.source_discovery_runs
                         where trigger_kind = 'scheduled'
                           and finished_at > now() - interval '36 hours')
                 """)
@@ -1941,7 +1942,7 @@ branch merges to main.**
    ```
 
    Expected: `=== scheduled poll … ===`, a `code: <sha>` line, engine output
-   ending in `DONE examined=…`, and a new row in `essentials.discovery_runs`
+   ending in `DONE examined=…`, and a new row in `essentials.source_discovery_runs`
    (`trigger_kind='scheduled'`) visible in the GUI header.
 3. The agenda poll's installed plist still passes no script argument — the
    wrapper defaults to `scripts/poll_agendas.py`, so it keeps working
@@ -2021,7 +2022,7 @@ Use the **superpowers:finishing-a-development-branch** skill: push the branch, o
 
 ## Post-merge operating checklist (ops, not code — copy into the PR body)
 
-1. Refresh the discovery plist per runbook §"Scheduler setup / upgrade" and kickstart once; confirm a `scheduled` row in `discovery_runs` and a fresh `poll.log`.
+1. Refresh the discovery plist per runbook §"Scheduler setup / upgrade" and kickstart once; confirm a `scheduled` row in `source_discovery_runs` and a fresh `poll.log`.
 2. Run the WI Governor / FL Senate / WY Senate gap-filler agents (runbook §Agent gap-filler) — do not wait for any of this code.
 3. Run outlet packs for remaining Aug/Sep primary states, now registering `web_rss` feeds too.
 4. After each triage session: harvest verdicts + re-run the eval (runbook §Eval upkeep).

@@ -80,7 +80,11 @@ agenda-poll plist passes `poll_agendas.py`, the discovery plist passes
 
 **Run records.** New table (the only new DDL in v2):
 
-### `essentials.discovery_runs`
+### `essentials.source_discovery_runs`
+
+*(Implementation amendment 2026-08-03: originally specced as `discovery_runs`, renamed —
+prod already has an unrelated `essentials.discovery_runs` table from migration 070, the
+per-jurisdiction candidate-discovery run log. The `source_` prefix matches the v1 family.)*
 
 | Column | Type | Notes |
 |---|---|---|
@@ -105,7 +109,7 @@ scheduled run has completed in >36 h.
 output is unchanged; history becomes queryable.
 
 **Definition of done for slice 0:** 7 consecutive unattended daily runs recorded in
-`discovery_runs` and visible in the GUI — v1's success criterion #5, finally measurable.
+`source_discovery_runs` and visible in the GUI — v1's success criterion #5, finally measurable.
 
 ## Slice 1 — TV-station / news-RSS watchlist layer
 
@@ -156,7 +160,7 @@ templated per chain. Aug/Sep primary states remain first in line.
 - **Recency filter.** Stage-1 drop for items with `published_at` older than
   `DISCOVERY_MAX_ITEM_AGE_DAYS` (default 420 — a cycle year plus slop). Applies to
   watchlist backfill and sweeps; undated items pass (stage 2 owns them). Dropped counts
-  are logged per run (no silent caps) and included in `discovery_runs.items_examined`
+  are logged per run (no silent caps) and included in `source_discovery_runs.items_examined`
   accounting.
 - **Eval harvest + calibration.** `scripts/harvest_discovery_verdicts.py` exports
   human-triaged `discovered_sources` rows (approved/ingested → `gold_relevant: true`;
@@ -209,7 +213,7 @@ templated per chain. Aug/Sep primary states remain first in line.
 
 ## Success criteria
 
-1. **7 consecutive unattended scheduled runs** recorded in `discovery_runs` and visible
+1. **7 consecutive unattended scheduled runs** recorded in `source_discovery_runs` and visible
    in the GUI health strip.
 2. **≥1 station-site (non-YouTube) source** flows discovery → approve → ingest → meeting
    end-to-end.
