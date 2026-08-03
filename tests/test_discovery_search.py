@@ -85,3 +85,25 @@ def test_queries_for_candidate():
     assert '"Maria Delgado" debate' in qs
     assert '"Maria Delgado" town hall' in qs
     assert len(qs) == 4
+
+
+def test_hydrate_casts_float_duration_to_int(monkeypatch):
+    monkeypatch.setattr(search, "fetch_source_metadata", lambda url: {
+        "title": None, "channel": None, "upload_date": None, "duration": 3300.0,
+        "chapters": [], "description": None, "channel_id": None, "channel_url": None,
+    })
+    item = RawItem(url="https://www.youtube.com/watch?v=abc12345678", via="search")
+    out = search.hydrate_item(item)
+    assert out.duration_seconds == 3300 and isinstance(out.duration_seconds, int)
+
+
+def test_ytsearch_skips_channel_and_playlist_entries(monkeypatch):
+    _install(monkeypatch, {"entries": [
+        {"id": "UCkxan0000000000000000", "url": "https://www.youtube.com/channel/UCkxan0000000000000000",
+         "title": "KXAN", "channel": "KXAN"},
+        {"id": "PLxyz", "url": "https://www.youtube.com/playlist?list=PLxyz", "title": "Debates"},
+        {"id": "abc12345678", "url": "https://www.youtube.com/watch?v=abc12345678",
+         "title": "Full debate", "channel": "KXAN", "duration": 3300},
+    ]})
+    items = search.ytsearch("q", limit=5)
+    assert [i.url for i in items] == ["https://www.youtube.com/watch?v=abc12345678"]

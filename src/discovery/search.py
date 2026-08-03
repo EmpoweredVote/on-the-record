@@ -30,9 +30,11 @@ def ytsearch(query: str, *, limit: "int | None" = None) -> list:
     items = []
     for entry in (info or {}).get("entries") or []:
         vid = entry.get("id")
-        url = entry.get("url") or (f"https://www.youtube.com/watch?v={vid}" if vid else None)
-        if not url:
+        if not vid or len(vid) != 11:
             continue
+        url = entry.get("url") or f"https://www.youtube.com/watch?v={vid}"
+        if "watch?v=" not in url and "youtu.be/" not in url:
+            url = f"https://www.youtube.com/watch?v={vid}"
         items.append(RawItem(
             url=url,
             title=entry.get("title") or None,
@@ -53,6 +55,7 @@ def hydrate_item(item: RawItem) -> RawItem:
     item.channel_name = item.channel_name or meta.get("channel")
     item.channel_id = item.channel_id or meta.get("channel_id")
     item.channel_url = item.channel_url or meta.get("channel_url")
-    item.duration_seconds = item.duration_seconds or meta.get("duration")
+    if item.duration_seconds is None and meta.get("duration"):
+        item.duration_seconds = int(meta["duration"])
     item.published_at = item.published_at or meta.get("upload_date")
     return item
