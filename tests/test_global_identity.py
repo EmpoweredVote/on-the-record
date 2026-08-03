@@ -385,3 +385,86 @@ def test_cluster_global_identities_rejects_an_unknown_linkage():
         cluster_global_identities(
             chunks, {0: {0: ALICE}}, threshold=0.60, linkage="banana"
         )
+
+
+import base64
+import json
+
+from src.modal_compute import stitch_chunk_payloads
+
+
+def _payload(window_index, window_start, window_end, turns, vectors, model):
+    """Build a worker-shaped payload; `vectors` is {turn_index: np.ndarray}."""
+    indices = sorted(vectors)
+    stacked = (
+        np.vstack([vectors[i] for i in indices]).astype(np.float32)
+        if indices else np.zeros((0, 0), dtype=np.float32)
+    )
+    labels = {}
+    for start, end, label in turns:
+        labels[label] = labels.get(label, 0.0) + (end - start)
+    return json.dumps({
+        "window_index": window_index,
+        "window_start_s": window_start,
+        "window_end_s": window_end,
+        "turns": [[s, e, l] for s, e, l in turns],
+        "centroids": {label: [1.0, 0.0, 0.0] for label in labels},
+        "speech_seconds": labels,
+        "elapsed_s": 1.0,
+        "turn_embeddings": {model: {
+            "dim": int(stacked.shape[1]) if stacked.size else 0,
+            "dtype": "float32",
+            "turn_indices": indices,
+            "b64": base64.b64encode(stacked.tobytes()).decode("ascii"),
+        }},
+    })
+
+
+def test_stitch_uses_global_identity_when_turn_embeddings_are_present():
+    model = "pyannote/wespeaker-voxceleb-resnet34-LM"
+    payloads = [
+        _payload(0, 0.0, 65.0, [(0.0, 30.0, "SPEAKER_00")], {0: ALICE}, model),
+        _payload(1, 55.0, 120.0, [(70.0, 100.0, "SPEAKER_00")], {0: ALICE_NOISY}, model),
+    ]
+
+    segments, centroids = stitch_chunk_payloads(
+        payloads, use_merge=False, identity="global",
+        cluster_threshold=0.60, embedder=model,
+    )
+
+    assert len({s["speaker_label"] for s in segments}) == 1
+    assert len(next(iter(centroids.values()))) == 3
+
+
+def test_stitch_falls_back_to_the_sequential_path_for_legacy_payloads():
+    """Payloads cached before per-turn embeddings existed must still stitch, so
+    old-vs-new comparison in the sweep costs no GPU."""
+    legacy = []
+    for payload in [
+        _payload(0, 0.0, 65.0, [(0.0, 30.0, "SPEAKER_00")], {0: ALICE},
+                 "pyannote/embedding"),
+        _payload(1, 55.0, 120.0, [(70.0, 100.0, "SPEAKER_00")], {0: ALICE},
+                 "pyannote/embedding"),
+    ]:
+        data = json.loads(payload)
+        del data["turn_embeddings"]
+        legacy.append(json.dumps(data))
+
+    segments, centroids = stitch_chunk_payloads(legacy, use_merge=False, identity="global")
+
+    assert len({s["speaker_label"] for s in segments}) == 1  # matched on centroids
+    assert len(next(iter(centroids.values()))) == 3
+
+
+def test_stitch_honours_an_explicit_sequential_request():
+    model = "pyannote/wespeaker-voxceleb-resnet34-LM"
+    payloads = [
+        _payload(0, 0.0, 65.0, [(0.0, 30.0, "SPEAKER_00")], {0: ALICE}, model),
+        _payload(1, 55.0, 120.0, [(70.0, 100.0, "SPEAKER_00")], {0: CAROL}, model),
+    ]
+    segments, _ = stitch_chunk_payloads(
+        payloads, use_merge=False, identity="sequential", embedding_threshold=0.50,
+    )
+    # sequential path matches on the payload `centroids` field (identical here),
+    # so it unifies where global identity on the turn vectors would not
+    assert len({s["speaker_label"] for s in segments}) == 1

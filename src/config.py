@@ -122,6 +122,43 @@ DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # speaker, but silently merged speakers misattribute quotes).
 DIARIZE_CHUNK_STITCH_THRESHOLD = 0.50
 
+# How chunked diarization turns window-local speaker labels into meeting-wide
+# ones. "global" (src/global_identity.py) runs ONE constrained agglomerative
+# clustering over PER-TURN embeddings at full-meeting scope — the same
+# information single-pass clustering uses. "sequential"
+# (src/speaker_reconcile.reconcile_chunks) is the older per-window CENTROID
+# matcher, kept as an escape hatch and for stitching payloads cached before
+# per-turn embeddings existed.
+#
+# Why global: per-window centroids fragment people (June 10: 49 labels for 41
+# people) and the cause is structural, not a threshold. Measured on that
+# meeting's human-reviewed transcript: its 86 window-local speakers map onto
+# exactly 40 real people, so grouping them is SUFFICIENT; 7 of 86 centroids
+# were non-finite (unfiltered NaN turns) and so could never match at all; and
+# at the sequential path's 0.50 threshold, centroid matching recovers only
+# 83.3% of same-person cross-window pairs while producing ZERO false
+# positives — headroom that greedy one-to-one matching against a running mean
+# cannot exploit safely.
+DIARIZE_CHUNK_IDENTITY = "global"
+# Cosine similarity required to merge two clusters of per-turn embeddings.
+# NOT interchangeable with DIARIZE_CHUNK_STITCH_THRESHOLD (0.50, per-window
+# centroids) or speaker_reconcile.EMBEDDING_MATCH_THRESHOLD (0.75, VibeVoice's
+# 50-minute windows): three matchers over three different signals, and reusing
+# a value measured on one of them elsewhere is how a tuned number ends up
+# somewhere it was never calibrated. Calibrated by
+# scripts/sweep_chunk_thresholds.py; conflation (silent quote
+# misattribution) is far worse than fragmentation (an extra unnamed speaker
+# the review gate catches), so ties break toward the HIGHER value.
+DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.60
+# Cluster-distance linkage: "average" (mean pairwise turn similarity),
+# "complete" (worst pair — most conservative) or "centroid".
+DIARIZE_CHUNK_LINKAGE = "average"
+# Which embedder's per-turn vectors the global pass clusters. wespeaker is
+# what pyannote 3.1 clusters on internally AND what voice profiles are built
+# on (config.EMBEDDING_MODEL), so its centroids need no re-extraction in
+# run_local's dimension guard.
+DIARIZE_CHUNK_EMBEDDER = EMBEDDING_MODEL
+
 # --- Post-identification segment merging ---
 SEGMENT_MERGE_GAP = 2.0  # merge adjacent same-speaker segments with gap < this (seconds)
 
