@@ -63,12 +63,28 @@ def test_parse_name_query_splits_tokens():
 
 
 def test_parse_name_query_drops_punctuation_and_extra_space():
-    assert parse_name_query("  O'Brien,  Mary-Kate ") == ["o", "brien", "mary", "kate"]
+    assert parse_name_query("  O'Brien,  Mary-Kate ") == ["brien", "mary", "kate"]
 
 
 def test_parse_name_query_empty():
     assert parse_name_query("") == []
     assert parse_name_query("   ") == []
+
+
+def test_parse_name_query_drops_a_bare_middle_initial():
+    # Every token becomes an AND-ed clause, so keeping "f" would require the
+    # stored row to contain an F somewhere: "John F Kennedy" returns ZERO against
+    # the stored "John Kennedy" (verified against prod). Dropping 1-char tokens
+    # is what makes the query survive an initial the record doesn't carry.
+    assert parse_name_query("John F Kennedy") == ["john", "kennedy"]
+    assert parse_name_query("Thomas P. Tiffany") == ["thomas", "tiffany"]
+
+
+def test_parse_name_query_drops_generational_suffixes():
+    # name_suffix is its own column and is not searched, so "Wesley Hunt Jr"
+    # returns zero against the stored "Wesley Hunt" (verified against prod).
+    assert parse_name_query("Wesley Hunt Jr.") == ["wesley", "hunt"]
+    assert parse_name_query("Harold Ford III") == ["harold", "ford"]
 
 
 def test_politician_display_name_only():
@@ -105,6 +121,29 @@ def test_politician_display_skips_district_that_repeats_the_office():
     rec = {"full_name": "Ken Paxton", "office_title": "Texas Attorney General",
            "district_label": "Texas Attorney General", "government_name": ""}
     assert politician_display(rec) == "Ken Paxton · Texas Attorney General"
+
+
+def test_politician_display_drops_a_district_contained_in_the_office():
+    # 1141 prod rows are redundant by containment, not exact equality.
+    rec = {"full_name": "Tara T. Hong",
+           "office_title": "Representative, 18th Middlesex District",
+           "district_label": "18th Middlesex District", "government_name": ""}
+    assert politician_display(rec) == (
+        "Tara T. Hong · Representative, 18th Middlesex District")
+
+
+def test_politician_display_keeps_the_longer_side_when_office_is_contained():
+    # When they differ, the district is often the MORE informative side.
+    rec = {"full_name": "Ken Paxton", "office_title": "Attorney General",
+           "district_label": "Texas Attorney General", "government_name": ""}
+    assert politician_display(rec) == "Ken Paxton · Texas Attorney General"
+
+
+def test_politician_display_keeps_both_when_neither_contains_the_other():
+    rec = {"full_name": "Thomas P. Tiffany", "office_title": "U.S. Representative",
+           "district_label": "Congressional District 7", "government_name": ""}
+    assert politician_display(rec) == (
+        "Thomas P. Tiffany · U.S. Representative · Congressional District 7")
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -161,29 +200,50 @@ _NAME_FIELDS = ("full_name", "preferred_name", "first_name", "last_name")
 # Candidacies shown in full before collapsing the tail into "+N more".
 _MAX_CANDIDACIES = 3
 
+# Query tokens that carry no matchable signal. Generational suffixes live in
+# their own `name_suffix` column, which _NAME_FIELDS doesn't search, so keeping
+# them would AND in a clause nothing can satisfy.
+_NOISE_TOKENS = frozenset({"jr", "sr", "ii", "iii", "iv"})
+
 
 def parse_name_query(q: str) -> list[str]:
-    """Lowercase alphanumeric tokens from a raw picker query.
+    """Matchable lowercase tokens from a raw picker query.
 
-    Each token becomes its own AND-ed clause, so "Thomas Tiffany" matches the
-    stored "Thomas P. Tiffany" (the dropped middle initial stops mattering) and
-    word order stops mattering too.
+    Each token becomes its own AND-ed clause, which is what lets "Thomas
+    Tiffany" match the stored "Thomas P. Tiffany" — but it cuts both ways, so
+    anything the stored row can't possibly carry has to be dropped or the whole
+    query returns nothing. Two such cases, both verified against prod:
+
+      "John F Kennedy"  -> stored "John Kennedy" has no F   -> 0 rows
+      "Wesley Hunt Jr"  -> name_suffix isn't in _NAME_FIELDS -> 0 rows
+
+    So single-character tokens (bare middle initials) and generational suffixes
+    are dropped. Word order never mattered either way.
     """
-    return re.findall(r"[a-z0-9]+", (q or "").lower())
+    return [t for t in re.findall(r"[a-z0-9]+", (q or "").lower())
+            if len(t) > 1 and t not in _NOISE_TOKENS]
 
 
 def politician_display(rec: dict) -> str:
     """'Thomas P. Tiffany · U.S. Representative · Congressional District 7 ·
     United States Federal Government' — identity, empty parts omitted.
 
-    district_label is dropped when it merely repeats office_title: essentials
-    stores d.label == o.title for many single-seat offices, and printing it twice
-    crowds out the part that actually disambiguates.
+    office_title and district_label are frequently redundant: 112 prod rows store
+    d.label == o.title outright ("Texas Attorney General" twice) and another 1141
+    have one contained in the other ("Representative, 18th Middlesex District" /
+    "18th Middlesex District"). Printing both crowds out the part that actually
+    disambiguates, so when one contains the other only the longer survives —
+    which side that is varies ("Attorney General" vs "Texas Attorney General"
+    keeps the district).
     """
     office = (rec.get("office_title") or "").strip()
     district = (rec.get("district_label") or "").strip()
-    if district and district == office:
-        district = ""
+    if office and district:
+        lower_office, lower_district = office.lower(), district.lower()
+        if lower_district in lower_office:
+            district = ""
+        elif lower_office in lower_district:
+            office, district = district, ""
     parts = [
         (rec.get("full_name") or "").strip(),
         office,
@@ -199,7 +259,7 @@ def politician_display(rec: dict) -> str:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `8 passed`
+Expected: `13 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -281,6 +341,7 @@ def test_candidacy_display_skips_malformed_entries():
 
 def test_candidacy_display_all_malformed_reads_as_none():
     assert candidacy_display(["not-a-dict", None]) == "no candidacies"
+
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -339,7 +400,7 @@ def candidacy_display(candidacies) -> str:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `15 passed`
+Expected: `20 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -466,7 +527,7 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `21 passed`
+Expected: `26 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -803,7 +864,7 @@ literal percent must be doubled or psycopg2 reads it as a placeholder.
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `32 passed`
+Expected: `37 passed`
 
 - [ ] **Step 5: Verify the SQL against the real database**
 
@@ -987,7 +1048,7 @@ The fallback reads both `politician_id`/`id` and `politician_slug`/`slug` becaus
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `35 passed`
+Expected: `40 passed`
 
 - [ ] **Step 5: Run the full suite to confirm no regression**
 
@@ -995,7 +1056,7 @@ Expected: `35 passed`
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1753 passed` (1718 baseline + 35 new)
+Expected: `1758 passed` (1718 baseline + 40 new)
 
 - [ ] **Step 6: Commit**
 
@@ -1127,7 +1188,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1754 passed` (1718 baseline + 35 from Tasks 1-5 + 1 from Task 6)
+Expected: `1759 passed` (1718 baseline + 40 from Tasks 1-5 + 1 from Task 6)
 
 - [ ] **Step 2: Start the GUI and exercise the picker by hand**
 
