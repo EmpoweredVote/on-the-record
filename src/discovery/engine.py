@@ -49,7 +49,8 @@ def sweep_due(election_date: "str | None", last_swept_at, today: dt.date) -> boo
         return False
     if last_swept_at is None:
         return True
-    last = last_swept_at.date() if hasattr(last_swept_at, "date") else last_swept_at
+    last = (last_swept_at.astimezone().date()
+            if isinstance(last_swept_at, dt.datetime) else last_swept_at)
     return (today - last).days >= sweep_interval_days(days_to)
 
 
@@ -75,6 +76,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
     all_names = sorted({t.full_name for t in tracked})
     seen = db.existing_source_keys(cur) | set(meeting_keys)
     cap = classify_cap if classify_cap is not None else config.DISCOVERY_CLASSIFY_CAP_PER_RUN
+    hydrated_cache: dict = {}
 
     def process(item, roster_names, race_hint):
         key = source_key(item.url)
@@ -88,7 +90,11 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             stats.prefiltered_out += 1
             return
         if item.duration_seconds is None or item.description is None:
-            item = hydrate_fn(item)
+            if key in hydrated_cache:
+                item = hydrated_cache[key]
+            else:
+                item = hydrate_fn(item)
+                hydrated_cache[key] = item
             pf = prefilter_item(item.title, item.description, item.duration_seconds,
                                 roster_names)
             if not pf.passed:
@@ -123,8 +129,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
         pending = (verdict.rejected_reason is None and verdict.relevant
                    and verdict.confidence >= config.DISCOVERY_CONFIDENCE_FLOOR)
         status = "pending" if pending else "auto_filtered"
-        matched_ids = sorted({t.politician_id for t in matched
-                              if t.race_id == race_id})
+        matched_ids = sorted({t.politician_id for t in matched})
         db.insert_discovered(cur, {
             "source_key": key, "url": item.url, "title": item.title,
             "description_snippet": _snippet(item.description),
@@ -147,6 +152,17 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
         else:
             stats.inserted_auto_filtered += 1
 
+    def process_safe(item, roster_names, race_hint):
+        try:
+            process(item, roster_names, race_hint)
+        except Exception as exc:  # noqa: BLE001 — per-item, loud, non-fatal
+            stats.failures.append(f"item {item.url}: {exc}")
+            print(f"FAILED item {item.url}: {exc}", file=sys.stderr)
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
     if not skip_watchlist:
         for outlet in db.fetch_active_outlets(cur):
             try:
@@ -156,7 +172,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                 print(f"FAILED outlet {outlet.name}: {exc}", file=sys.stderr)
                 continue
             for item in items:
-                process(item, all_names, None)
+                process_safe(item, all_names, None)
             if not dry_run:
                 db.mark_outlet_polled(cur, outlet.id)
                 conn.commit()
@@ -169,6 +185,10 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             if not race_filter and not sweep_due(cands[0].election_date,
                                                  state.get(race_id), today):
                 continue
+            if not dry_run and stats.classified >= cap:
+                print("SPEND CAP: deferring remaining sweeps to next run")
+                break
+            capped_before = stats.spend_capped
             for cand in cands:
                 for query in queries_for_candidate(cand.full_name):
                     try:
@@ -178,10 +198,15 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                         print(f"FAILED search {query!r}: {exc}", file=sys.stderr)
                         continue
                     for item in results:
-                        process(item, [c.full_name for c in cands], race_id)
+                        process_safe(item, [c.full_name for c in cands], race_id)
                     sleep_fn(config.DISCOVERY_SEARCH_SLEEP_SECONDS)
-            if not dry_run:
+            # don't record a sweep the spend cap truncated: a future run
+            # must still cover the queries the cap made us skip.
+            if not dry_run and stats.spend_capped == capped_before:
                 db.record_sweep(cur, race_id)
                 conn.commit()
+        if race_filter and race_filter not in by_race:
+            stats.failures.append(f"race filter {race_filter}: not a tracked race")
+            print(f"FAILED race filter {race_filter}: not a tracked race", file=sys.stderr)
 
     return stats

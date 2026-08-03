@@ -1840,6 +1840,15 @@ Expected: all PASS.
 git add src/discovery/engine.py tests/test_discovery_engine.py && git commit -m "feat: discovery engine orchestration (injected deps, spend cap, cadence)"
 ```
 
+**Post-review amendments (2026-08-02):** a deep review of the engine code above found seven degraded-path bugs, fixed in `fix: engine degraded-path hardening (per-item guard, cap-aware sweeps, cross-race anchors)` — the plan text above is left as originally written; these are sanctioned deviations layered on top of it.
+1. `process()` calls at both loop sites are now wrapped by a `process_safe()` helper that catches per-item exceptions (classifier errors, bad inserts), records a failure, and rolls back the connection instead of killing the whole run.
+2. The sweep loop snapshots `spend_capped` per race and skips `record_sweep`/commit when the cap truncated that race's results; it also breaks out of the race loop early (printing `SPEND CAP: deferring remaining sweeps to next run`) once the cap is already exhausted before a race starts, so no further searches are paid for.
+3. `matched_politician_ids` is now `sorted({t.politician_id for t in matched})` (no race-id filter) — politicians are the anchor and a cross-race name match should not silently drop a politician_id.
+4. `db.fetch_tracked_candidates` gained `order by rc.race_id, rc.full_name` for deterministic race/candidate ordering.
+5. `run_discovery` now keeps a per-run `hydrated_cache` keyed by `source_key`, so the same item hit by multiple sweep queries only pays for `hydrate_fn` once.
+6. `sweep_due` converts a timezone-aware `last_swept_at` via `.astimezone().date()` instead of a raw `.date()`, so cadence is computed against the local calendar date rather than whatever the DB timestamp's timezone happens to be.
+7. An unrecognized `race_filter` (not a key of `by_race`) now appends a loud failure and stderr line instead of silently sweeping nothing.
+
 ### Task 11: `scripts/poll_discovery.py` — the CLI the launchd job runs
 
 Thin I/O wrapper in the `poll_agendas.py` mold; all logic already tested in the engine. No new tests — the script only wires tested pieces together.

@@ -7,12 +7,16 @@ from src.discovery.models import Outlet, RawItem, TrackedCandidate, Verdict
 class _FakeConn:
     def __init__(self):
         self.commits = 0
+        self.rollbacks = 0
 
     def cursor(self):
         return object()
 
     def commit(self):
         self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
 
 
 TRACKED = [
@@ -149,3 +153,162 @@ def test_sweep_due_respects_last_swept(monkeypatch):
     old = dt.datetime(2026, 7, 20, 9, 0)
     assert engine.sweep_due("2026-11-03", old, today) is True
     assert engine.sweep_due("2026-07-01", old, today) is False     # election passed
+
+
+# --- Post-review hardening: degraded-path fixes -----------------------------
+
+def test_item_failure_is_nonfatal_and_run_continues(monkeypatch):
+    inserted = []
+    second_item = RawItem(url="https://www.youtube.com/watch?v=def12345678",
+                          title="Maria Delgado town hall on the issues",
+                          description="d", channel_name="KXAN",
+                          duration_seconds=1800, published_at="2026-08-01",
+                          outlet_id="o1", via="watchlist")
+
+    class _RaisesOnceProvider:
+        def __init__(self, reply):
+            self.reply = reply
+            self.calls = 0
+
+        def complete(self, prompt, *, max_tokens, temperature, system=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("classifier API error")
+            return self.reply
+
+    provider = _RaisesOnceProvider(
+        '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
+        ' "event_kind": "town_hall", "source_tier": 1, "original_vs_clip": "original",'
+        ' "route": "ingest", "why": "town hall"}')
+    stats, provider = _run(monkeypatch, inserted, skip_sweeps=True,
+                           fetch_feed_items=lambda o: [GOOD_ITEM, second_item],
+                           provider=provider)
+    assert provider.calls == 2
+    assert len(inserted) == 1
+    assert inserted[0]["url"] == second_item.url
+    assert len(stats.failures) == 1
+    assert GOOD_ITEM.url in stats.failures[0]
+
+
+def test_spend_cap_defers_sweep_and_skips_record(monkeypatch, capsys):
+    inserted = []
+    recorded = []
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: recorded.append(rid))
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider("irrelevant"),
+        fetch_feed_items=lambda o: [], ytsearch_fn=lambda q: [GOOD_ITEM],
+        hydrate_fn=lambda item: item, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True, classify_cap=0)
+
+    assert recorded == []
+    assert "SPEND CAP" in capsys.readouterr().out
+
+
+def test_matched_politician_ids_keep_cross_race_matches(monkeypatch):
+    inserted = []
+    tracked = TRACKED + [TrackedCandidate("p3", "r2", "Carlos Diaz", "TX AG", "2026-11-03")]
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(tracked))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: None)
+
+    item = RawItem(url="https://www.youtube.com/watch?v=cross1234567",
+                   title="Maria Delgado, Ana Ruiz, and Carlos Diaz: full debate",
+                   description="d", channel_name="KXAN",
+                   duration_seconds=3300, published_at="2026-08-01",
+                   outlet_id="o1", via="watchlist")
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider(
+            '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+            ' "event_kind": "debate", "source_tier": 1, "original_vs_clip": "original",'
+            ' "route": "ingest", "why": "cross-race debate"}'),
+        fetch_feed_items=lambda o: [item], ytsearch_fn=lambda q: [],
+        hydrate_fn=lambda it: it, captions_fetcher=None, sleep_fn=lambda s: None,
+        meeting_keys=set(), today=dt.date(2026, 8, 2), skip_sweeps=True)
+
+    assert len(inserted) == 1
+    row = inserted[0]
+    assert set(row["matched_politician_ids"]) == {"p1", "p2", "p3"}
+    assert row["race_id"] == "r1"
+
+
+def test_hydration_is_cached_across_duplicate_sweep_hits(monkeypatch):
+    inserted = []
+    _patch_db(monkeypatch, inserted)
+    calls = []
+    hits = {"count": 0}
+
+    def counting_hydrate(item):
+        calls.append(item.url)
+        return RawItem(url=item.url, title=item.title, description="",
+                       channel_name=item.channel_name, duration_seconds=90,
+                       published_at=item.published_at, outlet_id=item.outlet_id,
+                       via=item.via)
+
+    needs_hydration_item = RawItem(url="https://www.youtube.com/watch?v=hyd1234567",
+                                   title="Maria Delgado talks issues", description=None,
+                                   channel_name="KXAN", duration_seconds=None,
+                                   published_at="2026-08-01", via="search")
+
+    def fake_search(q):
+        if hits["count"] < 2:
+            hits["count"] += 1
+            return [needs_hydration_item]
+        return []
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider("irrelevant"),
+        fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
+        hydrate_fn=counting_hydrate, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True)
+
+    assert calls == [needs_hydration_item.url]  # hydrated exactly once, cached on repeat
+    assert stats.prefiltered_out == 2
+    assert inserted == []
+
+
+def test_sweep_due_converts_aware_datetime_to_local_date(monkeypatch):
+    import os
+    import time as time_mod
+
+    old_tz = os.environ.get("TZ")
+    os.environ["TZ"] = "America/New_York"
+    time_mod.tzset()
+    try:
+        today = dt.date(2026, 8, 2)
+        # 2026-08-01 02:00 UTC == 2026-07-31 22:00 EDT (UTC-4); the raw UTC
+        # calendar date is 2026-08-01 but the local calendar date is 2026-07-31.
+        aware = dt.datetime(2026, 8, 1, 2, 0, tzinfo=dt.timezone.utc)
+        # 2026-08-20 is 18 days out from today -> the 2-day sweep band.
+        # Local-date reckoning: 2 days since last swept -> due.
+        # Raw-UTC-date reckoning (the pre-fix bug): only 1 day since last swept -> not due.
+        assert engine.sweep_due("2026-08-20", aware, today) is True
+    finally:
+        if old_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old_tz
+        time_mod.tzset()
+
+
+def test_unknown_race_filter_is_loud_failure(monkeypatch):
+    inserted = []
+    stats, provider = _run(monkeypatch, inserted, skip_watchlist=True,
+                           race_filter="bogus-race-id")
+    assert stats.failures
+    assert any("bogus-race-id" in f for f in stats.failures)

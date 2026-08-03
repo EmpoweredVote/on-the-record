@@ -44,6 +44,7 @@ def fetch_tracked_candidates(cur) -> list:
           and p.election_date >= current_date
           and coalesce(rc.candidate_status, 'active') not in ('withdrawn','removed')
           and rc.full_name is not null
+        order by rc.race_id, rc.full_name
     """)
     return [TrackedCandidate(politician_id=r[0], race_id=r[1], full_name=r[2],
                              race_label=r[3], election_date=r[4])
