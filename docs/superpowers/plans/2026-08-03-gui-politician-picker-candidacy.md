@@ -1400,10 +1400,13 @@ In `gui/static/style.css`, append after line 59 (the
 `button.link-result:hover` rule):
 
 ```css
+/* Two lines per result: identity, then which races the person is a candidate in.
+   Warning colour and 0.78rem match the existing .thin ("short sample") caution
+   chip rather than inventing a second one; #b32020 is reserved for errors. */
 button.link-result { display: flex; flex-direction: column; gap: 0.1rem; }
 .link-result .pr-name { display: block; }
 .link-result .pr-cand { display: block; font-size: 0.78rem; color: #5c6b82; }
-.link-result .pr-warn { color: #b4530a; }
+.link-result .pr-warn { color: #9a6a00; }
 .link-result .pr-dupe { display: block; font-size: 0.78rem; font-weight: 600; }
 ```
 
