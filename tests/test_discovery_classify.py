@@ -46,6 +46,24 @@ starting with my first budget."""
     assert text == "I will cut property taxes starting with my first budget."
 
 
+def test_vtt_to_text_reconstructs_rolling_auto_captions():
+    vtt = """WEBVTT
+
+00:00:00.000 --> 00:00:01.000
+today I want to
+
+00:00:01.000 --> 00:00:02.000
+today I want to talk about property taxes
+
+00:00:02.000 --> 00:00:03.000
+today I want to talk about property taxes and how we fund schools
+
+00:00:03.000 --> 00:00:04.000
+and how we fund schools"""
+    text = classify.vtt_to_text(vtt)
+    assert text == "today I want to talk about property taxes and how we fund schools"
+
+
 class _FakeProvider:
     def __init__(self, replies):
         self.replies = list(replies)
@@ -89,3 +107,12 @@ def test_classify_item_mid_confidence_triggers_captions_second_pass():
     assert v.confidence == 0.92 and len(provider.prompts) == 2
     assert "I will cut taxes" in provider.prompts[1]
     assert fetched["url"] == _item().url
+
+
+def test_classify_item_drops_candidates_not_in_roster():
+    provider = _FakeProvider(['{"relevant": true, "confidence": 0.9, '
+                              '"candidates_present": ["Maria Delgado", "Totally Fake Person"], '
+                              '"why": "clear"}'])
+    v = classify.classify_item(provider, _item(), race_label="TX Senate",
+                               roster_names=["Maria Delgado"], captions_fetcher=None)
+    assert v.candidates_present == ["Maria Delgado"]

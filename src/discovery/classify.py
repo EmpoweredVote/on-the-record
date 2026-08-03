@@ -113,10 +113,19 @@ def vtt_to_text(vtt: str, max_chars: int = 6000) -> str:
                 or "-->" in line or line.isdigit()):
             continue
         line = re.sub(r"<[^>]+>", "", line)
-        if lines and lines[-1] == line:
-            continue  # auto-captions repeat lines across cues
+        while lines and lines[-1] in line:
+            lines.pop()          # incoming settled line supersedes prior fragments
+        if lines and line in lines[-1]:
+            continue             # fragment already inside the last settled line
         lines.append(line)
     return " ".join(lines)[:max_chars]
+
+
+def _filter_candidates(verdict: Verdict, roster_names: list) -> Verdict:
+    allowed = {n.lower() for n in roster_names}
+    verdict.candidates_present = [n for n in verdict.candidates_present
+                                  if n.lower() in allowed]
+    return verdict
 
 
 def classify_item(provider, item: RawItem, *, race_label: str, roster_names: list,
@@ -140,5 +149,5 @@ def classify_item(provider, item: RawItem, *, race_label: str, roster_names: lis
                 system=_SYSTEM)
             second = parse_verdict(text2)
             if second.rejected_reason is None:
-                return second
-    return verdict
+                return _filter_candidates(second, roster_names)
+    return _filter_candidates(verdict, roster_names)
