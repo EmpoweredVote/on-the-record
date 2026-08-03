@@ -111,8 +111,21 @@ def _seam_report(payloads: list[str], segments: list[dict], window_s: float = 10
     A person speaking across a seam must not change label there; this prints
     the turns on both sides so a human can see it rather than trusting an
     aggregate.
+
+    The seam itself is NOT `window_start_s` — that is merely where a
+    window's READ range begins (`start_s - overlap_s`), which sits a full
+    overlap-length away from where label ownership actually changes hands.
+    Ownership transfers at the MIDPOINT of two consecutive windows' overlap,
+    exactly as `src.speaker_reconcile._ownership_bounds` computes it:
+    `(next_window.start + this_window.end) / 2`. Using `window_start_s`
+    would inspect audio a full 60s (the shipped overlap) away from the
+    actual handover.
     """
-    seams = sorted({json.loads(p)["window_start_s"] for p in payloads} - {0.0})
+    parsed = sorted((json.loads(p) for p in payloads), key=lambda p: p["window_index"])
+    seams = [
+        (previous["window_end_s"] + current["window_start_s"]) / 2
+        for previous, current in zip(parsed, parsed[1:])
+    ]
     turns = _turns(segments)
     for seam in seams:
         before = [t for t in turns if seam - window_s <= t[1] <= seam]
@@ -182,6 +195,8 @@ def main() -> int:
                   f"SINGLE-PASS itself fragments {len(base_report.fragmentation)} and "
                   f"conflates {len(base_report.conflation)} of them "
                   "(this is the bar to beat, not DER)", flush=True)
+            print(f"    {base_report.fragmentation_summary}", flush=True)
+            print(f"    {base_report.conflation_summary}", flush=True)
 
         with tempfile.TemporaryDirectory() as tmp:
             ref = _rttm(base_turns, meeting_id, Path(tmp) / "ref.rttm")
@@ -237,6 +252,8 @@ def main() -> int:
                         row["named_fragmentation"] = len(report.fragmentation)
                         row["named_conflation"] = len(report.conflation)
                         row["named_people"] = report.reference_people
+                        row["named_fragmentation_summary"] = report.fragmentation_summary
+                        row["named_conflation_summary"] = report.conflation_summary
                     rows.append(row)
                     row_segments.append(segments)
                     label = (f"{cfg['identity']}"
@@ -248,7 +265,9 @@ def main() -> int:
                     if named_reference:
                         extra = (f" | vs reviewed names: "
                                  f"{row['named_fragmentation']} fragmented, "
-                                 f"{row['named_conflation']} conflated")
+                                 f"{row['named_conflation']} conflated "
+                                 f"({row['named_fragmentation_summary']}; "
+                                 f"{row['named_conflation_summary']})")
                     print(f"    {label}: DER {der:.4f}, {speakers} spk "
                           f"(drift {drift:+.1%}) "
                           f"{'PASS' if row['passes_gate'] else 'fail'}{extra}",
@@ -272,6 +291,12 @@ def main() -> int:
               f"{cfg_str:>30} {der:>8} {r['speakers']:>4} {r['base_speakers']:>5} "
               f"{r['speaker_drift']:>+7.1%} "
               f"{'PASS' if r['passes_gate'] else 'fail'}{extra}")
+        # A count alone can't distinguish a boundary bleed from a real
+        # merge/split, so print the seconds/share behind it right under the
+        # row it belongs to.
+        if "named_fragmentation" in r:
+            print(f"    {r['named_fragmentation_summary']}")
+            print(f"    {r['named_conflation_summary']}")
     passing = [(i, r) for i, r in enumerate(rows) if r["passes_gate"]]
     if passing:
         best_idx, best = min(passing, key=lambda item: item[1]["der"])
@@ -289,6 +314,8 @@ def main() -> int:
         if "named_fragmentation" in best:
             print(f"  vs reviewed names: {best['named_fragmentation']} fragmented, "
                   f"{best['named_conflation']} conflated of {best['named_people']} people")
+            print(f"    {best['named_fragmentation_summary']}")
+            print(f"    {best['named_conflation_summary']}")
         print(f"\n  seam spot-check for the best passing config "
               f"({best['meeting']} @ {best['chunk_minutes']}min):")
         _seam_report(payloads_by_key[(best["meeting"], best["chunk_minutes"])],

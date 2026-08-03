@@ -57,3 +57,55 @@ def test_sub_floor_slivers_are_not_counted_as_errors():
     report = identity_report(hypothesis, REFERENCE, min_seconds=3.0)
     assert report.conflation == []
     assert report.fragmentation == []
+
+
+# --- Proportional floor: a fixed 3s absolute floor is meaningless at
+# meeting scale (a 10s bleed against a 1600s person is noise; a 3s floor
+# alone can't tell that from a real merge). `min_fraction` (default 0.02)
+# requires the overlap ALSO be at least 2% of the OTHER side's total
+# attributed speech. These use realistic (hours-scale) magnitudes because
+# the effect is invisible at the tens-of-seconds scale of the fixtures above.
+
+def test_a_boundary_bleed_clearing_the_absolute_floor_is_not_conflation():
+    """10s against a 1600s dominant speaker is 0.6% of the label's total --
+    exactly the shape real June 10 output has (3-14s bleeds against
+    500-1700s dominants) -- so it must not read as a second identity even
+    though 10s alone clears the absolute 3.0s floor."""
+    reference = [(0.0, 1600.0, "Alice"), (1600.0, 1610.0, "Bob")]
+    hypothesis = [(0.0, 1610.0, "SPEAKER_00")]
+    report = identity_report(hypothesis, reference)
+    assert report.conflation == []
+    assert report.conflation_summary == "no conflation"
+
+
+def test_a_genuine_two_person_merge_is_still_conflation():
+    """300s and 250s under one label is a real merge, not a bleed -- both
+    clear the 2% proportional floor by a wide margin."""
+    reference = [(0.0, 300.0, "Alice"), (300.0, 550.0, "Bob")]
+    hypothesis = [(0.0, 550.0, "SPEAKER_00")]
+    report = identity_report(hypothesis, reference)
+    assert [c.label for c in report.conflation] == ["SPEAKER_00"]
+    assert sorted(report.conflation[0].people) == ["Alice", "Bob"]
+    assert "45.5%" in report.conflation_summary
+
+
+def test_a_boundary_bleed_clearing_the_absolute_floor_is_not_fragmentation():
+    """Symmetric to the conflation case: a label holding only 10s of a
+    1600s person's total speech (0.6%) is a boundary bleed, not a second
+    label for that person."""
+    reference = [(0.0, 1600.0, "Alice")]
+    hypothesis = [(0.0, 1590.0, "SPEAKER_00"), (1590.0, 1600.0, "SPEAKER_01")]
+    report = identity_report(hypothesis, reference)
+    assert report.fragmentation == []
+    assert report.fragmentation_summary == "no fragmentation"
+
+
+def test_a_genuine_fragmentation_across_two_labels_is_still_reported():
+    """300s and 250s of one person's speech split across two labels is a
+    real fragmentation, not a bleed."""
+    reference = [(0.0, 550.0, "Alice")]
+    hypothesis = [(0.0, 300.0, "SPEAKER_00"), (300.0, 550.0, "SPEAKER_01")]
+    report = identity_report(hypothesis, reference)
+    assert [f.person for f in report.fragmentation] == ["Alice"]
+    assert sorted(report.fragmentation[0].labels) == ["SPEAKER_00", "SPEAKER_01"]
+    assert "45.5%" in report.fragmentation_summary

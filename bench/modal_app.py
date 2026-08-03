@@ -1649,9 +1649,15 @@ def diarize_chunk_window(
         model_centroids = {
             label: np.mean(rows, axis=0).tolist() for label, rows in per_speaker.items()
         }
-        if not centroids:
+        if model_id == embedders[0]:
             # First embedder listed owns the legacy `centroids` field, which the
-            # sequential reconciler path still reads.
+            # sequential reconciler path still reads. Keyed off identity, not
+            # truthiness: `if not centroids` let a LATER embedder's
+            # differently-dimensioned vectors populate this field whenever the
+            # first embedder happened to yield zero centroids for a window
+            # (e.g. every turn too short to embed), silently mixing embedding
+            # spaces across windows and breaking the sequential path's
+            # centroid recomputation.
             centroids = model_centroids
         print(f"  [chunk {window_index}] {model_id}: {len(indices)} turn vectors, "
               f"{len(model_centroids)} centroids")

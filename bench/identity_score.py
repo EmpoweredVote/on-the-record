@@ -17,6 +17,12 @@ people), which supports the measure that actually matters:
   misattribution; strictly worse, and the reason every threshold judgment in
   this pipeline errs toward fewer merges.
 
+Both error modes are floored by seconds AND by share of the other side's
+total attributed speech (see `identity_report`'s docstring) so a 3-14s
+boundary bleed against a person holding 500-1700s of the same label does not
+read as a real merge — a fixed-seconds floor alone cannot tell the two apart
+at meeting scale, and single-pass itself proved that on real June 10 output.
+
 Pure: no torch, no Modal, no I/O beyond what the caller passes in.
 """
 
@@ -55,6 +61,8 @@ class IdentityReport:
     fragmentation: list[Fragmentation]
     conflation: list[Conflation]
     mapping: dict[str, LabelMapping]
+    fragmentation_summary: str
+    conflation_summary: str
 
 
 def _overlap(a0: float, a1: float, b0: float, b1: float) -> float:
@@ -86,20 +94,97 @@ def map_labels_to_reference(
     return mapping
 
 
+DEFAULT_MIN_SECONDS = 3.0
+DEFAULT_MIN_FRACTION = 0.02
+
+
+def _largest_minority(
+    groups: dict[str, dict[str, float]]
+) -> tuple[str, str, float, float, float] | None:
+    """Across `groups` (key -> {subkey: seconds}), find the biggest share held
+    by a non-dominant subkey. This is the "how close to real" readout: a
+    group whose largest minority share is 0.8% is a boundary bleed, one
+    whose largest minority share is 45% is a real second identity.
+    """
+    best: tuple[str, str, float, float, float] | None = None
+    for key, seconds in groups.items():
+        total = sum(seconds.values())
+        if total <= 0:
+            continue
+        ranked = sorted(seconds.items(), key=lambda kv: kv[1], reverse=True)
+        for subkey, secs in ranked[1:]:
+            share = secs / total
+            if best is None or share > best[3]:
+                best = (key, subkey, secs, share, total)
+    return best
+
+
+def _conflation_summary(conflation: list[Conflation]) -> str:
+    best = _largest_minority({c.label: c.seconds for c in conflation})
+    if best is None:
+        return "no conflation"
+    label, person, secs, share, total = best
+    return (f"largest conflation minority share: {share:.1%} "
+            f"({person} holds {secs:.1f}s of {total:.1f}s under label {label})")
+
+
+def _fragmentation_summary(fragmentation: list[Fragmentation]) -> str:
+    best = _largest_minority({f.person: f.seconds for f in fragmentation})
+    if best is None:
+        return "no fragmentation"
+    person, label, secs, share, total = best
+    return (f"largest fragmentation minority share: {share:.1%} "
+            f"(label {label} holds {secs:.1f}s of {total:.1f}s for {person})")
+
+
 def identity_report(
-    hypothesis: Turns, reference: Turns, min_seconds: float = 3.0
+    hypothesis: Turns,
+    reference: Turns,
+    min_seconds: float = DEFAULT_MIN_SECONDS,
+    min_fraction: float = DEFAULT_MIN_FRACTION,
 ) -> IdentityReport:
     """Fragmentation and conflation against a human-reviewed reference.
 
-    `min_seconds` floors both error modes: a sub-floor overlap between a label
-    and a person is boundary noise (diarization routinely bleeds a word across
-    a turn edge), not evidence of a second identity.
+    A person/label only counts toward the OTHER side's identity if its
+    overlap clears BOTH an absolute floor (`min_seconds`) and a proportional
+    one (`min_fraction` of the other side's total attributed speech). The
+    absolute floor alone is meaningless at meeting scale: measured on real
+    June 10 output, single-pass itself -- the REFERENCE arm, not a new path --
+    scored 5 "conflated" labels under min_seconds=3.0 alone, and 4 of the 5
+    were 3-14s bleeds against a dominant person holding 500-1700s under the
+    same label. Every configuration, including the reference, read
+    "conflated" against a floor that could not tell a boundary bleed from a
+    genuine two-person merge.
+
+    Two things make `min_fraction` (default 0.02) legitimate rather than
+    goalpost-moving:
+
+    1. It was chosen from the REFERENCE's (single-pass's) own behaviour,
+       before any new-path (chunked+global) result existed.
+    2. Single-pass is scored with this function using the IDENTICAL floor
+       whenever it is measured, so a new configuration cannot look better
+       than single-pass merely by being judged against a laxer bar.
+
+    The rule is applied symmetrically so both error modes are measured on
+    the same basis: a person only counts toward a LABEL's conflation tally
+    if their share clears the floor against that label's total attributed
+    speech; a label only counts toward a PERSON's fragmentation tally if its
+    share clears the floor against that person's total attributed speech.
+
+    This is added reporting; it does not touch the DER/speaker-count gate.
     """
     matrix = _cross_seconds(hypothesis, reference)
 
+    label_totals = {label: sum(row.values()) for label, row in matrix.items()}
+    person_totals: dict[str, float] = {}
+    for row in matrix.values():
+        for person, seconds in row.items():
+            person_totals[person] = person_totals.get(person, 0.0) + seconds
+
     conflation: list[Conflation] = []
     for label in sorted(matrix):
-        people = {p: s for p, s in matrix[label].items() if s >= min_seconds}
+        floor = max(min_seconds, min_fraction * label_totals[label])
+        people = {p: s for p, s in matrix[label].items() if s >= floor}
         if len(people) > 1:
             conflation.append(Conflation(
                 label=label,
@@ -110,7 +195,8 @@ def identity_report(
     by_person: dict[str, dict[str, float]] = {}
     for label, row in matrix.items():
         for person, seconds in row.items():
-            if seconds >= min_seconds:
+            floor = max(min_seconds, min_fraction * person_totals[person])
+            if seconds >= floor:
                 by_person.setdefault(person, {})[label] = seconds
     fragmentation = [
         Fragmentation(
@@ -128,6 +214,8 @@ def identity_report(
         fragmentation=fragmentation,
         conflation=conflation,
         mapping=map_labels_to_reference(hypothesis, reference),
+        fragmentation_summary=_fragmentation_summary(fragmentation),
+        conflation_summary=_conflation_summary(conflation),
     )
 
 

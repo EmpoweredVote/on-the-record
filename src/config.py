@@ -120,6 +120,14 @@ DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # climbing again as genuinely different people begin merging, and conflation
 # is far worse than fragmentation (a human reviewer sees an extra unnamed
 # speaker, but silently merged speakers misattribute quotes).
+#
+# WARNING: 0.50 was calibrated on cross-window pyannote/embedding (512-dim)
+# centroid similarity specifically. This threshold is only in its calibrated
+# regime when a payload's `centroids` come from that model. New chunk-worker
+# payloads default to computing centroids from wespeaker first (see
+# DIARIZE_CHUNK_EMBEDDER below), so a sequential-path run over them is NOT
+# the shipped/measured baseline — re-calibrate before trusting DER out of
+# that combination.
 DIARIZE_CHUNK_STITCH_THRESHOLD = 0.50
 
 # How chunked diarization turns window-local speaker labels into meeting-wide
@@ -145,10 +153,18 @@ DIARIZE_CHUNK_IDENTITY = "global"
 # centroids) or speaker_reconcile.EMBEDDING_MATCH_THRESHOLD (0.75, VibeVoice's
 # 50-minute windows): three matchers over three different signals, and reusing
 # a value measured on one of them elsewhere is how a tuned number ends up
-# somewhere it was never calibrated. Calibrated by
+# somewhere it was never calibrated. Intended to be set by
 # scripts/sweep_chunk_thresholds.py; conflation (silent quote
 # misattribution) is far worse than fragmentation (an extra unnamed speaker
 # the review gate catches), so ties break toward the HIGHER value.
+#
+# PROVISIONAL: 0.60 is a GUESS, not a measurement — the sweep that
+# calibrates this value has not run yet. DIARIZE_CHUNK_MINUTES = 0 keeps
+# chunking (and therefore this threshold) inert by default, but
+# `run_local.py --diarize-chunk-minutes N` can enable chunking, and
+# therefore this guessed value, manually today. Do not treat 0.60 as
+# validated until scripts/sweep_chunk_thresholds.py has actually run and
+# this comment has been updated to say so.
 DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.60
 # Cluster-distance linkage: "average" (mean pairwise turn similarity),
 # "complete" (worst pair — most conservative) or "centroid".
