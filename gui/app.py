@@ -75,6 +75,21 @@ def create_app() -> FastAPI:
              "batch_counts": bs["counts"], "batch_pending": bs["pending"]},
         )
 
+    @app.get("/discovery", response_class=HTMLResponse)
+    def discovery_page(request: Request, flash: str = "") -> HTMLResponse:
+        from gui import discovery, races
+        rows = discovery.pending_rows()
+        labels = races.race_labels({r.race_id for r in rows if r.race_id})
+        groups: dict = {}
+        for r in rows:
+            if r.race_id and labels.get(r.race_id):
+                r.race_label = labels[r.race_id]
+            groups.setdefault(r.race_label or "Unmatched", []).append(r)
+        return _templates.TemplateResponse(
+            request, "discovery.html",
+            {"groups": list(groups.items()), "health": discovery.health(),
+             "flash": flash})
+
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
         if not is_safe_meeting_id(meeting_id):
