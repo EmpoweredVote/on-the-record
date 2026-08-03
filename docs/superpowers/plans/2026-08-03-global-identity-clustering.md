@@ -318,10 +318,13 @@ def build_nodes(
         for position, turn in enumerate(chunk.turns):
             by_local.setdefault(turn.local_speaker, []).append((position, turn))
         available = turn_vectors.get(chunk.window.index, {})
+        # Keep the dimension consistent across a window's nodes even when one of
+        # them embedded nothing, so later node-pair matmuls see matching shapes.
+        dim = len(next(iter(available.values()))) if available else 0
         for local in sorted(by_local):
             entries = by_local[local]
             rows = [available[position] for position, _ in entries if position in available]
-            matrix = np.asarray(rows, dtype=float) if rows else np.zeros((0, 0))
+            matrix = np.asarray(rows, dtype=float) if rows else np.zeros((0, dim))
             if matrix.size:
                 norms = np.linalg.norm(matrix, axis=1, keepdims=True)
                 norms[norms == 0] = 1.0
