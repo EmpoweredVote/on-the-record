@@ -403,7 +403,26 @@ the running GUI before merge, and recorded in the PR.
    `connect()`, not the query (see the table above). A shared connection or small
    pool would roughly halve perceived latency for both this picker and the race
    picker, but needs a lock and stale-connection retry.
-6. **Nickname variants escape the duplicate marker.** `dan brotman` and
+6. **13 `is_active = false` rows hold a real office, so the picker cannot find
+   them.** This is upstream data rot in `essentials`, not a query defect — among
+   them are sitting officials: `Daniel Webster` (U.S. Rep, FL-11)
+   `7119c7db-6909-4d05-8613-95d5dc9818de`, `Raul Ruiz` (U.S. Rep, CA-25)
+   `05349fa0-8529-4738-8556-f386965e4cc8`, `Kristi Noem` (Secretary of Homeland
+   Security) `9f756a19-c14a-4546-911d-8d86a4eef430`, `Pamela Bondi` (Attorney
+   General), two Indiana Appeals Court judges, plus local seats (Shruti Rana,
+   Bloomington Council D5; Dan Combs, Perry Township Trustee; Patrice Lattimore,
+   LA City Clerk).
+
+   I tested rescuing them in the query with
+   `OR (g.id IS NOT NULL AND COALESCE(o.title,'') <> '')` — which is safe from the
+   76,343 FEC-committee rows, since those carry no chamber/government link — but it
+   costs **5x**: 165 ms becomes 850-1068 ms, because the `OR` defeats the planner's
+   pruning. It also surfaced a duplicate `Raul Ruiz` (one active row, one inactive).
+   Rejected: taxing every keystroke forever to work around 13 bad rows is the wrong
+   trade when the fix upstream is a single `UPDATE`. Fix `is_active` in essentials
+   instead.
+
+7. **Nickname variants escape the duplicate marker.** `dan brotman` and
    `daniel brotman` are different keys, so the 21 such pairs in prod go unflagged —
    9 of them with one row holding a race edge and its twin holding none
    (Dan/Daniel Brotman, Mike/Michael Thompson, Rick/Richard Bennett, ...). The
