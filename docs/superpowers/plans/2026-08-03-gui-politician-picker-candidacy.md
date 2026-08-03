@@ -200,6 +200,17 @@ _NAME_FIELDS = ("full_name", "preferred_name", "first_name", "last_name")
 # Candidacies shown in full before collapsing the tail into "+N more".
 _MAX_CANDIDACIES = 3
 
+# candidate_status values that mean the person is actually contesting the race.
+# essentials uses {active, filed, withdrawn}; "filed" is 111 live rows and means
+# the paperwork is in, so it earns the "running:" lead exactly like "active".
+# Note publish.resolve_races_for_politicians ignores status entirely, so ALL
+# three resolve the race on publish — the distinction here is informational.
+_RUNNING_STATUSES = frozenset({"active", "filed"})
+
+# The label for a person row with no race_candidates edge. Public because it is
+# the warning case, and callers assert on it.
+NO_CANDIDACIES = "no candidacies"
+
 # Query tokens that carry no matchable signal. Generational suffixes live in
 # their own `name_suffix` column, which _NAME_FIELDS doesn't search, so keeping
 # them would AND in a clause nothing can satisfy.
@@ -329,6 +340,36 @@ def test_candidacy_display_prefixes_non_active_status():
     assert out == "withdrawn: WI · Governor · Republican primary · 2026"
 
 
+def test_candidacy_display_treats_filed_as_running():
+    # candidate_status is {active, filed, withdrawn} and "filed" is 111 live rows.
+    # A filed candidate IS contesting the race, so prefixing it like a withdrawal
+    # and dropping the "running:" lead would misread the data.
+    assert candidacy_display([_cand(status="filed")]) == (
+        "running: WI · Governor · Republican primary · 2026")
+
+
+def test_candidacy_display_prefix_is_the_actual_status():
+    # Pins that the prefix comes from the data, not a hardcoded "withdrawn".
+    assert candidacy_display([_cand(status="disqualified")]).startswith("disqualified: ")
+
+
+def test_candidacy_display_missing_status_counts_as_running():
+    c = _cand()
+    del c["status"]
+    assert candidacy_display([c]).startswith("running: ")
+
+
+def test_candidacy_display_normalizes_status_case_and_whitespace():
+    assert candidacy_display([_cand(status="  ACTIVE ")]).startswith("running: ")
+
+
+def test_candidacy_display_exactly_three_has_no_tail():
+    cands = [_cand(position_name=f"Office {i}") for i in range(3)]
+    out = candidacy_display(cands)
+    assert "more" not in out
+    assert out.count("; ") == 2
+
+
 def test_candidacy_display_leads_with_running_when_any_is_active():
     out = candidacy_display([_cand(status="withdrawn"),
                              _cand(position_name="Senate")])
@@ -369,17 +410,20 @@ Expected: `ImportError: cannot import name 'candidacy_display' from 'gui.politic
 Append to `gui/politicians.py`:
 
 ```python
-def _is_active(c) -> bool:
-    """Whether a candidacy entry counts as a live run. Missing status means active,
-    matching publish.resolve_races_for_politicians, which doesn't filter status."""
-    if not isinstance(c, dict):
-        return False
-    return (c.get("status") or "active").strip().lower() == "active"
+def _status(c: dict) -> str:
+    """A candidacy's normalized candidate_status. Missing means 'active', matching
+    publish.resolve_races_for_politicians, which doesn't filter on status at all."""
+    return (c.get("status") or "active").strip().lower()
 
 
-def _one_candidacy(c: dict) -> Optional[str]:
-    """'WI · Governor · Republican primary · 2026', or 'withdrawn: <that>' for a
-    non-active status. None when the entry isn't a usable dict."""
+def _one_candidacy(c) -> Optional[tuple[str, bool]]:
+    """('WI · Governor · Republican primary · 2026', True) — the label plus
+    whether it's a live run. A non-running status is prefixed
+    ('withdrawn: <that>', False). None when the entry isn't a usable dict.
+
+    Returning both together keeps the dict validated and the status normalized
+    exactly once per entry.
+    """
     if not isinstance(c, dict):
         return None
     label = race_display(
@@ -391,8 +435,9 @@ def _one_candidacy(c: dict) -> Optional[str]:
     )
     if not label:
         return None
-    status = (c.get("status") or "active").strip().lower()
-    return label if status == "active" else f"{status}: {label}"
+    status = _status(c)
+    running = status in _RUNNING_STATUSES
+    return (label if running else f"{status}: {label}", running)
 
 
 def candidacy_display(candidacies) -> str:
@@ -400,23 +445,22 @@ def candidacy_display(candidacies) -> str:
     signal that this person row has no race_candidates edge and so cannot carry a
     meeting or a quote into a race.
 
-    The 'running:' lead is dropped when nothing is active, because
+    The 'running:' lead is dropped when nothing is running, because
     'running: withdrawn: ...' reads as nonsense and a withdrawn-only person is
     precisely the case a curator needs to notice.
 
     Capped at _MAX_CANDIDACIES with a '+N more' tail so one row can't run away.
     Malformed entries are skipped rather than breaking the whole label.
     """
-    pairs = [p for p in ((_one_candidacy(c), _is_active(c)) for c in (candidacies or []))
-             if p[0]]
+    pairs = [p for p in (_one_candidacy(c) for c in (candidacies or [])) if p]
     if not pairs:
-        return "no candidacies"
+        return NO_CANDIDACIES
     shown = pairs[:_MAX_CANDIDACIES]
-    text = "; ".join(label for label, _active in shown)
+    text = "; ".join(label for label, _running in shown)
     extra = len(pairs) - len(shown)
     if extra:
         text += f"; +{extra} more"
-    return f"running: {text}" if any(active for _label, active in pairs) else text
+    return f"running: {text}" if any(running for _label, running in pairs) else text
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -425,7 +469,7 @@ def candidacy_display(candidacies) -> str:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `21 passed`
+Expected: `26 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -552,7 +596,7 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `27 passed`
+Expected: `32 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -646,6 +690,7 @@ def test_search_maps_a_row_to_a_labelled_result(monkeypatch):
         "· United States Federal Government"
     )
     assert r["candidacy_display"] == "running: WI · Governor · Republican primary · 2026"
+    assert r["candidacy_warn"] is False
     assert r["duplicate_note"] == ""
 
 
@@ -687,6 +732,8 @@ def test_search_flags_duplicate_names(monkeypatch):
         "⚠ 2 records for this name"] * 2
     # the one with no race edge says so — the signal that was missing
     assert out["results"][1]["candidacy_display"] == "no candidacies"
+    assert out["results"][1]["candidacy_warn"] is True
+    assert out["results"][0]["candidacy_warn"] is False
 
 
 def test_search_parses_candidacies_delivered_as_json_text(monkeypatch):
@@ -705,6 +752,7 @@ def test_search_treats_null_candidacies_as_none(monkeypatch):
     out = politicians.search_politicians_safe("tiffany")
     assert out["results"][0]["candidacies"] == []
     assert out["results"][0]["candidacy_display"] == "no candidacies"
+    assert out["results"][0]["candidacy_warn"] is True
 
 
 def test_search_short_query_returns_empty_without_connecting(monkeypatch):
@@ -875,6 +923,10 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
         }
         rec["display"] = politician_display(rec)
         rec["candidacy_display"] = candidacy_display(rec["candidacies"])
+        # Explicit flag rather than letting the client match on the label text:
+        # Task 6 styles this row as a warning, and a reworded label must not be
+        # able to silently turn that styling off.
+        rec["candidacy_warn"] = not rec["candidacies"]
         results.append(rec)
     return {"results": mark_duplicate_names(results), "error": None}
 ```
@@ -889,7 +941,7 @@ literal percent must be doubled or psycopg2 reads it as a placeholder.
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `38 passed`
+Expected: `43 passed`
 
 - [ ] **Step 5: Verify the SQL against the real database**
 
@@ -987,6 +1039,7 @@ def test_review_api_falls_back_to_http_without_a_db_url(monkeypatch):
         "Tom Tiffany · U.S. Representative · United States Federal Government")
     # no DB means no candidacy data — the renderer must omit line 2, not lie
     assert r["candidacy_display"] == ""
+    assert r["candidacy_warn"] is False
     assert r["duplicate_note"] == ""
 
 
@@ -1059,6 +1112,9 @@ def _search_politicians_http(q: str, *, limit: int = 10) -> dict:
         }
         rec["display"] = politicians.politician_display(rec)
         rec["candidacy_display"] = ""
+        # False, not True: without a DB we never looked, so we must not claim the
+        # person has no candidacies.
+        rec["candidacy_warn"] = False
         rec["duplicate_note"] = ""
         results.append(rec)
     return {"results": results, "error": None}
@@ -1073,7 +1129,7 @@ The fallback reads both `politician_id`/`id` and `politician_slug`/`slug` becaus
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `41 passed`
+Expected: `46 passed`
 
 - [ ] **Step 5: Run the full suite to confirm no regression**
 
@@ -1081,7 +1137,7 @@ Expected: `41 passed`
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1759 passed` (1718 baseline + 41 new)
+Expected: `1764 passed` (1718 baseline + 46 new)
 
 - [ ] **Step 6: Commit**
 
@@ -1120,7 +1176,10 @@ def test_workspace_js_renders_server_composed_two_line_result(tmp_meetings_dir):
     # the server owns the label now — it's the only side that knows candidacies
     assert "r.display" in js
     assert "r.candidacy_display" in js
+    assert "r.candidacy_warn" in js
     assert "r.duplicate_note" in js
+    # the warning style must not hang off matching the label text
+    assert '"no candidacies"' not in js
     # ...so the client must not re-join identity fields itself
     assert "r.office_title" not in js
     assert "r.government_name" not in js
@@ -1146,7 +1205,7 @@ list.map(...)` block) with:
         // candidacy data, and a wrong pick here silently detaches the meeting
         // from its race (publish derives races from politician_id alone).
         const cand = r.candidacy_display || "";
-        const warn = cand === "no candidacies";
+        const warn = !!r.candidacy_warn;
         let inner = '<span class="pr-name">' + esc(r.display || r.full_name) + "</span>";
         if (r.duplicate_note) {
           inner += '<span class="pr-warn pr-dupe">' + esc(r.duplicate_note) + "</span>";
@@ -1213,7 +1272,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1760 passed` (1718 baseline + 41 from Tasks 1-5 + 1 from Task 6)
+Expected: `1765 passed` (1718 baseline + 46 from Tasks 1-5 + 1 from Task 6)
 
 - [ ] **Step 2: Start the GUI and exercise the picker by hand**
 
