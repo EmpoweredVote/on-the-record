@@ -383,3 +383,114 @@ def merge_clusters(
         round(threshold - best_rejected, 4) if best_rejected > float("-inf") else None
     )
     return clusters, diagnostics
+
+
+@dataclass
+class GlobalIdentityResult:
+    """`ReconciliationResult`'s turns + diagnostics, plus global centroids.
+
+    The sequential path recomputes centroids in the orchestrator by averaging
+    per-window centroids; here they come straight from the cluster's own turn
+    vectors, which is a better voiceprint and one less place to get the
+    weighting wrong.
+    """
+
+    turns: list[StableTurn]
+    diagnostics: dict[str, Any]
+    centroids: dict[str, list[float]] = field(default_factory=dict)
+
+
+def cluster_global_identities(
+    chunks: list[ChunkResult],
+    turn_vectors: dict[int, dict[int, np.ndarray]],
+    *,
+    threshold: float,
+    linkage: str = "average",
+    label_prefix: str = "SPEAKER_",
+) -> GlobalIdentityResult:
+    """Assign meeting-wide speaker labels from per-turn embeddings.
+
+    One global pass, not a walk over seams: seam overlap seeds the clusters,
+    same-window distinctness constrains them, and constrained agglomerative
+    clustering over per-turn cosine similarity does the rest.
+    """
+    if linkage not in ("average", "complete", "centroid"):
+        raise ValueError(f"unknown linkage {linkage!r}; use average, complete or centroid")
+    chunks = sorted(chunks, key=lambda chunk: chunk.window.index)
+    windows = [chunk.window for chunk in chunks]
+    nodes = build_nodes(chunks, turn_vectors)
+    seeded, diagnostics = seed_clusters(nodes, chunks)
+    stats = node_pair_statistics(nodes)
+    clusters, merge_diagnostics = merge_clusters(
+        nodes, seeded, stats, threshold=threshold, linkage=linkage
+    )
+    diagnostics["embedding_matches"] = merge_diagnostics["embedding_matches"]
+    diagnostics["cannot_link_blocks"] += merge_diagnostics["cannot_link_blocks"]
+    diagnostics["margin"] = merge_diagnostics["margin"]
+
+    members: dict[int, list[int]] = {}
+    for index, cluster_id in enumerate(clusters):
+        members.setdefault(cluster_id, []).append(index)
+    # Most talkative person first: deterministic, and it puts the chair at
+    # SPEAKER_00, which makes review listings read naturally.
+    order = sorted(
+        members,
+        key=lambda cid: (-sum(nodes[i].speech_seconds for i in members[cid]), cid),
+    )
+    label_of = {cid: f"{label_prefix}{position:02d}" for position, cid in enumerate(order)}
+
+    node_label = [label_of[cluster_id] for cluster_id in clusters]
+    position_of_window = {window.index: position for position, window in enumerate(windows)}
+    stable_turns: list[StableTurn] = []
+    for node, label in zip(nodes, node_label):
+        owned_start, owned_end = _ownership_bounds(
+            windows, position_of_window[node.chunk_index]
+        )
+        for turn in node.turns:
+            start = max(turn.start, owned_start)
+            end = min(turn.end, owned_end)
+            if end <= start:
+                continue
+            stable_turns.append(StableTurn(
+                chunk_index=turn.chunk_index,
+                start=round(start, 3),
+                end=round(end, 3),
+                local_speaker=turn.local_speaker,
+                speaker=label,
+            ))
+    stable_turns.sort(key=lambda turn: (turn.start, turn.end, turn.speaker))
+
+    centroids: dict[str, list[float]] = {}
+    for cluster_id, indices in members.items():
+        rows = [nodes[i].vectors for i in indices if nodes[i].vectors.size]
+        if rows:
+            centroids[label_of[cluster_id]] = np.vstack(rows).mean(axis=0).tolist()
+
+    present = {turn.speaker for turn in stable_turns}
+    per_window = [
+        len({node.local_speaker for node in nodes if node.chunk_index == window.index})
+        for window in windows
+    ]
+    # A "new speaker" is a cluster that never matched anything — a window-local
+    # speaker whose cluster still has exactly one member after seeding AND
+    # merging. (Simpler than reaching back through `order`/`label_prefix` to
+    # recover a cluster id from its label, and behaviourally identical: a
+    # cluster with >1 node merged with something, temporally or by embedding.)
+    diagnostics["new_speakers"] = sorted(
+        (
+            {"global": label_of[cluster_id]}
+            for cluster_id, indices in members.items()
+            if len(indices) == 1
+        ),
+        key=lambda entry: entry["global"],
+    )
+    diagnostics["clusters"] = len(present)
+    diagnostics["nodes"] = len(nodes)
+    diagnostics["linkage"] = linkage
+    diagnostics["threshold"] = threshold
+    # Pyannote's own per-window counts bound the answer: a person can appear in
+    # every window (lower bound = the busiest window) and at most once per
+    # window (upper bound = the sum). June 10 @60min: 26 <= K <= 87, truth 40.
+    diagnostics["window_speaker_bounds"] = [max(per_window, default=0), sum(per_window)]
+    diagnostics["speakers_without_centroid"] = sorted(present - set(centroids))
+    return GlobalIdentityResult(stable_turns, diagnostics, centroids)

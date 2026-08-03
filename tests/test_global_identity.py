@@ -313,3 +313,75 @@ def test_node_pair_statistics_rejects_more_turns_than_max_embedded_turns(monkeyp
     nodes = [_node(0, "SPEAKER_00", [ALICE, ALICE]), _node(1, "SPEAKER_00", [ALICE])]
     with pytest.raises(ValueError, match="MAX_EMBEDDED_TURNS"):
         node_pair_statistics(nodes)
+
+
+from src.global_identity import cluster_global_identities
+
+
+def test_cluster_global_identities_end_to_end_two_windows_two_people():
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(0.0, 30.0, "SPEAKER_00"), (30.0, 60.0, "SPEAKER_01")]),
+        _chunk(1, 55.0, 120.0, [(66.0, 100.0, "SPEAKER_00"), (100.0, 110.0, "SPEAKER_01")]),
+    ]
+    vectors = {
+        0: {0: ALICE, 1: BOB},
+        1: {0: BOB, 1: ALICE_NOISY},   # local labels swapped between windows
+    }
+
+    result = cluster_global_identities(chunks, vectors, threshold=0.60)
+
+    assert len({t.speaker for t in result.turns}) == 2
+    by_start = {round(t.start, 1): t.speaker for t in result.turns}
+    assert by_start[0.0] == by_start[100.0]      # ALICE in both windows
+    assert by_start[30.0] == by_start[66.0]      # BOB in both windows
+    # SPEAKER_00 is the most talkative person (BOB: 30s + 34s)
+    assert by_start[30.0] == "SPEAKER_00"
+    assert sorted(result.centroids) == ["SPEAKER_00", "SPEAKER_01"]
+    assert len(result.centroids["SPEAKER_00"]) == 3
+    assert result.diagnostics["clusters"] == 2
+    assert result.diagnostics["nodes"] == 4
+    assert result.diagnostics["window_speaker_bounds"] == [2, 4]
+
+
+def test_cluster_global_identities_clips_turns_at_the_overlap_midpoint():
+    """Both windows diarize 55-65s; each second of audio must be owned once.
+    The midpoint is 60.0, so window 0's turn is cut there and window 1's starts
+    there — the same ownership rule the sequential path uses."""
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 64.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(56.0, 70.0, "SPEAKER_00")]),
+    ]
+    result = cluster_global_identities(chunks, {0: {0: ALICE}, 1: {0: ALICE}}, threshold=0.60)
+
+    spans = sorted((t.start, t.end) for t in result.turns)
+    assert spans == [(50.0, 60.0), (60.0, 70.0)]
+    assert len({t.speaker for t in result.turns}) == 1
+
+
+def test_cluster_global_identities_labels_unmatched_nodes_as_new_speakers():
+    chunks = [
+        _chunk(0, 0.0, 60.0, [(0.0, 30.0, "SPEAKER_00")]),
+        _chunk(1, 60.0, 120.0, [(70.0, 80.0, "SPEAKER_00")]),
+    ]
+    result = cluster_global_identities(chunks, {0: {0: ALICE}, 1: {0: CAROL}}, threshold=0.60)
+    assert len({t.speaker for t in result.turns}) == 2
+    assert len(result.diagnostics["new_speakers"]) == 2
+
+
+def test_cluster_global_identities_reports_a_speaker_with_no_centroid():
+    """A node whose turns never embedded still publishes its turns; it just has
+    no voiceprint, and the caller must be able to see that rather than
+    discover it downstream."""
+    chunks = [_chunk(0, 0.0, 60.0, [(0.0, 30.0, "SPEAKER_00")])]
+    result = cluster_global_identities(chunks, {0: {}}, threshold=0.60)
+    assert len(result.turns) == 1
+    assert result.centroids == {}
+    assert result.diagnostics["speakers_without_centroid"] == ["SPEAKER_00"]
+
+
+def test_cluster_global_identities_rejects_an_unknown_linkage():
+    chunks = [_chunk(0, 0.0, 60.0, [(0.0, 30.0, "SPEAKER_00")])]
+    with pytest.raises(ValueError, match="unknown linkage"):
+        cluster_global_identities(
+            chunks, {0: {0: ALICE}}, threshold=0.60, linkage="banana"
+        )
