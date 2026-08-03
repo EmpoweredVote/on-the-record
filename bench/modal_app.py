@@ -1508,6 +1508,7 @@ def diarize_chunk_window(
     end_s: float,
     overlap_s: float = 60.0,
     window_index: int = 0,
+    embedders: tuple[str, ...] = ("pyannote/wespeaker-voxceleb-resnet34-LM",),
 ) -> str:
     """Diarize ONE overlapping window of a meeting; return turns + centroids.
 
@@ -1522,10 +1523,25 @@ def diarize_chunk_window(
     only, so overlap audio can inform matching but never shapes the
     voiceprint of a speaker a neighbouring window owns.
 
+    Per-turn embeddings are returned as well as centroids, because global
+    identity clustering (src/global_identity.py) needs the per-turn view that
+    per-window centroids average away. Vectors are computed for CANONICAL-span
+    turns only and non-finite rows are dropped per turn — pyannote/embedding
+    NaNs on some turns, and averaging unfiltered poisoned 7 of 86 window-local
+    centroids on the June 10 meeting.
+
+    `embedders` selects which embedding model(s) to run. Calibration passes
+    both candidates in one call so the expensive segmentation is paid once:
+    "pyannote/embedding" (512-dim, the historical chunk/single-pass space) and
+    "pyannote/wespeaker-voxceleb-resnet34-LM" (256-dim, config.EMBEDDING_MODEL,
+    what pyannote 3.1 clusters on internally and what voice profiles use).
+
     Returns JSON: {"window_index", "window_start_s", "window_end_s",
     "turns": [[start, end, label], ...], "centroids": {label: [float, ...]},
-    "speech_seconds": {label: float}, "elapsed_s": float}, all times in
-    ABSOLUTE meeting seconds.
+    "speech_seconds": {label: float}, "elapsed_s": float,
+    "turn_embeddings": {model_id: {"dim": int, "dtype": "float32",
+    "turn_indices": [int, ...], "b64": str}} where turn_indices index the
+    "turns" list above}, all times in ABSOLUTE meeting seconds.
     """
     import json as _json
     import os
@@ -1584,10 +1600,11 @@ def diarize_chunk_window(
         if c1 > c0:
             speech_seconds[label] = speech_seconds.get(label, 0.0) + (c1 - c0)
 
-    emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
-    inference = Inference(emb_model, window="whole", device=device)
-    per_speaker: dict[str, list] = {}
-    for start, end, label in turns:
+    import base64 as _base64
+
+    # Canonical-span clips, computed once and reused by every embedder.
+    clips: list[tuple[int, str, np.ndarray]] = []
+    for turn_index, (start, end, label) in enumerate(turns):
         c0 = max(start, start_s)
         c1 = min(end, end_s)
         if c1 - c0 < 0.3:  # too little canonical audio to embed
@@ -1597,12 +1614,47 @@ def diarize_chunk_window(
         clip = samples[i0:i1]
         if len(clip) < int(sr * 0.3):
             continue
-        wf = torch.tensor(clip, dtype=torch.float32).unsqueeze(0).to(device)
-        per_speaker.setdefault(label, []).append(inference({"waveform": wf, "sample_rate": sr}))
-    centroids = {
-        label: np.mean(vectors, axis=0).tolist()
-        for label, vectors in per_speaker.items()
-    }
+        clips.append((turn_index, label, clip))
+
+    turn_embeddings: dict[str, dict] = {}
+    centroids: dict[str, list] = {}
+    for model_id in embedders:
+        emb_model = Model.from_pretrained(model_id, token=os.environ["HF_TOKEN"])
+        inference = Inference(emb_model, window="whole", device=device)
+        indices: list[int] = []
+        vectors: list[np.ndarray] = []
+        per_speaker: dict[str, list] = {}
+        for turn_index, label, clip in clips:
+            wf = torch.tensor(clip, dtype=torch.float32).unsqueeze(0).to(device)
+            vector = np.asarray(
+                inference({"waveform": wf, "sample_rate": sr}), dtype=np.float32
+            ).reshape(-1)
+            # Drop non-finite PER TURN: one NaN turn must not be able to poison
+            # a centroid (it silently did, for 7 of 86 nodes on June 10).
+            if not np.all(np.isfinite(vector)):
+                continue
+            indices.append(turn_index)
+            vectors.append(vector)
+            per_speaker.setdefault(label, []).append(vector)
+        stacked = (
+            np.vstack(vectors).astype(np.float32)
+            if vectors else np.zeros((0, 0), dtype=np.float32)
+        )
+        turn_embeddings[model_id] = {
+            "dim": int(stacked.shape[1]) if stacked.size else 0,
+            "dtype": "float32",
+            "turn_indices": indices,
+            "b64": _base64.b64encode(stacked.tobytes()).decode("ascii"),
+        }
+        model_centroids = {
+            label: np.mean(rows, axis=0).tolist() for label, rows in per_speaker.items()
+        }
+        if not centroids:
+            # First embedder listed owns the legacy `centroids` field, which the
+            # sequential reconciler path still reads.
+            centroids = model_centroids
+        print(f"  [chunk {window_index}] {model_id}: {len(indices)} turn vectors, "
+              f"{len(model_centroids)} centroids")
 
     print(f"  [chunk {window_index} @ {start_s:.0f}-{end_s:.0f}s "
           f"(read {read_start:.0f}-{read_end:.0f}s)] {len(turns)} turns, "
@@ -1614,6 +1666,7 @@ def diarize_chunk_window(
         "turns": turns,
         "centroids": centroids,
         "speech_seconds": speech_seconds,
+        "turn_embeddings": turn_embeddings,
         "elapsed_s": round(elapsed, 1),
     })
 
