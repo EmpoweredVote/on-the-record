@@ -119,18 +119,19 @@ overlap audio informs matching but never shapes a voiceprint a neighbouring wind
 ### 2. `src/global_identity.py` — one global identity pass (pure, unit-tested)
 
 Reuses `src/speaker_reconcile`'s `ChunkWindow` / `LocalTurn` / `ChunkResult` /
-`StableTurn` / `ReconciliationResult` / `_overlap_seconds` / `_ownership_bounds` and returns
-the same `ReconciliationResult`, so it is a one-call swap in the orchestrator. No second
-copy of ownership or overlap logic — the repo has already been burned by duplicated
-stitchers.
+`StableTurn` / `_overlap_seconds` / `_ownership_bounds`, and returns a
+`GlobalIdentityResult` — `ReconciliationResult`'s `turns` + `diagnostics` **plus**
+`centroids`, since it can build voiceprints from its own per-turn vectors instead of making
+the orchestrator re-derive them from per-window averages. No second copy of ownership or
+overlap logic — the repo has already been burned by duplicated stitchers.
 
 ```
 cluster_global_identities(
     chunks: list[ChunkResult],
-    turn_vectors: dict[tuple[int, int], np.ndarray],   # (chunk_index, turn_index) -> vector
+    turn_vectors: dict[int, dict[int, np.ndarray]],   # chunk_index -> turn_index -> vector
     *, threshold: float, linkage: str = "average",
     label_prefix: str = "SPEAKER_",
-) -> ReconciliationResult
+) -> GlobalIdentityResult
 ```
 
 1. **Nodes.** One per (window index, local speaker). Each carries its canonical-span turns
@@ -146,10 +147,13 @@ cluster_global_identities(
    similarity cannot see, and it is retained deliberately.
 3. **Cannot-link.** Two nodes from the same window may never land in one cluster,
    propagated through the union-find so the constraint survives transitive merges.
-4. **Constrained agglomerative merge.** Cluster distance = 1 − mean pairwise cosine
-   similarity over the two clusters' turn vectors (**average linkage**; `complete` and
-   `centroid` are sweepable alternatives). Repeatedly merge the closest admissible pair
-   while distance < 1 − `threshold`. Cost is milliseconds at real scale.
+4. **Constrained agglomerative merge.** Cluster similarity = mean pairwise cosine over the
+   two clusters' turn vectors (**average linkage**; `complete`, the worst pair, and
+   `centroid` are sweepable alternatives). Repeatedly merge the single most similar
+   admissible pair while its similarity ≥ `threshold` — same similarity convention as every
+   other threshold in `src/config.py`. Node-pair aggregates (sum, count, min, gram) are
+   precomputed once from the turn matrix, which makes each linkage exact and the merge loop
+   nodes-sized rather than turns-sized. Cost is milliseconds at real scale.
 5. **Labels.** `f"{label_prefix}{n:02d}"` assigned by **descending total speech time**, so
    numbering is deterministic and the chair lands at `SPEAKER_00`.
 6. **Turns.** Clipped through the existing `_ownership_bounds`, so each second of audio
