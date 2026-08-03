@@ -56,13 +56,14 @@ human to resolve even though the *detection* is mechanical.
 | `source-tier-4` | quote | prefer tier 1–2 spoken sources | medium | decision-required |
 | `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
 | `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
+| `scorecard-source` | quote | a scorecard publishes votes and ratings, not utterances — **re-source** | high | decision-required |
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
-### 2.1 The two bad-source classes
+### 2.1 The three bad-source classes
 
-`invalid-source` and `unquotable-source` are deliberately separate checks because their remedies
-are opposite.
+`invalid-source`, `unquotable-source` and `scorecard-source` are deliberately separate checks
+because their remedies differ.
 
 - **`invalid-source` — aggregator; an original exists, so re-attribute.** ontheissues.org and
   wikipedia.org restate or paraphrase something the candidate actually said elsewhere. The quote is
@@ -79,7 +80,31 @@ are opposite.
   is nothing to descend to. All 29 isidewith.com rows were hard-deleted on 2026-07-25 — evidence
   and cost in `docs/audits/2026-07-25-isidewith-purge.md`.
 
-**ballotpedia.org is in neither class and is not flagged.** It reproduces campaign-site text
+- **`scorecard-source` — a rating, not speech; find the real statement.** An advocacy group's
+  legislative scorecard (lcv.org, and the same shape at AFL-CIO, Heritage Action, NRA) publishes
+  what a member *did* — a score and a vote record — and never what they said. A quote attributed
+  to one therefore came from somewhere else, or from nowhere.
+
+  This check exists because the fetch pass proved it rather than because it sounded right: in the
+  2026-08-02 full sweep, **all 30 scorecard-sourced live quotes came back `source-unverified` —
+  30 of 30, no exceptions.** Catching them by URL costs nothing and needs no network, so they no
+  longer have to wait for `--verify-sources` to run.
+
+  **Two neighbouring classes were tested and deliberately left out**, so they don't get
+  re-litigated:
+  - *Bill and statute pages* (congress.gov, leg.\*/bills/): 8 live quotes, of which **one
+    verified clean**. Bill pages sometimes carry sponsor statements and CRS summaries, so
+    "structurally cannot carry a quote" is simply false for them.
+  - *Roll-call tallies* (clerk.house.gov/Votes): only 2 live quotes, and both were
+    `source-unfetchable`, so the sweep never actually tested the premise. Too thin to justify a
+    high-severity rule.
+
+  The pattern is path-anchored (`/scorecard/`, `/congressional-scorecard/`) so it does not match
+  a news article whose slug merely contains the word. An earlier draft keyed on `/roll-?call`
+  and wrongly matched **rollcall.com — CQ Roll Call, a news outlet**, which is a perfectly good
+  source; there is a regression test for that.
+
+**ballotpedia.org is in none of these classes and is not flagged.** It reproduces campaign-site text
 verbatim under an attribution line with a footnote to the original (re-attributable case by case),
 and its Candidate Connection survey answers are candidate-written *for* Ballotpedia — Ballotpedia
 **is** the original publisher there, so the citation is already correct. Treating it as
@@ -144,10 +169,29 @@ that "a government-paying program is the most moral…"`) from flooding the repo
 the *source's*, faithfully reproduced. A cut that falls *inside* the source's quotation still flags.
 
 **`source-unfetchable` is not a soft `source-unverified`.** A JS-rendered campaign site, a 403
-(Ballotpedia blocks the fetcher), or a paywall yields no prose to match against. Calling that
-"quote not in its source" would be a false accusation, so it is reported separately, at medium,
-meaning *go read the page yourself*. Roughly a quarter of written sources in the first sample
-landed here.
+(Ballotpedia blocks the fetcher), a paywall, or a PDF yields no prose to match against. Calling
+that "quote not in its source" would be a false accusation, so it is reported separately, at
+medium, meaning *go read the page yourself*.
+
+Two rules keep that boundary honest, both added after the first full sweep put 86 nav-only pages
+into the high-severity bucket:
+
+- **Readability is judged by prose, not word count, and only after the match fails.**
+  `MIN_PAGE_WORDS` counts every word, so a roll-call tally or a link farm clears it on menu
+  labels alone. `prose_word_count` instead sums the words living in blocks of at least
+  `PROSE_BLOCK_WORDS` (8). That bar is deliberately low: campaign platform pages are legitimately
+  written as short bullets and are where most true positives come from, so a stricter test would
+  discard real findings. The check runs *after* the verbatim match, never before — a page that
+  matched is by definition legible, so a sparse page whose only real prose **is** the quote can
+  never be dismissed as unreadable.
+- **PDFs are detected, not parsed.** `extract_page_text` over binary returns mojibake from which
+  every quote is "absent". `looks_like_pdf` checks both the extension and the `%PDF-` magic
+  bytes, since plenty of PDFs are served from extensionless URLs.
+
+Residual limit: a page whose only long block is a cookie/consent notice can still slip past the
+prose gate and produce a false `source-unverified` (observed on `gowithmunro.com/promises`, where
+the two longest blocks were a cookie banner and a repeated site title). Rare — after the fix, 274
+of 294 findings sit on pages with ≥120 words of genuine prose — but not zero.
 
 What these checks **cannot** do: judge whether a verbatim, well-bounded excerpt is the candidate's
 *distinctive* position, whether it is a curator summary of a bulleted platform (`source-summary`,
