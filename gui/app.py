@@ -90,6 +90,74 @@ def create_app() -> FastAPI:
             {"groups": list(groups.items()), "health": discovery.health(),
              "flash": flash})
 
+    def _discovery_redirect(flash: str) -> RedirectResponse:
+        from urllib.parse import quote
+        return RedirectResponse(url=f"/discovery?flash={quote(flash)}", status_code=303)
+
+    @app.post("/discovery/{row_id}/approve-ingest")
+    def discovery_approve_ingest(row_id: str):
+        import datetime as _dt
+        from gui import batch, discovery, runner
+        from gui.formmeta import (DEFAULT_COMPUTE, DEFAULT_DIARIZER,
+                                  FIELDS_BY_KIND, MEETING_TYPE_DEFAULTS)
+        from gui.runner import RunParams
+        from src.event_kinds import EVENT_KINDS
+
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        existing = runner.find_meeting_by_source(row.url)
+        if existing:
+            discovery.set_status(row_id, "superseded",
+                                 reason=f"already ingested as {existing}")
+            return _discovery_redirect(f"duplicate of {existing}")
+        kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
+        fields = FIELDS_BY_KIND.get(kind, ())
+        race_id = row.race_id if "race" in fields else None
+        params = RunParams(
+            input=row.url,
+            date=(row.published_at or "")[:10] or _dt.date.today().isoformat(),
+            meeting_type=MEETING_TYPE_DEFAULTS.get(kind, "Recording"),
+            event_kind=kind,
+            title=row.title,
+            compute=DEFAULT_COMPUTE,
+            diarizer=DEFAULT_DIARIZER,
+            event_orgs=[row.channel_name] if row.channel_name else [],
+            race_id=race_id,
+            race_slug=discovery.race_slug_for(race_id) if race_id else None,
+        )
+        try:
+            outcome, meeting_id = batch.launch_or_enqueue(params)
+        except ValueError as exc:
+            return _discovery_redirect(f"error: {exc}")
+        discovery.set_status(row_id, "ingested")
+        return _discovery_redirect(f"{outcome}: {meeting_id or params.title}")
+
+    @app.post("/discovery/{row_id}/quote-source")
+    def discovery_quote_source(row_id: str):
+        from gui import discovery
+        if discovery.get_row(row_id) is None:
+            raise HTTPException(status_code=404)
+        discovery.set_status(row_id, "approved")
+        return _discovery_redirect("approved as quote source")
+
+    @app.post("/discovery/{row_id}/reject")
+    def discovery_reject(row_id: str, reason: str = Form("other")):
+        from gui import discovery
+        if discovery.get_row(row_id) is None:
+            raise HTTPException(status_code=404)
+        discovery.set_status(row_id, "rejected", reason=reason)
+        return _discovery_redirect("rejected")
+
+    @app.post("/discovery/{row_id}/watch-channel")
+    def discovery_watch_channel(row_id: str):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        ok, message = discovery.watch_channel(row)
+        return _discovery_redirect(message)
+
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
         if not is_safe_meeting_id(meeting_id):

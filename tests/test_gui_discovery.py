@@ -59,3 +59,79 @@ def test_library_links_to_discovery(monkeypatch, tmp_meetings_dir):
     client = TestClient(create_app())
     resp = client.get("/")
     assert 'href="/discovery"' in resp.text
+
+
+def test_approve_ingest_enqueues_with_gated_fields(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    launched = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: launched.setdefault("status", status) or True)
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+
+    def fake_enqueue(p):
+        launched["params"] = p
+        return ("started", "mid")
+
+    monkeypatch.setattr(batch, "launch_or_enqueue", fake_enqueue)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert resp.status_code == 303
+    p = launched["params"]
+    assert p.input == "https://www.youtube.com/watch?v=abc12345678"
+    assert p.event_kind == "debate" and p.meeting_type == "Debate"
+    assert p.date == "2026-08-01"
+    assert p.race_id == "r1" and p.race_slug == "us-senate-tx-general"
+    assert p.event_orgs == ["KXAN"]
+    assert launched["status"] == "ingested"
+
+
+def test_approve_ingest_blocks_known_duplicate(monkeypatch):
+    import gui.runner as runner
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: "2026-08-01-debate")
+    statuses = {}
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: statuses.update(s=status, r=reason) or True)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert resp.status_code == 303 and "duplicate" in resp.headers["location"]
+    assert statuses["s"] == "superseded"
+
+
+def test_reject_requires_and_records_reason(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: calls.update(status=status, reason=reason) or True)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject", data={"reason": "clip-not-original"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls == {"status": "rejected", "reason": "clip-not-original"}
+
+
+def test_quote_source_route_marks_approved(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: calls.update(status=status) or True)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
+    assert resp.status_code == 303 and calls["status"] == "approved"
+
+
+def test_watch_channel_calls_flywheel(monkeypatch):
+    called = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+
+    def fake_watch(row):
+        called["row"] = row
+        return (True, "watching KXAN")
+
+    monkeypatch.setattr(discovery, "watch_channel", fake_watch)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/watch-channel", follow_redirects=False)
+    assert resp.status_code == 303 and "watching" in resp.headers["location"]
