@@ -23,6 +23,14 @@ AGGREGATOR_SOURCE = re.compile(r"ontheissues\.org|wikipedia\.org", re.I)
 # labelled "CHATGPT"), all under the candidate's name — so no row is quotable regardless of which
 # row it came from (see docs/audits/2026-07-25-isidewith-purge.md).
 QUIZ_SOURCE = re.compile(r"isidewith\.com", re.I)
+# Legislative scorecards — an advocacy group's rating and vote record for a member. They publish
+# what the member *did*, never what they said, so a quote attributed to one came from somewhere
+# else (or from nowhere). Evidence: in the 2026-08-02 full source-verification sweep, all 30
+# scorecard-sourced live quotes came back `source-unverified` — 30 of 30, no exceptions.
+# Path-anchored, so it catches lcv.org's two URL shapes (/scorecard/, /congressional-scorecard/)
+# and future ones (AFL-CIO, Heritage Action, NRA) without matching an article that merely has
+# "scorecard" in a headline slug.
+SCORECARD_SOURCE = re.compile(r"/(?:[a-z]+-)?scorecards?/", re.I)
 
 def check_note_quality(r) -> Optional[Finding]:
     note = (r.get("editor_note") or "").strip()
@@ -119,6 +127,17 @@ def check_unquotable_source(r) -> Optional[Finding]:
                    what=f"Source is a quiz/questionnaire comparison site: {url}. Such pages mix canned answer-option text, third-party aggregates and AI-generated stances under one candidate's name, so no row is a candidate utterance.",
                    suggested_fix="Delete the row (deselect from live first). There is no original to re-attribute to — if the candidate holds this position, source it from an actual statement instead.")
 
+def check_scorecard_source(r) -> Optional[Finding]:
+    url = r.get("source_url") or ""
+    if not SCORECARD_SOURCE.search(url):
+        return None
+    return Finding(check_id="scorecard-source", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
+                   race_id=r["race_id"], candidate=r["candidate"],
+                   principle="a scorecard publishes votes and ratings, not utterances",
+                   severity="high", fix_class="decision-required",
+                   what=f"Source is a legislative scorecard: {url}. These pages carry an advocacy group's rating and vote record for the member — never the member's own words — so the quoted text is not on the page it cites.",
+                   suggested_fix="Find where the candidate actually said this (floor statement, press release, interview) and re-source to it; deselect from live until then. If no such statement exists, the row is not a quote — remove it.")
+
 def topic_live_count(group) -> Optional[Finding]:
     counts = Counter(q["candidate"] for q in group["quotes"] if q.get("readrank_selected"))
     dupes = {c: n for c, n in counts.items() if n > 1}
@@ -140,7 +159,7 @@ def topic_min_candidates(group) -> Optional[Finding]:
 
 QUOTE_CHECKS = [check_note_quality, check_deid_present, check_trailing_ellipsis,
                 check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
-                check_unquotable_source]
+                check_unquotable_source, check_scorecard_source]
 TOPIC_CHECKS = [topic_live_count, topic_min_candidates]
 
 def run_mechanical(rows) -> list:
