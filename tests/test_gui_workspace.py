@@ -229,6 +229,21 @@ def test_workspace_js_wires_core_endpoints(tmp_meetings_dir):
     assert "publish-result" in js and "publish-form" in js
 
 
+def test_workspace_js_renders_server_composed_two_line_result(tmp_meetings_dir):
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    # the server owns the label now — it's the only side that knows candidacies
+    assert "r.display" in js
+    assert "r.candidacy_display" in js
+    assert "r.candidacy_warn" in js
+    assert "r.duplicate_note" in js
+    # the warning style must not hang off matching the label text
+    assert '"no candidacies"' not in js
+    # ...so the client must not re-join identity fields itself
+    assert "r.office_title" not in js
+    assert "r.government_name" not in js
+
+
 def test_workspace_review_tab_always_has_attention_dot(tagged_meeting_dir, tmp_meetings_dir):
     import re
     from tests.test_gui_review import _write_meeting
