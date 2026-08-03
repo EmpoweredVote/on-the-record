@@ -46,6 +46,16 @@ import numpy as np
 
 EMBEDDING_MATCH_THRESHOLD = 0.75
 MIN_EMBEDDING_SPEECH_SECONDS = 3.0
+#: Minimum shared speech, in seconds, for a seam overlap to count as a temporal
+#: match. Temporal matching is a MUST-LINK — applied before, and independently
+#: of, the embedding threshold — so a wrong one cannot be tuned away.
+#: Measured on the May 6 council meeting against its human-reviewed transcript:
+#: of 12 seam joins, the 10 correct ones overlapped 1.1-71.0s while the 2 that
+#: joined DIFFERENT people overlapped 0.6s and 0.3s, and those two chained three
+#: real people into a single speaker at every embedding threshold tested. A
+#: sub-second overlap is two windows disagreeing about a turn boundary, not
+#: evidence of one speaker; below the floor, voice similarity decides instead.
+MIN_SEAM_OVERLAP_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -121,8 +131,13 @@ def reconcile_chunks(
     embedding_threshold: float = EMBEDDING_MATCH_THRESHOLD,
     min_embedding_speech_seconds: float = MIN_EMBEDDING_SPEECH_SECONDS,
     label_prefix: str = "SPEAKER_",
+    min_seam_overlap_seconds: float = MIN_SEAM_OVERLAP_SECONDS,
 ) -> ReconciliationResult:
-    """Map chunk-local speakers to stable meeting-wide labels."""
+    """Map chunk-local speakers to stable meeting-wide labels.
+
+    Seam overlaps below `min_seam_overlap_seconds` are not treated as temporal
+    matches — see that constant for the measurement behind the floor.
+    """
     chunks = sorted(chunks, key=lambda chunk: chunk.window.index)
     windows = [chunk.window for chunk in chunks]
     next_global = 0
@@ -161,7 +176,7 @@ def reconcile_chunks(
                         for current_turn in current_turns
                         for previous_turn in previous_turns
                     )
-                    if score > 0:
+                    if score >= min_seam_overlap_seconds:
                         candidates.append((score, local, global_label))
             for _, local, global_label in sorted(candidates, reverse=True):
                 if local in mapping or global_label in used_globals:

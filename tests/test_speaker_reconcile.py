@@ -280,3 +280,47 @@ def test_non_finite_embedding_is_rejected_without_crashing():
     )
     assert len(_speakers(result)) == 2
     assert result.diagnostics["embedding_matches"] == []
+
+
+def test_a_sub_second_seam_overlap_does_not_force_a_temporal_match():
+    """Temporal matching is a MUST-LINK: it is applied before, and independently
+    of, the embedding threshold, so a wrong one cannot be tuned away. Measured on
+    the May 6 council meeting (via the pyannote chunked path, which shares this
+    reconciler): of 12 seam joins the 10 correct ones overlapped 1.1-71.0s, while
+    the 2 that merged DIFFERENT people overlapped 0.6s and 0.3s and chained three
+    real people into one cluster at every threshold tested. Two distinct voices
+    below the floor must stay distinct and let voice similarity decide."""
+    result = reconcile_chunks(
+        [
+            ChunkResult(
+                window=ChunkWindow(0, 0.0, 100.0),
+                turns=[LocalTurn(0, 80.0, 90.3, "SPEAKER_00")],
+                embeddings={"SPEAKER_00": ALICE},
+                speech_seconds={"SPEAKER_00": 10.3},
+            ),
+            ChunkResult(
+                window=ChunkWindow(1, 90.0, 190.0),
+                turns=[LocalTurn(1, 90.0, 110.0, "SPEAKER_00")],
+                embeddings={"SPEAKER_00": BOB},
+                speech_seconds={"SPEAKER_00": 20.0},
+            ),
+        ],
+        label_prefix="SPEAKER_",
+    )
+    assert len(_speakers(result)) == 2
+    assert result.diagnostics["temporal_matches"] == []
+
+
+def test_the_seam_overlap_floor_is_configurable():
+    chunks = [
+        ChunkResult(
+            window=ChunkWindow(0, 0.0, 100.0),
+            turns=[LocalTurn(0, 80.0, 92.0, "SPEAKER_00")],
+        ),
+        ChunkResult(
+            window=ChunkWindow(1, 90.0, 190.0),
+            turns=[LocalTurn(1, 90.0, 110.0, "SPEAKER_00")],
+        ),
+    ]
+    assert len(_speakers(reconcile_chunks(chunks, min_seam_overlap_seconds=1.0))) == 1
+    assert len(_speakers(reconcile_chunks(chunks, min_seam_overlap_seconds=5.0))) == 2

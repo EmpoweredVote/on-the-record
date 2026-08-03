@@ -15,6 +15,7 @@ from .speaker_reconcile import (
     EMBEDDING_MATCH_THRESHOLD,
     LocalTurn,
     MIN_EMBEDDING_SPEECH_SECONDS,
+    MIN_SEAM_OVERLAP_SECONDS,
     ReconciliationResult,
     StableTurn,
     _cosine_similarity,
@@ -142,6 +143,7 @@ def reconcile_chunks(
     embedding_threshold: float = EMBEDDING_MATCH_THRESHOLD,
     min_embedding_speech_seconds: float = MIN_EMBEDDING_SPEECH_SECONDS,
     label_prefix: str = "VIBE_",
+    min_seam_overlap_seconds: float = MIN_SEAM_OVERLAP_SECONDS,
 ) -> ReconciliationResult:
     """Map chunk-local speakers to stable meeting-wide labels.
 
@@ -155,4 +157,5 @@ def reconcile_chunks(
         embedding_threshold=embedding_threshold,
         min_embedding_speech_seconds=min_embedding_speech_seconds,
         label_prefix=label_prefix,
+        min_seam_overlap_seconds=min_seam_overlap_seconds,
     )

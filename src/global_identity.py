@@ -40,6 +40,7 @@ from typing import Any
 import numpy as np
 
 from .speaker_reconcile import (
+    MIN_SEAM_OVERLAP_SECONDS,
     ChunkResult,
     LocalTurn,
     StableTurn,
@@ -73,13 +74,6 @@ def decode_turn_vectors(block: dict[str, Any]) -> dict[int, np.ndarray]:
         for row, index in enumerate(indices)
         if np.all(np.isfinite(matrix[row]))
     }
-
-
-#: Minimum shared speech, in seconds, for a seam overlap to count as a MUST-LINK
-#: between two windows' local speakers. See `seed_clusters` for the measurement:
-#: correct joins overlap 1.1s and up, wrong ones 0.3-0.6s, and a wrong must-link
-#: survives every embedding threshold because it is applied before them.
-MIN_SEAM_OVERLAP_SECONDS = 1.0
 
 
 @dataclass

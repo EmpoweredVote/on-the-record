@@ -454,6 +454,14 @@ forcing together now stand apart. The trade is right and taken deliberately: it 
 all (the fragmentation count stays 2, equal to single-pass). Conflation misattributes quotes
 silently; fragmentation surfaces at the review gate. Both gates still pass with wide margin.
 
-**Follow-up worth doing:** `src/speaker_reconcile.reconcile_chunks` has the same missing floor
-and is used by the VibeVoice path with its own tuned 0.75. It was left untouched here (fallback
-paths stay untouched during a calibration), but the same one-line floor would likely improve it.
+**The floor was then applied to `src/speaker_reconcile.reconcile_chunks` too**, since the defect
+was in the shared reconciler rather than in this change's copy of it. `MIN_SEAM_OVERLAP_SECONDS`
+now lives in `speaker_reconcile` as the single source of truth and `global_identity` imports it;
+`vibevoice.reconcile_chunks` threads it through, and VibeVoice's regression suite passes
+untouched. Measured effect on the legacy sequential path (old cached payloads, threshold 0.50):
+
+- **June 10 unchanged** — 49 labels, 6 people fragmented, 0 conflated, exactly as PR #141 shipped.
+- **May 6: 43 → 45 labels, conflation 4 → 3.** So the floor improves the legacy path as well,
+  but it does change one figure #141 recorded (43 speakers), which is the honest caveat: cached
+  payloads still stitch, and June 10 reproduces exactly, but May 6's sequential speaker count no
+  longer matches that PR's table.
