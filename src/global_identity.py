@@ -75,6 +75,13 @@ def decode_turn_vectors(block: dict[str, Any]) -> dict[int, np.ndarray]:
     }
 
 
+#: Minimum shared speech, in seconds, for a seam overlap to count as a MUST-LINK
+#: between two windows' local speakers. See `seed_clusters` for the measurement:
+#: correct joins overlap 1.1s and up, wrong ones 0.3-0.6s, and a wrong must-link
+#: survives every embedding threshold because it is applied before them.
+MIN_SEAM_OVERLAP_SECONDS = 1.0
+
+
 @dataclass
 class IdentityNode:
     """One window-local speaker: the atom of global identity.
@@ -150,7 +157,9 @@ def cannot_link_chunks(
 
 
 def seed_clusters(
-    nodes: list[IdentityNode], chunks: list[ChunkResult]
+    nodes: list[IdentityNode],
+    chunks: list[ChunkResult],
+    min_seam_overlap_seconds: float = MIN_SEAM_OVERLAP_SECONDS,
 ) -> tuple[list[int], dict[str, Any]]:
     """Seed one cluster per node, then join nodes that overlap in a seam.
 
@@ -159,6 +168,17 @@ def seed_clusters(
     skipped — the same greedy discipline the sequential reconciler uses, which
     cannot displace a strong match onto a worse partner the way a
     sum-maximizing assignment can.
+
+    A seam join is a MUST-LINK: it is applied before, and independently of, any
+    embedding threshold, so a wrong one cannot be undone by tuning. Only
+    overlaps of at least `min_seam_overlap_seconds` therefore qualify. Measured
+    on May 6's reviewed reference: of 12 seam joins, the 10 correct ones
+    overlapped 1.1-71.0s while the 2 that merged DIFFERENT people overlapped
+    0.6s and 0.3s — and those two chained three real people (Kerr, Toothman,
+    Sturbaum) into one cluster at every threshold tested. A sub-second overlap
+    is two windows disagreeing about a boundary, not evidence of one speaker.
+    Dropping a weak join is safe: the pair can still merge on voice similarity,
+    which is the signal that should decide when temporal evidence is thin.
     """
     clusters = list(range(len(nodes)))
     index_of = {(n.chunk_index, n.local_speaker): i for i, n in enumerate(nodes)}
@@ -184,7 +204,7 @@ def seed_clusters(
                     for turn_a in node_a.turns
                     for turn_b in node_b.turns
                 )
-                if score > 0:
+                if score >= min_seam_overlap_seconds:
                     candidates.append((
                         score,
                         index_of[(node_a.chunk_index, node_a.local_speaker)],

@@ -468,3 +468,45 @@ def test_stitch_honours_an_explicit_sequential_request():
     # sequential path matches on the payload `centroids` field (identical here),
     # so it unifies where global identity on the turn vectors would not
     assert len({s["speaker_label"] for s in segments}) == 1
+
+
+def test_a_sub_second_seam_overlap_is_not_a_must_link():
+    """A seam join is applied BEFORE any embedding threshold, so a wrong one
+    cannot be tuned away. Measured on May 6's reviewed reference: correct seam
+    joins overlapped 1.1-71.0s, while the two that merged DIFFERENT people
+    overlapped 0.6s and 0.3s and chained three real people into one cluster at
+    every threshold. Below the floor, voice similarity decides instead."""
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 60.4, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(60.1, 90.0, "SPEAKER_00")]),  # 0.3s of overlap
+    ]
+    nodes = build_nodes(chunks, {})
+
+    clusters, diagnostics = seed_clusters(nodes, chunks)
+
+    assert clusters[0] != clusters[1]
+    assert diagnostics["temporal_matches"] == []
+
+
+def test_a_substantial_seam_overlap_is_still_a_must_link():
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 64.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(56.0, 90.0, "SPEAKER_00")]),  # 8s of overlap
+    ]
+    nodes = build_nodes(chunks, {})
+
+    clusters, diagnostics = seed_clusters(nodes, chunks)
+
+    assert clusters[0] == clusters[1]
+    assert len(diagnostics["temporal_matches"]) == 1
+
+
+def test_the_seam_overlap_floor_is_configurable():
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 62.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(60.0, 90.0, "SPEAKER_00")]),  # 2s of overlap
+    ]
+    nodes = build_nodes(chunks, {})
+
+    assert len(seed_clusters(nodes, chunks, 1.0)[1]["temporal_matches"]) == 1
+    assert seed_clusters(nodes, chunks, 5.0)[1]["temporal_matches"] == []
