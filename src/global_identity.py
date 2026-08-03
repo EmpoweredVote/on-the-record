@@ -130,3 +130,86 @@ def build_nodes(
                 speech_seconds=sum(t.end - t.start for _, t in entries),
             ))
     return nodes
+
+
+def cannot_link_chunks(
+    nodes: list[IdentityNode], clusters: list[int], cluster_id: int
+) -> set[int]:
+    """Window indices a cluster already occupies — it may absorb no more from them.
+
+    A window's own diarization said its locals are different people, so a
+    cluster that already holds one local from window W can never hold another.
+    The constraint is on the CLUSTER, not the node, so it survives transitive
+    merges.
+    """
+    return {
+        node.chunk_index
+        for node, assigned in zip(nodes, clusters)
+        if assigned == cluster_id
+    }
+
+
+def seed_clusters(
+    nodes: list[IdentityNode], chunks: list[ChunkResult]
+) -> tuple[list[int], dict[str, list[dict[str, Any]]]]:
+    """Seed one cluster per node, then join nodes that overlap in a seam.
+
+    Returns (cluster_id per node, diagnostics). Overlap candidates are applied
+    highest-overlap-first and any join that would violate a cannot-link is
+    skipped — the same greedy discipline the sequential reconciler uses, which
+    cannot displace a strong match onto a worse partner the way a
+    sum-maximizing assignment can.
+    """
+    clusters = list(range(len(nodes)))
+    index_of = {(n.chunk_index, n.local_speaker): i for i, n in enumerate(nodes)}
+    windows = {chunk.window.index: chunk.window for chunk in chunks}
+    diagnostics: dict[str, list[dict[str, Any]]] = {
+        "temporal_matches": [], "embedding_matches": [], "new_speakers": [],
+        "cannot_link_blocks": [],
+    }
+
+    ordered = sorted(windows)
+    candidates: list[tuple[float, int, int]] = []
+    for position in range(1, len(ordered)):
+        previous_index, current_index = ordered[position - 1], ordered[position]
+        previous_window, current_window = windows[previous_index], windows[current_index]
+        overlap_start = max(previous_window.start, current_window.start)
+        overlap_end = min(previous_window.end, current_window.end)
+        if overlap_end <= overlap_start:
+            continue
+        for node_a in (n for n in nodes if n.chunk_index == previous_index):
+            for node_b in (n for n in nodes if n.chunk_index == current_index):
+                score = sum(
+                    _overlap_seconds(turn_a, turn_b, overlap_start, overlap_end)
+                    for turn_a in node_a.turns
+                    for turn_b in node_b.turns
+                )
+                if score > 0:
+                    candidates.append((
+                        score,
+                        index_of[(node_a.chunk_index, node_a.local_speaker)],
+                        index_of[(node_b.chunk_index, node_b.local_speaker)],
+                    ))
+
+    for score, a, b in sorted(candidates, key=lambda c: (-c[0], c[1], c[2])):
+        target, source = clusters[a], clusters[b]
+        if target == source:
+            continue
+        occupied = cannot_link_chunks(nodes, clusters, target)
+        if cannot_link_chunks(nodes, clusters, source) & occupied:
+            diagnostics["cannot_link_blocks"].append({
+                "reason": "temporal",
+                "chunk": nodes[b].chunk_index,
+                "local": nodes[b].local_speaker,
+                "overlap_seconds": round(score, 3),
+            })
+            continue
+        clusters = [target if c == source else c for c in clusters]
+        diagnostics["temporal_matches"].append({
+            "chunk": nodes[b].chunk_index,
+            "local": nodes[b].local_speaker,
+            "matched_chunk": nodes[a].chunk_index,
+            "matched_local": nodes[a].local_speaker,
+            "overlap_seconds": round(score, 3),
+        })
+    return clusters, diagnostics
