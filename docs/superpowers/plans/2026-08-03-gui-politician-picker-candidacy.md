@@ -322,8 +322,18 @@ def test_candidacy_display_joins_several_with_semicolons():
 
 
 def test_candidacy_display_prefixes_non_active_status():
+    # No "running:" lead when nothing is active — "running: withdrawn: ..." reads
+    # as nonsense, and a withdrawn-only person is exactly the case a curator
+    # needs to notice.
     out = candidacy_display([_cand(status="withdrawn")])
-    assert out == "running: withdrawn: WI · Governor · Republican primary · 2026"
+    assert out == "withdrawn: WI · Governor · Republican primary · 2026"
+
+
+def test_candidacy_display_leads_with_running_when_any_is_active():
+    out = candidacy_display([_cand(status="withdrawn"),
+                             _cand(position_name="Senate")])
+    assert out.startswith("running: ")
+    assert "withdrawn: WI · Governor" in out
 
 
 def test_candidacy_display_caps_at_three_and_counts_the_rest():
@@ -357,6 +367,14 @@ Expected: `ImportError: cannot import name 'candidacy_display' from 'gui.politic
 Append to `gui/politicians.py`:
 
 ```python
+def _is_active(c) -> bool:
+    """Whether a candidacy entry counts as a live run. Missing status means active,
+    matching publish.resolve_races_for_politicians, which doesn't filter status."""
+    if not isinstance(c, dict):
+        return False
+    return (c.get("status") or "active").strip().lower() == "active"
+
+
 def _one_candidacy(c: dict) -> Optional[str]:
     """'WI · Governor · Republican primary · 2026', or 'withdrawn: <that>' for a
     non-active status. None when the entry isn't a usable dict."""
@@ -380,18 +398,23 @@ def candidacy_display(candidacies) -> str:
     signal that this person row has no race_candidates edge and so cannot carry a
     meeting or a quote into a race.
 
+    The 'running:' lead is dropped when nothing is active, because
+    'running: withdrawn: ...' reads as nonsense and a withdrawn-only person is
+    precisely the case a curator needs to notice.
+
     Capped at _MAX_CANDIDACIES with a '+N more' tail so one row can't run away.
     Malformed entries are skipped rather than breaking the whole label.
     """
-    labels = [s for s in (_one_candidacy(c) for c in (candidacies or [])) if s]
-    if not labels:
+    pairs = [p for p in ((_one_candidacy(c), _is_active(c)) for c in (candidacies or []))
+             if p[0]]
+    if not pairs:
         return "no candidacies"
-    shown = labels[:_MAX_CANDIDACIES]
-    text = "; ".join(shown)
-    extra = len(labels) - len(shown)
+    shown = pairs[:_MAX_CANDIDACIES]
+    text = "; ".join(label for label, _active in shown)
+    extra = len(pairs) - len(shown)
     if extra:
         text += f"; +{extra} more"
-    return f"running: {text}"
+    return f"running: {text}" if any(active for _label, active in pairs) else text
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -400,7 +423,7 @@ def candidacy_display(candidacies) -> str:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `20 passed`
+Expected: `21 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -527,7 +550,7 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `26 passed`
+Expected: `27 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -864,7 +887,7 @@ literal percent must be doubled or psycopg2 reads it as a placeholder.
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `37 passed`
+Expected: `38 passed`
 
 - [ ] **Step 5: Verify the SQL against the real database**
 
@@ -1048,7 +1071,7 @@ The fallback reads both `politician_id`/`id` and `politician_slug`/`slug` becaus
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `40 passed`
+Expected: `41 passed`
 
 - [ ] **Step 5: Run the full suite to confirm no regression**
 
@@ -1056,7 +1079,7 @@ Expected: `40 passed`
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1758 passed` (1718 baseline + 40 new)
+Expected: `1759 passed` (1718 baseline + 41 new)
 
 - [ ] **Step 6: Commit**
 
@@ -1188,7 +1211,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1759 passed` (1718 baseline + 40 from Tasks 1-5 + 1 from Task 6)
+Expected: `1760 passed` (1718 baseline + 41 from Tasks 1-5 + 1 from Task 6)
 
 - [ ] **Step 2: Start the GUI and exercise the picker by hand**
 
