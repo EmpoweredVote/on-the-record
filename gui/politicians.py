@@ -38,6 +38,17 @@ _NAME_FIELDS = ("full_name", "preferred_name", "first_name", "last_name")
 # Candidacies shown in full before collapsing the tail into "+N more".
 _MAX_CANDIDACIES = 3
 
+# candidate_status values that mean the person is actually contesting the race.
+# essentials uses {active, filed, withdrawn}; "filed" is 111 live rows and means
+# the paperwork is in, so it earns the "running:" lead exactly like "active".
+# Note publish.resolve_races_for_politicians ignores status entirely, so ALL
+# three resolve the race on publish — the distinction here is informational.
+_RUNNING_STATUSES = frozenset({"active", "filed"})
+
+# The label for a person row with no race_candidates edge. Public because it is
+# the warning case, and callers assert on it.
+NO_CANDIDACIES = "no candidacies"
+
 # Query tokens that carry no matchable signal. Generational suffixes live in
 # their own `name_suffix` column, which _NAME_FIELDS doesn't search, so keeping
 # them would AND in a clause nothing can satisfy.
@@ -97,16 +108,14 @@ def _status(c: dict) -> str:
     return (c.get("status") or "active").strip().lower()
 
 
-def _is_active(c) -> bool:
-    """Whether a candidacy entry counts as a live run."""
-    if not isinstance(c, dict):
-        return False
-    return _status(c) == "active"
+def _one_candidacy(c) -> Optional[tuple[str, bool]]:
+    """('WI · Governor · Republican primary · 2026', True) — the label plus
+    whether it's a live run. A non-running status is prefixed
+    ('withdrawn: <that>', False). None when the entry isn't a usable dict.
 
-
-def _one_candidacy(c: dict) -> Optional[str]:
-    """'WI · Governor · Republican primary · 2026', or 'withdrawn: <that>' for a
-    non-active status. None when the entry isn't a usable dict."""
+    Returning both together keeps the dict validated and the status normalized
+    exactly once per entry.
+    """
     if not isinstance(c, dict):
         return None
     label = race_display(
@@ -119,7 +128,8 @@ def _one_candidacy(c: dict) -> Optional[str]:
     if not label:
         return None
     status = _status(c)
-    return label if status == "active" else f"{status}: {label}"
+    running = status in _RUNNING_STATUSES
+    return (label if running else f"{status}: {label}", running)
 
 
 def candidacy_display(candidacies) -> str:
@@ -127,20 +137,19 @@ def candidacy_display(candidacies) -> str:
     signal that this person row has no race_candidates edge and so cannot carry a
     meeting or a quote into a race.
 
-    The 'running:' lead is dropped when nothing is active, because
+    The 'running:' lead is dropped when nothing is running, because
     'running: withdrawn: ...' reads as nonsense and a withdrawn-only person is
     precisely the case a curator needs to notice.
 
     Capped at _MAX_CANDIDACIES with a '+N more' tail so one row can't run away.
     Malformed entries are skipped rather than breaking the whole label.
     """
-    pairs = [p for p in ((_one_candidacy(c), _is_active(c)) for c in (candidacies or []))
-             if p[0]]
+    pairs = [p for p in (_one_candidacy(c) for c in (candidacies or [])) if p]
     if not pairs:
-        return "no candidacies"
+        return NO_CANDIDACIES
     shown = pairs[:_MAX_CANDIDACIES]
-    text = "; ".join(label for label, _active in shown)
+    text = "; ".join(label for label, _running in shown)
     extra = len(pairs) - len(shown)
     if extra:
         text += f"; +{extra} more"
-    return f"running: {text}" if any(active for _label, active in pairs) else text
+    return f"running: {text}" if any(running for _label, running in pairs) else text

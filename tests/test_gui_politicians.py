@@ -104,8 +104,10 @@ def _cand(position_name="Governor", state="WI", primary_party="Republican",
 
 
 def test_candidacy_display_none_is_a_warning_string():
-    assert candidacy_display([]) == "no candidacies"
-    assert candidacy_display(None) == "no candidacies"
+    from gui.politicians import NO_CANDIDACIES
+    assert candidacy_display([]) == NO_CANDIDACIES
+    assert candidacy_display(None) == NO_CANDIDACIES
+    assert NO_CANDIDACIES == "no candidacies"
 
 
 def test_candidacy_display_one_matches_race_display():
@@ -127,6 +129,36 @@ def test_candidacy_display_prefixes_non_active_status():
     # needs to notice.
     out = candidacy_display([_cand(status="withdrawn")])
     assert out == "withdrawn: WI · Governor · Republican primary · 2026"
+
+
+def test_candidacy_display_treats_filed_as_running():
+    # candidate_status is {active, filed, withdrawn} and "filed" is 111 live rows.
+    # A filed candidate IS contesting the race, so prefixing it like a withdrawal
+    # and dropping the "running:" lead would misread the data.
+    assert candidacy_display([_cand(status="filed")]) == (
+        "running: WI · Governor · Republican primary · 2026")
+
+
+def test_candidacy_display_prefix_is_the_actual_status():
+    # Pins that the prefix comes from the data, not a hardcoded "withdrawn".
+    assert candidacy_display([_cand(status="disqualified")]).startswith("disqualified: ")
+
+
+def test_candidacy_display_missing_status_counts_as_running():
+    c = _cand()
+    del c["status"]
+    assert candidacy_display([c]).startswith("running: ")
+
+
+def test_candidacy_display_normalizes_status_case_and_whitespace():
+    assert candidacy_display([_cand(status="  ACTIVE ")]).startswith("running: ")
+
+
+def test_candidacy_display_exactly_three_has_no_tail():
+    cands = [_cand(position_name=f"Office {i}") for i in range(3)]
+    out = candidacy_display(cands)
+    assert "more" not in out
+    assert out.count("; ") == 2
 
 
 def test_candidacy_display_leads_with_running_when_any_is_active():
