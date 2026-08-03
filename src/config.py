@@ -102,6 +102,38 @@ RETURNING_SPEAKER_THRESHOLD_3 = 0.70  # Lowered match threshold for profiles see
 MERGE_GAP_SECONDS = 0.5  # merge adjacent same-speaker segments closer than this
 SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similarity above this
 
+# Chunked diarization (see docs/superpowers/specs/2026-07-31-chunked-parallel-diarization-design.md).
+# 0 = OFF: single-pass diarization, the long-standing behaviour. This is the
+# DEFAULT BY DELIBERATE CHOICE, not because chunking is unbuilt or unmeasured.
+#
+# Chunking works and is fast (60-min windows: 64x on the 5-hour June 10
+# meeting, 33x on May 6, DER 0.044/0.059 vs single-pass). But it reliably
+# produces MORE speaker labels than there are people (June 10: 49 vs 41),
+# because a window sees only a slice of each voice. identify._dedupe then
+# treats two labels naming one person as a mis-ID and demotes the loser to
+# unnamed+needs_review — so an unmerged fragment publishes a real person's
+# remarks attributed to NOBODY unless the reviewer catches it in the GUI.
+# Since the 118-minute single-pass cost is UNATTENDED machine time while the
+# fragmentation lands on the human review step, the trade is not worth it for
+# accuracy-first processing. Set to 60 (or pass --diarize-chunk-minutes 60)
+# when a long meeting genuinely needs fast turnaround, and watch the speaker
+# count during review. The fix that would make this default-on is
+# architectural, not a threshold: chunk for segmentation, then re-cluster
+# identity globally over per-turn embeddings (~20s for 2811 segments).
+DIARIZE_CHUNK_MINUTES = 0
+DIARIZE_CHUNK_OVERLAP_SECONDS = 60
+# Cosine similarity required to call a chunk-local speaker the same person as
+# an already-seen global speaker across windows. Deliberately LOWER than
+# src.speaker_reconcile.EMBEDDING_MATCH_THRESHOLD (0.75, tuned for VibeVoice's
+# 50-min windows): per-window pyannote centroids average over fewer turns, so
+# the same person scores as low as ~0.55 across a seam and 0.75 fragments them
+# badly (June 10: 56 speakers vs 41). Do not lower this further without
+# re-running scripts/sweep_chunk_thresholds.py — below 0.50 the DER starts
+# climbing again as genuinely different people begin merging, and conflation
+# is far worse than fragmentation (a human reviewer sees an extra unnamed
+# speaker, but silently merged speakers misattribute quotes).
+DIARIZE_CHUNK_STITCH_THRESHOLD = 0.50
+
 # --- Post-identification segment merging ---
 SEGMENT_MERGE_GAP = 2.0  # merge adjacent same-speaker segments with gap < this (seconds)
 

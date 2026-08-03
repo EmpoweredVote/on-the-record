@@ -998,6 +998,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     meeting_id,
                     use_merge=args.merge and args.diarizer == "oss",
                     diarizer=args.diarizer,
+                    chunk_minutes=(
+                        getattr(args, "diarize_chunk_minutes", None)
+                        if getattr(args, "diarize_chunk_minutes", None) is not None
+                        else config.DIARIZE_CHUNK_MINUTES
+                    ),
                 )
                 elapsed = time.time() - t0
                 segments = [Segment.from_dict(d) for d in _segs_data]
@@ -3715,6 +3720,12 @@ Environment Variables:
                              "installed and authenticated (modal token new). "
                              "Has no effect when --diarizer api is used (pyannote.ai "
                              "is always remote).")
+    parser.add_argument("--diarize-chunk-minutes", type=int, metavar="N",
+                        help="Diarize in N-minute windows fanned out across Modal "
+                             "containers and stitch speakers globally (0 = single "
+                             "pass; default from config.DIARIZE_CHUNK_MINUTES). "
+                             "Diarization cost is ~quadratic in window length, so "
+                             "this is the main speedup for long meetings.")
     parser.add_argument(
         "--congressional-record", nargs=2, metavar=("DATE", "CHAMBER"), default=None,
         help="Resolve speakers from the Congressional Record for a floor session: "

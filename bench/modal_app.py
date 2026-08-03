@@ -1346,9 +1346,287 @@ def pipeline_extract_embeddings(meeting_id: str, segments_json: str) -> str:
     return json.dumps(centroids)
 
 @app.function(
+    image=pyannote_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    gpu="A100",
+    cpu=16,
+    timeout=60 * 60 * 2,
+)
+def probe_diarize_tuning(
+    meeting_id: str,
+    embedding_batch_size: int = 0,
+    copy_local: bool = False,
+    truncate_s: int = 0,
+) -> str:
+    """Diagnostic: where does pyannote's wall-clock go, and does batching help?
+
+    Runs the diarization pipeline on audio ALREADY in the volume, printing the
+    pipeline's batch-size attributes, each internal model's device, and a
+    per-stage timing breakdown. `embedding_batch_size > 0` sets that attribute
+    before running so a run can be compared against the default.
+
+    Motivation (July 2026): the pipeline call is ~99.7% of diarization
+    wall-clock and the `embeddings` stage is ~99% of that (4090s of 4125s on
+    the May 6 meeting), while GPU tier (L4 -> A100) and cpu=16 barely moved
+    it — consistent with tiny/serial embedding batches rather than a
+    compute-bound GPU. No DB, no LLM: safe to run any time.
+    """
+    import json as _json
+    import os
+    import shutil
+
+    import torch
+    from pyannote.audio import Pipeline
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(f"{wav_path} not in volume — process this meeting first.")
+
+    # pyannote reads audio slices on demand; on a network Volume every window
+    # is a remote read. Copying to container-local disk first tests whether
+    # the "embeddings" stage is really volume I/O rather than compute.
+    t_copy = 0.0
+    if copy_local:
+        local_wav = Path("/tmp") / f"{meeting_id}.wav"
+        t_copy0 = time.time()
+        shutil.copy2(wav_path, local_wav)
+        t_copy = time.time() - t_copy0
+        print(f"  [probe] copied audio to local disk in {t_copy:.1f}s")
+        wav_path = local_wav
+
+    # `truncate_s` writes the first N seconds to local disk and runs on that.
+    # This is the chunking pre-test: if a 60-min slice of a 5-hour meeting
+    # runs at the s/audio-min rate of a naturally-short meeting, then the
+    # embedding stage's cost is superlinear in DURATION and splitting a long
+    # meeting into parallel chunks wins more than N×. If instead the slice
+    # runs at the long meeting's rate, duration is not the driver (speech
+    # density / speaker count is) and chunking would disappoint.
+    if truncate_s > 0:
+        import soundfile as sf
+
+        info = sf.info(str(wav_path))
+        frames = min(int(truncate_s * info.samplerate), info.frames)
+        data, sr = sf.read(str(wav_path), frames=frames, dtype="float32")
+        sliced = Path("/tmp") / f"{meeting_id}_first{truncate_s}s.wav"
+        sf.write(str(sliced), data, sr)
+        print(f"  [probe] truncated to {frames / sr:.0f}s "
+              f"(source {info.frames / info.samplerate:.0f}s)")
+        wav_path = sliced
+
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1", token=os.environ["HF_TOKEN"]
+    )
+    pipeline.to(torch.device("cuda"))
+
+    attrs = ("embedding_batch_size", "segmentation_batch_size")
+    before = {a: getattr(pipeline, a, "<absent>") for a in attrs}
+    print(f"  [probe] batch attrs BEFORE: {before}")
+    if embedding_batch_size > 0:
+        try:
+            pipeline.embedding_batch_size = embedding_batch_size
+        except Exception as exc:
+            print(f"  [probe] could not set embedding_batch_size: {exc}")
+    print(f"  [probe] batch attrs AFTER: "
+          f"{ {a: getattr(pipeline, a, '<absent>') for a in attrs} }")
+
+    # Which device does each sub-model actually sit on? A CPU-resident
+    # embedding model would explain everything.
+    for name in ("_segmentation", "_embedding", "segmentation", "embedding"):
+        obj = getattr(pipeline, name, None)
+        if obj is None:
+            continue
+        model = getattr(obj, "model", obj)
+        device = getattr(model, "device", None)
+        if device is None:
+            # pyannote objects sometimes expose `parameters` as a dict, so
+            # only trust it when it yields tensors.
+            params = getattr(model, "parameters", None)
+            try:
+                device = next(iter(params())).device if callable(params) else None
+            except Exception:
+                device = None
+        print(f"  [probe] {name} ({type(model).__name__}) device: {device}")
+
+    starts: dict[str, float] = {}
+
+    def hook(step_name, step_artifact=None, file=None, total=None, completed=None):
+        starts.setdefault(str(step_name), time.time())
+
+    t0 = time.time()
+    diarization = pipeline(str(wav_path), hook=hook)
+    total = time.time() - t0
+
+    names = list(starts)
+    stages = {
+        name: round((starts[names[i + 1]] if i + 1 < len(names) else t0 + total)
+                    - starts[name], 1)
+        for i, name in enumerate(names)
+    }
+    # Print the measurement FIRST — everything below is derived and must never
+    # be able to lose the numbers we came for.
+    print(f"  [probe] stages_s={_json.dumps(stages)} total_s={total:.1f} "
+          f"copy_s={t_copy:.1f}")
+
+    turns = _annotation_to_turns(diarization)  # handles 3.x Annotation / 4.x DiarizeOutput
+    audio_s = _ffprobe_duration(wav_path)
+    embeddings_s = stages.get("embeddings", 0.0)
+    result = {
+        "meeting_id": meeting_id,
+        "embedding_batch_size_requested": embedding_batch_size,
+        "batch_attrs_before": {k: str(v) for k, v in before.items()},
+        "copy_local": copy_local,
+        "copy_s": round(t_copy, 1),
+        "truncate_s": truncate_s,
+        "audio_s": round(audio_s, 1),
+        "stages_s": stages,
+        "total_s": round(total, 1),
+        # The comparable number across meetings/slices.
+        "embeddings_s_per_audio_min": round(embeddings_s / (audio_s / 60), 2)
+        if audio_s else None,
+        "turns": len(turns),
+        "speakers": len({t[2] for t in turns}),
+    }
+    print(f"  [probe] RESULT {_json.dumps(result)}")
+    return _json.dumps(result)
+
+
+@app.function(
+    image=pyannote_image,
+    volumes={VOLUME_PATH: volume},
+    secrets=[hf_secret],
+    # Measured: GPU tier does not matter for this workload (the dominant cost
+    # is single-threaded CPU clustering), so take the cheap card. Chunking is
+    # what buys the speedup — see docs/superpowers/plans/2026-07-31-chunked-
+    # parallel-diarization.md.
+    gpu="L4",
+    timeout=60 * 60,
+)
+def diarize_chunk_window(
+    meeting_id: str,
+    start_s: float,
+    end_s: float,
+    overlap_s: float = 60.0,
+    window_index: int = 0,
+) -> str:
+    """Diarize ONE overlapping window of a meeting; return turns + centroids.
+
+    Reads only `[start_s - overlap_s, end_s + overlap_s]` out of the volume
+    WAV (soundfile start/frames — no full-file load, no re-upload). Turns are
+    returned over the ENTIRE read window in ABSOLUTE meeting time, UNCLIPPED
+    (only sub-50ms slivers are dropped) — the local orchestrator's
+    `src.speaker_reconcile.reconcile_chunks` needs turns inside the overlap
+    region from both neighbouring windows to match speakers temporally, and
+    it clips ownership to the overlap midpoint itself. Centroids and
+    speech_seconds are computed over the CANONICAL span `[start_s, end_s)`
+    only, so overlap audio can inform matching but never shapes the
+    voiceprint of a speaker a neighbouring window owns.
+
+    Returns JSON: {"window_index", "window_start_s", "window_end_s",
+    "turns": [[start, end, label], ...], "centroids": {label: [float, ...]},
+    "speech_seconds": {label: float}, "elapsed_s": float}, all times in
+    ABSOLUTE meeting seconds.
+    """
+    import json as _json
+    import os
+    import time as _time
+
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from pyannote.audio import Inference, Model, Pipeline
+
+    wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
+    if not wav_path.exists():
+        raise FileNotFoundError(
+            f"Audio not found in Modal volume: {wav_path}. "
+            "Run src.modal_compute.upload_audio() first."
+        )
+
+    info = sf.info(str(wav_path))
+    sr = info.samplerate
+    read_start = max(0.0, start_s - overlap_s)
+    read_end = min(info.frames / sr, end_s + overlap_s)
+    frames = int((read_end - read_start) * sr)
+    samples, _ = sf.read(
+        str(wav_path), start=int(read_start * sr), frames=frames, dtype="float32"
+    )
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+
+    device = torch.device("cuda")
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1", token=os.environ["HF_TOKEN"]
+    )
+    pipeline.to(device)
+
+    t0 = _time.time()
+    waveform = torch.tensor(samples, dtype=torch.float32).unsqueeze(0)
+    diarization = pipeline({"waveform": waveform, "sample_rate": sr})
+    elapsed = _time.time() - t0
+
+    # Window-relative -> absolute. No clipping to the canonical span: the
+    # reconciler owns boundary resolution via overlap-midpoint ownership.
+    turns: list[tuple[float, float, str]] = []
+    for rel_start, rel_end, speaker in _annotation_to_turns(diarization):
+        abs_start = read_start + rel_start
+        abs_end = read_start + rel_end
+        if abs_end - abs_start > 0.05:  # drop slivers
+            turns.append((round(abs_start, 3), round(abs_end, 3), str(speaker)))
+
+    # Canonical-span-only speech seconds and centroids: overlap audio informs
+    # matching but must not shape a voiceprint or duration weight owned by a
+    # neighbouring window.
+    speech_seconds: dict[str, float] = {}
+    for start, end, label in turns:
+        c0 = max(start, start_s)
+        c1 = min(end, end_s)
+        if c1 > c0:
+            speech_seconds[label] = speech_seconds.get(label, 0.0) + (c1 - c0)
+
+    emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
+    inference = Inference(emb_model, window="whole", device=device)
+    per_speaker: dict[str, list] = {}
+    for start, end, label in turns:
+        c0 = max(start, start_s)
+        c1 = min(end, end_s)
+        if c1 - c0 < 0.3:  # too little canonical audio to embed
+            continue
+        i0 = int((c0 - read_start) * sr)
+        i1 = int((c1 - read_start) * sr)
+        clip = samples[i0:i1]
+        if len(clip) < int(sr * 0.3):
+            continue
+        wf = torch.tensor(clip, dtype=torch.float32).unsqueeze(0).to(device)
+        per_speaker.setdefault(label, []).append(inference({"waveform": wf, "sample_rate": sr}))
+    centroids = {
+        label: np.mean(vectors, axis=0).tolist()
+        for label, vectors in per_speaker.items()
+    }
+
+    print(f"  [chunk {window_index} @ {start_s:.0f}-{end_s:.0f}s "
+          f"(read {read_start:.0f}-{read_end:.0f}s)] {len(turns)} turns, "
+          f"{len(centroids)} speakers, {elapsed:.1f}s")
+    return _json.dumps({
+        "window_index": window_index,
+        "window_start_s": read_start,
+        "window_end_s": read_end,
+        "turns": turns,
+        "centroids": centroids,
+        "speech_seconds": speech_seconds,
+        "elapsed_s": round(elapsed, 1),
+    })
+
+
+@app.function(
     image=pyannote_merged_image,  # has cs_src for merge.py
     volumes={VOLUME_PATH: volume},
     secrets=[hf_secret],
+    # MEASURED (July 2026): GPU tier is irrelevant here — the pipeline's
+    # `embeddings` step (which buckets agglomerative clustering) is ~99% of
+    # wall-clock, CPU-bound and single-threaded, and scales ~quadratically
+    # with duration. A100 and cpu=16 both bought nothing, so stay on the
+    # cheap GPU; the fix is chunking (see the chunked path below).
     gpu="L4",
     timeout=60 * 60 * 2,
 )
@@ -1387,8 +1665,30 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
     )
     pipeline.to(device)
 
+    class _StageTimer:
+        """Pipeline hook: pyannote calls it per internal step (segmentation,
+        embeddings, clustering, ...); recording each step's first-seen time
+        turns consecutive starts into per-stage durations."""
+
+        def __init__(self):
+            self.starts: dict[str, float] = {}
+
+        def __call__(self, step_name, step_artifact=None, file=None,
+                     total=None, completed=None):
+            self.starts.setdefault(str(step_name), time.time())
+
+        def report(self, t_end: float) -> None:
+            names = list(self.starts)
+            for i, name in enumerate(names):
+                t_next = self.starts[names[i + 1]] if i + 1 < len(names) else t_end
+                print(f"  [timing]   pipeline stage {name}: "
+                      f"{t_next - self.starts[name]:.1f}s")
+
+    stage_timer = _StageTimer()
     t0 = time.time()
-    diarization = pipeline(str(wav_path))
+    diarization = pipeline(str(wav_path), hook=stage_timer)
+    t_diarize = time.time() - t0
+    stage_timer.report(t0 + t_diarize)
     turns = _annotation_to_turns(diarization)
 
     # Convert to plain dicts (no Segment dataclass dependency here).
@@ -1405,6 +1705,7 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
     ]
 
     # --- Extract per-speaker centroid embeddings ---
+    t1 = time.time()
     emb_model = Model.from_pretrained("pyannote/embedding", token=os.environ["HF_TOKEN"])
     inference = Inference(emb_model, window="whole", device=device)
 
@@ -1427,8 +1728,10 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
         label: np.mean(vecs, axis=0).tolist()
         for label, vecs in embs_per_speaker.items()
     }
+    t_embed = time.time() - t1
 
     # --- Optional speaker merge (mirrors src/merge.py logic) ---
+    t2 = time.time()
     if use_merge:
         sys.path.insert(0, "/root")
         from cs_src.merge import merge_similar_speakers
@@ -1460,7 +1763,17 @@ def pipeline_diarize_and_embed(meeting_id: str, use_merge: bool = False) -> str:
         ]
         centroids = {k: v.tolist() for k, v in merged_centroids.items()}
 
+    t_merge = time.time() - t2
+
+    # Stage timing breakdown (issue: is the pipeline or the serial
+    # per-segment embedding loop the wall-clock hog?) — read these off the
+    # streamed logs of the next run before optimizing further.
     elapsed = time.time() - t0
+    print(f"  [timing] diarization pipeline: {t_diarize:.1f}s")
+    print(f"  [timing] embedding extraction: {t_embed:.1f}s "
+          f"({len(segments_data)} segments)")
+    if use_merge:
+        print(f"  [timing] speaker merge: {t_merge:.1f}s")
     print(f"  Diarization + embeddings done in {elapsed:.1f}s "
           f"({len(segments_data)} segments, {len(centroids)} speakers)")
 
