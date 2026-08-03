@@ -480,3 +480,53 @@ def test_live_an_inactive_person_who_is_an_active_candidate_is_findable(live_db)
     out = politicians.search_politicians_safe("andrew chase")
     assert [r["full_name"] for r in out["results"]] == ["Andrew Chase"]
     assert out["results"][0]["candidacy_warn"] is False
+
+
+# --- review_api delegation ---
+
+def test_review_api_delegates_to_the_direct_db_search(monkeypatch):
+    from gui import review_api
+    sentinel = {"results": [{"politician_id": "x", "display": "X"}], "error": None}
+    monkeypatch.setattr(politicians, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(politicians, "search_politicians_safe",
+                        lambda q, limit=10: sentinel)
+    assert review_api.search_politicians_safe("tiffany") is sentinel
+
+
+def test_review_api_falls_back_to_http_without_a_db_url(monkeypatch):
+    from gui import review_api
+    monkeypatch.setattr(politicians, "_db_url", lambda: None)
+    calls = []
+
+    def fake_http(q, limit=10):
+        calls.append(q)
+        return [{"id": "http-id", "slug": "http-slug", "full_name": "Tom Tiffany",
+                 "office_title": "U.S. Representative", "district_label": "",
+                 "government_name": "United States Federal Government",
+                 "is_incumbent": True}]
+
+    monkeypatch.setattr("src.essentials_client.search_politicians", fake_http)
+    out = review_api.search_politicians_safe("tiffany")
+    assert calls == ["tiffany"]
+    (r,) = out["results"]
+    assert r["politician_id"] == "http-id"
+    assert r["display"] == (
+        "Tom Tiffany · U.S. Representative · United States Federal Government")
+    # no DB means no candidacy data — the renderer must omit line 2, not lie
+    assert r["candidacy_display"] == ""
+    assert r["candidacy_warn"] is False
+    assert r["duplicate_note"] == ""
+
+
+def test_review_api_fallback_swallows_http_errors(monkeypatch):
+    from gui import review_api
+    from src.essentials_client import EssentialsClientError
+    monkeypatch.setattr(politicians, "_db_url", lambda: None)
+
+    def boom(q, limit=10):
+        raise EssentialsClientError("upstream down")
+
+    monkeypatch.setattr("src.essentials_client.search_politicians", boom)
+    out = review_api.search_politicians_safe("tiffany")
+    assert out["results"] == []
+    assert out["error"]
