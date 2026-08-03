@@ -4,9 +4,6 @@ Mirrors tests/test_gui_races.py: pure label/parse functions tested directly,
 the DB query tested through a fake cursor.
 """
 import json
-import os
-
-import pytest
 
 from gui import politicians
 from gui.politicians import (
@@ -440,26 +437,15 @@ def test_search_honours_an_explicit_limit(monkeypatch):
 # returns rows in the order given. These run only when DATABASE_URL is set.
 
 #
-# conftest's autouse _no_real_db_env deletes DATABASE_URL from os.environ for
-# EVERY test, so reading it inside a test body always yields None and the search
-# would return zero rows with error=None — these tests would "pass" their skip
-# check and then fail silently for the wrong reason. Per that fixture's own
-# instruction ("Tests that need these set them explicitly"), capture the URL at
-# import time — collection runs before fixtures — and hand it back to just these
-# three tests via `live_db`.
-_REAL_DB_URL = os.environ.get("DATABASE_URL")
-
-_needs_db = pytest.mark.skipif(not _REAL_DB_URL,
-                               reason="needs DATABASE_URL (live essentials schema)")
+# They take conftest's `live_db` fixture, which both skips them when no database
+# was provided and re-injects the URL that the autouse `_no_real_db_env` strips.
+# Capturing it here instead would be wrong: by the time this module is imported,
+# earlier test modules have done `import run_local`, which setdefault()s
+# DATABASE_URL from .env.local — so a local gate would read a leaked value and run
+# these against production on a bare `pytest tests/`. conftest is imported first,
+# which is why the capture lives there.
 
 
-@pytest.fixture
-def live_db(monkeypatch):
-    """Restore the real DATABASE_URL that conftest scrubbed, for live tests only."""
-    monkeypatch.setenv("DATABASE_URL", _REAL_DB_URL or "")
-
-
-@_needs_db
 def test_live_fanout_collapses_to_the_real_office(live_db):
     # Harriet M. Hageman holds BOTH "U.S. Representative" and the placeholder
     # "Candidate for U.S. Senate — Wyoming" in office_current_holder. One row must
@@ -473,7 +459,7 @@ def test_live_fanout_collapses_to_the_real_office(live_db):
     assert "U.S. Senate Wyoming" in hers[0]["candidacy_display"]
 
 
-@_needs_db
+
 def test_live_candidate_row_outranks_its_office_holding_twin(live_db):
     # Two Francesca Hong person rows exist; only one carries the WI Governor edge,
     # and it must sort FIRST so the curator's eye lands on the right one.
@@ -487,7 +473,7 @@ def test_live_candidate_row_outranks_its_office_holding_twin(live_db):
     assert all(r["duplicate_note"] for r in hongs)
 
 
-@_needs_db
+
 def test_live_an_inactive_person_who_is_an_active_candidate_is_findable(live_db):
     # is_active = false but candidate_status = active (Murphy TX council 2026).
     # Before the IN clause this returned zero — a silent "no such person".
