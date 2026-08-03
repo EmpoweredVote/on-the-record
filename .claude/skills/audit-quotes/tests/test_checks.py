@@ -24,6 +24,12 @@ def test_note_too_long_flagged():
     f = check_note_quality(row(editor_note=long))
     assert f and f.check_id == "note-too-long"
 
+def test_note_of_three_sentences_allowed():
+    """Two sentences stay the house preference, but an edited quote often needs a third to say
+    what was cut and why — a note that earns it is not a defect."""
+    three = "Trimmed from one longer sentence. The ellipsis drops a drafting aside. Verbatim otherwise."
+    assert check_note_quality(row(editor_note=three)) is None
+
 def test_good_note_passes():
     assert check_note_quality(row(editor_note="Clear housing supply position. Verbatim, no edits.")) is None
 

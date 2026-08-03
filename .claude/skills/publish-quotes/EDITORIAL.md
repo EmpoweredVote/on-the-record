@@ -94,9 +94,9 @@ that goes in the DB is the wording the public will see.
 
 ## Editor note (required)
 
-Every quote needs an `editor_note` — **two sentences max** (longer only when heavy editing needs
-explaining). Cover **why this quote / how it aligns with the candidate's current Compass stance**,
-and **if you edited it**, what changed (or "verbatim, no edits").
+Every quote needs an `editor_note` — **two sentences, three at the outside** (take the third only
+to explain a real edit). Cover **why this quote / how it aligns with the candidate's current
+Compass stance**, and **if you edited it**, what changed (or "verbatim, no edits").
 
 **Write it to stand alone:** a human who hasn't read the principles doc must understand it. Flag
 source weakness plainly ("campaign website, not verifiable to video"); don't cite section numbers
