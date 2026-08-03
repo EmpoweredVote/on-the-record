@@ -5,6 +5,7 @@ from scripts.verify_source import (
     longest_verbatim_match, phrase_found, check_source, MIN_RUN_WORDS,
     extract_page_text, starts_midsentence, cached_page_text,
     MIN_PAGE_WORDS, CACHE_TTL_SECONDS, nested_quotation,
+    prose_word_count, looks_like_pdf, PROSE_BLOCK_WORDS,
 )
 
 
@@ -416,6 +417,63 @@ def test_check_source_flags_js_shell_page_as_unfetchable_not_unverified():
     f = check_source(None, _written_row("I will abolish the federal income tax"),
                      fetch_page=_fetcher(shell))
     assert f is not None and f.check_id == "source-unfetchable"
+
+def test_check_source_flags_a_nav_only_page_as_unfetchable_not_unverified():
+    # A roll-call tally or link farm carries thousands of words in 1-3 word nav labels. It clears
+    # MIN_PAGE_WORDS easily, and calling that "the quote is not on this page" is a false
+    # accusation about a page we never read. 86 of 330 findings in the first sweep were this.
+    nav = "\n".join(["Roll Call Votes", "Legislative Activity", "Find Your Representative",
+                     "Search", "Committees", "Members", "About the Clerk"] * 40)
+    f = check_source(None, _written_row("I will abolish the federal income tax in my first term"),
+                     fetch_page=_fetcher(nav))
+    assert f is not None and f.check_id == "source-unfetchable"
+    assert len(nav.split()) > MIN_PAGE_WORDS          # it really did clear the old gate
+
+def test_check_source_still_flags_unverified_on_a_bulleted_platform_page():
+    # The prose gate must not swallow real findings: campaign platform pages are legitimately
+    # written as short bullets, and they are where most true positives come from.
+    page = "\n".join([
+        "End inflation by stopping reckless deficit spending today.",
+        "Lower housing costs through actual homesteading, not more bureaucracy.",
+        "Protect Social Security and Medicare from every proposed cut.",
+        "Secure the border and finish building the southern wall.",
+        "Restore parental rights in every public school in this state.",
+        "Cut red tape so small businesses can hire more people.",
+    ])
+    f = check_source(None, _written_row("I will abolish the federal income tax in my first term"),
+                     fetch_page=_fetcher(page))
+    assert f is not None and f.check_id == "source-unverified"
+
+def test_check_source_verifies_a_page_whose_only_prose_is_the_quote():
+    # Regression guard for the reorder: readability is judged AFTER the match, so a sparse page
+    # that does carry the quote can never be dismissed as unreadable.
+    page = "Home\nAbout\nDonate\nWe will raise the minimum wage to fifteen dollars an hour.\nContact"
+    row = _written_row("We will raise the minimum wage to fifteen dollars an hour.")
+    assert check_source(None, row, fetch_page=_fetcher(page)) is None
+
+def test_check_source_flags_a_pdf_source_as_unfetchable():
+    f = check_source(None, _written_row("whatever the roll call says",
+                                        "https://example.org/2025-senate-roll-call.pdf"),
+                     fetch_page=_fetcher("%PDF-1.7 binary garbage here"))
+    assert f is not None and f.check_id == "source-unfetchable"
+    assert "PDF" in f.what
+
+def test_check_source_detects_a_pdf_served_without_an_extension():
+    f = check_source(None, _written_row("whatever the questionnaire says",
+                                        "https://example.org/download?doc=17"),
+                     fetch_page=_fetcher("%PDF-1.4\n%\xe2\xe3\xcf\xd3 more binary"))
+    assert f is not None and f.check_id == "source-unfetchable"
+
+def test_pdf_detection_ignores_query_strings_and_fragments():
+    assert looks_like_pdf("https://x.org/a.pdf?v=2", "") is True
+    assert looks_like_pdf("https://x.org/a.pdf#page=3", "") is True
+    assert looks_like_pdf("https://x.org/pdfs/article", "<html>real page</html>") is False
+
+def test_prose_word_count_separates_navigation_from_prose():
+    nav = "\n".join(["Home", "About Us", "Contact", "Donate Now", "Privacy Policy"] * 30)
+    assert prose_word_count(nav) == 0
+    prose = "We will raise the minimum wage to fifteen dollars an hour for every worker."
+    assert prose_word_count(prose) >= PROSE_BLOCK_WORDS
 
 def test_check_source_accepts_html_and_extracts_it():
     html = "<html><body><script>junk</script><p>" + _ISSUES_PAGE + "</p></body></html>"

@@ -88,11 +88,8 @@ def backfill(*, dry_run: bool = False) -> int:
         meeting = _meeting_for(meeting_id)
         attach_thumbnail(meeting, mdir)
         if getattr(meeting, "thumbnail_url", None) and hasattr(meeting, "to_dict"):
-            from gui.review_api import _atomic_write_text
-            _atomic_write_text(
-                mdir / "transcript_named.json",
-                json.dumps(meeting.to_dict(), indent=2),
-            )
+            from src.atomic_io import atomic_write_json
+            atomic_write_json(mdir / "transcript_named.json", meeting.to_dict())
         if (mdir / "thumbnail.jpg").exists():
             made += 1
             print(f"  OK   {meeting_id}")

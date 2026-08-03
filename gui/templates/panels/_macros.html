@@ -8,6 +8,17 @@
   </div>
   {% if c.speaker_status == "unidentified" %}<span class="statusbadge unident">unidentified</span>{% endif %}
   {% if c.speaker_status == "non_speaker" %}<span class="statusbadge nonspk">not-a-speaker</span>{% endif %}
+  {% if c.duplicate_labels %}
+  <div class="dup-name">
+    ⚠ Same name as {{ c.duplicate_labels|join(', ') }} — two labels can't be the same person
+    {% for other in c.duplicate_labels %}
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge-inline">
+      <input type="hidden" name="target" value="{{ other }}">
+      <button type="submit">Merge into {{ other }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% for hname, hscore in c.hints %}
     <div class="hint">▸ voice match: {{ hname }} ({{ '%.2f'|format(hscore) }})</div>
   {% endfor %}

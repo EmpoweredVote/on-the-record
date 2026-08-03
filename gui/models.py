@@ -196,6 +196,7 @@ class SpeakerCard:
     thin_sample: bool = False     # < ENROLL_MIN_SPEECH_SECONDS of speech
     profile_meetings: int = 0     # distinct meetings the stored voice profile draws from
     profile_samples: int = 0      # voice samples (embeddings) in the stored profile
+    duplicate_labels: list[str] = field(default_factory=list)  # other labels sharing this speaker's name
 
     @property
     def profile_strength(self) -> str:
@@ -265,6 +266,7 @@ class ReviewPageData:
     hls_url: Optional[str] = None  # set when the source is an HLS .m3u8 (e.g. House Clerk CDN): review streams it via hls.js
     needs_attention: list[SpeakerCard] = field(default_factory=list)
     confirmed: list[SpeakerCard] = field(default_factory=list)
+    warnings: list[dict] = field(default_factory=list)  # review.enrollment_warnings dicts
 
     @property
     def speaker_count(self) -> int:
