@@ -60,18 +60,25 @@ stitching logic is locally testable without Modal.
    to absolute meeting time. Also returns, per chunk-local speaker: centroid embedding and
    total speech seconds (needed for weighting and for the representative choice at merge).
 
-2. **Stitcher** — `src/diarize_stitch.py`, pure: `stitch_chunks(chunks, threshold) ->
-   (turns, centroids, log)`. Walks chunks in time order maintaining a global speaker table.
-   For each chunk it builds the cosine-similarity matrix between chunk-local centroids and
-   global centroids and solves a **one-to-one assignment** (`scipy.optimize.
-   linear_sum_assignment`), accepting only pairs at or above `threshold`; unmatched locals
-   become new global speakers. Global centroids update as duration-weighted running means.
+2. **Reconciler** — `src/speaker_reconcile.py`, pure, **extracted from `src/vibevoice.py`
+   rather than newly written** (see the plan's REVISION section): `reconcile_chunks(chunks,
+   embedding_threshold, min_embedding_speech_seconds, label_prefix)`. It matches
+   **temporally first** — speakers whose turns physically overlap inside the shared overlap
+   region — and only then by centroid similarity, greedy highest-first against a
+   `used_globals` set. Global centroids update as duration-weighted running means, and
+   `_ownership_bounds` assigns each second of audio to exactly one window at the overlap
+   midpoint.
 
-   One-to-one is not an optimization — it is the correctness constraint. Two distinct
-   speakers *within* a chunk are distinct people by that chunk's own clustering, so they
-   must never collapse into one global speaker (the identity-collision lesson from the
-   `interview-chris-swanson` conflation). Greedy nearest-match can violate this; the
-   assignment solve cannot.
+   Matching is **one-to-one per chunk**: two speakers a chunk's own clustering called
+   distinct are distinct people and must never collapse into one global speaker (the
+   identity-collision lesson from the `interview-chris-swanson` conflation). Greedy
+   highest-first with a used-set satisfies that, and — unlike the optimal-assignment
+   version this spec originally proposed — it cannot displace a perfect match onto a worse
+   global in pursuit of a higher total similarity. Reusing the existing reconciler also
+   brought guards a new module lacked: non-finite embedding rejection and a
+   `MIN_EMBEDDING_SPEECH_SECONDS = 3.0` floor so thin evidence never sets a voiceprint.
+   Temporal matching turned out to supply 7–19 matches per meeting that centroid
+   similarity alone would have missed, so this was the build's biggest quality decision.
 
 3. **Orchestrator** — chunked branch in `src/modal_compute.run_diarization`: compute
    windows from the local audio duration, fan out with Modal `.starmap` (concurrent),
@@ -84,9 +91,10 @@ inference), so voice-profile enrollment and identification are unaffected.
 
 ## Contract and configuration
 
-- `config.DIARIZE_CHUNK_MINUTES` (default **0 = off**, single-pass) and
-  `config.DIARIZE_CHUNK_OVERLAP_SECONDS` (default 60), plus
-  `config.CHUNK_STITCH_THRESHOLD` (default 0.80, matching `SPEAKER_MERGE_THRESHOLD`).
+- `config.DIARIZE_CHUNK_MINUTES` (**60 as calibrated** — was 0/off until the gate passed),
+  `config.DIARIZE_CHUNK_OVERLAP_SECONDS` (60), and
+  `config.DIARIZE_CHUNK_STITCH_THRESHOLD` (**0.50 as calibrated**; deliberately separate
+  from `speaker_reconcile.EMBEDDING_MATCH_THRESHOLD = 0.75`, which VibeVoice still uses).
 - CLI: `run_local.py --diarize-chunk-minutes N` overrides the config for one run.
 - Meetings shorter than one chunk fall through to the existing single-pass path
   untouched — no behaviour change for short meetings.
@@ -137,3 +145,74 @@ Whisper/transcription chunking (already free via CATS VTT); using the overlap re
 *verify* stitching rather than only to provide context; a different diarizer (NeMo, paid
 pyannote API); GUI exposure of the chunk flag. The A100/`cpu=16` changes from PR #130 are
 reverted — the probe and `[timing]` instrumentation are kept.
+
+## Calibration results (2026-08-01/03) — SHIPPING ENABLED at 60 min / 0.50
+
+Method: for each meeting the **single-pass output is the reference** (the honest
+question is "does chunking change what we ship", not "is pyannote correct"), scored with
+`bench.score.calculate_der`. `scripts/sweep_chunk_thresholds.py` pays for the GPU chunk
+work once per chunk size, caches the payloads, and then re-stitches locally across a
+threshold grid — so the whole threshold search costs no GPU at all.
+
+### The chosen configuration
+
+`DIARIZE_CHUNK_MINUTES = 60`, `DIARIZE_CHUNK_STITCH_THRESHOLD = 0.50`.
+
+| meeting | audio | ref speakers | DER | speakers | drift | slowest window | single-pass | speedup |
+|---|---|---|---|---|---|---|---|---|
+| May 6 | 244 min | 42 | **0.0589** | 43 | **+2.4%** | 110s | 3586s | **33×** |
+| June 10 | 298 min | 41 | **0.0439** | 49 | +19.5% | 111s | 7100s | **64×** |
+| July 29 | 82 min | 14 | n/a — **does not chunk** | — | — | — | 584s | 1× |
+
+At 60-minute windows a meeting under ~90 minutes falls through to a single window, i.e.
+literally today's single-pass path with byte-identical output. Chunking therefore engages
+only above ~90 minutes, which is exactly where the single-pass cost is intolerable, and
+short meetings carry zero risk. July 29's row is deliberately marked n/a rather than
+"pass": no chunking happens there, so counting it as passing evidence would be vacuous.
+
+### Why 0.50, and why not lower
+
+Same-person centroids score as low as ~0.55 **across** windows, because a per-window
+centroid averages over far fewer turns than a whole-meeting one. VibeVoice's inherited
+0.75 therefore fragments badly (June 10: 56 speakers vs 41). Sweeping down:
+
+| June 10, 60-min | 0.75 | 0.65 | 0.60 | 0.55 | **0.50** | 0.45 |
+|---|---|---|---|---|---|---|
+| DER | .0681 | .0542 | .0542 | .0469 | **.0439** | .0555 ↑ |
+| speakers | 56 | 53 | 53 | 50 | **49** | 47 |
+
+DER bottoms at 0.50 and climbs again at 0.45 while the speaker count keeps falling — that
+is the **conflation cliff**: genuinely different people beginning to merge. 0.50 is the
+bottom of that U on the hardest meeting, and July 29's independent optimum landed at
+0.55, so the value is not fitted to one meeting.
+
+The two error modes are deliberately **not** treated as equivalent. Fragmentation (one
+person as two speakers) surfaces as an extra unnamed speaker that the GUI review gate
+catches. Conflation (two people as one) silently misattributes quotes — the
+identity-collision failure this repo has already been burned by. So every judgment call
+here errs toward the higher threshold.
+
+### What the sweep also settled
+
+- **30-minute windows fail everywhere on long meetings** (June 10 best: DER 0.128 at any
+  threshold). DER improves with window size; drift worsens with it. The two gates pull in
+  opposite directions, and 60 min is where both clear.
+- **`merge_similar_speakers` contributes nothing post-reconcile** — identical results at
+  merge thresholds 0.80/0.75/0.70. Everything mergeable is already handled by
+  reconciliation; the call is retained only for parity with the single-pass path.
+- **Temporal matching earns its place**: 7–19 matches per meeting come from turn overlap
+  in the seam region, a signal per-window centroids cannot provide. Reusing vibevoice's
+  reconciler (which already had it) rather than the purpose-built Hungarian stitcher was
+  the single biggest quality decision in this build.
+
+### Residual risk, accepted knowingly
+
+June 10's +19.5% drift is the weak point: 49 speakers where single-pass found 41, i.e. ~8
+extra labels for a reviewer to name or merge on a 5-hour meeting. May 6 shows +2.4% on a
+244-minute meeting, so this is the outlier rather than the norm, and the cost is reviewer
+time rather than published error — the review gate stands between chunked output and
+publication. Watch the speaker count on the next long meeting; if drift regresses toward
+June 10's figure routinely, the next step is architectural, not another threshold: chunk
+for segmentation, then re-cluster identity **globally over per-turn embeddings** (measured
+at ~20s for 2811 segments), which replaces window-centroid matching with the global view
+that single-pass gets for free.

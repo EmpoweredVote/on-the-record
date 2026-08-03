@@ -92,11 +92,25 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 
 # Chunked diarization (see docs/superpowers/specs/2026-07-31-chunked-parallel-diarization-design.md).
 # 0 disables chunking (single-pass diarization, the pre-2026-08 behaviour).
-DIARIZE_CHUNK_MINUTES = 0
+# 60 was chosen by calibration: diarization cost is ~quadratic in window
+# length, and a meeting shorter than one chunk falls through to the untouched
+# single-pass path — so chunking engages only above ~90 min, which is exactly
+# where the single-pass cost (118 min on the 5-hour June 10 meeting) hurts.
+# Measured on June 10 at 60 min / threshold 0.50: DER 0.0439 vs single-pass,
+# 49 speakers vs 41, slowest window 111s vs 7100s.
+DIARIZE_CHUNK_MINUTES = 60
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # Cosine similarity required to call a chunk-local speaker the same person as
-# an already-seen global speaker. The single source of truth for this is
-# src.speaker_reconcile.EMBEDDING_MATCH_THRESHOLD, not a config knob here.
+# an already-seen global speaker across windows. Deliberately LOWER than
+# src.speaker_reconcile.EMBEDDING_MATCH_THRESHOLD (0.75, tuned for VibeVoice's
+# 50-min windows): per-window pyannote centroids average over fewer turns, so
+# the same person scores as low as ~0.55 across a seam and 0.75 fragments them
+# badly (June 10: 56 speakers vs 41). Do not lower this further without
+# re-running scripts/sweep_chunk_thresholds.py — below 0.50 the DER starts
+# climbing again as genuinely different people begin merging, and conflation
+# is far worse than fragmentation (a human reviewer sees an extra unnamed
+# speaker, but silently merged speakers misattribute quotes).
+DIARIZE_CHUNK_STITCH_THRESHOLD = 0.50
 
 # --- Post-identification segment merging ---
 SEGMENT_MERGE_GAP = 2.0  # merge adjacent same-speaker segments with gap < this (seconds)

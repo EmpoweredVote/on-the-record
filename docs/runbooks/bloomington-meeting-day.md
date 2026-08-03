@@ -75,6 +75,17 @@ CATS usually posts within a day or two of the meeting.
 - `--no-review` skips terminal review so the pipeline runs to completion
   unattended; review happens in the GUI next (same flow as July 22).
 - The other flags are the July 22 council standard.
+- **Long meetings diarize in parallel windows automatically.** `DIARIZE_CHUNK_MINUTES = 60`
+  means a meeting over ~90 minutes is split into 60-minute windows fanned out across Modal
+  containers, with speaker labels unified afterwards by voice embedding + turn overlap at
+  the seams. Measured: the 5-hour June 10 meeting went from 7100s to a 111s slowest window
+  (64x), the 244-minute May 6 meeting from 3586s to 110s (33x). A meeting UNDER ~90 minutes
+  is a single window, i.e. exactly the old single-pass path with identical output — nothing
+  changes for a typical 80-minute session.
+- Expect a few extra speakers to name in review on very long meetings: chunking errs toward
+  splitting a person into two labels rather than merging two people into one (June 10: 49
+  speakers vs 41 single-pass; May 6: 43 vs 42). Force the old behaviour for one run with
+  `--diarize-chunk-minutes 0`.
 
 ## 3. Review speakers in the GUI
 

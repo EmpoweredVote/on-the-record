@@ -124,10 +124,10 @@ def stitch_chunk_payloads(
     """
     import numpy as np
 
+    from . import config
     from .merge import merge_similar_speakers
     from .models import Segment
     from .speaker_reconcile import (
-        EMBEDDING_MATCH_THRESHOLD,
         ChunkResult,
         ChunkWindow,
         LocalTurn,
@@ -135,7 +135,10 @@ def stitch_chunk_payloads(
     )
 
     if embedding_threshold is None:
-        embedding_threshold = EMBEDDING_MATCH_THRESHOLD
+        # NOT speaker_reconcile's 0.75 default — that is tuned for VibeVoice's
+        # windows and fragments pyannote per-window centroids. See the config
+        # comment for the calibration behind this value.
+        embedding_threshold = config.DIARIZE_CHUNK_STITCH_THRESHOLD
 
     chunks: list[ChunkResult] = []
     # local_speaker -> {(chunk_index, local_speaker): (centroid, weight)} for
