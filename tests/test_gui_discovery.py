@@ -154,3 +154,15 @@ def test_new_form_prefills_from_query(monkeypatch):
     assert 'value="r1"' in body
     assert 'value="us-senate-tx-general"' in body
     assert "TX · U.S. Senate" in body
+    import re
+    chosen = re.search(r'<div class="race-chosen" id="f-race-chosen"([^>]*)>', body).group(1)
+    assert "hidden" not in chosen
+
+
+def test_new_form_race_chosen_hidden_when_not_prefilled():
+    client = TestClient(create_app())
+    resp = client.get("/new")
+    body = resp.text
+    import re
+    chosen = re.search(r'<div class="race-chosen" id="f-race-chosen"([^>]*)>', body).group(1)
+    assert "hidden" in chosen

@@ -55,7 +55,7 @@
           <div class="race-search" id="f-race" data-search-url="/api/races/search">
             <input type="text" id="f-race-input" placeholder="Search a race… (e.g. KS governor GOP primary)" autocomplete="off">
             <div class="race-results" id="f-race-results"></div>
-            <div class="race-chosen" id="f-race-chosen" hidden>{{ prefill.race_label or '' }}</div>
+            <div class="race-chosen" id="f-race-chosen"{% if not prefill.race_label %} hidden{% endif %}>{{ prefill.race_label or '' }}</div>
           </div>
           <input type="hidden" name="race_id" id="f-race-id" value="{{ prefill.race_id or '' }}">
           <input type="hidden" name="race_slug" id="f-race-slug" value="{{ prefill.race_slug or '' }}">
