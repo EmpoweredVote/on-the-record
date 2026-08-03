@@ -42,6 +42,10 @@ Source tiers: 1 = debate/candidate forum; 2 = news interview; 3 = prepared publi
 remarks (stump speech, town hall, testimony); 4 = candidate-bylined written.
 "original_vs_clip": "original" = the full event / substantial segment where the
 candidate speaks at length; "clip" = a short excerpt or a package about them.
+Set "relevant" to true ONLY for original sources of the candidates' own words —
+i.e. when original_vs_clip is "original". News packages ABOUT candidates, campaign
+ads, and highlight/clip compilations are relevant=false even when the candidate
+appears or is quoted in them.
 If captions are provided, judge DISCOURSE SHAPE: sustained first-person policy
 speech and moderator/Q&A signatures suggest an original event; third-person
 anchor narration with soundbites suggests a news package. Do not guess who is
