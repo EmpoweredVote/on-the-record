@@ -52,8 +52,8 @@ def match_names(title: "str | None", description: "str | None",
     return out
 
 
-def _has_event_term(title: "str | None") -> bool:
-    t = normalize(title)
+def _has_event_term(title: "str | None", description: "str | None") -> bool:
+    t = f"{normalize(title)} {normalize(description)}"
     return any(normalize(term) in t for term in EVENT_TERMS)
 
 
@@ -62,6 +62,6 @@ def prefilter_item(title, description, duration_seconds, full_names) -> Prefilte
     sig = duration_signal(duration_seconds)
     if not matched:
         return PrefilterVerdict(False, [], sig, "no tracked candidate name")
-    if sig == "short" and not _has_event_term(title):
+    if sig == "short" and not _has_event_term(title, description):
         return PrefilterVerdict(False, matched, sig, "short clip without event term")
     return PrefilterVerdict(True, matched, sig, "name match")
