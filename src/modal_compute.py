@@ -79,27 +79,18 @@ def plan_chunk_windows(
     return windows
 
 
-def _run_chunked_diarization(
-    app, wav_path: Path, meeting_id: str, chunk_minutes: int, use_merge: bool
-) -> tuple[list[dict], dict[str, list[float]]]:
-    """Fan canonical windows out across Modal containers, then reconcile.
+def fetch_chunk_payloads(
+    app, wav_path: Path, meeting_id: str, chunk_minutes: int
+) -> list[str]:
+    """Fan canonical windows out across Modal containers; return raw payloads.
 
-    Diarization cost is ~quadratic in window length (measured), so N windows
-    cost ~1/N of one pass AND run concurrently. Each worker call reads its
-    canonical span plus overlap for context and returns turns over that
-    whole (unclipped) read window; `src.speaker_reconcile.reconcile_chunks`
-    matches window-local labels into stable meeting-wide labels (temporal
-    overlap first, then embedding similarity), and the existing
-    `merge_similar_speakers` then handles within-meeting fragmentation
-    exactly as the single-pass path does.
+    This is the expensive half of chunked diarization (all the GPU time).
+    Split from `stitch_chunk_payloads` so calibration can pay for the GPU
+    work once and then re-stitch the same payloads at many thresholds for
+    free — stitching is pure local code.
     """
-    import numpy as np
-
     from . import config
     from .audio_utils import get_audio_duration
-    from .merge import merge_similar_speakers
-    from .models import Segment
-    from .speaker_reconcile import ChunkResult, ChunkWindow, LocalTurn, reconcile_chunks
 
     duration = get_audio_duration(wav_path)
     windows = plan_chunk_windows(duration, chunk_minutes)
@@ -113,7 +104,38 @@ def _run_chunked_diarization(
         for index, (start, end) in enumerate(windows)
     ]
     with app.app.run():
-        payloads = list(app.diarize_chunk_window.starmap(args))
+        return list(app.diarize_chunk_window.starmap(args))
+
+
+def stitch_chunk_payloads(
+    payloads: list[str],
+    use_merge: bool,
+    embedding_threshold: float | None = None,
+    merge_threshold: float | None = None,
+) -> tuple[list[dict], dict[str, list[float]]]:
+    """Reconcile window payloads into the standard (segments, centroids) pair.
+
+    Pure (no Modal, no GPU): `src.speaker_reconcile.reconcile_chunks` matches
+    window-local labels into stable meeting-wide labels (temporal overlap
+    first, then embedding similarity), then the existing
+    `merge_similar_speakers` handles residual fragmentation exactly as the
+    single-pass path does. Both thresholds are overridable so calibration can
+    sweep them against cached payloads.
+    """
+    import numpy as np
+
+    from .merge import merge_similar_speakers
+    from .models import Segment
+    from .speaker_reconcile import (
+        EMBEDDING_MATCH_THRESHOLD,
+        ChunkResult,
+        ChunkWindow,
+        LocalTurn,
+        reconcile_chunks,
+    )
+
+    if embedding_threshold is None:
+        embedding_threshold = EMBEDDING_MATCH_THRESHOLD
 
     chunks: list[ChunkResult] = []
     # local_speaker -> {(chunk_index, local_speaker): (centroid, weight)} for
@@ -142,7 +164,9 @@ def _run_chunked_diarization(
     print(f"  Slowest window: {slowest_elapsed:.0f}s "
           f"(vs one single-pass call over the whole meeting)")
 
-    result = reconcile_chunks(chunks, label_prefix="SPEAKER_")
+    result = reconcile_chunks(
+        chunks, embedding_threshold=embedding_threshold, label_prefix="SPEAKER_"
+    )
     diag = result.diagnostics
     print(f"  Reconciled to {len({t.speaker for t in result.turns})} global "
           f"speaker(s): {len(diag['temporal_matches'])} temporal match(es), "
@@ -209,7 +233,8 @@ def _run_chunked_diarization(
             for d in segments_data
         ]
         merged_segs, merged_centroids, merge_log = merge_similar_speakers(
-            segs, {k: np.array(v) for k, v in centroids.items()}
+            segs, {k: np.array(v) for k, v in centroids.items()},
+            threshold=merge_threshold,
         )
         if merge_log:
             print(f"  Post-reconcile merge: {merge_log}")
@@ -227,6 +252,14 @@ def _run_chunked_diarization(
         centroids = {k: v.tolist() for k, v in merged_centroids.items()}
 
     return segments_data, centroids
+
+
+def _run_chunked_diarization(
+    app, wav_path: Path, meeting_id: str, chunk_minutes: int, use_merge: bool
+) -> tuple[list[dict], dict[str, list[float]]]:
+    """Chunked diarization end to end: fan out to Modal, then stitch locally."""
+    payloads = fetch_chunk_payloads(app, wav_path, meeting_id, chunk_minutes)
+    return stitch_chunk_payloads(payloads, use_merge)
 
 
 def upload_audio(wav_path: Path, meeting_id: str) -> None:
