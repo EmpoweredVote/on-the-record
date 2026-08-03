@@ -73,6 +73,13 @@ class DiscoveredRow:
     def confidence_label(self) -> str:
         return f"{self.confidence:.2f}" if self.confidence is not None else "—"
 
+    @property
+    def safe_url(self) -> Optional[str]:
+        """self.url, but only when it's an http(s) link — never render an
+        unvetted scheme (javascript:, data:, ...) as an href."""
+        u = (self.url or "").strip()
+        return u if u.startswith(("http://", "https://")) else None
+
 
 def _to_row(r) -> DiscoveredRow:
     return DiscoveredRow(*r)
@@ -145,19 +152,8 @@ def health() -> dict:
         conn = psycopg2.connect(url)
         try:
             with conn.cursor() as cur:
-                cur.execute("""
-                    select p.race_id::text, p.race_label, p.election_date::text
-                    from essentials.readrank_race_pipeline p
-                    where p.race_id is not null and p.status = 'needs_quotes'
-                      and p.election_date between current_date
-                          and current_date + interval '30 days'
-                      and not exists (
-                          select 1 from essentials.discovered_sources d
-                          where d.race_id = p.race_id
-                            and d.status in ('approved','ingested'))
-                    order by p.election_date
-                """)
-                alarms = cur.fetchall()
+                from src.discovery.db import alarm_races
+                alarms = alarm_races(cur, days=30)
                 cur.execute("""
                     select name from essentials.source_outlets
                     where active and (last_polled_at is null
@@ -204,7 +200,8 @@ def race_slug_for(race_id: "str | None") -> str:
 
 
 def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
-    """Flywheel: insert the row's channel as an active outlet."""
+    """Flywheel: insert the row's channel as an active outlet, reviving it
+    if a prior (now-deactivated) row already claims this feed_url."""
     if not row.channel_id:
         return False, "no channel id on this item"
     url = _db_url()
@@ -219,14 +216,13 @@ def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
                     insert into essentials.source_outlets
                       (name, kind, feed_url, external_channel_id, added_via)
                     values (%s, 'youtube_channel', %s, %s, 'flywheel')
-                    on conflict (feed_url) do nothing
+                    on conflict (feed_url) do update set active = true, updated_at = now()
                     returning id
                 """, (row.channel_name or row.channel_id, feed_url, row.channel_id))
-                inserted = cur.fetchone() is not None
+                cur.fetchone()
             conn.commit()
-            return True, ("watching " + (row.channel_name or row.channel_id)
-                          if inserted else "already watching")
+            return True, "watching " + (row.channel_name or row.channel_id)
         finally:
             conn.close()
-    except Exception as exc:
-        return False, f"failed: {exc}"
+    except Exception:
+        return False, "failed to add outlet (db error)"

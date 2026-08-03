@@ -1,8 +1,16 @@
+from urllib.parse import parse_qs, urlparse
+
+import pytest
 from fastapi.testclient import TestClient
 
 from gui.app import create_app
 import gui.discovery as discovery
 from gui.discovery import DiscoveredRow
+
+
+def _flash(resp):
+    """Decoded value of the ?flash= query param on a redirect response."""
+    return parse_qs(urlparse(resp.headers["location"]).query).get("flash", [""])[0]
 
 
 def _row(**over):
@@ -137,7 +145,7 @@ def test_watch_channel_calls_flywheel(monkeypatch):
     assert resp.status_code == 303 and "watching" in resp.headers["location"]
 
 
-def test_new_form_prefills_from_query(monkeypatch):
+def test_new_form_prefills_from_query(monkeypatch, tmp_meetings_dir):
     monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
     client = TestClient(create_app())
     resp = client.get("/new", params={
@@ -159,10 +167,205 @@ def test_new_form_prefills_from_query(monkeypatch):
     assert "hidden" not in chosen
 
 
-def test_new_form_race_chosen_hidden_when_not_prefilled():
+def test_new_form_race_chosen_hidden_when_not_prefilled(tmp_meetings_dir):
     client = TestClient(create_app())
     resp = client.get("/new")
     body = resp.text
     import re
     chosen = re.search(r'<div class="race-chosen" id="f-race-chosen"([^>]*)>', body).group(1)
     assert "hidden" in chosen
+
+
+# --- I1: status guard on the four POST actions (double-click = double ingest) ---
+
+def test_approve_ingest_blocks_non_pending_status(monkeypatch):
+    import gui.batch as batch
+    calls = {"enqueued": False}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="ingested"))
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: calls.update(enqueued=True) or ("started", "mid"))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "already" in _flash(resp)
+    assert calls["enqueued"] is False
+
+
+def test_quote_source_blocks_non_pending_status(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="rejected"))
+    calls = {"set_status": False}
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: calls.update(set_status=True) or True)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "already" in _flash(resp)
+    assert calls["set_status"] is False
+
+
+def test_reject_blocks_non_pending_status(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="approved"))
+    calls = {"set_status": False}
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: calls.update(set_status=True) or True)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject", data={"reason": "other"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert "already" in _flash(resp)
+    assert calls["set_status"] is False
+
+
+# --- I2: surface set_status failures in the flash ---
+
+def test_reject_flash_surfaces_save_failure(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: False)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject", data={"reason": "clip-not-original"},
+                       follow_redirects=False)
+    assert "SAVE FAILED" in _flash(resp)
+
+
+def test_quote_source_flash_surfaces_save_failure(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: False)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
+    assert "SAVE FAILED" in _flash(resp)
+
+
+def test_approve_ingest_flash_surfaces_save_failure(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: False)
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda p: ("started", "mid"))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert "SAVE FAILED" in _flash(resp)
+
+
+# --- I3: race-anchored items keep their race even when kind is a generic bucket ---
+
+def test_approve_ingest_coerces_community_meeting_to_forum_when_race_set(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    launched = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(event_kind_guess="community_meeting"))
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: True)
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    def fake_enqueue(p):
+        launched["params"] = p
+        return ("started", "mid")
+
+    monkeypatch.setattr(batch, "launch_or_enqueue", fake_enqueue)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert resp.status_code == 303
+    p = launched["params"]
+    assert p.event_kind == "forum"
+    assert p.race_id == "r1"
+    assert p.meeting_type == "Candidate Forum"
+
+
+# --- M2: published_at renders as a date, not a raw timestamptz ---
+
+def test_discovery_page_truncates_published_at_to_date(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda: [_row(published_at="2026-08-01 14:30:00+00")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    body = resp.text
+    assert "2026-08-01" in body
+    assert "14:30" not in body
+
+
+# --- M5: scheme-filter r.url so an unsafe scheme never becomes an href ---
+
+def test_discovery_page_blocks_unsafe_url_scheme(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda: [_row(url="javascript:alert(1)")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert 'href="javascript:' not in resp.text
+
+
+# --- M11: missing branch coverage (monkeypatch-based, cheap) ---
+
+def test_approve_ingest_none_kind_coerces_to_news_clip_with_race(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    launched = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(event_kind_guess=None))
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: True)
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    def fake_enqueue(p):
+        launched["params"] = p
+        return ("started", "mid")
+
+    monkeypatch.setattr(batch, "launch_or_enqueue", fake_enqueue)
+    client = TestClient(create_app())
+    client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    p = launched["params"]
+    assert p.event_kind == "news_clip"
+    assert p.race_id == "r1"
+
+
+def test_approve_ingest_none_published_at_defaults_to_today(monkeypatch):
+    import datetime as dt
+    import gui.batch as batch
+    import gui.runner as runner
+    launched = {}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(published_at=None))
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: True)
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    def fake_enqueue(p):
+        launched["params"] = p
+        return ("started", "mid")
+
+    monkeypatch.setattr(batch, "launch_or_enqueue", fake_enqueue)
+    client = TestClient(create_app())
+    client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert launched["params"].date == dt.date.today().isoformat()
+
+
+def test_approve_ingest_value_error_flashes_error_and_skips_status(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    calls = {"set_status": False}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: calls.update(set_status=True) or True)
+
+    def raise_value_error(p):
+        raise ValueError("bad input")
+
+    monkeypatch.setattr(batch, "launch_or_enqueue", raise_value_error)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert _flash(resp).startswith("error:")
+    assert calls["set_status"] is False
+
+
+@pytest.mark.parametrize("path", [
+    "/discovery/d1/approve-ingest",
+    "/discovery/d1/quote-source",
+    "/discovery/d1/reject",
+    "/discovery/d1/watch-channel",
+])
+def test_missing_row_404s_across_all_actions(monkeypatch, path):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: None)
+    client = TestClient(create_app())
+    resp = client.post(path, follow_redirects=False)
+    assert resp.status_code == 404

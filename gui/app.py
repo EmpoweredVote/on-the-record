@@ -106,12 +106,19 @@ def create_app() -> FastAPI:
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
+        if row.status != "pending":
+            return _discovery_redirect(f"already {row.status}")
         existing = runner.find_meeting_by_source(row.url)
         if existing:
-            discovery.set_status(row_id, "superseded",
-                                 reason=f"already ingested as {existing}")
-            return _discovery_redirect(f"duplicate of {existing}")
+            ok = discovery.set_status(row_id, "superseded",
+                                      reason=f"already ingested as {existing}")
+            flash = f"duplicate of {existing}"
+            if not ok:
+                flash += " — SAVE FAILED, retry"
+            return _discovery_redirect(flash)
         kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
+        if kind in ("community_meeting", "other") and row.race_id:
+            kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)
         fields = FIELDS_BY_KIND.get(kind, ())
         race_id = row.race_id if "race" in fields else None
         params = RunParams(
@@ -130,24 +137,39 @@ def create_app() -> FastAPI:
             outcome, meeting_id = batch.launch_or_enqueue(params)
         except ValueError as exc:
             return _discovery_redirect(f"error: {exc}")
-        discovery.set_status(row_id, "ingested")
-        return _discovery_redirect(f"{outcome}: {meeting_id or params.title}")
+        ok = discovery.set_status(row_id, "ingested")
+        flash = f"{outcome}: {meeting_id or params.title}"
+        if not ok:
+            flash += " — SAVE FAILED, retry"
+        return _discovery_redirect(flash)
 
     @app.post("/discovery/{row_id}/quote-source")
     def discovery_quote_source(row_id: str):
         from gui import discovery
-        if discovery.get_row(row_id) is None:
+        row = discovery.get_row(row_id)
+        if row is None:
             raise HTTPException(status_code=404)
-        discovery.set_status(row_id, "approved")
-        return _discovery_redirect("approved as quote source")
+        if row.status != "pending":
+            return _discovery_redirect(f"already {row.status}")
+        ok = discovery.set_status(row_id, "approved")
+        flash = "approved as quote source"
+        if not ok:
+            flash += " — SAVE FAILED, retry"
+        return _discovery_redirect(flash)
 
     @app.post("/discovery/{row_id}/reject")
     def discovery_reject(row_id: str, reason: str = Form("other")):
         from gui import discovery
-        if discovery.get_row(row_id) is None:
+        row = discovery.get_row(row_id)
+        if row is None:
             raise HTTPException(status_code=404)
-        discovery.set_status(row_id, "rejected", reason=reason)
-        return _discovery_redirect("rejected")
+        if row.status != "pending":
+            return _discovery_redirect(f"already {row.status}")
+        ok = discovery.set_status(row_id, "rejected", reason=reason)
+        flash = "rejected"
+        if not ok:
+            flash += " — SAVE FAILED, retry"
+        return _discovery_redirect(flash)
 
     @app.post("/discovery/{row_id}/watch-channel")
     def discovery_watch_channel(row_id: str):
@@ -156,7 +178,7 @@ def create_app() -> FastAPI:
         if row is None:
             raise HTTPException(status_code=404)
         ok, message = discovery.watch_channel(row)
-        return _discovery_redirect(message)
+        return _discovery_redirect(message if ok else f"error: {message}")
 
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
