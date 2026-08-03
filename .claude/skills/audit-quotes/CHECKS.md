@@ -56,13 +56,14 @@ human to resolve even though the *detection* is mechanical.
 | `source-tier-4` | quote | prefer tier 1–2 spoken sources | medium | decision-required |
 | `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
 | `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
+| `scorecard-source` | quote | a scorecard publishes votes and ratings, not utterances — **re-source** | high | decision-required |
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
-### 2.1 The two bad-source classes
+### 2.1 The three bad-source classes
 
-`invalid-source` and `unquotable-source` are deliberately separate checks because their remedies
-are opposite.
+`invalid-source`, `unquotable-source` and `scorecard-source` are deliberately separate checks
+because their remedies differ.
 
 - **`invalid-source` — aggregator; an original exists, so re-attribute.** ontheissues.org and
   wikipedia.org restate or paraphrase something the candidate actually said elsewhere. The quote is
@@ -79,7 +80,31 @@ are opposite.
   is nothing to descend to. All 29 isidewith.com rows were hard-deleted on 2026-07-25 — evidence
   and cost in `docs/audits/2026-07-25-isidewith-purge.md`.
 
-**ballotpedia.org is in neither class and is not flagged.** It reproduces campaign-site text
+- **`scorecard-source` — a rating, not speech; find the real statement.** An advocacy group's
+  legislative scorecard (lcv.org, and the same shape at AFL-CIO, Heritage Action, NRA) publishes
+  what a member *did* — a score and a vote record — and never what they said. A quote attributed
+  to one therefore came from somewhere else, or from nowhere.
+
+  This check exists because the fetch pass proved it rather than because it sounded right: in the
+  2026-08-02 full sweep, **all 30 scorecard-sourced live quotes came back `source-unverified` —
+  30 of 30, no exceptions.** Catching them by URL costs nothing and needs no network, so they no
+  longer have to wait for `--verify-sources` to run.
+
+  **Two neighbouring classes were tested and deliberately left out**, so they don't get
+  re-litigated:
+  - *Bill and statute pages* (congress.gov, leg.\*/bills/): 8 live quotes, of which **one
+    verified clean**. Bill pages sometimes carry sponsor statements and CRS summaries, so
+    "structurally cannot carry a quote" is simply false for them.
+  - *Roll-call tallies* (clerk.house.gov/Votes): only 2 live quotes, and both were
+    `source-unfetchable`, so the sweep never actually tested the premise. Too thin to justify a
+    high-severity rule.
+
+  The pattern is path-anchored (`/scorecard/`, `/congressional-scorecard/`) so it does not match
+  a news article whose slug merely contains the word. An earlier draft keyed on `/roll-?call`
+  and wrongly matched **rollcall.com — CQ Roll Call, a news outlet**, which is a perfectly good
+  source; there is a regression test for that.
+
+**ballotpedia.org is in none of these classes and is not flagged.** It reproduces campaign-site text
 verbatim under an attribution line with a footnote to the original (re-attributable case by case),
 and its Candidate Connection survey answers are candidate-written *for* Ballotpedia — Ballotpedia
 **is** the original publisher there, so the citation is already correct. Treating it as
