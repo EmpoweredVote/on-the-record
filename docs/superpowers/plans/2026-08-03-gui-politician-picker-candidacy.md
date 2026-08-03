@@ -686,8 +686,9 @@ Append to `tests/test_gui_politicians.py`:
 ```python
 # --- end-to-end search wiring against a fake cursor ---
 #
-# Add `import json` to the imports at the top of the file — the
-# candidacies-as-text test below needs it.
+# Add `import json`, `import os` and `import pytest` to the imports at the top of
+# the file — the candidacies-as-text test needs json, and the integration tests at
+# the bottom need os and pytest.
 
 class _FakeCursor:
     def __init__(self, rows):
@@ -852,6 +853,52 @@ def test_search_honours_an_explicit_limit(monkeypatch):
     politicians.search_politicians_safe("tiffany", limit=25)
     _sql, params = cur.executed
     assert params[-1] == 25
+
+
+# --- integration: the two things a fake cursor structurally cannot prove -------
+# The SQL-string assertions above would pass unchanged if the DISTINCT ON tie-break
+# sorted the wrong way, or if the outer ranking never took effect — the fake cursor
+# returns rows in the order given. These run only when DATABASE_URL is set.
+
+_needs_db = pytest.mark.skipif(not os.environ.get("DATABASE_URL"),
+                               reason="needs DATABASE_URL (live essentials schema)")
+
+
+@_needs_db
+def test_live_fanout_collapses_to_the_real_office():
+    # Harriet M. Hageman holds BOTH "U.S. Representative" and the placeholder
+    # "Candidate for U.S. Senate — Wyoming" in office_current_holder. One row must
+    # come back, carrying the real office — if the boolean tie-break inverted, the
+    # placeholder would win and nothing else would notice.
+    out = politicians.search_politicians_safe("hageman")
+    hers = [r for r in out["results"] if r["full_name"].startswith("Harriet")]
+    assert len(hers) == 1, [r["display"] for r in hers]
+    assert hers[0]["office_title"] == "U.S. Representative"
+    assert "Candidate for" not in hers[0]["display"]
+    assert "U.S. Senate Wyoming" in hers[0]["candidacy_display"]
+
+
+@_needs_db
+def test_live_candidate_row_outranks_its_office_holding_twin():
+    # Two Francesca Hong person rows exist; only one carries the WI Governor edge,
+    # and it must sort FIRST so the curator's eye lands on the right one.
+    out = politicians.search_politicians_safe("hong")
+    hongs = [r for r in out["results"] if r["full_name"] == "Francesca Hong"]
+    assert len(hongs) == 2, [r["display"] for r in hongs]
+    assert hongs[0]["candidacy_warn"] is False
+    assert "Governor" in hongs[0]["candidacy_display"]
+    assert hongs[1]["candidacy_warn"] is True
+    assert hongs[1]["candidacy_display"] == politicians.NO_CANDIDACIES
+    assert all(r["duplicate_note"] for r in hongs)
+
+
+@_needs_db
+def test_live_an_inactive_person_who_is_an_active_candidate_is_findable():
+    # is_active = false but candidate_status = active (Murphy TX council 2026).
+    # Before the IN clause this returned zero — a silent "no such person".
+    out = politicians.search_politicians_safe("andrew chase")
+    assert [r["full_name"] for r in out["results"]] == ["Andrew Chase"]
+    assert out["results"][0]["candidacy_warn"] is False
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -871,6 +918,14 @@ Append to `gui/politicians.py`:
 # want to present. Limiting at that level would truncate an arbitrary N rows
 # BEFORE ranking, so on a common surname the candidate could be cut entirely.
 # Hence the wrap: dedupe inside, rank and LIMIT outside.
+#
+# is_active alone was too strict: three people are is_active = false while holding
+# an ACTIVE candidacy (Andrew Chase / Laura Deel, Murphy TX council 2026; Gopal
+# Ponangi, Frisco 2025), and the picker returned zero for them — indistinguishable
+# from "no such person", the very failure this module exists to remove. The IN is
+# deliberately UNCORRELATED so Postgres hashes it once: the correlated EXISTS form
+# measured 1700ms against 160ms, while this measures 162ms. Rows that are inactive
+# AND only ever withdrawn stay hidden.
 _SEARCH_SQL = """
 SELECT * FROM (
   SELECT DISTINCT ON (p.id)
@@ -899,7 +954,10 @@ SELECT * FROM (
     JOIN essentials.elections e ON e.id = r.election_id
     WHERE rc.politician_id = p.id
   ) cand ON true
-  WHERE p.is_active = true
+  WHERE (p.is_active = true
+         OR p.id IN (SELECT rc2.politician_id
+                     FROM essentials.race_candidates rc2
+                     WHERE COALESCE(rc2.candidate_status, 'active') <> 'withdrawn'))
     AND {token_clauses}
   ORDER BY p.id,
            (COALESCE(o.title, '') ILIKE 'Candidate for%%'),
@@ -915,6 +973,31 @@ LIMIT %s
 def _db_url() -> Optional[str]:
     url = os.environ.get("DATABASE_URL", "").strip()
     return url or None
+
+
+def _token_clauses(tokens: list[str]) -> tuple[str, list]:
+    """(sql, params) for the name filter: one AND-ed clause per token, each an OR
+    over _NAME_FIELDS. Only field names — from a module constant — are
+    interpolated; every user value is a bound parameter.
+
+    Known cost: essentials has a trigram index on f_unaccent(lower(full_name)),
+    which this predicate cannot use (no lower(), and the OR across three
+    unindexed columns would defeat it anyway), so each search seq-scans the
+    politicians table — 160ms today and O(table size). Recorded as a spec
+    follow-up: fixing it needs matching expression indexes in ev-accounts'
+    schema, and the secondary fields can't simply be dropped (23 active rows
+    match only on preferred_name, which is the nickname recall).
+    """
+    clauses = []
+    params: list = []
+    for tok in tokens:
+        ors = " OR ".join(
+            f"public.f_unaccent(p.{f}) ILIKE public.f_unaccent(%s)"
+            for f in _NAME_FIELDS
+        )
+        clauses.append(f"({ors})")
+        params.extend([f"%{tok}%"] * len(_NAME_FIELDS))
+    return " AND ".join(clauses), params
 
 
 def _coerce_candidacies(raw) -> list:
@@ -948,17 +1031,9 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
     if not url:
         return {"results": [], "error": None}
 
-    clauses = []
-    params: list = []
-    for tok in tokens:
-        ors = " OR ".join(
-            f"public.f_unaccent(p.{f}) ILIKE public.f_unaccent(%s)"
-            for f in _NAME_FIELDS
-        )
-        clauses.append(f"({ors})")
-        params.extend([f"%{tok}%"] * len(_NAME_FIELDS))
+    where_sql, params = _token_clauses(tokens)
     params.append(limit)
-    sql = _SEARCH_SQL.format(token_clauses=" AND ".join(clauses))
+    sql = _SEARCH_SQL.format(token_clauses=where_sql)
 
     try:
         conn = psycopg2.connect(url)
@@ -986,8 +1061,11 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
         rec["candidacy_display"] = candidacy_display(rec["candidacies"])
         # Explicit flag rather than letting the client match on the label text:
         # Task 6 styles this row as a warning, and a reworded label must not be
-        # able to silently turn that styling off.
-        rec["candidacy_warn"] = not rec["candidacies"]
+        # able to silently turn that styling off. Derived FROM the label rather
+        # than from `candidacies`, so the two can never disagree — a row whose
+        # candidacies all fail to render would otherwise say "no candidacies"
+        # while telling the client not to warn.
+        rec["candidacy_warn"] = rec["candidacy_display"] == NO_CANDIDACIES
         results.append(rec)
     return {"results": mark_duplicate_names(results), "error": None}
 ```
@@ -1002,7 +1080,9 @@ literal percent must be doubled or psycopg2 reads it as a placeholder.
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `47 passed`
+Expected: `47 passed, 3 skipped` without `DATABASE_URL` in the environment, or
+`50 passed` with it. The three integration tests skip themselves when there's no
+database.
 
 - [ ] **Step 5: Verify the SQL against the real database**
 
@@ -1190,7 +1270,7 @@ The fallback reads both `politician_id`/`id` and `politician_slug`/`slug` becaus
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `50 passed`
+Expected: `50 passed, 3 skipped` without `DATABASE_URL`, or `53 passed` with it
 
 - [ ] **Step 5: Run the full suite to confirm no regression**
 
@@ -1198,7 +1278,7 @@ Expected: `50 passed`
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1768 passed` (1718 baseline + 50 new)
+Expected: `1765 passed, 3 skipped` (1718 baseline + 50 fake-cursor tests, 3 skipped without DATABASE_URL)
 
 - [ ] **Step 6: Commit**
 
@@ -1333,7 +1413,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1769 passed` (1718 baseline + 50 from Tasks 1-5 + 1 from Task 6)
+Expected: `1766 passed, 3 skipped` (1718 baseline + 50 from Tasks 1-5 + 1 from Task 6, 3 skipped without DATABASE_URL)
 
 - [ ] **Step 2: Start the GUI and exercise the picker by hand**
 
