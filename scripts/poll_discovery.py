@@ -11,6 +11,7 @@ Usage:
 """
 import argparse
 import datetime as dt
+import hashlib
 import sys
 import time
 from pathlib import Path
@@ -46,7 +47,7 @@ def _captions_fetcher(url: str):
     from src.download import download_captions_via_ytdlp
     cache = config.DISCOVERY_DIR / "captions"
     cache.mkdir(parents=True, exist_ok=True)
-    safe = source_key(url).replace(":", "_").replace("/", "_")
+    safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
     dest = cache / f"{safe}.vtt"
     if dest.exists():
         return dest.read_text(encoding="utf-8", errors="replace")
