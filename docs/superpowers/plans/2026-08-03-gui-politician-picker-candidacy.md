@@ -685,6 +685,9 @@ Append to `tests/test_gui_politicians.py`:
 
 ```python
 # --- end-to-end search wiring against a fake cursor ---
+#
+# Add `import json` to the imports at the top of the file — the
+# candidacies-as-text test below needs it.
 
 class _FakeCursor:
     def __init__(self, rows):
@@ -766,8 +769,10 @@ def test_search_dedupes_on_politician_id_and_ranks_outside_it(monkeypatch):
     sql, _ = cur.executed
     # collapses the office_current_holder fan-out
     assert "DISTINCT ON (p.id)" in sql
-    # a real office beats a "Candidate for ..." placeholder inside the DISTINCT
-    assert "ILIKE 'Candidate for%'" in sql
+    # a real office beats a "Candidate for ..." placeholder inside the DISTINCT.
+    # Doubled % because the SQL still has to survive psycopg2's own parameter
+    # binding after str.format has run — str.format leaves %% untouched.
+    assert "ILIKE 'Candidate for%%'" in sql
     # ranking + LIMIT sit OUTSIDE the dedupe, so a candidate can't be truncated
     # away by non-candidates on a common surname
     assert "(candidacies IS NULL)" in sql
@@ -1019,7 +1024,7 @@ PY
 
 Expected, matching the spec's verification table:
 - `thomas tiffany` → exactly one row, `U.S. Representative · Congressional District 7 · …`, `running: WI · Governor · Republican primary · 2026`
-- `hong` → **two** Francesca Hong rows, the first `running: WI · Governor · Democratic primary · 2026`, the second `no candidacies`, both marked `⚠ 2 records for this name`
+- `hong` → **two** Francesca Hong rows, the first `running: WI · Governor · Democratic primary · 2026`, the second `no candidacies`, both marked `⚠ 2 results share this name`
 - `paxton` → Ken Paxton **once** (not twice) with `Texas Attorney General` and a U.S. Senate candidacy; Angela Paxton separately with `no candidacies`
 - `talarico` → James Talarico **once** (not twice), `Representative · TX House District 50`, with a U.S. Senate candidacy
 - `smith` → every returned row carries a candidacy (non-candidates ranked out)
