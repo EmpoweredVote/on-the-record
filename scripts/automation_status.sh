@@ -60,8 +60,10 @@ if [ -d "$AUTOMATION_CHECKOUT" ]; then
         && echo "  ${GREEN}✓${OFF} .env.local symlinked from the primary checkout" \
         || echo "  ${RED}✗${OFF} .env.local MISSING — the poll will fail on DB/API credentials"
 else
-    echo "  ${RED}✗ missing${OFF} — recreate:"
-    echo "      git -C $REPO worktree add --detach $AUTOMATION_CHECKOUT origin/main"
+    echo "  ${RED}✗ missing${OFF} — recreate (a CLONE, not a worktree: launchd's git"
+    echo "      cannot read ~/Documents, see run_scheduled_poll.sh header):"
+    echo "      git clone $REPO $AUTOMATION_CHECKOUT"
+    echo "      git -C $AUTOMATION_CHECKOUT remote set-url origin git@github.com:EmpoweredVote/on-the-record.git"
     echo "      ln -s $REPO/.env.local $AUTOMATION_CHECKOUT/.env.local"
 fi
 
