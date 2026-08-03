@@ -538,6 +538,20 @@ def test_mark_duplicate_names_flags_genuinely_different_people_too():
     assert all(r["duplicate_note"] for r in out)
 
 
+def test_mark_duplicate_names_does_not_collide_two_juniors():
+    # Without dropping the suffix both would key to "john jr" — prod has plenty
+    # of these (John G. Roberts Jr., John P. Wiley Jr.).
+    rows = [{"full_name": "John G. Roberts Jr."}, {"full_name": "John P. Wiley Jr."}]
+    out = mark_duplicate_names(rows)
+    assert [r["duplicate_note"] for r in out] == ["", ""]
+
+
+def test_mark_duplicate_names_still_matches_across_a_suffix():
+    rows = [{"full_name": "Harold Ford III"}, {"full_name": "Harold Ford"}]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] == "⚠ 2 records for this name" for r in out)
+
+
 def test_mark_duplicate_names_does_not_flag_a_lone_row():
     out = mark_duplicate_names([{"full_name": "Thomas P. Tiffany"}])
     assert out[0]["duplicate_note"] == ""
@@ -556,13 +570,18 @@ Expected: `ImportError: cannot import name 'mark_duplicate_names'`
 Append to `gui/politicians.py`:
 
 ```python
-# Dropped when normalizing a name for duplicate detection: a bare middle
-# initial ("P.") is a display choice, not a different person.
 def _dupe_key(full_name: str) -> str:
     """'thomas tiffany' from 'Thomas P. Tiffany' — a loose identity key for
-    spotting two rows that a curator would read as the same person."""
+    spotting two rows that a curator would read as the same person.
+
+    Bare middle initials and generational suffixes are dropped for the same
+    reason parse_name_query drops them: they're display choices, not identity.
+    Dropping the suffix is what stops the key collapsing to the suffix itself —
+    'John G. Roberts Jr.' and 'John P. Wiley Jr.' would BOTH key to 'john jr'
+    and get flagged as the same person, and prod is full of such names.
+    """
     tokens = [t for t in re.findall(r"[a-z0-9]+", (full_name or "").lower())
-              if len(t) > 1]
+              if len(t) > 1 and t not in _NOISE_TOKENS]
     if len(tokens) <= 2:
         return " ".join(tokens)
     return f"{tokens[0]} {tokens[-1]}"
@@ -596,7 +615,7 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `32 passed`
+Expected: `34 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -941,7 +960,7 @@ literal percent must be doubled or psycopg2 reads it as a placeholder.
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `43 passed`
+Expected: `45 passed`
 
 - [ ] **Step 5: Verify the SQL against the real database**
 
@@ -1129,7 +1148,7 @@ The fallback reads both `politician_id`/`id` and `politician_slug`/`slug` becaus
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `46 passed`
+Expected: `48 passed`
 
 - [ ] **Step 5: Run the full suite to confirm no regression**
 
@@ -1137,7 +1156,7 @@ Expected: `46 passed`
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1764 passed` (1718 baseline + 46 new)
+Expected: `1766 passed` (1718 baseline + 48 new)
 
 - [ ] **Step 6: Commit**
 
@@ -1272,7 +1291,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1765 passed` (1718 baseline + 46 from Tasks 1-5 + 1 from Task 6)
+Expected: `1767 passed` (1718 baseline + 48 from Tasks 1-5 + 1 from Task 6)
 
 - [ ] **Step 2: Start the GUI and exercise the picker by hand**
 
