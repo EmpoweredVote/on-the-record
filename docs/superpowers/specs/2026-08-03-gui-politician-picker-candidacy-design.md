@@ -2,7 +2,8 @@
 
 Date: 2026-08-03
 Branch: `worktree-feat+gui-politician-picker-candidacy`
-Status: design, awaiting review
+Status: implemented on branch `worktree-feat+gui-politician-picker-candidacy`,
+verified in the running GUI
 
 ## Problem
 
@@ -237,6 +238,42 @@ Run by hand against the live DB (not automated — there is no test DB):
 | `paxton` | Ken Paxton **once** · `Texas Attorney General` + his U.S. Senate candidacy; Angela Paxton separately with no candidacy |
 | `hong` | both Francesca Hong rows returned and now distinguishable — one carries the WI Governor Democratic primary, the other carries none |
 | `smith` | all ten returned rows carry a candidacy; office-less non-candidates correctly ranked out |
+
+### Verified in the running GUI
+
+Driven through the real app on `http://localhost:8001` (a second instance, so the
+developer's own GUI on :8000 was untouched), against the live `essentials` schema.
+The markup below is what the page actually produced:
+
+```
+"hong"
+  Francesca Hong                                          ⚠ 2 results share this name
+    running: WI · Governor · Democratic primary · 2026            <- politician_id dfe4ad6a
+  Francesca Hong · Representative to the Assembly · …     ⚠ 2 results share this name
+    no candidacies                                                <- politician_id f1212497
+  ...4 other Hongs, each "no candidacies", none flagged
+
+"thomas tiffany"
+  Thomas P. Tiffany · U.S. Representative · Congressional District 7 · United States Federal Government
+    running: WI · Governor · Republican primary · 2026
+
+"barnes"   (candidates ranked ahead of office-holders)
+  Brice Barnes                     running: FL · U.S. Representative District 2 · General · 2026
+  Mandela Barnes                   running: WI · Governor · Democratic primary · 2026
+  Ben Barnes · Delegate · …        no candidacies
+
+"andrew chase"
+  Andrew Chase                     running: TX · Murphy Council Member Place 3 · General · 2026
+
+"tom tiffany"  ->  "no matches"   (expected: nickname aliasing is a non-goal)
+```
+
+Computed styles confirmed in the browser: the picker button is
+`display: flex; flex-direction: column` with `text-align: left` preserved; the
+candidacy line is `#5c6b82` at 12.48px; `no candidacies` and the duplicate chip are
+`#9a6a00`, matching the existing `.thin` caution. A synthetic race-picker button
+(`.link-result` inside `.race-results`) computed `display: block` — confirming the
+scoped selector leaves the race picker's own buttons alone.
 
 Cost on the worst case (`smith`): planning 7 ms, server-side execution **101 ms**.
 
