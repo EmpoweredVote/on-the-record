@@ -353,6 +353,15 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True
     )
 
+    # Surface every enrollment warning (the terminal enroll flow already gets
+    # these; the GUI reviewer must too) plus, per card, the peer labels that
+    # share its name — a rename onto an existing name is usually a merge-in-waiting.
+    warnings = review.enrollment_warnings(meeting.speakers, roster)
+    peer_labels: dict[str, list[str]] = {}
+    for labels in review.duplicate_named_speakers(meeting.speakers).values():
+        for lbl in labels:
+            peer_labels[lbl] = [o for o in labels if o != lbl]
+
     from src.publish import extract_youtube_id, playback_for_meeting
 
     youtube_id = extract_youtube_id(meeting.audio_source or "")
@@ -407,6 +416,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
             profile_meetings=profile_meetings,
             profile_samples=profile_samples,
+            duplicate_labels=peer_labels.get(v.label, []),
         )
         (confirmed if card.is_confirmed else needs).append(card)
 
@@ -422,4 +432,5 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         hls_url=hls_url,
         needs_attention=needs,
         confirmed=confirmed,
+        warnings=warnings,
     )

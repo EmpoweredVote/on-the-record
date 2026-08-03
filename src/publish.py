@@ -1198,6 +1198,23 @@ def publish_meeting(
     """
     from .clip import absolutize_meeting_times
     meeting = absolutize_meeting_times(meeting)
+
+    # Two named, non-placeholder speakers sharing a name is never a valid
+    # published state (identify's dedupe guard enforces this, but a review
+    # rename can re-create it — and downstream, memo reconciliation drops the
+    # member's votes as "ambiguous"). Refuse before any DB work.
+    from .review import duplicate_named_speakers
+    dups = duplicate_named_speakers(meeting.speakers)
+    if dups:
+        parts = [
+            f"{len(labels)} speakers named {meeting.speakers[labels[0]].speaker_name!r} ({', '.join(labels)})"
+            for labels in dups.values()
+        ]
+        raise ValueError(
+            f"Cannot publish {meeting.meeting_id}: {'; '.join(parts)}. "
+            "Merge them in review before publishing."
+        )
+
     db_url = _require_db_url()
 
     conn = psycopg2.connect(db_url)

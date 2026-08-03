@@ -18,6 +18,17 @@
     <p class="empty">No media found for clip playback.</p>
   {% endif %}
 
+  {% if page.warnings %}
+  <section class="review-warnings">
+    <h2>⚠ Before you publish</h2>
+    <ul>
+      {% for w in page.warnings %}
+      <li class="warn warn-{{ w.kind }}">{{ w.detail }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section>
     <h2>Needs attention</h2>
     {% if page.needs_attention %}

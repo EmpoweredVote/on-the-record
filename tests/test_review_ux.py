@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.models import SpeakerMapping
 from src.models import Segment
 from src.review import identity_label
-from src.review import enrollment_warnings
+from src.review import duplicate_named_speakers, enrollment_warnings
 from src.review import snapshot_mapping, restore_mapping
 from src.roster import Roster, RosterMember
 
@@ -62,6 +62,55 @@ def test_no_duplicate_warning_for_multiple_unidentified():
 def test_clean_mappings_have_no_warnings():
     mappings = {"S0": SpeakerMapping("S0", "Jane Adams", politician_slug="jane-adams")}
     assert enrollment_warnings(mappings, roster=None) == []
+
+
+def test_duplicate_named_speakers_groups_labels_by_shared_name():
+    mappings = {
+        "SPEAKER_19": SpeakerMapping("SPEAKER_19", "City Common Council - District 6 Zulich"),
+        "SPEAKER_07": SpeakerMapping("SPEAKER_07", "City Common Council - District 6 Zulich"),
+        "SPEAKER_02": SpeakerMapping("SPEAKER_02", "Mayor Johnson"),
+    }
+    dups = duplicate_named_speakers(mappings)
+    assert dups == {"city common council - district 6 zulich": ["SPEAKER_07", "SPEAKER_19"]}
+
+
+def test_duplicate_named_speakers_is_case_and_whitespace_insensitive():
+    mappings = {
+        "S0": SpeakerMapping("S0", "Jane Adams "),
+        "S1": SpeakerMapping("S1", "jane adams"),
+    }
+    assert list(duplicate_named_speakers(mappings).values()) == [["S0", "S1"]]
+
+
+def test_duplicate_named_speakers_excludes_placeholder_statuses():
+    mappings = {
+        "S0": SpeakerMapping("S0", "Unidentified Speaker", local_slug="unidentified-m-s0",
+                             speaker_status="unidentified"),
+        "S1": SpeakerMapping("S1", "Unidentified Speaker", local_slug="unidentified-m-s1",
+                             speaker_status="unidentified"),
+        "S2": SpeakerMapping("S2", "Non-speaker", speaker_status="non_speaker"),
+        "S3": SpeakerMapping("S3", "Non-speaker", speaker_status="non_speaker"),
+    }
+    assert duplicate_named_speakers(mappings) == {}
+
+
+def test_duplicate_named_speakers_empty_when_clean():
+    mappings = {
+        "S0": SpeakerMapping("S0", "Jane Adams"),
+        "S1": SpeakerMapping("S1", None),
+    }
+    assert duplicate_named_speakers(mappings) == {}
+
+
+def test_enrollment_warning_duplicate_carries_labels_list():
+    mappings = {
+        "S1": SpeakerMapping("S1", "Jane Adams"),
+        "S0": SpeakerMapping("S0", "Jane Adams"),
+    }
+    w = next(w for w in enrollment_warnings(mappings, roster=None)
+             if w["kind"] == "duplicate_name")
+    assert w["labels"] == ["S0", "S1"]
+    assert w["label"] == "S0,S1"  # joined form stays for existing callers
 
 
 def test_snapshot_restore_round_trips_mapping_and_segments():

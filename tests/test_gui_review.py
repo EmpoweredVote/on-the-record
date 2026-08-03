@@ -135,6 +135,53 @@ def test_load_review_page_video_seeks_add_clip_offset(tagged_meeting_dir, tmp_me
     assert page.confirmed[0].clip_seeks[0] == pytest.approx(607.0)
 
 
+def _write_meeting_with_duplicate(mdir):
+    """3 speakers, two human-renamed to the same person (the Zulich collision)."""
+    from src.models import Meeting, Segment, SpeakerMapping
+
+    segs = [
+        Segment(segment_id=0, start_time=10.0, end_time=70.0, speaker_label="SPEAKER_07",
+                text="I vote no.", speaker_name="District 6 Zulich"),
+        Segment(segment_id=1, start_time=80.0, end_time=95.0, speaker_label="SPEAKER_19",
+                text="Thank you.", speaker_name="District 6 Zulich"),
+        Segment(segment_id=2, start_time=100.0, end_time=130.0, speaker_label="SPEAKER_00",
+                text="Motion carries.", speaker_name="Mayor Johnson"),
+    ]
+    speakers = {
+        "SPEAKER_07": SpeakerMapping(speaker_label="SPEAKER_07", speaker_name="District 6 Zulich",
+                                     confidence=1.0, id_method="human_review"),
+        "SPEAKER_19": SpeakerMapping(speaker_label="SPEAKER_19", speaker_name="District 6 Zulich",
+                                     confidence=1.0, id_method="human_review"),
+        "SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Mayor Johnson",
+                                     confidence=0.95, id_method="voice_profile"),
+    }
+    meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-06-10",
+                      meeting_type="Regular Session", event_kind="council",
+                      segments=segs, speakers=speakers)
+    (mdir / "transcript_named.json").write_text(json.dumps(meeting.to_dict()))
+
+
+def test_load_review_page_surfaces_duplicate_name_warning(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-06-10-council", completed_stage=4)
+    _write_meeting_with_duplicate(mdir)
+    page = load_review_page("2026-06-10-council")
+    dup = [w for w in page.warnings if w["kind"] == "duplicate_name"]
+    assert len(dup) == 1
+    assert dup[0]["labels"] == ["SPEAKER_07", "SPEAKER_19"]
+    by_label = {c.label: c for c in page.all_cards}
+    assert by_label["SPEAKER_07"].duplicate_labels == ["SPEAKER_19"]
+    assert by_label["SPEAKER_19"].duplicate_labels == ["SPEAKER_07"]
+    assert by_label["SPEAKER_00"].duplicate_labels == []
+
+
+def test_load_review_page_clean_meeting_has_no_warnings(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    page = load_review_page("2026-02-04-council")
+    assert page.warnings == []
+    assert all(c.duplicate_labels == [] for c in page.all_cards)
+
+
 from fastapi.testclient import TestClient
 
 from gui.app import create_app
@@ -1021,3 +1068,27 @@ def test_delete_route_404_for_unsafe_id(tmp_meetings_dir):
     client = TestClient(create_app())
     assert client.post("/meetings/..%2Fx/delete",
                        data={"confirm_slug": "x"}, follow_redirects=False).status_code == 404
+
+
+def test_review_route_renders_duplicate_warning_and_merge_chip(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-06-10-council", completed_stage=4)
+    _write_meeting_with_duplicate(mdir)
+    client = TestClient(create_app())
+    resp = client.get("/meetings/2026-06-10-council/review")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Before you publish" in body      # warnings block is visible
+    assert "Same name as" in body            # per-card duplicate chip
+    # one-click merge: hidden-target forms pointing each twin at the other
+    assert '<input type="hidden" name="target" value="SPEAKER_19">' in body
+    assert '<input type="hidden" name="target" value="SPEAKER_07">' in body
+
+
+def test_review_route_clean_meeting_renders_no_warning_block(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    resp = client.get("/meetings/2026-02-04-council/review")
+    assert resp.status_code == 200
+    assert "Before you publish" not in resp.text
+    assert "Same name as" not in resp.text
