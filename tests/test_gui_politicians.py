@@ -3,6 +3,8 @@
 Mirrors tests/test_gui_races.py: pure label/parse functions tested directly,
 the DB query tested through a fake cursor.
 """
+import json
+
 from gui import politicians
 from gui.politicians import (
     candidacy_display,
@@ -260,3 +262,170 @@ def test_mark_duplicate_names_collapses_a_middle_name_on_purpose():
 def test_mark_duplicate_names_does_not_flag_a_lone_row():
     out = mark_duplicate_names([{"full_name": "Thomas P. Tiffany"}])
     assert out[0]["duplicate_note"] == ""
+
+
+# --- end-to-end search wiring against a fake cursor ---
+
+class _FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+        self.executed = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params):
+        self.executed = (sql, params)
+
+    def fetchall(self):
+        return self._rows
+
+
+class _FakeConn:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def cursor(self):
+        return self._cursor
+
+    def close(self):
+        pass
+
+
+# Row order matches the SELECT in _SEARCH_SQL:
+# id, full_name, slug, office_title, district_label, government_name, candidacies
+_TIFFANY_ROW = (
+    "a8f96324-50ac-4fa1-b57b-47a998306fe8", "Thomas P. Tiffany", None,
+    "U.S. Representative", "Congressional District 7",
+    "United States Federal Government",
+    [{"position_name": "Governor", "state": "WI", "primary_party": "Republican",
+      "election_type": "primary", "year": 2026, "status": "active"}],
+)
+
+
+def _fake_db(monkeypatch, rows):
+    cur = _FakeCursor(rows)
+    monkeypatch.setattr(politicians, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(politicians.psycopg2, "connect", lambda url: _FakeConn(cur))
+    return cur
+
+
+def test_search_maps_a_row_to_a_labelled_result(monkeypatch):
+    _fake_db(monkeypatch, [_TIFFANY_ROW])
+    out = politicians.search_politicians_safe("thomas tiffany")
+    assert out["error"] is None
+    (r,) = out["results"]
+    assert r["politician_id"] == "a8f96324-50ac-4fa1-b57b-47a998306fe8"
+    assert r["politician_slug"] is None
+    assert r["full_name"] == "Thomas P. Tiffany"
+    assert r["display"] == (
+        "Thomas P. Tiffany · U.S. Representative · Congressional District 7 "
+        "· United States Federal Government"
+    )
+    assert r["candidacy_display"] == "running: WI · Governor · Republican primary · 2026"
+    assert r["candidacy_warn"] is False
+    assert r["duplicate_note"] == ""
+
+
+def test_search_builds_one_and_ed_clause_per_token(monkeypatch):
+    cur = _fake_db(monkeypatch, [])
+    politicians.search_politicians_safe("thomas tiffany")
+    sql, params = cur.executed
+    # 4 name fields x 2 tokens, plus the limit
+    assert len(params) == 9
+    assert params[-1] == 10
+    assert params.count("%thomas%") == 4 and params.count("%tiffany%") == 4
+
+
+def test_search_dedupes_on_politician_id_and_ranks_outside_it(monkeypatch):
+    cur = _fake_db(monkeypatch, [])
+    politicians.search_politicians_safe("paxton")
+    sql, _ = cur.executed
+    # collapses the office_current_holder fan-out
+    assert "DISTINCT ON (p.id)" in sql
+    # a real office beats a "Candidate for ..." placeholder inside the DISTINCT.
+    # Doubled % because the SQL still has to survive psycopg2's own parameter
+    # binding after str.format has run — str.format leaves %% untouched.
+    assert "ILIKE 'Candidate for%%'" in sql
+    # ranking + LIMIT sit OUTSIDE the dedupe, so a candidate can't be truncated
+    # away by non-candidates on a common surname
+    assert "(candidacies IS NULL)" in sql
+    outer = sql.rsplit(") t", 1)[1]
+    assert "ORDER BY" in outer and "LIMIT" in outer
+
+
+def test_search_flags_duplicate_names(monkeypatch):
+    hong_cand = ("dfe4ad6a", "Francesca Hong", None, "", "", "",
+                 [{"position_name": "Governor", "state": "WI",
+                   "primary_party": "Democratic", "election_type": "primary",
+                   "year": 2026, "status": "active"}])
+    hong_office = ("f1212497", "Francesca Hong", None,
+                   "Representative to the Assembly", "Assembly District 76", "", None)
+    _fake_db(monkeypatch, [hong_cand, hong_office])
+    out = politicians.search_politicians_safe("hong")
+    assert [r["duplicate_note"] for r in out["results"]] == [
+        "⚠ 2 results share this name"] * 2
+    # the one with no race edge says so — the signal that was missing
+    assert out["results"][1]["candidacy_display"] == "no candidacies"
+    assert out["results"][1]["candidacy_warn"] is True
+    assert out["results"][0]["candidacy_warn"] is False
+
+
+def test_search_parses_candidacies_delivered_as_json_text(monkeypatch):
+    # psycopg2 hands back json as str unless a typecaster is registered
+    row = list(_TIFFANY_ROW)
+    row[6] = json.dumps(_TIFFANY_ROW[6])
+    _fake_db(monkeypatch, [tuple(row)])
+    out = politicians.search_politicians_safe("tiffany")
+    assert out["results"][0]["candidacy_display"].startswith("running: WI · Governor")
+
+
+def test_search_treats_null_candidacies_as_none(monkeypatch):
+    row = list(_TIFFANY_ROW)
+    row[6] = None
+    _fake_db(monkeypatch, [tuple(row)])
+    out = politicians.search_politicians_safe("tiffany")
+    assert out["results"][0]["candidacies"] == []
+    assert out["results"][0]["candidacy_display"] == "no candidacies"
+    assert out["results"][0]["candidacy_warn"] is True
+
+
+def test_search_short_query_returns_empty_without_connecting(monkeypatch):
+    cur = _fake_db(monkeypatch, [_TIFFANY_ROW])
+    out = politicians.search_politicians_safe("x")
+    assert out == {"results": [], "error": None}
+    assert cur.executed is None
+
+
+def test_search_query_with_no_usable_tokens_returns_empty(monkeypatch):
+    cur = _fake_db(monkeypatch, [_TIFFANY_ROW])
+    out = politicians.search_politicians_safe("!!!")     # >=2 chars, no tokens
+    assert out == {"results": [], "error": None}
+    assert cur.executed is None
+
+
+def test_search_no_db_url_returns_empty(monkeypatch):
+    monkeypatch.setattr(politicians, "_db_url", lambda: None)
+    assert politicians.search_politicians_safe("tiffany") == {"results": [], "error": None}
+
+
+def test_search_swallows_db_errors(monkeypatch):
+    monkeypatch.setattr(politicians, "_db_url", lambda: "postgres://fake")
+
+    def boom(url):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(politicians.psycopg2, "connect", boom)
+    out = politicians.search_politicians_safe("tiffany")
+    assert out["results"] == []
+    assert out["error"]                       # a message, not a crash
+
+
+def test_search_honours_an_explicit_limit(monkeypatch):
+    cur = _fake_db(monkeypatch, [])
+    politicians.search_politicians_safe("tiffany", limit=25)
+    _sql, params = cur.executed
+    assert params[-1] == 25

@@ -211,3 +211,128 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
         n = counts.get(key, 0)
         r["duplicate_note"] = f"⚠ {n} results share this name" if n > 1 else ""
     return results
+
+
+# DISTINCT ON requires its ORDER BY to lead with p.id, which is not the order we
+# want to present. Limiting at that level would truncate an arbitrary N rows
+# BEFORE ranking, so on a common surname the candidate could be cut entirely.
+# Hence the wrap: dedupe inside, rank and LIMIT outside.
+_SEARCH_SQL = """
+SELECT * FROM (
+  SELECT DISTINCT ON (p.id)
+         p.id, p.full_name, p.slug,
+         COALESCE(o.title, '') AS office_title,
+         COALESCE(d.label, '') AS district_label,
+         COALESCE(g.name, '')  AS government_name,
+         cand.candidacies
+  FROM essentials.politicians p
+  LEFT JOIN essentials.office_current_holder och ON och.politician_id = p.id
+  LEFT JOIN essentials.offices     o  ON o.id  = och.office_id
+  LEFT JOIN essentials.districts   d  ON d.id  = o.district_id
+  LEFT JOIN essentials.chambers    ch ON ch.id = o.chamber_id
+  LEFT JOIN essentials.governments g  ON g.id  = ch.government_id
+  LEFT JOIN LATERAL (
+    SELECT json_agg(json_build_object(
+             'position_name',  r.position_name,
+             'state',          e.state,
+             'primary_party',  r.primary_party,
+             'election_type',  e.election_type,
+             'year',           EXTRACT(YEAR FROM e.election_date)::int,
+             'status',         COALESCE(rc.candidate_status, 'active')
+           ) ORDER BY e.election_date) AS candidacies
+    FROM essentials.race_candidates rc
+    JOIN essentials.races     r ON r.id = rc.race_id
+    JOIN essentials.elections e ON e.id = r.election_id
+    WHERE rc.politician_id = p.id
+  ) cand ON true
+  WHERE p.is_active = true
+    AND {token_clauses}
+  ORDER BY p.id,
+           (COALESCE(o.title, '') ILIKE 'Candidate for%%'),
+           o.title NULLS LAST
+) t
+ORDER BY (candidacies IS NULL),
+         (office_title = ''),
+         full_name
+LIMIT %s
+"""
+
+
+def _db_url() -> Optional[str]:
+    url = os.environ.get("DATABASE_URL", "").strip()
+    return url or None
+
+
+def _coerce_candidacies(raw) -> list:
+    """psycopg2 gives json back as a list when a typecaster is registered and as
+    text otherwise; NULL means no race_candidates rows at all."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return []
+    return list(raw) if isinstance(raw, list) else []
+
+
+def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
+    """Best-effort politician search for the link picker. Returns
+    {"results": [...], "error": None|str} — never raises.
+
+    Every result carries `display` (identity), `candidacy_display` (which races
+    this person is actually a candidate in) and `duplicate_note`, so the curator
+    can see which of two same-named rows holds the race edge.
+    """
+    query = (q or "").strip()
+    if len(query) < 2:
+        return {"results": [], "error": None}
+    tokens = parse_name_query(query)
+    if not tokens:
+        return {"results": [], "error": None}
+    url = _db_url()
+    if not url:
+        return {"results": [], "error": None}
+
+    clauses = []
+    params: list = []
+    for tok in tokens:
+        ors = " OR ".join(
+            f"public.f_unaccent(p.{f}) ILIKE public.f_unaccent(%s)"
+            for f in _NAME_FIELDS
+        )
+        clauses.append(f"({ors})")
+        params.extend([f"%{tok}%"] * len(_NAME_FIELDS))
+    params.append(limit)
+    sql = _SEARCH_SQL.format(token_clauses=" AND ".join(clauses))
+
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, tuple(params))
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:  # DB down / auth / schema — stay best-effort
+        return {"results": [], "error": f"politician search failed: {exc}"}
+
+    results = []
+    for pid, full_name, slug, office, district, government, cands in rows:
+        rec = {
+            "politician_id": str(pid) if pid else None,
+            "politician_slug": slug,
+            "full_name": full_name or "",
+            "office_title": office or "",
+            "district_label": district or "",
+            "government_name": government or "",
+            "candidacies": _coerce_candidacies(cands),
+        }
+        rec["display"] = politician_display(rec)
+        rec["candidacy_display"] = candidacy_display(rec["candidacies"])
+        # Explicit flag rather than letting the client match on the label text:
+        # Task 6 styles this row as a warning, and a reworded label must not be
+        # able to silently turn that styling off.
+        rec["candidacy_warn"] = not rec["candidacies"]
+        results.append(rec)
+    return {"results": mark_duplicate_names(results), "error": None}
