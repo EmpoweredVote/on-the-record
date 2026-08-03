@@ -32,6 +32,24 @@ QUIZ_SOURCE = re.compile(r"isidewith\.com", re.I)
 # "scorecard" in a headline slug.
 SCORECARD_SOURCE = re.compile(r"/(?:[a-z]+-)?scorecards?/", re.I)
 
+# A quote this short states a topic, not a position on it. Read & Rank compares candidates on a
+# question, and "Universal Healthcare" / "Abolish ICE" / "Medicare For All" / "Protect the unborn"
+# give a reader nothing to weigh against the other candidate's answer — no mechanism, no
+# direction beyond the topic name.
+#
+# Four is a calibrated floor, not a guess. All 101 live quotes at <=4 words read as slogans or
+# platform-page bullets; the 5-6 word band already contains real, mechanism-bearing sentences
+# ("Lower Medicare eligibility to Age 55.", "Rein in private insurers managing Medicaid."), so
+# raising the bar would start flagging good quotes. Counting words needs no POS tagger and has no
+# judgment in it, which is what keeps this in the mechanical pass at all.
+#
+# Note what this is NOT: these are mostly *verbatim* text from the candidate's own platform page,
+# not curator inventions — 26 of the 49 shortest verify clean against their cited source. The
+# defect is that a bullet is not an utterance and carries no rankable claim. Severity is medium
+# for that reason: the text is usually real, it is just too thin to rank.
+_WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9'’-]*")
+STANCE_LABEL_MAX_WORDS = 4
+
 def check_note_quality(r) -> Optional[Finding]:
     note = (r.get("editor_note") or "").strip()
     base = dict(level="quote", quote_id=r["id"], topic_key=r["topic_key"],
@@ -138,6 +156,18 @@ def check_scorecard_source(r) -> Optional[Finding]:
                    what=f"Source is a legislative scorecard: {url}. These pages carry an advocacy group's rating and vote record for the member — never the member's own words — so the quoted text is not on the page it cites.",
                    suggested_fix="Find where the candidate actually said this (floor statement, press release, interview) and re-source to it; deselect from live until then. If no such statement exists, the row is not a quote — remove it.")
 
+def check_stance_label(r) -> Optional[Finding]:
+    text = (r.get("quote_text") or "").strip()
+    n = len(_WORD.findall(text))
+    if n == 0 or n > STANCE_LABEL_MAX_WORDS:
+        return None
+    return Finding(check_id="stance-label", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
+                   race_id=r["race_id"], candidate=r["candidate"],
+                   principle="a quote must state a position, not name a topic",
+                   severity="medium", fix_class="decision-required",
+                   what=f"Quote is {n} word(s) — a stance label or platform bullet ({text!r}), not a statement a reader can weigh against the other candidate's answer.",
+                   suggested_fix="Replace with a sentence from the same source that carries the candidate's actual claim — the mechanism or the direction, not just the topic. If the source offers no such sentence, the row is not rankable: deselect it.")
+
 def topic_live_count(group) -> Optional[Finding]:
     counts = Counter(q["candidate"] for q in group["quotes"] if q.get("readrank_selected"))
     dupes = {c: n for c, n in counts.items() if n > 1}
@@ -159,7 +189,7 @@ def topic_min_candidates(group) -> Optional[Finding]:
 
 QUOTE_CHECKS = [check_note_quality, check_deid_present, check_trailing_ellipsis,
                 check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
-                check_unquotable_source, check_scorecard_source]
+                check_unquotable_source, check_scorecard_source, check_stance_label]
 TOPIC_CHECKS = [topic_live_count, topic_min_candidates]
 
 def run_mechanical(rows) -> list:
