@@ -617,8 +617,12 @@ def test_merging_is_transitive_across_three_windows():
     """A person's window-2 appearance can join through their window-1 one even
     if window 0 vs window 2 alone would be borderline — the global view the
     sequential running-mean matcher cannot provide."""
-    bridge = _vec(1, 0.55, 0)
-    far = _vec(1, 1.05, 0)
+    # cos(ALICE, far) is 0.743 — below the 0.80 threshold — so `far` can only
+    # land in ALICE's cluster transitively, as an average through `bridge`
+    # (0.833). Merge ORDER is pinned separately by
+    # test_the_closest_admissible_pair_merges_first, not here.
+    bridge = _vec(1, 0.35, 0)
+    far = _vec(1, 0.90, 0)
     nodes = [
         _node(0, "SPEAKER_00", [ALICE]),
         _node(1, "SPEAKER_00", [bridge]),

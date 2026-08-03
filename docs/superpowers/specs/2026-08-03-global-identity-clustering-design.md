@@ -152,8 +152,12 @@ cluster_global_identities(
    `centroid` are sweepable alternatives). Repeatedly merge the single most similar
    admissible pair while its similarity ≥ `threshold` — same similarity convention as every
    other threshold in `src/config.py`. Node-pair aggregates (sum, count, min, gram) are
-   precomputed once from the turn matrix, which makes each linkage exact and the merge loop
-   nodes-sized rather than turns-sized. Cost is milliseconds at real scale.
+   precomputed once from the turn matrix, which makes each linkage exact (verified to 1e-9
+   against direct turn-vector computation) and the merge loop nodes-sized rather than
+   turns-sized. Measured at June 10's scale (87 nodes, 2745 turns): 23 ms to precompute,
+   ~500 ms for the merge loop. The loop is O(nodes³) because it rescans every cluster pair
+   per merge; negligible against GPU diarization at this size, but it would want
+   per-row caching above ~300 nodes.
 5. **Labels.** `f"{label_prefix}{n:02d}"` assigned by **descending total speech time**, so
    numbering is deterministic and the chair lands at `SPEAKER_00`.
 6. **Turns.** Clipped through the existing `_ownership_bounds`, so each second of audio
