@@ -12,6 +12,8 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field
 
+import psycopg2
+
 from src import config
 from src.discovery import db
 from src.discovery.classify import classify_item
@@ -158,10 +160,14 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
         except Exception as exc:  # noqa: BLE001 — per-item, loud, non-fatal
             stats.failures.append(f"item {item.url}: {exc}")
             print(f"FAILED item {item.url}: {exc}", file=sys.stderr)
-            try:
-                conn.rollback()
-            except Exception:
-                pass
+            if isinstance(exc, psycopg2.Error):
+                # only a DB error leaves the transaction in a state that needs
+                # rolling back; a classifier hiccup shouldn't discard whatever
+                # this outlet/race already committed-worth of good rows.
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
     if not skip_watchlist:
         for outlet in db.fetch_active_outlets(cur):
@@ -200,10 +206,13 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                     for item in results:
                         process_safe(item, [c.full_name for c in cands], race_id)
                     sleep_fn(config.DISCOVERY_SEARCH_SLEEP_SECONDS)
-            # don't record a sweep the spend cap truncated: a future run
-            # must still cover the queries the cap made us skip.
-            if not dry_run and stats.spend_capped == capped_before:
-                db.record_sweep(cur, race_id)
+            if not dry_run:
+                # don't record a sweep the spend cap truncated: a future run
+                # must still cover the queries the cap made us skip. But the
+                # rows already inserted this race are paid for -- commit them
+                # regardless, or they die at the caller's conn.close().
+                if stats.spend_capped == capped_before:
+                    db.record_sweep(cur, race_id)
                 conn.commit()
         if race_filter and race_filter not in by_race:
             stats.failures.append(f"race filter {race_filter}: not a tracked race")

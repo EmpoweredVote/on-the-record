@@ -56,6 +56,7 @@ def test_fetch_tracked_candidates_filters_active_pipeline_races():
     sql, _ = cur.executed[0]
     assert "readrank_race_pipeline" in sql
     assert "'needs_quotes','quotes_staged','published'" in sql.replace(" ", "")
+    assert "order by" in sql.lower()
     assert tracked[0].full_name == "Maria Delgado"
     assert tracked[0].race_label == "TX Senate (general)"
 

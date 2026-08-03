@@ -159,6 +159,7 @@ def test_sweep_due_respects_last_swept(monkeypatch):
 
 def test_item_failure_is_nonfatal_and_run_continues(monkeypatch):
     inserted = []
+    _patch_db(monkeypatch, inserted)
     second_item = RawItem(url="https://www.youtube.com/watch?v=def12345678",
                           title="Maria Delgado town hall on the issues",
                           description="d", channel_name="KXAN",
@@ -180,14 +181,100 @@ def test_item_failure_is_nonfatal_and_run_continues(monkeypatch):
         '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
         ' "event_kind": "town_hall", "source_tier": 1, "original_vs_clip": "original",'
         ' "route": "ingest", "why": "town hall"}')
-    stats, provider = _run(monkeypatch, inserted, skip_sweeps=True,
-                           fetch_feed_items=lambda o: [GOOD_ITEM, second_item],
-                           provider=provider)
+    conn = _FakeConn()
+    stats = engine.run_discovery(
+        conn, provider=provider,
+        fetch_feed_items=lambda o: [GOOD_ITEM, second_item],
+        ytsearch_fn=lambda q: [], hydrate_fn=lambda item: item,
+        captions_fetcher=None, sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_sweeps=True)
+
     assert provider.calls == 2
     assert len(inserted) == 1
     assert inserted[0]["url"] == second_item.url
     assert len(stats.failures) == 1
     assert GOOD_ITEM.url in stats.failures[0]
+    # RuntimeError from the classifier is not a DB error -> no rollback,
+    # so any already-inserted rows in this outlet's transaction survive.
+    assert conn.rollbacks == 0
+
+
+def test_sweep_item_failure_is_nonfatal(monkeypatch):
+    inserted = []
+    _patch_db(monkeypatch, inserted)
+
+    class _AlwaysRaisesProvider:
+        def complete(self, prompt, *, max_tokens, temperature, system=None):
+            raise RuntimeError("classifier API error")
+
+    item = RawItem(url="https://www.youtube.com/watch?v=sw112345678",
+                   title="Maria Delgado town hall on the issues", description="d",
+                   channel_name="KXAN", duration_seconds=1800,
+                   published_at="2026-08-01", via="search")
+    hits = {"count": 0}
+
+    def fake_search(q):
+        hits["count"] += 1
+        return [item] if hits["count"] == 1 else []
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_AlwaysRaisesProvider(),
+        fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
+        hydrate_fn=lambda it: it, captions_fetcher=None, sleep_fn=lambda s: None,
+        meeting_keys=set(), today=dt.date(2026, 8, 2), skip_watchlist=True)
+
+    assert len(stats.failures) == 1
+    assert inserted == []
+
+
+def test_spend_cap_mid_race_skips_record_but_commits(monkeypatch):
+    inserted = []
+    recorded = []
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: recorded.append(rid))
+
+    item_a = RawItem(url="https://www.youtube.com/watch?v=aaa12345678",
+                     title="Maria Delgado town hall event", description="d",
+                     channel_name="KXAN", duration_seconds=1800,
+                     published_at="2026-08-01", via="search")
+    item_b = RawItem(url="https://www.youtube.com/watch?v=bbb12345678",
+                     title="Ana Ruiz debate coverage", description="d",
+                     channel_name="KXAN", duration_seconds=1800,
+                     published_at="2026-08-01", via="search")
+    hits = {"count": 0}
+
+    def fake_search(q):
+        hits["count"] += 1
+        if hits["count"] == 1:
+            return [item_a]
+        if hits["count"] == 2:
+            return [item_b]
+        return []
+
+    conn = _FakeConn()
+    stats = engine.run_discovery(
+        conn, provider=_FakeProvider(
+            '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+            ' "event_kind": "town_hall", "source_tier": 1, "original_vs_clip": "original",'
+            ' "route": "ingest", "why": "town hall"}'),
+        fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
+        hydrate_fn=lambda item: item, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True, classify_cap=1)
+
+    # item_a consumes the one allowed classification and is inserted; item_b
+    # arrives after the cap is already spent, so it's skipped in-race (no
+    # early break, since the cap wasn't exhausted until partway through).
+    assert stats.classified == 1
+    assert len(inserted) == 1
+    assert recorded == []          # cap truncated this race -> don't record it
+    assert conn.commits >= 1       # but the already-paid-for row still commits
 
 
 def test_spend_cap_defers_sweep_and_skips_record(monkeypatch, capsys):
