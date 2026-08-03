@@ -213,3 +213,160 @@ def seed_clusters(
             "overlap_seconds": round(score, 3),
         })
     return clusters, diagnostics
+
+
+#: Above this many embedded turns the nodes x nodes precomputation would need a
+#: turn x turn similarity matrix too large to hold comfortably (12k turns is
+#: ~576 MB). No real meeting is close — June 10, a 5-hour council meeting, has
+#: 2745 — so this raises rather than silently degrading.
+MAX_EMBEDDED_TURNS = 20_000
+
+
+@dataclass
+class NodePairStatistics:
+    """Exact per-node-pair aggregates, computed once from the turn matrix.
+
+    Every linkage below is computable from these without touching turn vectors
+    again, which is what makes the merge loop nodes-sized (87 for June 10)
+    rather than turns-sized (2745):
+
+    * ``similarity_sum`` / ``pair_count`` -> average linkage, exactly.
+    * ``similarity_min`` -> complete linkage, exactly.
+    * ``gram`` (sum-vector dot products) -> centroid linkage, exactly, since
+      the dot product of two clusters' summed vectors is the sum of their
+      node-pair gram entries.
+    """
+
+    similarity_sum: np.ndarray
+    pair_count: np.ndarray
+    similarity_min: np.ndarray
+    gram: np.ndarray
+    norm_sq: np.ndarray
+
+
+def node_pair_statistics(nodes: list[IdentityNode]) -> NodePairStatistics:
+    """Precompute node-pair similarity aggregates from per-turn vectors."""
+    count = len(nodes)
+    rows = [node.vectors for node in nodes if node.vectors.size]
+    total_turns = sum(matrix.shape[0] for matrix in rows)
+    if total_turns > MAX_EMBEDDED_TURNS:
+        raise ValueError(
+            f"{total_turns} embedded turns exceeds MAX_EMBEDDED_TURNS "
+            f"({MAX_EMBEDDED_TURNS}); raise the chunk size or aggregate in blocks"
+        )
+    similarity_sum = np.zeros((count, count))
+    pair_count = np.zeros((count, count))
+    similarity_min = np.full((count, count), np.inf)
+    sums = np.zeros((count, max((m.shape[1] for m in rows), default=0)))
+    for index, node in enumerate(nodes):
+        if node.vectors.size:
+            sums[index] = node.vectors.sum(axis=0)
+    for i, node_i in enumerate(nodes):
+        for j in range(i, count):
+            node_j = nodes[j]
+            if not node_i.vectors.size or not node_j.vectors.size:
+                continue
+            block = node_i.vectors @ node_j.vectors.T
+            similarity_sum[i, j] = similarity_sum[j, i] = float(block.sum())
+            pair_count[i, j] = pair_count[j, i] = float(block.size)
+            similarity_min[i, j] = similarity_min[j, i] = float(block.min())
+    gram = sums @ sums.T if sums.size else np.zeros((count, count))
+    return NodePairStatistics(
+        similarity_sum=similarity_sum,
+        pair_count=pair_count,
+        similarity_min=similarity_min,
+        gram=gram,
+        norm_sq=np.diag(gram).copy(),
+    )
+
+
+def _cluster_similarity(
+    members_a: list[int], members_b: list[int], stats: NodePairStatistics, linkage: str
+) -> float:
+    """Similarity between two clusters under the requested linkage, or -inf.
+
+    -inf means "no embedding evidence connects these", which keeps a node with
+    no usable vectors out of every embedding merge instead of merging it
+    arbitrarily.
+    """
+    pairs = stats.pair_count[np.ix_(members_a, members_b)]
+    if pairs.sum() == 0:
+        return float("-inf")
+    if linkage == "average":
+        return float(stats.similarity_sum[np.ix_(members_a, members_b)].sum() / pairs.sum())
+    if linkage == "complete":
+        block = stats.similarity_min[np.ix_(members_a, members_b)]
+        return float(block[np.isfinite(block)].min())
+    if linkage == "centroid":
+        dot = float(stats.gram[np.ix_(members_a, members_b)].sum())
+        norm_a = float(stats.gram[np.ix_(members_a, members_a)].sum()) ** 0.5
+        norm_b = float(stats.gram[np.ix_(members_b, members_b)].sum()) ** 0.5
+        if norm_a == 0 or norm_b == 0:
+            return float("-inf")
+        return dot / (norm_a * norm_b)
+    raise ValueError(f"unknown linkage {linkage!r}; use average, complete or centroid")
+
+
+def merge_clusters(
+    nodes: list[IdentityNode],
+    clusters: list[int],
+    stats: NodePairStatistics,
+    *,
+    threshold: float,
+    linkage: str = "average",
+) -> tuple[list[int], dict[str, list[dict[str, Any]]]]:
+    """Merge clusters by per-turn similarity, respecting cannot-link.
+
+    Repeatedly joins the single most similar admissible pair while its
+    similarity is at or above `threshold`. Closest-first (rather than
+    first-found) is what lets a person's strongest cross-window match claim
+    them before a weaker candidate can.
+
+    Diagnostics carry `embedding_matches`, `cannot_link_blocks` (pairs above
+    threshold refused by the constraint) and `margin` — how far below the
+    threshold the nearest non-merge sat. A small margin means the run came
+    close to the conflation cliff even if the speaker count looks right.
+    """
+    diagnostics: dict[str, Any] = {"embedding_matches": [], "cannot_link_blocks": []}
+    clusters = list(clusters)
+    best_rejected = float("-inf")
+
+    while True:
+        members: dict[int, list[int]] = {}
+        for index, cluster_id in enumerate(clusters):
+            members.setdefault(cluster_id, []).append(index)
+        occupied = {
+            cluster_id: {nodes[i].chunk_index for i in indices}
+            for cluster_id, indices in members.items()
+        }
+        best: tuple[float, int, int] | None = None
+        for a, b in ((a, b) for a in members for b in members if b > a):
+            similarity = _cluster_similarity(members[a], members[b], stats, linkage)
+            if similarity == float("-inf"):
+                continue
+            if occupied[a] & occupied[b]:
+                if similarity >= threshold:
+                    diagnostics["cannot_link_blocks"].append({
+                        "reason": "embedding",
+                        "similarity": round(similarity, 4),
+                        "windows": sorted(occupied[a] & occupied[b]),
+                    })
+                continue
+            if similarity < threshold:
+                best_rejected = max(best_rejected, similarity)
+                continue
+            if best is None or similarity > best[0]:
+                best = (similarity, a, b)
+        if best is None:
+            break
+        similarity, target, source = best
+        clusters = [target if c == source else c for c in clusters]
+        diagnostics["embedding_matches"].append({
+            "similarity": round(similarity, 4),
+            "windows": sorted(occupied[target] | occupied[source]),
+        })
+
+    diagnostics["margin"] = (
+        round(threshold - best_rejected, 4) if best_rejected > float("-inf") else None
+    )
+    return clusters, diagnostics

@@ -177,3 +177,124 @@ def test_cannot_link_pairs_cover_transitive_membership():
 
     joined = clusters[0]  # (0, SPEAKER_00) seeded with (1, SPEAKER_01)
     assert cannot_link_chunks(nodes, clusters, joined) == {0, 1}
+
+
+from src.global_identity import merge_clusters, node_pair_statistics
+
+
+def _vec(*values):
+    vec = np.array(values, dtype=float)
+    return vec / np.linalg.norm(vec)
+
+
+ALICE = _vec(1, 0, 0)
+ALICE_NOISY = _vec(1, 0.30, 0)   # cos(ALICE, ALICE_NOISY) ~ 0.958
+BOB = _vec(0, 1, 0)
+CAROL = _vec(0, 0, 1)
+
+
+def _node(chunk_index, local, vectors, speech=30.0, turns=None):
+    return IdentityNode(
+        chunk_index=chunk_index,
+        local_speaker=local,
+        turns=turns or [LocalTurn(chunk_index, 0.0, speech, local)],
+        vectors=np.asarray(vectors, dtype=float),
+        speech_seconds=speech,
+    )
+
+
+def test_average_linkage_merges_the_same_voice_across_windows():
+    nodes = [_node(0, "SPEAKER_00", [ALICE]), _node(1, "SPEAKER_00", [ALICE_NOISY])]
+    stats = node_pair_statistics(nodes)
+    clusters, diagnostics = merge_clusters(
+        nodes, [0, 1], stats, threshold=0.60, linkage="average"
+    )
+    assert len(set(clusters)) == 1
+    assert len(diagnostics["embedding_matches"]) == 1
+
+
+def test_different_voices_are_not_merged():
+    nodes = [_node(0, "SPEAKER_00", [ALICE]), _node(1, "SPEAKER_00", [BOB])]
+    stats = node_pair_statistics(nodes)
+    clusters, diagnostics = merge_clusters(
+        nodes, [0, 1], stats, threshold=0.60, linkage="average"
+    )
+    assert len(set(clusters)) == 2
+    # the nearest rejected merge is reported so operators can see how close a
+    # run came to the conflation cliff
+    assert diagnostics["margin"] == pytest.approx(0.60, abs=0.01)
+
+
+def test_cannot_link_blocks_a_merge_that_similarity_alone_would_make():
+    """Two locals in ONE window with near-identical voices: the window's own
+    clustering says they are different people, and that wins. This is the
+    structural bound on conflation."""
+    nodes = [_node(0, "SPEAKER_00", [ALICE]), _node(0, "SPEAKER_01", [ALICE_NOISY])]
+    stats = node_pair_statistics(nodes)
+    clusters, diagnostics = merge_clusters(
+        nodes, [0, 1], stats, threshold=0.60, linkage="average"
+    )
+    assert len(set(clusters)) == 2
+    assert len(diagnostics["cannot_link_blocks"]) == 1
+    assert diagnostics["cannot_link_blocks"][0]["similarity"] == pytest.approx(0.958, abs=0.01)
+
+
+def test_merging_is_transitive_across_three_windows():
+    """A person's window-2 appearance can join through their window-1 one even
+    if window 0 vs window 2 alone would be borderline — the global view the
+    sequential running-mean matcher cannot provide."""
+    # NOTE: deviation from the plan's literal values (bridge=0.55, far=1.05) —
+    # see the Task 4 report for why: those numbers make bridge-far (0.953) the
+    # single closest pair, so the documented "closest-admissible-pair-first"
+    # merge order joins bridge+far BEFORE alice, and the resulting
+    # alice-vs-(bridge+far) average (0.783) never clears threshold=0.80 — the
+    # test fails against a spec-compliant implementation. These values make
+    # alice-bridge (0.944) the closest pair instead, so it merges first, and
+    # the subsequent (alice+bridge)-vs-far average (0.833) clears the
+    # threshold — which is what the docstring below actually describes.
+    bridge = _vec(1, 0.35, 0)
+    far = _vec(1, 0.90, 0)
+    nodes = [
+        _node(0, "SPEAKER_00", [ALICE]),
+        _node(1, "SPEAKER_00", [bridge]),
+        _node(2, "SPEAKER_00", [far]),
+    ]
+    stats = node_pair_statistics(nodes)
+    clusters, _ = merge_clusters(nodes, [0, 1, 2], stats, threshold=0.80, linkage="average")
+    assert len(set(clusters)) == 1
+
+
+def test_complete_linkage_is_more_conservative_than_average():
+    """Complete linkage scores a candidate by its WORST pair, so one dissimilar
+    turn holds a merge back. Same data, different verdict."""
+    nodes = [
+        _node(0, "SPEAKER_00", [ALICE, ALICE]),
+        _node(1, "SPEAKER_00", [ALICE, _vec(1, 1, 0)]),   # one turn at cos 0.707
+    ]
+    stats = node_pair_statistics(nodes)
+    average, _ = merge_clusters(nodes, [0, 1], stats, threshold=0.80, linkage="average")
+    complete, _ = merge_clusters(nodes, [0, 1], stats, threshold=0.80, linkage="complete")
+    assert len(set(average)) == 1
+    assert len(set(complete)) == 2
+
+
+def test_a_node_with_no_vectors_never_merges_by_embedding():
+    nodes = [_node(0, "SPEAKER_00", np.zeros((0, 3))), _node(1, "SPEAKER_00", [ALICE])]
+    stats = node_pair_statistics(nodes)
+    clusters, _ = merge_clusters(nodes, [0, 1], stats, threshold=0.10, linkage="average")
+    assert len(set(clusters)) == 2
+
+
+def test_the_closest_admissible_pair_merges_first():
+    """CAROL is nearer ALICE than BOB is; with only one merge admissible per
+    window pair, the stronger match must win."""
+    nearly_alice = _vec(1, 0.10, 0)
+    nodes = [
+        _node(0, "SPEAKER_00", [ALICE]),
+        _node(1, "SPEAKER_00", [_vec(1, 0.80, 0)]),
+        _node(1, "SPEAKER_01", [nearly_alice]),
+    ]
+    stats = node_pair_statistics(nodes)
+    clusters, _ = merge_clusters(nodes, [0, 1, 2], stats, threshold=0.60, linkage="average")
+    assert clusters[0] == clusters[2]
+    assert clusters[0] != clusters[1]
