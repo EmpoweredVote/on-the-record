@@ -56,11 +56,11 @@ matching fails, and that the failure is not a threshold choice:
 
 - **7 of 86 node centroids are non-finite.** `pyannote/embedding` returns NaN on some turns
   and `diarize_chunk_window` averages turn vectors **without filtering** — one bad turn
-  poisons the whole node. (Independently confirmed during review: replaying the cached June
-  10 payloads through the new consumer dropped 161 of 2541 vectors as non-finite, traceable
-  to exactly those 7 nodes.) (`pipeline_extract_embeddings` does filter; the chunk worker was
-  not given the same guard.) Those 7 nodes cannot match by embedding at *any* threshold, so
-  they fragment by construction. This is a bug, not a tuning problem.
+  poisons the whole node — `pipeline_extract_embeddings` does filter, but the chunk worker was
+  never given the same guard. Those 7 nodes cannot match by embedding at *any* threshold, so
+  they fragment by construction. This is a bug, not a tuning problem. (Independently confirmed
+  during review: replaying the cached June 10 payloads through the new consumer dropped 161 of
+  2541 vectors as non-finite, traceable to exactly those 7 nodes.)
 - Same-person pairs: median 0.773, p05 0.321. Different-person pairs: p95 0.274, **max
   0.495**. At the shipped 0.50 threshold: **83.3 % same-person recall with 0 false
   positives**.
@@ -307,3 +307,102 @@ Routing VibeVoice's 50-minute windows through the global clusterer (it has its o
 0.75 and its own regression tests — a separate change with its own calibration); changing
 single-pass diarization in any way; re-sweeping chunk size below 60 min; GUI exposure of the
 new knobs; whisper/transcription chunking.
+
+## Calibration results (2026-08-03) — SHIPPING ENABLED at 60 min / average / 0.32 / wespeaker
+
+Method: `scripts/sweep_chunk_thresholds.py`. Chunk payloads were re-fetched once per meeting
+with per-turn embeddings under **both** candidate embedders (segmentation GPU paid once, both
+vector sets cached, ~11 MB for June 10) and cached under `calibration_chunks_60min_turnemb.json`
+so the pre-existing caches survived. The single-pass references were **reused from cache** —
+no reference arm was re-derived. Every threshold, linkage and embedder after the one fetch
+cost nothing.
+
+### The chosen configuration
+
+`DIARIZE_CHUNK_MINUTES = 60`, `DIARIZE_CHUNK_IDENTITY = "global"`,
+`DIARIZE_CHUNK_LINKAGE = "average"`, `DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.32`,
+`DIARIZE_CHUNK_EMBEDDER = pyannote/wespeaker-voxceleb-resnet34-LM`.
+
+| meeting | audio | DER | speakers | base | drift | fragmented | conflated | slowest window | single-pass | speedup |
+|---|---|---|---|---|---|---|---|---|---|---|
+| June 10 | 298 min | **0.0060** | **41** | 41 | **0.0%** | **1** (= single-pass's own) | **0** | 109s | 7100s | **65×** |
+| May 6 | 244 min | **0.0210** | **41** | 42 | **−2.4%** | reference not trustworthy | — | 109s | 3586s | **33×** |
+| July 29 | 82 min | n/a — **does not chunk** at 60 min | — | — | — | — | — | — | 584s | 1× |
+
+Both gates clear on both long meetings, and the stronger target clears too: the speaker count
+is **at or below** single-pass on both, not above. What blocked the default is gone.
+
+| June 10 | shipped sequential @0.50 | this change | single-pass |
+|---|---|---|---|
+| labels for 40 real people | 49 | **41** | 41 |
+| people fragmented | **6** | **1** | 1 |
+| people conflated | 0 | **0** | 0 |
+| DER vs single-pass | 0.0439 | **0.0060** | — |
+
+The one remaining fragmented person on June 10 is Zulich, split 265.9 s / 15.9 s — **the same
+person single-pass itself splits**, at a 3.2 % minority share. This path is therefore at
+parity with whole-meeting clustering on real identity accuracy, at 65× the speed.
+
+### Why 0.32, and why the scale is not 0.50
+
+Per-turn average linkage lives on a lower scale than per-window centroid similarity, because
+it averages over pairs of *individual* turn embeddings rather than over two window means. On
+June 10's reviewed reference, same-person cross-window node pairs score p05 0.273 / median
+0.427; different-person pairs top out at **0.322**. The grid inherited from the centroid path
+(0.45–0.75) was therefore entirely above the operating range and produced 58–79 speakers —
+the first sweep was aborted and re-run on a measured grid rather than tuned blindly.
+
+| June 10, 60 min, average | 0.40 | 0.36 | **0.32** | 0.30 | 0.28 | 0.26 | 0.24 | 0.22 |
+|---|---|---|---|---|---|---|---|---|
+| DER | .0085 | .0085 | **.0060** | .0060 | .0150 | .0150 | .0163 | .0318 |
+| speakers | 44 | 44 | **41** | 41 | 40 | 40 | 39 | 37 |
+| people conflated | 0 | 0 | **0** | 0 | **1** | 1 | 2 | 4 |
+
+**0.28 is a conflation cliff that two meetings agree on independently**: June 10 merges Paul
+Gillard (140.4 s, 44.6 % of the label) into another speaker, May 6 merges Steve Volin
+(168.5 s, 47.3 %). 0.32 is the top of the flat basin above it — chosen high because
+fragmentation is reviewable and conflation is not. July 29 at 45 minutes is **flat across the
+entire 0.24–0.40 grid**, so 0.32 is not fitted to the two gate meetings.
+
+### What the sweep also settled, by measurement rather than argument
+
+- **wespeaker beats pyannote/embedding decisively.** Separating same- from different-person
+  cross-window pairs: wespeaker J=0.953 (90.3 % recall at 4 false pairs in 2810);
+  pyannote/embedding J=0.919 at a 10× higher false rate and only 44 % recall at the same
+  threshold. wespeaker is also profile-compatible, so chunked runs now return 256-dim
+  centroids and no longer trip `run_local`'s re-extraction guard.
+- **Complete linkage is unusable here.** A real person's *worst* turn pair is often
+  anti-correlated (same-person median −0.125), so it merges almost nothing (recall 2–5 %).
+- **Centroid linkage is worse than average.** At the most conservative threshold tested it
+  already conflated 2 real people on June 10 (Hilary Martel, 30.3 %) and on May 6 (City Clerk
+  Bolden, 42.4 %). Pooling turns into one mean discards the distribution that per-turn
+  embeddings exist to provide.
+- **The DER gate alone could not have defended this.** Every June 10 configuration passes DER
+  ≤ 0.10 and ±20 % drift, *including* 0.22 with four real people conflated (DER 0.0318). The
+  reviewed-names check is what discriminates. The gate was kept exactly as specified; the
+  named check was added alongside it.
+- **Seams are clean.** At the winning configuration every seam (60/120/180/240 min on June 10,
+  45 min on July 29) has a speaker whose label is continuous across it. The seam report had to
+  be fixed first: it was inspecting `window_start_s`, a full minute from where ownership
+  actually transfers.
+- **Cost is a non-issue.** Global clustering over 2745 turns / 87 nodes: 23 ms to precompute
+  node-pair aggregates, ~500 ms for the merge loop.
+
+### Residual risk, accepted knowingly
+
+- **May 6's named reference is not trustworthy** and its fragmentation/conflation numbers are
+  excluded from the accuracy claim: only 21 human-reviewed segments, **150 segments with no
+  name at all** (each unnamed label becomes its own pseudo-person, so merging two of them
+  scores as conflation by construction), and one name already split across two labels in the
+  reference itself. May 6 is judged on the DER + speaker-count gate, which is what the gate
+  specifies. June 10 (871 voice-profile + 184 human-review segments, 40 names, nothing
+  unnamed) is the one real accuracy reference; July 29 (fully named, 13 people) supports it.
+- **July 29's single 2.6 % conflation** (Stosberg, 3.4 s) sits just above the 2 % floor and is
+  a boundary bleed, not a merge — single-pass scores one conflation there too.
+- **The sequential path is now outside its calibrated regime by default.** Its 0.50 was
+  measured on `pyannote/embedding` centroids, but new payloads carry wespeaker centroids. It
+  remains only as an escape hatch and for stitching pre-existing caches; a true sequential
+  baseline must come from the old cache (`--payload-suffix ""`), which is how the comparison
+  table above was produced.
+- **Centroids are turn-count-weighted, not duration-weighted** (see the architecture note).
+  Untested effect on voice-profile match rates; revisit if they move.

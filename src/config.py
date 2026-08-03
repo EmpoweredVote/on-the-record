@@ -90,25 +90,35 @@ RETURNING_SPEAKER_THRESHOLD_3 = 0.70  # Lowered match threshold for profiles see
 MERGE_GAP_SECONDS = 0.5  # merge adjacent same-speaker segments closer than this
 SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similarity above this
 
-# Chunked diarization (see docs/superpowers/specs/2026-07-31-chunked-parallel-diarization-design.md).
-# 0 = OFF: single-pass diarization, the long-standing behaviour. This is the
-# DEFAULT BY DELIBERATE CHOICE, not because chunking is unbuilt or unmeasured.
+# Chunked diarization: split a meeting into 60-minute windows, diarize them
+# concurrently on separate GPUs, then resolve identity globally. See
+# docs/superpowers/specs/2026-07-31-chunked-parallel-diarization-design.md for
+# the chunking itself and .../2026-08-03-global-identity-clustering-design.md
+# for the identity pass.
 #
-# Chunking works and is fast (60-min windows: 64x on the 5-hour June 10
-# meeting, 33x on May 6, DER 0.044/0.059 vs single-pass). But it reliably
-# produces MORE speaker labels than there are people (June 10: 49 vs 41),
-# because a window sees only a slice of each voice. identify._dedupe then
-# treats two labels naming one person as a mis-ID and demotes the loser to
-# unnamed+needs_review — so an unmerged fragment publishes a real person's
-# remarks attributed to NOBODY unless the reviewer catches it in the GUI.
-# Since the 118-minute single-pass cost is UNATTENDED machine time while the
-# fragmentation lands on the human review step, the trade is not worth it for
-# accuracy-first processing. Set to 60 (or pass --diarize-chunk-minutes 60)
-# when a long meeting genuinely needs fast turnaround, and watch the speaker
-# count during review. The fix that would make this default-on is
-# architectural, not a threshold: chunk for segmentation, then re-cluster
-# identity globally over per-turn embeddings (~20s for 2811 segments).
-DIARIZE_CHUNK_MINUTES = 0
+# 60 = ON. This was 0 (off) until 2026-08-03, because chunking reliably produced
+# MORE speaker labels than there were people (June 10: 49 vs 41) when
+# cross-window identity rested on per-window CENTROIDS. That is not cosmetic:
+# identify._dedupe_identities treats two labels naming one person as a mis-ID
+# and demotes the loser to unnamed+needs_review, so an unmerged fragment
+# publishes a real person's remarks attributed to NOBODY unless a reviewer
+# catches it. The fix was architectural, not another threshold — chunk for
+# SEGMENTATION (where the ~quadratic cost lives), then cluster identity
+# globally over PER-TURN embeddings (DIARIZE_CHUNK_IDENTITY below).
+#
+# Calibrated at 60 min / average linkage / 0.32 / wespeaker against
+# human-reviewed named transcripts, not just against single-pass output:
+#   June 10 (298 min): DER 0.0060, 41 speakers vs single-pass's 41 (drift
+#     0.0%), 1 person fragmented — the SAME person single-pass itself splits —
+#     and 0 conflated. Slowest window 109s vs 7100s single-pass (65x).
+#   May 6 (244 min): DER 0.0210, 41 speakers vs 42 (drift -2.4%).
+#   July 29 (82 min): does not chunk at 60 min (a meeting under ~90 minutes is
+#     one window, i.e. byte-identical single-pass output, zero risk). Checked
+#     separately at 45 min: 0 people fragmented where single-pass fragments 2.
+# Before this change the same meetings gave 49 and 43 labels with 6 people
+# fragmented on June 10. Fragmentation is what blocked the default, and it is
+# gone.
+DIARIZE_CHUNK_MINUTES = 60
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # Cosine similarity required to call a chunk-local speaker the same person as
 # an already-seen global speaker across windows. Deliberately LOWER than
@@ -153,26 +163,47 @@ DIARIZE_CHUNK_IDENTITY = "global"
 # centroids) or speaker_reconcile.EMBEDDING_MATCH_THRESHOLD (0.75, VibeVoice's
 # 50-minute windows): three matchers over three different signals, and reusing
 # a value measured on one of them elsewhere is how a tuned number ends up
-# somewhere it was never calibrated. Intended to be set by
-# scripts/sweep_chunk_thresholds.py; conflation (silent quote
-# misattribution) is far worse than fragmentation (an extra unnamed speaker
-# the review gate catches), so ties break toward the HIGHER value.
+# somewhere it was never calibrated. Conflation (silent quote misattribution)
+# is far worse than fragmentation (an extra unnamed speaker the review gate
+# catches), so ties break toward the HIGHER value.
 #
-# PROVISIONAL: 0.60 is a GUESS, not a measurement — the sweep that
-# calibrates this value has not run yet. DIARIZE_CHUNK_MINUTES = 0 keeps
-# chunking (and therefore this threshold) inert by default, but
-# `run_local.py --diarize-chunk-minutes N` can enable chunking, and
-# therefore this guessed value, manually today. Do not treat 0.60 as
-# validated until scripts/sweep_chunk_thresholds.py has actually run and
-# this comment has been updated to say so.
-DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.60
-# Cluster-distance linkage: "average" (mean pairwise turn similarity),
-# "complete" (worst pair — most conservative) or "centroid".
+# MEASURED 2026-08-03 by scripts/sweep_chunk_thresholds.py over per-turn
+# wespeaker vectors, using each meeting's human-reviewed transcript as truth.
+# The scale is much lower than the centroid path's 0.50 because these are
+# means over pairs of INDIVIDUAL TURN embeddings, not over per-window means:
+# same-person cross-window node pairs score p05 0.273 / median 0.427 while
+# different-person pairs top out at 0.322.
+#
+#   0.36-0.40  fragments slightly (June 10: 44 speakers for 41 people)
+#   0.30-0.32  FLAT and correct (June 10: 41 speakers, DER 0.0060, 1 person
+#              fragmented — the same one single-pass splits — 0 conflated;
+#              May 6: 41 vs 42, DER 0.0210; July 29 @45min: 0 fragmented)
+#   0.28       CONFLATION CLIFF, independently on both long meetings: June 10
+#              merges Paul Gillard (140.4s, 44.6% of the label) into another
+#              speaker, May 6 merges Steve Volin (168.5s, 47.3%). DER rises
+#              with it (0.0060 -> 0.0150).
+#
+# 0.32 is the TOP of the flat basin, one full step above a cliff that two
+# meetings agree on. Do not lower it without re-running the sweep. Note that
+# the DER + speaker-count gate PASSES even at 0.22 (4 real people conflated on
+# June 10), so DER alone cannot defend this value — the reviewed-names check in
+# bench/identity_score.py is what discriminates.
+DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.32
+# Cluster-distance linkage. MEASURED: "average" (mean pairwise turn
+# similarity) is the only workable choice. "complete" scores a candidate by its
+# WORST turn pair, and a real person's worst pair is often anti-correlated
+# (same-person median -0.125), so it merges almost nothing. "centroid" pools
+# each cluster into one mean and throws away the distribution that makes
+# per-turn embeddings worth having — it conflated 2 real people at the most
+# conservative threshold tested, on both long meetings.
 DIARIZE_CHUNK_LINKAGE = "average"
-# Which embedder's per-turn vectors the global pass clusters. wespeaker is
-# what pyannote 3.1 clusters on internally AND what voice profiles are built
-# on (config.EMBEDDING_MODEL), so its centroids need no re-extraction in
-# run_local's dimension guard.
+# Which embedder's per-turn vectors the global pass clusters. MEASURED: on
+# June 10's reviewed reference, wespeaker separates same-person from
+# different-person cross-window pairs at J=0.953 (90.3% recall at 4 false
+# pairs in 2810) versus pyannote/embedding's J=0.919 at a 10x higher false
+# rate. It is also what pyannote 3.1 clusters on internally AND what voice
+# profiles are built on (config.EMBEDDING_MODEL), so the centroids this path
+# returns are profile-compatible and skip run_local's re-extraction guard.
 DIARIZE_CHUNK_EMBEDDER = EMBEDDING_MODEL
 
 # --- Post-identification segment merging ---
