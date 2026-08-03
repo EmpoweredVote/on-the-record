@@ -57,6 +57,12 @@ def parse_podcast_feed(xml_text: str, *, outlet_id: "str | None" = None) -> list
     items = []
     for item in root.findall("./channel/item"):
         page = item.findtext("link")
+        if not page:
+            guid = item.find("guid")
+            if guid is not None and guid.get("isPermaLink", "true").lower() == "true":
+                text = (guid.text or "").strip()
+                if text.startswith(("http://", "https://")):
+                    page = text
         enclosure = item.find("enclosure")
         url = page or (enclosure.get("url") if enclosure is not None else None)
         if not url:

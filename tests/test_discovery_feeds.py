@@ -24,10 +24,17 @@ def test_parse_youtube_feed_maps_entries():
 def test_parse_podcast_feed_prefers_page_link_over_enclosure():
     xml = (FIXTURES / "discovery_podcast_feed.xml").read_text()
     items = feeds.parse_podcast_feed(xml, outlet_id="o2")
-    assert len(items) == 1
+    assert len(items) == 2
     assert items[0].url == "https://example.buzzsprout.com/ep/101"  # page URL = citation
     assert items[0].title == "Maria Delgado on housing"
     assert items[0].published_at.startswith("2026-08-01")
+
+
+def test_parse_podcast_feed_falls_back_to_permalink_guid():
+    xml = (FIXTURES / "discovery_podcast_feed.xml").read_text()
+    items = feeds.parse_podcast_feed(xml, outlet_id="o2")
+    assert len(items) == 2
+    assert items[1].url == "https://example.buzzsprout.com/ep/102"  # guid page, not .mp3
 
 
 def test_fetch_outlet_items_dispatches_by_kind(monkeypatch):
