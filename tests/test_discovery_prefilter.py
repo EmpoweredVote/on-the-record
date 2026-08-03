@@ -46,6 +46,11 @@ def test_prefilter_passes_short_clip_with_event_term():
     assert v.passed
 
 
+def test_prefilter_passes_short_qa_clip():
+    v = prefilter_item("Q&A with Maria Delgado", "", 90, ["Maria Delgado"])
+    assert v.passed
+
+
 def test_prefilter_passes_long_video_with_name():
     v = prefilter_item("Delgado vs. Ruiz: full debate", "Maria Delgado faces Ana Ruiz",
                        55 * 60, ["Maria Delgado", "Ana Ruiz"])

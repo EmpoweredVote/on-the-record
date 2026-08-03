@@ -54,7 +54,7 @@ def match_names(title: "str | None", description: "str | None",
 
 def _has_event_term(title: "str | None") -> bool:
     t = normalize(title)
-    return any(term.replace("-", " ") in t for term in EVENT_TERMS)
+    return any(normalize(term) in t for term in EVENT_TERMS)
 
 
 def prefilter_item(title, description, duration_seconds, full_names) -> PrefilterVerdict:
