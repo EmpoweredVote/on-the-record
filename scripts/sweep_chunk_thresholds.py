@@ -37,6 +37,7 @@ from gui.env import load_env_local
 
 load_env_local()
 
+from bench.identity_score import identity_report, named_reference_turns  # noqa: E402
 from bench.score import calculate_der  # noqa: E402
 from src import config  # noqa: E402
 from src.modal_compute import (  # noqa: E402
@@ -83,19 +84,43 @@ def _reference(app, meeting_id: str, wav: Path) -> tuple[list, float]:
     return turns, elapsed
 
 
-def _payload_cache(wav: Path, chunk_minutes: int) -> Path:
-    return wav.parent / f"calibration_chunks_{chunk_minutes}min.json"
+def _payload_cache(wav: Path, chunk_minutes: int, suffix: str) -> Path:
+    stem = f"calibration_chunks_{chunk_minutes}min"
+    return wav.parent / (f"{stem}_{suffix}.json" if suffix else f"{stem}.json")
 
 
-def _payloads(app, wav: Path, meeting_id: str, chunk_minutes: int) -> list[str]:
+def _payloads(app, wav: Path, meeting_id: str, chunk_minutes: int,
+              suffix: str, embedders: list[str]) -> list[str]:
     """Chunk-worker payloads, from cache when available (this is the GPU cost)."""
-    cache = _payload_cache(wav, chunk_minutes)
+    cache = _payload_cache(wav, chunk_minutes, suffix)
     if cache.exists():
-        print(f"  reusing cached chunk payloads for {chunk_minutes} min", flush=True)
+        print(f"  reusing cached chunk payloads for {chunk_minutes} min "
+              f"({cache.name})", flush=True)
         return json.loads(cache.read_text())
-    payloads = fetch_chunk_payloads(app, wav, meeting_id, chunk_minutes)
+    payloads = fetch_chunk_payloads(
+        app, wav, meeting_id, chunk_minutes, embedders=tuple(embedders)
+    )
     cache.write_text(json.dumps(payloads))
+    print(f"  cached {cache.name} ({cache.stat().st_size / 1e6:.1f} MB)", flush=True)
     return payloads
+
+
+def _seam_report(payloads: list[str], segments: list[dict], window_s: float = 10.0) -> None:
+    """Print label continuity across each chunk boundary.
+
+    A person speaking across a seam must not change label there; this prints
+    the turns on both sides so a human can see it rather than trusting an
+    aggregate.
+    """
+    seams = sorted({json.loads(p)["window_start_s"] for p in payloads} - {0.0})
+    turns = _turns(segments)
+    for seam in seams:
+        before = [t for t in turns if seam - window_s <= t[1] <= seam]
+        after = [t for t in turns if seam <= t[0] <= seam + window_s]
+        crossing = {t[2] for t in before} & {t[2] for t in after}
+        print(f"  seam @ {seam / 60:.1f} min: {len(before)} turn(s) before, "
+              f"{len(after)} after, {len(crossing)} label(s) continuous "
+              f"across it: {sorted(crossing)}")
 
 
 def main() -> int:
@@ -106,10 +131,35 @@ def main() -> int:
                     default=[0.75, 0.70, 0.65, 0.60, 0.55, 0.50])
     ap.add_argument("--merge", type=float, nargs="+", default=[0.80],
                     help="post-reconcile merge_similar_speakers threshold(s)")
+    ap.add_argument("--identity", choices=["global", "sequential", "both"],
+                    default="global",
+                    help="cross-window identity strategy to sweep")
+    ap.add_argument("--cluster", type=float, nargs="+",
+                    default=[0.70, 0.65, 0.60, 0.55, 0.50, 0.45],
+                    help="global-identity cluster similarity threshold(s)")
+    ap.add_argument("--linkage", nargs="+", default=["average"],
+                    choices=["average", "complete", "centroid"])
+    ap.add_argument("--embedder", nargs="+",
+                    default=["pyannote/wespeaker-voxceleb-resnet34-LM",
+                             "pyannote/embedding"],
+                    help="per-turn embedder(s) to cluster; the worker computes "
+                         "every one listed in ONE pass so segmentation GPU is "
+                         "paid once")
+    ap.add_argument("--payload-suffix", default="turnemb",
+                    help="cache filename suffix; keeps pre-turn-embedding "
+                         "caches intact for old-vs-new comparison")
     args = ap.parse_args()
 
     app = _modal_app()
     rows: list[dict] = []
+    # Parallel to `rows`, so the best passing row's own segments can be handed
+    # to `_seam_report` at the end without re-stitching or re-parsing payloads.
+    row_segments: list[list[dict]] = []
+    # Payloads are cheap to hold in memory (they are already local JSON once
+    # fetched) and re-keying by (meeting, chunk_minutes) lets the seam
+    # spot-check find the right cached payload set for the winning row.
+    payloads_by_key: dict[tuple[str, int], list[str]] = {}
+
     for meeting_id in args.meeting_ids:
         wav = config.MEETINGS_DIR / meeting_id / "audio.wav"
         if not wav.exists():
@@ -123,59 +173,126 @@ def main() -> int:
         print(f"  {len(base_turns)} turns, {base_speakers} speakers, "
               f"{base_elapsed:.0f}s", flush=True)
 
+        named_path = wav.parent / "transcript_named.json"
+        named_reference = None
+        if named_path.exists():
+            named_reference = named_reference_turns(json.loads(named_path.read_text()))
+            base_report = identity_report(base_turns, named_reference)
+            print(f"  human-reviewed reference: {base_report.reference_people} people; "
+                  f"SINGLE-PASS itself fragments {len(base_report.fragmentation)} and "
+                  f"conflates {len(base_report.conflation)} of them "
+                  "(this is the bar to beat, not DER)", flush=True)
+
         with tempfile.TemporaryDirectory() as tmp:
             ref = _rttm(base_turns, meeting_id, Path(tmp) / "ref.rttm")
             for chunk_minutes in args.chunks:
                 print(f"\n=== {meeting_id}: chunk payloads @ {chunk_minutes} min ===",
                       flush=True)
-                payloads = _payloads(app, wav, meeting_id, chunk_minutes)
-                for emb in args.embedding:
-                    for mrg in args.merge:
-                        segments, centroids = stitch_chunk_payloads(
-                            payloads, use_merge=True,
-                            embedding_threshold=emb, merge_threshold=mrg,
-                        )
-                        turns = _turns(segments)
-                        speakers = len({t[2] for t in turns})
-                        hyp = _rttm(turns, meeting_id, Path(tmp) / "hyp.rttm")
-                        metrics = calculate_der(ref, hyp)
-                        der = metrics["der"] if metrics else None
-                        drift = ((speakers - base_speakers) / base_speakers
-                                 if base_speakers else 0.0)
-                        rows.append({
-                            "meeting": meeting_id, "chunk_minutes": chunk_minutes,
-                            "embedding_threshold": emb, "merge_threshold": mrg,
-                            "der": der, "speakers": speakers,
-                            "base_speakers": base_speakers,
-                            "speaker_drift": round(drift, 3),
-                            "confusion": metrics["confusion"] if metrics else None,
-                            "passes_gate": bool(der is not None and der <= DER_GATE
-                                                and abs(drift) <= DRIFT_GATE),
-                        })
-                        print(f"    emb {emb:.2f} merge {mrg:.2f}: "
-                              f"DER {der:.4f}, {speakers} spk "
-                              f"(drift {drift:+.1%}) "
-                              f"{'PASS' if rows[-1]['passes_gate'] else 'fail'}",
-                              flush=True)
+                payloads = _payloads(app, wav, meeting_id, chunk_minutes,
+                                      args.payload_suffix, args.embedder)
+                payloads_by_key[(meeting_id, chunk_minutes)] = payloads
+
+                configs: list[dict] = []
+                if args.identity in ("global", "both"):
+                    configs += [
+                        {"identity": "global", "embedder": embedder,
+                         "linkage": linkage, "cluster_threshold": cluster,
+                         "merge_threshold": mrg}
+                        for embedder in args.embedder
+                        for linkage in args.linkage
+                        for cluster in args.cluster
+                        for mrg in args.merge
+                    ]
+                if args.identity in ("sequential", "both"):
+                    configs += [
+                        {"identity": "sequential", "embedding_threshold": emb,
+                         "merge_threshold": mrg}
+                        for emb in args.embedding
+                        for mrg in args.merge
+                    ]
+
+                for cfg in configs:
+                    segments, centroids = stitch_chunk_payloads(
+                        payloads, use_merge=True, **cfg
+                    )
+                    turns = _turns(segments)
+                    speakers = len({t[2] for t in turns})
+                    hyp = _rttm(turns, meeting_id, Path(tmp) / "hyp.rttm")
+                    metrics = calculate_der(ref, hyp)
+                    der = metrics["der"] if metrics else None
+                    drift = ((speakers - base_speakers) / base_speakers
+                             if base_speakers else 0.0)
+                    row = {
+                        "meeting": meeting_id, "chunk_minutes": chunk_minutes,
+                        "der": der, "speakers": speakers,
+                        "base_speakers": base_speakers,
+                        "speaker_drift": round(drift, 3),
+                        "confusion": metrics["confusion"] if metrics else None,
+                        "passes_gate": bool(der is not None and der <= DER_GATE
+                                            and abs(drift) <= DRIFT_GATE),
+                        **cfg,
+                    }
+                    if named_reference:
+                        report = identity_report(turns, named_reference)
+                        row["named_fragmentation"] = len(report.fragmentation)
+                        row["named_conflation"] = len(report.conflation)
+                        row["named_people"] = report.reference_people
+                    rows.append(row)
+                    row_segments.append(segments)
+                    label = (f"{cfg['identity']}"
+                             + (f" {cfg['linkage']}@{cfg['cluster_threshold']:.2f}"
+                                f" {cfg['embedder'].split('/')[-1][:12]}"
+                                if cfg["identity"] == "global"
+                                else f" emb@{cfg['embedding_threshold']:.2f}"))
+                    extra = ""
+                    if named_reference:
+                        extra = (f" | vs reviewed names: "
+                                 f"{row['named_fragmentation']} fragmented, "
+                                 f"{row['named_conflation']} conflated")
+                    print(f"    {label}: DER {der:.4f}, {speakers} spk "
+                          f"(drift {drift:+.1%}) "
+                          f"{'PASS' if row['passes_gate'] else 'fail'}{extra}",
+                          flush=True)
 
     print("\n==================== SWEEP SUMMARY ====================")
-    print(f"{'meeting':<42} {'chunk':>5} {'emb':>5} {'merge':>6} {'DER':>8} "
-          f"{'spk':>4} {'base':>5} {'drift':>7} gate")
-    for r in sorted(rows, key=lambda r: (r["meeting"], r["chunk_minutes"],
-                                         -r["embedding_threshold"])):
+    print(f"{'meeting':<42} {'chunk':>5} {'identity':>10} {'config':>30} "
+          f"{'DER':>8} {'spk':>4} {'base':>5} {'drift':>7} gate")
+    for r in sorted(rows, key=lambda r: (r["meeting"], r["chunk_minutes"], r["identity"])):
         der = f"{r['der']:.4f}" if r["der"] is not None else "n/a"
-        print(f"{r['meeting']:<42} {r['chunk_minutes']:>5} "
-              f"{r['embedding_threshold']:>5.2f} {r['merge_threshold']:>6.2f} "
-              f"{der:>8} {r['speakers']:>4} {r['base_speakers']:>5} "
+        if r["identity"] == "global":
+            cfg_str = (f"{r['linkage']}@{r['cluster_threshold']:.2f} "
+                       f"{r['embedder'].split('/')[-1][:12]}")
+        else:
+            cfg_str = f"emb@{r['embedding_threshold']:.2f}"
+        extra = ""
+        if "named_fragmentation" in r:
+            extra = (f" frag={r['named_fragmentation']} "
+                     f"confl={r['named_conflation']}")
+        print(f"{r['meeting']:<42} {r['chunk_minutes']:>5} {r['identity']:>10} "
+              f"{cfg_str:>30} {der:>8} {r['speakers']:>4} {r['base_speakers']:>5} "
               f"{r['speaker_drift']:>+7.1%} "
-              f"{'PASS' if r['passes_gate'] else 'fail'}")
-    passing = [r for r in rows if r["passes_gate"]]
+              f"{'PASS' if r['passes_gate'] else 'fail'}{extra}")
+    passing = [(i, r) for i, r in enumerate(rows) if r["passes_gate"]]
     if passing:
-        best = min(passing, key=lambda r: r["der"])
-        print(f"\nBEST PASSING: chunk {best['chunk_minutes']}min, "
-              f"embedding {best['embedding_threshold']:.2f}, "
-              f"merge {best['merge_threshold']:.2f} → DER {best['der']:.4f}, "
-              f"{best['speakers']} speakers (drift {best['speaker_drift']:+.1%})")
+        best_idx, best = min(passing, key=lambda item: item[1]["der"])
+        if best["identity"] == "global":
+            cfg_desc = (f"identity global, {best['linkage']} linkage, "
+                        f"cluster {best['cluster_threshold']:.2f}, "
+                        f"embedder {best['embedder']}, "
+                        f"merge {best['merge_threshold']:.2f}")
+        else:
+            cfg_desc = (f"identity sequential, embedding {best['embedding_threshold']:.2f}, "
+                        f"merge {best['merge_threshold']:.2f}")
+        print(f"\nBEST PASSING: chunk {best['chunk_minutes']}min, {cfg_desc} "
+              f"→ DER {best['der']:.4f}, {best['speakers']} speakers "
+              f"(drift {best['speaker_drift']:+.1%})")
+        if "named_fragmentation" in best:
+            print(f"  vs reviewed names: {best['named_fragmentation']} fragmented, "
+                  f"{best['named_conflation']} conflated of {best['named_people']} people")
+        print(f"\n  seam spot-check for the best passing config "
+              f"({best['meeting']} @ {best['chunk_minutes']}min):")
+        _seam_report(payloads_by_key[(best["meeting"], best["chunk_minutes"])],
+                     row_segments[best_idx])
     else:
         print("\nNO SETTING PASSES BOTH GATES on this meeting.")
     print("=======================================================")
