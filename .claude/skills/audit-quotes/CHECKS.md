@@ -144,10 +144,29 @@ that "a government-paying program is the most moral…"`) from flooding the repo
 the *source's*, faithfully reproduced. A cut that falls *inside* the source's quotation still flags.
 
 **`source-unfetchable` is not a soft `source-unverified`.** A JS-rendered campaign site, a 403
-(Ballotpedia blocks the fetcher), or a paywall yields no prose to match against. Calling that
-"quote not in its source" would be a false accusation, so it is reported separately, at medium,
-meaning *go read the page yourself*. Roughly a quarter of written sources in the first sample
-landed here.
+(Ballotpedia blocks the fetcher), a paywall, or a PDF yields no prose to match against. Calling
+that "quote not in its source" would be a false accusation, so it is reported separately, at
+medium, meaning *go read the page yourself*.
+
+Two rules keep that boundary honest, both added after the first full sweep put 86 nav-only pages
+into the high-severity bucket:
+
+- **Readability is judged by prose, not word count, and only after the match fails.**
+  `MIN_PAGE_WORDS` counts every word, so a roll-call tally or a link farm clears it on menu
+  labels alone. `prose_word_count` instead sums the words living in blocks of at least
+  `PROSE_BLOCK_WORDS` (8). That bar is deliberately low: campaign platform pages are legitimately
+  written as short bullets and are where most true positives come from, so a stricter test would
+  discard real findings. The check runs *after* the verbatim match, never before — a page that
+  matched is by definition legible, so a sparse page whose only real prose **is** the quote can
+  never be dismissed as unreadable.
+- **PDFs are detected, not parsed.** `extract_page_text` over binary returns mojibake from which
+  every quote is "absent". `looks_like_pdf` checks both the extension and the `%PDF-` magic
+  bytes, since plenty of PDFs are served from extensionless URLs.
+
+Residual limit: a page whose only long block is a cookie/consent notice can still slip past the
+prose gate and produce a false `source-unverified` (observed on `gowithmunro.com/promises`, where
+the two longest blocks were a cookie banner and a repeated site title). Rare — after the fix, 274
+of 294 findings sit on pages with ≥120 words of genuine prose — but not zero.
 
 What these checks **cannot** do: judge whether a verbatim, well-bounded excerpt is the candidate's
 *distinctive* position, whether it is a curator summary of a bulleted platform (`source-summary`,
