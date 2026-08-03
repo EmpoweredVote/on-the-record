@@ -182,7 +182,7 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
     of returning nothing. Never raises.
     """
     from gui import politicians
-    if politicians._db_url():
+    if politicians.db_configured():
         return politicians.search_politicians_safe(q, limit=limit)
     return _search_politicians_http(q, limit=limit)
 

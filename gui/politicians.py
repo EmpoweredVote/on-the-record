@@ -274,6 +274,14 @@ def _db_url() -> Optional[str]:
     return url or None
 
 
+def db_configured() -> bool:
+    """Whether a direct-DB search is possible at all. Public because callers must
+    pre-check: search_politicians_safe returns {"results": [], "error": None}
+    with no DATABASE_URL, which is indistinguishable from "no matches", so the
+    capability question can't be answered from its result."""
+    return _db_url() is not None
+
+
 def _token_clauses(tokens: list[str]) -> tuple[str, list]:
     """(sql, params) for the name filter: one AND-ed clause per token, each an OR
     over _NAME_FIELDS. Only field names — from a module constant — are

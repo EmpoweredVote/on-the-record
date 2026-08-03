@@ -518,6 +518,28 @@ def test_review_api_falls_back_to_http_without_a_db_url(monkeypatch):
     assert r["duplicate_note"] == ""
 
 
+def test_review_api_does_not_touch_http_when_a_db_url_is_set(monkeypatch):
+    # The real regression surface: a wiring slip that still calls the HTTP client
+    # would lose every row's candidacy data, and asserting only the return value
+    # would not notice. Track the call as a side effect rather than relying on an
+    # exception to propagate: _search_politicians_http's own `except Exception`
+    # (which must stay broad so real transport errors stay best-effort) would
+    # otherwise swallow a raise-on-call probe and this test would pass either way.
+    from gui import review_api
+    monkeypatch.setattr(politicians, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(politicians, "search_politicians_safe",
+                        lambda q, limit=10: {"results": [], "error": None})
+    calls = []
+
+    def boom(q, limit=10):
+        calls.append(q)
+        raise AssertionError("HTTP search must not run when DATABASE_URL is set")
+
+    monkeypatch.setattr("src.essentials_client.search_politicians", boom)
+    review_api.search_politicians_safe("tiffany")
+    assert calls == []
+
+
 def test_review_api_fallback_swallows_http_errors(monkeypatch):
     from gui import review_api
     from src.essentials_client import EssentialsClientError
