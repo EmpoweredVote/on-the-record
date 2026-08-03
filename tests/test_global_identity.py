@@ -279,15 +279,20 @@ def test_complete_linkage_is_more_conservative_than_average():
 
 
 def test_a_node_with_no_vectors_never_merges_by_embedding():
+    # threshold is negative so a broken "-inf becomes 0.0" implementation
+    # would still pass the merge check; only the real -inf sentinel is
+    # guaranteed to stay below a negative threshold too.
     nodes = [_node(0, "SPEAKER_00", np.zeros((0, 3))), _node(1, "SPEAKER_00", [ALICE])]
     stats = node_pair_statistics(nodes)
-    clusters, _ = merge_clusters(nodes, [0, 1], stats, threshold=0.10, linkage="average")
+    clusters, _ = merge_clusters(nodes, [0, 1], stats, threshold=-1.0, linkage="average")
     assert len(set(clusters)) == 2
 
 
 def test_the_closest_admissible_pair_merges_first():
-    """CAROL is nearer ALICE than BOB is; with only one merge admissible per
-    window pair, the stronger match must win."""
+    """Node 0 (ALICE) is nearer node 2's vector than node 1's, so the (0, 2)
+    pair merges first even though node 1 is visited first in iteration order.
+    Nodes 1 and 2 share a window, so cannot-link then permanently blocks node
+    1 from ever joining the cluster node 0 and node 2 formed."""
     nearly_alice = _vec(1, 0.10, 0)
     nodes = [
         _node(0, "SPEAKER_00", [ALICE]),
@@ -298,3 +303,13 @@ def test_the_closest_admissible_pair_merges_first():
     clusters, _ = merge_clusters(nodes, [0, 1, 2], stats, threshold=0.60, linkage="average")
     assert clusters[0] == clusters[2]
     assert clusters[0] != clusters[1]
+
+
+def test_node_pair_statistics_rejects_more_turns_than_max_embedded_turns(monkeypatch):
+    """MAX_EMBEDDED_TURNS is a documented safety valve against an O(turns^2)
+    similarity matrix; patch it down rather than construct a real 20k-turn
+    meeting to exercise it cheaply."""
+    monkeypatch.setattr("src.global_identity.MAX_EMBEDDED_TURNS", 2)
+    nodes = [_node(0, "SPEAKER_00", [ALICE, ALICE]), _node(1, "SPEAKER_00", [ALICE])]
+    with pytest.raises(ValueError, match="MAX_EMBEDDED_TURNS"):
+        node_pair_statistics(nodes)

@@ -151,7 +151,7 @@ def cannot_link_chunks(
 
 def seed_clusters(
     nodes: list[IdentityNode], chunks: list[ChunkResult]
-) -> tuple[list[int], dict[str, list[dict[str, Any]]]]:
+) -> tuple[list[int], dict[str, Any]]:
     """Seed one cluster per node, then join nodes that overlap in a seam.
 
     Returns (cluster_id per node, diagnostics). Overlap candidates are applied
@@ -241,13 +241,20 @@ class NodePairStatistics:
     pair_count: np.ndarray
     similarity_min: np.ndarray
     gram: np.ndarray
-    norm_sq: np.ndarray
 
 
 def node_pair_statistics(nodes: list[IdentityNode]) -> NodePairStatistics:
     """Precompute node-pair similarity aggregates from per-turn vectors."""
     count = len(nodes)
     rows = [node.vectors for node in nodes if node.vectors.size]
+    dims = {matrix.shape[1] for matrix in rows}
+    if len(dims) > 1:
+        raise ValueError(
+            f"embedded turns carry mismatched dimensions {sorted(dims)} — this "
+            "means vectors from two different embedding models (e.g. 256-dim "
+            "wespeaker and 512-dim pyannote/embedding) ended up in one meeting's "
+            "payload"
+        )
     total_turns = sum(matrix.shape[0] for matrix in rows)
     if total_turns > MAX_EMBEDDED_TURNS:
         raise ValueError(
@@ -276,7 +283,6 @@ def node_pair_statistics(nodes: list[IdentityNode]) -> NodePairStatistics:
         pair_count=pair_count,
         similarity_min=similarity_min,
         gram=gram,
-        norm_sq=np.diag(gram).copy(),
     )
 
 
@@ -314,7 +320,7 @@ def merge_clusters(
     *,
     threshold: float,
     linkage: str = "average",
-) -> tuple[list[int], dict[str, list[dict[str, Any]]]]:
+) -> tuple[list[int], dict[str, Any]]:
     """Merge clusters by per-turn similarity, respecting cannot-link.
 
     Repeatedly joins the single most similar admissible pair while its
@@ -323,10 +329,15 @@ def merge_clusters(
     them before a weaker candidate can.
 
     Diagnostics carry `embedding_matches`, `cannot_link_blocks` (pairs above
-    threshold refused by the constraint) and `margin` — how far below the
-    threshold the nearest non-merge sat. A small margin means the run came
-    close to the conflation cliff even if the speaker count looks right.
+    threshold refused by the constraint, as of the FINAL scan only — a block
+    can never be lifted, so re-recording it on every intervening iteration
+    would just inflate the count) and `margin` — how far below the threshold
+    the nearest non-merge sat. A small margin means the run came close to the
+    conflation cliff even if the speaker count looks right.
     """
+    if linkage not in {"average", "complete", "centroid"}:
+        raise ValueError(f"unknown linkage {linkage!r}; use average, complete or centroid")
+
     diagnostics: dict[str, Any] = {"embedding_matches": [], "cannot_link_blocks": []}
     clusters = list(clusters)
     best_rejected = float("-inf")
@@ -340,13 +351,14 @@ def merge_clusters(
             for cluster_id, indices in members.items()
         }
         best: tuple[float, int, int] | None = None
+        blocked: list[dict[str, Any]] = []
         for a, b in ((a, b) for a in members for b in members if b > a):
             similarity = _cluster_similarity(members[a], members[b], stats, linkage)
             if similarity == float("-inf"):
                 continue
             if occupied[a] & occupied[b]:
                 if similarity >= threshold:
-                    diagnostics["cannot_link_blocks"].append({
+                    blocked.append({
                         "reason": "embedding",
                         "similarity": round(similarity, 4),
                         "windows": sorted(occupied[a] & occupied[b]),
@@ -357,6 +369,7 @@ def merge_clusters(
                 continue
             if best is None or similarity > best[0]:
                 best = (similarity, a, b)
+        diagnostics["cannot_link_blocks"] = blocked
         if best is None:
             break
         similarity, target, source = best
