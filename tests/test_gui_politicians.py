@@ -4,6 +4,9 @@ Mirrors tests/test_gui_races.py: pure label/parse functions tested directly,
 the DB query tested through a fake cursor.
 """
 import json
+import os
+
+import pytest
 
 from gui import politicians
 from gui.politicians import (
@@ -429,3 +432,65 @@ def test_search_honours_an_explicit_limit(monkeypatch):
     politicians.search_politicians_safe("tiffany", limit=25)
     _sql, params = cur.executed
     assert params[-1] == 25
+
+
+# --- integration: the two things a fake cursor structurally cannot prove -------
+# The SQL-string assertions above would pass unchanged if the DISTINCT ON tie-break
+# sorted the wrong way, or if the outer ranking never took effect — the fake cursor
+# returns rows in the order given. These run only when DATABASE_URL is set.
+
+#
+# conftest's autouse _no_real_db_env deletes DATABASE_URL from os.environ for
+# EVERY test, so reading it inside a test body always yields None and the search
+# would return zero rows with error=None — these tests would "pass" their skip
+# check and then fail silently for the wrong reason. Per that fixture's own
+# instruction ("Tests that need these set them explicitly"), capture the URL at
+# import time — collection runs before fixtures — and hand it back to just these
+# three tests via `live_db`.
+_REAL_DB_URL = os.environ.get("DATABASE_URL")
+
+_needs_db = pytest.mark.skipif(not _REAL_DB_URL,
+                               reason="needs DATABASE_URL (live essentials schema)")
+
+
+@pytest.fixture
+def live_db(monkeypatch):
+    """Restore the real DATABASE_URL that conftest scrubbed, for live tests only."""
+    monkeypatch.setenv("DATABASE_URL", _REAL_DB_URL or "")
+
+
+@_needs_db
+def test_live_fanout_collapses_to_the_real_office(live_db):
+    # Harriet M. Hageman holds BOTH "U.S. Representative" and the placeholder
+    # "Candidate for U.S. Senate — Wyoming" in office_current_holder. One row must
+    # come back, carrying the real office — if the boolean tie-break inverted, the
+    # placeholder would win and nothing else would notice.
+    out = politicians.search_politicians_safe("hageman")
+    hers = [r for r in out["results"] if r["full_name"].startswith("Harriet")]
+    assert len(hers) == 1, [r["display"] for r in hers]
+    assert hers[0]["office_title"] == "U.S. Representative"
+    assert "Candidate for" not in hers[0]["display"]
+    assert "U.S. Senate Wyoming" in hers[0]["candidacy_display"]
+
+
+@_needs_db
+def test_live_candidate_row_outranks_its_office_holding_twin(live_db):
+    # Two Francesca Hong person rows exist; only one carries the WI Governor edge,
+    # and it must sort FIRST so the curator's eye lands on the right one.
+    out = politicians.search_politicians_safe("hong")
+    hongs = [r for r in out["results"] if r["full_name"] == "Francesca Hong"]
+    assert len(hongs) == 2, [r["display"] for r in hongs]
+    assert hongs[0]["candidacy_warn"] is False
+    assert "Governor" in hongs[0]["candidacy_display"]
+    assert hongs[1]["candidacy_warn"] is True
+    assert hongs[1]["candidacy_display"] == politicians.NO_CANDIDACIES
+    assert all(r["duplicate_note"] for r in hongs)
+
+
+@_needs_db
+def test_live_an_inactive_person_who_is_an_active_candidate_is_findable(live_db):
+    # is_active = false but candidate_status = active (Murphy TX council 2026).
+    # Before the IN clause this returned zero — a silent "no such person".
+    out = politicians.search_politicians_safe("andrew chase")
+    assert [r["full_name"] for r in out["results"]] == ["Andrew Chase"]
+    assert out["results"][0]["candidacy_warn"] is False

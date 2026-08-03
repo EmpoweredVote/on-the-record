@@ -217,6 +217,14 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
 # want to present. Limiting at that level would truncate an arbitrary N rows
 # BEFORE ranking, so on a common surname the candidate could be cut entirely.
 # Hence the wrap: dedupe inside, rank and LIMIT outside.
+#
+# is_active alone was too strict: three people are is_active = false while holding
+# an ACTIVE candidacy (Andrew Chase / Laura Deel, Murphy TX council 2026; Gopal
+# Ponangi, Frisco 2025), and the picker returned zero for them — indistinguishable
+# from "no such person", the very failure this module exists to remove. The IN is
+# deliberately UNCORRELATED so Postgres hashes it once: the correlated EXISTS form
+# measured 1700ms against 160ms, while this measures 162ms. Rows that are inactive
+# AND only ever withdrawn stay hidden.
 _SEARCH_SQL = """
 SELECT * FROM (
   SELECT DISTINCT ON (p.id)
@@ -245,7 +253,10 @@ SELECT * FROM (
     JOIN essentials.elections e ON e.id = r.election_id
     WHERE rc.politician_id = p.id
   ) cand ON true
-  WHERE p.is_active = true
+  WHERE (p.is_active = true
+         OR p.id IN (SELECT rc2.politician_id
+                     FROM essentials.race_candidates rc2
+                     WHERE COALESCE(rc2.candidate_status, 'active') <> 'withdrawn'))
     AND {token_clauses}
   ORDER BY p.id,
            (COALESCE(o.title, '') ILIKE 'Candidate for%%'),
@@ -261,6 +272,31 @@ LIMIT %s
 def _db_url() -> Optional[str]:
     url = os.environ.get("DATABASE_URL", "").strip()
     return url or None
+
+
+def _token_clauses(tokens: list[str]) -> tuple[str, list]:
+    """(sql, params) for the name filter: one AND-ed clause per token, each an OR
+    over _NAME_FIELDS. Only field names — from a module constant — are
+    interpolated; every user value is a bound parameter.
+
+    Known cost: essentials has a trigram index on f_unaccent(lower(full_name)),
+    which this predicate cannot use (no lower(), and the OR across three
+    unindexed columns would defeat it anyway), so each search seq-scans the
+    politicians table — 160ms today and O(table size). Recorded as a spec
+    follow-up: fixing it needs matching expression indexes in ev-accounts'
+    schema, and the secondary fields can't simply be dropped (23 active rows
+    match only on preferred_name, which is the nickname recall).
+    """
+    clauses = []
+    params: list = []
+    for tok in tokens:
+        ors = " OR ".join(
+            f"public.f_unaccent(p.{f}) ILIKE public.f_unaccent(%s)"
+            for f in _NAME_FIELDS
+        )
+        clauses.append(f"({ors})")
+        params.extend([f"%{tok}%"] * len(_NAME_FIELDS))
+    return " AND ".join(clauses), params
 
 
 def _coerce_candidacies(raw) -> list:
@@ -294,17 +330,9 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
     if not url:
         return {"results": [], "error": None}
 
-    clauses = []
-    params: list = []
-    for tok in tokens:
-        ors = " OR ".join(
-            f"public.f_unaccent(p.{f}) ILIKE public.f_unaccent(%s)"
-            for f in _NAME_FIELDS
-        )
-        clauses.append(f"({ors})")
-        params.extend([f"%{tok}%"] * len(_NAME_FIELDS))
+    where_sql, params = _token_clauses(tokens)
     params.append(limit)
-    sql = _SEARCH_SQL.format(token_clauses=" AND ".join(clauses))
+    sql = _SEARCH_SQL.format(token_clauses=where_sql)
 
     try:
         conn = psycopg2.connect(url)
@@ -332,7 +360,10 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
         rec["candidacy_display"] = candidacy_display(rec["candidacies"])
         # Explicit flag rather than letting the client match on the label text:
         # Task 6 styles this row as a warning, and a reworded label must not be
-        # able to silently turn that styling off.
-        rec["candidacy_warn"] = not rec["candidacies"]
+        # able to silently turn that styling off. Derived FROM the label rather
+        # than from `candidacies`, so the two can never disagree — a row whose
+        # candidacies all fail to render would otherwise say "no candidacies"
+        # while telling the client not to warn.
+        rec["candidacy_warn"] = rec["candidacy_display"] == NO_CANDIDACIES
         results.append(rec)
     return {"results": mark_duplicate_names(results), "error": None}
