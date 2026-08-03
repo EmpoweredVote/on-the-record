@@ -9,12 +9,22 @@
 # checkout was sitting on a quotes feature branch 12 commits behind main.
 # Civic-data automation must not depend on where a human left their HEAD.
 #
-# So: a dedicated DETACHED worktree that this script fast-forwards to
+# So: a dedicated STANDALONE CLONE that this script fast-forwards to
 # origin/main before every run. Nothing a human does to their branches can
 # change what the scheduler executes, and the scheduler always runs shipped
 # code. .env.local is symlinked in (it is gitignored, so it exists only in
 # the primary checkout) and the venv is shared — an interpreter is not
 # branch-specific.
+#
+# IT MUST BE A CLONE, NOT A GIT WORKTREE. A worktree keeps its metadata in
+# the primary repo's .git/worktrees/, i.e. under ~/Documents — and macOS
+# privacy protection (TCC) is granted per binary, so /usr/bin/git launched by
+# launchd is DENIED there even though the same git works from a Terminal
+# shell, which inherits Terminal's grant. Measured 2026-08-03: every git
+# command in the launchd context failed with "fatal: not a git repository:
+# .../.git/worktrees/automation-checkout" while python in the same job read
+# the symlinked .env.local fine. A standalone clone keeps all git metadata in
+# ~/CouncilScribe, which launchd can read.
 set -euo pipefail
 
 REPO="/Users/chrisandrews/Documents/GitHub/on-the-record"
@@ -25,8 +35,11 @@ echo "=== scheduled poll $(date '+%Y-%m-%d %H:%M:%S %Z') ==="
 
 if [ ! -d "$AUTOMATION_CHECKOUT" ]; then
     echo "FATAL: $AUTOMATION_CHECKOUT is missing. Recreate it with:"
-    echo "  git -C $REPO worktree add --detach $AUTOMATION_CHECKOUT origin/main"
+    echo "  git clone $REPO $AUTOMATION_CHECKOUT"
+    echo "  git -C $AUTOMATION_CHECKOUT remote set-url origin git@github.com:EmpoweredVote/on-the-record.git"
+    echo "  git -C $AUTOMATION_CHECKOUT checkout --detach origin/main"
     echo "  ln -s $REPO/.env.local $AUTOMATION_CHECKOUT/.env.local"
+    echo "(a CLONE, not a worktree — launchd's git cannot read ~/Documents; see the header)"
     exit 1
 fi
 
