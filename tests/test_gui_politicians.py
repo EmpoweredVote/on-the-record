@@ -4,7 +4,12 @@ Mirrors tests/test_gui_races.py: pure label/parse functions tested directly,
 the DB query tested through a fake cursor.
 """
 from gui import politicians
-from gui.politicians import candidacy_display, parse_name_query, politician_display
+from gui.politicians import (
+    candidacy_display,
+    mark_duplicate_names,
+    parse_name_query,
+    politician_display,
+)
 from gui.races import race_display
 
 
@@ -185,3 +190,55 @@ def test_candidacy_display_skips_malformed_entries():
 
 def test_candidacy_display_all_malformed_reads_as_none():
     assert candidacy_display(["not-a-dict", None]) == "no candidacies"
+
+
+def test_mark_duplicate_names_leaves_unique_names_alone():
+    rows = [{"full_name": "Mandela Barnes"}, {"full_name": "Kelda Roys"}]
+    out = mark_duplicate_names(rows)
+    assert [r.get("duplicate_note", "") for r in out] == ["", ""]
+
+
+def test_mark_duplicate_names_flags_both_rows_of_a_pair():
+    rows = [{"full_name": "Francesca Hong"}, {"full_name": "Francesca Hong"}]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] == "⚠ 2 records for this name" for r in out)
+
+
+def test_mark_duplicate_names_ignores_middle_initials_and_case():
+    rows = [{"full_name": "Thomas P. Tiffany"}, {"full_name": "thomas tiffany"}]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] for r in out)
+
+
+def test_mark_duplicate_names_counts_the_whole_group():
+    rows = [{"full_name": "Mike Rogers"}] * 3
+    out = mark_duplicate_names([dict(r) for r in rows])
+    assert all(r["duplicate_note"] == "⚠ 3 records for this name" for r in out)
+
+
+def test_mark_duplicate_names_flags_genuinely_different_people_too():
+    # Two real distinct Mike Rogers still both get flagged — correct: the
+    # curator must look, and we can't tell them apart from names alone.
+    rows = [{"full_name": "Mike Rogers", "office_title": "U.S. Representative"},
+            {"full_name": "Mike Rogers", "office_title": "Senator"}]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] for r in out)
+
+
+def test_mark_duplicate_names_does_not_collide_two_juniors():
+    # Without dropping the suffix both would key to "john jr" — prod has plenty
+    # of these (John G. Roberts Jr., John P. Wiley Jr.).
+    rows = [{"full_name": "John G. Roberts Jr."}, {"full_name": "John P. Wiley Jr."}]
+    out = mark_duplicate_names(rows)
+    assert [r["duplicate_note"] for r in out] == ["", ""]
+
+
+def test_mark_duplicate_names_still_matches_across_a_suffix():
+    rows = [{"full_name": "Harold Ford III"}, {"full_name": "Harold Ford"}]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] == "⚠ 2 records for this name" for r in out)
+
+
+def test_mark_duplicate_names_does_not_flag_a_lone_row():
+    out = mark_duplicate_names([{"full_name": "Thomas P. Tiffany"}])
+    assert out[0]["duplicate_note"] == ""

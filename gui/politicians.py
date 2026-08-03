@@ -153,3 +153,42 @@ def candidacy_display(candidacies) -> str:
     if extra:
         text += f"; +{extra} more"
     return f"running: {text}" if any(running for _label, running in pairs) else text
+
+
+def _dupe_key(full_name: str) -> str:
+    """'thomas tiffany' from 'Thomas P. Tiffany' — a loose identity key for
+    spotting two rows that a curator would read as the same person.
+
+    Bare middle initials and generational suffixes are dropped for the same
+    reason parse_name_query drops them: they're display choices, not identity.
+    Dropping the suffix is what stops the key collapsing to the suffix itself —
+    'John G. Roberts Jr.' and 'John P. Wiley Jr.' would BOTH key to 'john jr'
+    and get flagged as the same person, and prod is full of such names.
+    """
+    tokens = [t for t in re.findall(r"[a-z0-9]+", (full_name or "").lower())
+              if len(t) > 1 and t not in _NOISE_TOKENS]
+    if len(tokens) <= 2:
+        return " ".join(tokens)
+    return f"{tokens[0]} {tokens[-1]}"
+
+
+def mark_duplicate_names(results: list[dict]) -> list[dict]:
+    """Set `duplicate_note` on every row whose normalized name is shared with
+    another row in the same response ('' on the rest). Mutates and returns the
+    list.
+
+    Deliberately flags the WHOLE group rather than guessing which row is right:
+    two rows can be one person split by a bad hand-add, or two genuinely
+    different people with the same name, and nothing in the name distinguishes
+    those cases. The candidacy line is what tells the curator which to pick; this
+    marker only says "look before you click".
+    """
+    counts: dict[str, int] = {}
+    for r in results:
+        key = _dupe_key(r.get("full_name") or "")
+        if key:
+            counts[key] = counts.get(key, 0) + 1
+    for r in results:
+        n = counts.get(_dupe_key(r.get("full_name") or ""), 0)
+        r["duplicate_note"] = f"⚠ {n} records for this name" if n > 1 else ""
+    return results
