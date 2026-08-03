@@ -975,6 +975,14 @@ def _db_url() -> Optional[str]:
     return url or None
 
 
+def db_configured() -> bool:
+    """Whether a direct-DB search is possible at all. Public because callers must
+    pre-check: search_politicians_safe returns {"results": [], "error": None}
+    with no DATABASE_URL, which is indistinguishable from "no matches", so the
+    capability question can't be answered from its result."""
+    return _db_url() is not None
+
+
 def _token_clauses(tokens: list[str]) -> tuple[str, list]:
     """(sql, params) for the name filter: one AND-ed clause per token, each an OR
     over _NAME_FIELDS. Only field names — from a module constant — are
@@ -1184,6 +1192,22 @@ def test_review_api_falls_back_to_http_without_a_db_url(monkeypatch):
     assert r["duplicate_note"] == ""
 
 
+def test_review_api_does_not_touch_http_when_a_db_url_is_set(monkeypatch):
+    # The real regression surface: a wiring slip that still calls the HTTP client
+    # would lose every row's candidacy data, and asserting only the return value
+    # would not notice.
+    from gui import review_api
+    monkeypatch.setattr(politicians, "_db_url", lambda: "postgres://fake")
+    monkeypatch.setattr(politicians, "search_politicians_safe",
+                        lambda q, limit=10: {"results": [], "error": None})
+
+    def boom(q, limit=10):
+        raise AssertionError("HTTP search must not run when DATABASE_URL is set")
+
+    monkeypatch.setattr("src.essentials_client.search_politicians", boom)
+    review_api.search_politicians_safe("tiffany")
+
+
 def test_review_api_fallback_swallows_http_errors(monkeypatch):
     from gui import review_api
     from src.essentials_client import EssentialsClientError
@@ -1224,7 +1248,7 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
     of returning nothing. Never raises.
     """
     from gui import politicians
-    if politicians._db_url():
+    if politicians.db_configured():
         return politicians.search_politicians_safe(q, limit=limit)
     return _search_politicians_http(q, limit=limit)
 
@@ -1270,7 +1294,7 @@ The fallback reads both `politician_id`/`id` and `politician_slug`/`slug` becaus
 $VP -m pytest tests/test_gui_politicians.py -q
 ```
 
-Expected: `50 passed, 3 skipped` without `DATABASE_URL`, or `53 passed` with it
+Expected: `51 passed, 3 skipped` without `DATABASE_URL`, or `54 passed` with it
 
 - [ ] **Step 5: Run the full suite to confirm no regression**
 
@@ -1278,7 +1302,7 @@ Expected: `50 passed, 3 skipped` without `DATABASE_URL`, or `53 passed` with it
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1768 passed, 3 skipped` (1718 baseline + 50 fake-cursor tests from Tasks 1-4 + 3 from this task; the 3 integration tests skip without DATABASE_URL)
+Expected: `1769 passed, 3 skipped` (1718 baseline + 47 fake-cursor tests from Tasks 1-4 + 4 from this task; the 3 integration tests skip without DATABASE_URL)
 
 - [ ] **Step 6: Commit**
 
@@ -1413,7 +1437,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1766 passed, 3 skipped` (1718 baseline + 50 from Tasks 1-5 + 1 from Task 6, 3 skipped without DATABASE_URL)
+Expected: `1770 passed, 3 skipped` (1718 baseline + 51 from Tasks 1-5 + 1 from Task 6, 3 skipped without DATABASE_URL)
 
 - [ ] **Step 2: Start the GUI and exercise the picker by hand**
 
