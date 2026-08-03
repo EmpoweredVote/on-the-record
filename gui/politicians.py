@@ -38,29 +38,50 @@ _NAME_FIELDS = ("full_name", "preferred_name", "first_name", "last_name")
 # Candidacies shown in full before collapsing the tail into "+N more".
 _MAX_CANDIDACIES = 3
 
+# Query tokens that carry no matchable signal. Generational suffixes live in
+# their own `name_suffix` column, which _NAME_FIELDS doesn't search, so keeping
+# them would AND in a clause nothing can satisfy.
+_NOISE_TOKENS = frozenset({"jr", "sr", "ii", "iii", "iv"})
+
 
 def parse_name_query(q: str) -> list[str]:
-    """Lowercase alphanumeric tokens from a raw picker query.
+    """Matchable lowercase tokens from a raw picker query.
 
-    Each token becomes its own AND-ed clause, so "Thomas Tiffany" matches the
-    stored "Thomas P. Tiffany" (the dropped middle initial stops mattering) and
-    word order stops mattering too.
+    Each token becomes its own AND-ed clause, which is what lets "Thomas
+    Tiffany" match the stored "Thomas P. Tiffany" — but it cuts both ways, so
+    anything the stored row can't possibly carry has to be dropped or the whole
+    query returns nothing. Two such cases, both verified against prod:
+
+      "John F Kennedy"  -> stored "John Kennedy" has no F   -> 0 rows
+      "Wesley Hunt Jr"  -> name_suffix isn't in _NAME_FIELDS -> 0 rows
+
+    So single-character tokens (bare middle initials) and generational suffixes
+    are dropped. Word order never mattered either way.
     """
-    return re.findall(r"[a-z0-9]+", (q or "").lower())
+    return [t for t in re.findall(r"[a-z0-9]+", (q or "").lower())
+            if len(t) > 1 and t not in _NOISE_TOKENS]
 
 
 def politician_display(rec: dict) -> str:
     """'Thomas P. Tiffany · U.S. Representative · Congressional District 7 ·
     United States Federal Government' — identity, empty parts omitted.
 
-    district_label is dropped when it merely repeats office_title: essentials
-    stores d.label == o.title for many single-seat offices, and printing it twice
-    crowds out the part that actually disambiguates.
+    office_title and district_label are frequently redundant: 112 prod rows store
+    d.label == o.title outright ("Texas Attorney General" twice) and another 1141
+    have one contained in the other ("Representative, 18th Middlesex District" /
+    "18th Middlesex District"). Printing both crowds out the part that actually
+    disambiguates, so when one contains the other only the longer survives —
+    which side that is varies ("Attorney General" vs "Texas Attorney General"
+    keeps the district).
     """
     office = (rec.get("office_title") or "").strip()
     district = (rec.get("district_label") or "").strip()
-    if district and district == office:
-        district = ""
+    if office and district:
+        lower_office, lower_district = office.lower(), district.lower()
+        if lower_district in lower_office:
+            district = ""
+        elif lower_office in lower_district:
+            office, district = district, ""
     parts = [
         (rec.get("full_name") or "").strip(),
         office,
