@@ -89,9 +89,8 @@ def backfill(*, dry_run: bool = False) -> int:
         if dry_run:
             print(f"  [dry-run] {mdir.name}: {before} -> {after} segments")
             continue
-        from gui.review_api import _atomic_write_text
-        _atomic_write_text(mdir / "transcript_named.json",
-                           json.dumps(meeting.to_dict(), indent=2))
+        from src.atomic_io import atomic_write_json
+        atomic_write_json(mdir / "transcript_named.json", meeting.to_dict())
         try:
             from src.export import export_all
             export_all(meeting, mdir / "exports")

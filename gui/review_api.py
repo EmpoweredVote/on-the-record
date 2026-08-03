@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
 from src import config
+# The crash-safe writer lives in src/ so run_local.py and src/* can use it too;
+# re-exported under the old private name for this module's existing callers.
+from src.atomic_io import atomic_write_text as _atomic_write_text
 from src.models import Meeting
 
 from gui.models import CONFIDENT_THRESHOLD, ENROLL_MIN_SPEECH_SECONDS, ReviewPageData, SpeakerCard
@@ -81,13 +83,6 @@ def _load_meeting_ctx(meeting_id: str):
     except (ValueError, OSError, KeyError, TypeError, AttributeError):
         return None
     return meeting, meeting_dir, _load_roster_for(meeting_dir)
-
-
-def _atomic_write_text(path: Path, text: str) -> None:
-    """Crash-safe write: temp file in the same dir, then os.replace."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
 
 
 def _load_embeddings(meeting_dir: Path) -> dict:
