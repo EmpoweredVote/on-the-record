@@ -89,3 +89,58 @@ def politician_display(rec: dict) -> str:
         (rec.get("government_name") or "").strip(),
     ]
     return " · ".join(p for p in parts if p)
+
+
+def _status(c: dict) -> str:
+    """Normalized candidacy status. Missing status means active, matching
+    publish.resolve_races_for_politicians, which doesn't filter status."""
+    return (c.get("status") or "active").strip().lower()
+
+
+def _is_active(c) -> bool:
+    """Whether a candidacy entry counts as a live run."""
+    if not isinstance(c, dict):
+        return False
+    return _status(c) == "active"
+
+
+def _one_candidacy(c: dict) -> Optional[str]:
+    """'WI · Governor · Republican primary · 2026', or 'withdrawn: <that>' for a
+    non-active status. None when the entry isn't a usable dict."""
+    if not isinstance(c, dict):
+        return None
+    label = race_display(
+        c.get("position_name") or "",
+        c.get("year"),
+        c.get("state"),
+        c.get("primary_party"),
+        c.get("election_type"),
+    )
+    if not label:
+        return None
+    status = _status(c)
+    return label if status == "active" else f"{status}: {label}"
+
+
+def candidacy_display(candidacies) -> str:
+    """'running: <race>; <race>' — or the literal 'no candidacies', which is the
+    signal that this person row has no race_candidates edge and so cannot carry a
+    meeting or a quote into a race.
+
+    The 'running:' lead is dropped when nothing is active, because
+    'running: withdrawn: ...' reads as nonsense and a withdrawn-only person is
+    precisely the case a curator needs to notice.
+
+    Capped at _MAX_CANDIDACIES with a '+N more' tail so one row can't run away.
+    Malformed entries are skipped rather than breaking the whole label.
+    """
+    pairs = [p for p in ((_one_candidacy(c), _is_active(c)) for c in (candidacies or []))
+             if p[0]]
+    if not pairs:
+        return "no candidacies"
+    shown = pairs[:_MAX_CANDIDACIES]
+    text = "; ".join(label for label, _active in shown)
+    extra = len(pairs) - len(shown)
+    if extra:
+        text += f", +{extra} more"
+    return f"running: {text}" if any(active for _label, active in pairs) else text

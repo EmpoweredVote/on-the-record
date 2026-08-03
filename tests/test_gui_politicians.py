@@ -4,7 +4,8 @@ Mirrors tests/test_gui_races.py: pure label/parse functions tested directly,
 the DB query tested through a fake cursor.
 """
 from gui import politicians
-from gui.politicians import parse_name_query, politician_display
+from gui.politicians import candidacy_display, parse_name_query, politician_display
+from gui.races import race_display
 
 
 def test_parse_name_query_splits_tokens():
@@ -93,3 +94,60 @@ def test_politician_display_keeps_both_when_neither_contains_the_other():
            "district_label": "Congressional District 7", "government_name": ""}
     assert politician_display(rec) == (
         "Thomas P. Tiffany · U.S. Representative · Congressional District 7")
+
+
+def _cand(position_name="Governor", state="WI", primary_party="Republican",
+          election_type="primary", year=2026, status="active"):
+    return {"position_name": position_name, "state": state,
+            "primary_party": primary_party, "election_type": election_type,
+            "year": year, "status": status}
+
+
+def test_candidacy_display_none_is_a_warning_string():
+    assert candidacy_display([]) == "no candidacies"
+    assert candidacy_display(None) == "no candidacies"
+
+
+def test_candidacy_display_one_matches_race_display():
+    expected = race_display("Governor", 2026, "WI", "Republican", "primary")
+    assert candidacy_display([_cand()]) == f"running: {expected}"
+    assert "WI · Governor · Republican primary · 2026" in candidacy_display([_cand()])
+
+
+def test_candidacy_display_joins_several_with_semicolons():
+    out = candidacy_display([_cand(), _cand(election_type="general", primary_party="")])
+    assert out.startswith("running: ")
+    assert out.count("; ") == 1
+    assert "Republican primary" in out and "General" in out
+
+
+def test_candidacy_display_prefixes_non_active_status():
+    # No "running:" lead when nothing is active — "running: withdrawn: ..." reads
+    # as nonsense, and a withdrawn-only person is exactly the case a curator
+    # needs to notice.
+    out = candidacy_display([_cand(status="withdrawn")])
+    assert out == "withdrawn: WI · Governor · Republican primary · 2026"
+
+
+def test_candidacy_display_leads_with_running_when_any_is_active():
+    out = candidacy_display([_cand(status="withdrawn"),
+                             _cand(position_name="Senate")])
+    assert out.startswith("running: ")
+    assert "withdrawn: WI · Governor" in out
+
+
+def test_candidacy_display_caps_at_three_and_counts_the_rest():
+    cands = [_cand(position_name=f"Office {i}") for i in range(5)]
+    out = candidacy_display(cands)
+    assert out.count("; ") == 2          # 3 shown => 2 separators
+    assert out.endswith("+2 more")
+    assert "Office 3" not in out
+
+
+def test_candidacy_display_skips_malformed_entries():
+    out = candidacy_display(["not-a-dict", _cand(), None])
+    assert out == "running: WI · Governor · Republican primary · 2026"
+
+
+def test_candidacy_display_all_malformed_reads_as_none():
+    assert candidacy_display(["not-a-dict", None]) == "no candidacies"
