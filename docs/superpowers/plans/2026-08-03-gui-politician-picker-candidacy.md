@@ -1278,7 +1278,7 @@ Expected: `50 passed, 3 skipped` without `DATABASE_URL`, or `53 passed` with it
 $VP -m pytest tests/ -q
 ```
 
-Expected: `1765 passed, 3 skipped` (1718 baseline + 50 fake-cursor tests, 3 skipped without DATABASE_URL)
+Expected: `1768 passed, 3 skipped` (1718 baseline + 50 fake-cursor tests from Tasks 1-4 + 3 from this task; the 3 integration tests skip without DATABASE_URL)
 
 - [ ] **Step 6: Commit**
 
