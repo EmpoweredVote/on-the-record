@@ -201,7 +201,7 @@ def test_mark_duplicate_names_leaves_unique_names_alone():
 def test_mark_duplicate_names_flags_both_rows_of_a_pair():
     rows = [{"full_name": "Francesca Hong"}, {"full_name": "Francesca Hong"}]
     out = mark_duplicate_names(rows)
-    assert all(r["duplicate_note"] == "⚠ 2 records for this name" for r in out)
+    assert all(r["duplicate_note"] == "⚠ 2 results share this name" for r in out)
 
 
 def test_mark_duplicate_names_ignores_middle_initials_and_case():
@@ -211,9 +211,9 @@ def test_mark_duplicate_names_ignores_middle_initials_and_case():
 
 
 def test_mark_duplicate_names_counts_the_whole_group():
-    rows = [{"full_name": "Mike Rogers"}] * 3
-    out = mark_duplicate_names([dict(r) for r in rows])
-    assert all(r["duplicate_note"] == "⚠ 3 records for this name" for r in out)
+    rows = [{"full_name": "Mike Rogers"} for _ in range(3)]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] == "⚠ 3 results share this name" for r in out)
 
 
 def test_mark_duplicate_names_flags_genuinely_different_people_too():
@@ -236,7 +236,25 @@ def test_mark_duplicate_names_does_not_collide_two_juniors():
 def test_mark_duplicate_names_still_matches_across_a_suffix():
     rows = [{"full_name": "Harold Ford III"}, {"full_name": "Harold Ford"}]
     out = mark_duplicate_names(rows)
-    assert all(r["duplicate_note"] == "⚠ 2 records for this name" for r in out)
+    assert all(r["duplicate_note"] == "⚠ 2 results share this name" for r in out)
+
+
+def test_mark_duplicate_names_does_not_group_nameless_rows():
+    # Two rows with no name are not "the same person" — without the empty-key
+    # guard every nameless row would flag every other one.
+    rows = [{"full_name": ""}, {"full_name": None}, {}]
+    out = mark_duplicate_names(rows)
+    assert [r["duplicate_note"] for r in out] == ["", "", ""]
+
+
+def test_mark_duplicate_names_collapses_a_middle_name_on_purpose():
+    # first+last for 3+ tokens means a full middle name is dropped, so these
+    # collide. That is the intended bias: a needless second glance costs nothing,
+    # a missed duplicate costs a silently detached meeting. Pinned so a later
+    # "fix" to key on all tokens can't quietly reopen the false-negative case.
+    rows = [{"full_name": "Mary Kate Olsen"}, {"full_name": "Mary Olsen"}]
+    out = mark_duplicate_names(rows)
+    assert all(r["duplicate_note"] == "⚠ 2 results share this name" for r in out)
 
 
 def test_mark_duplicate_names_does_not_flag_a_lone_row():

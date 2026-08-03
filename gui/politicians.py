@@ -55,6 +55,15 @@ NO_CANDIDACIES = "no candidacies"
 _NOISE_TOKENS = frozenset({"jr", "sr", "ii", "iii", "iv"})
 
 
+def _tokens(text: str) -> list[str]:
+    """Lowercase alphanumeric tokens worth matching on: bare initials and
+    generational suffixes dropped. Shared by parse_name_query (which needs tokens
+    a stored row could plausibly contain) and _dupe_key (which needs tokens that
+    carry identity) — the two want the same normalization for the same reason."""
+    return [t for t in re.findall(r"[a-z0-9]+", (text or "").lower())
+            if len(t) > 1 and t not in _NOISE_TOKENS]
+
+
 def parse_name_query(q: str) -> list[str]:
     """Matchable lowercase tokens from a raw picker query.
 
@@ -69,8 +78,7 @@ def parse_name_query(q: str) -> list[str]:
     So single-character tokens (bare middle initials) and generational suffixes
     are dropped. Word order never mattered either way.
     """
-    return [t for t in re.findall(r"[a-z0-9]+", (q or "").lower())
-            if len(t) > 1 and t not in _NOISE_TOKENS]
+    return _tokens(q)
 
 
 def politician_display(rec: dict) -> str:
@@ -165,8 +173,7 @@ def _dupe_key(full_name: str) -> str:
     'John G. Roberts Jr.' and 'John P. Wiley Jr.' would BOTH key to 'john jr'
     and get flagged as the same person, and prod is full of such names.
     """
-    tokens = [t for t in re.findall(r"[a-z0-9]+", (full_name or "").lower())
-              if len(t) > 1 and t not in _NOISE_TOKENS]
+    tokens = _tokens(full_name)
     if len(tokens) <= 2:
         return " ".join(tokens)
     return f"{tokens[0]} {tokens[-1]}"
@@ -182,13 +189,25 @@ def mark_duplicate_names(results: list[dict]) -> list[dict]:
     different people with the same name, and nothing in the name distinguishes
     those cases. The candidacy line is what tells the curator which to pick; this
     marker only says "look before you click".
+
+    Known blind spot: nickname variants aren't caught, because "dan brotman" and
+    "daniel brotman" are different keys. Prod has 21 such pairs and 9 of them have
+    the dangerous shape — one row with a race edge, its twin with none (Dan/Daniel
+    Brotman, Mike/Michael Thompson, Rick/Richard Bennett, ...). Closing it needs a
+    nickname map; keying on the first initial instead would group "Angela Davis"
+    with "Andrew Davis" and drown the signal on common surnames. The candidacy
+    line still distinguishes those pairs, which is the safeguard that matters.
+
+    The count is per-response, not global — the search is limited, so a name with
+    more rows than fit can show a smaller number. Hence "results share this name"
+    rather than "records exist".
     """
+    keys = [_dupe_key(r.get("full_name") or "") for r in results]
     counts: dict[str, int] = {}
-    for r in results:
-        key = _dupe_key(r.get("full_name") or "")
-        if key:
+    for key in keys:
+        if key:                      # two nameless rows aren't the same person
             counts[key] = counts.get(key, 0) + 1
-    for r in results:
-        n = counts.get(_dupe_key(r.get("full_name") or ""), 0)
-        r["duplicate_note"] = f"⚠ {n} records for this name" if n > 1 else ""
+    for r, key in zip(results, keys):
+        n = counts.get(key, 0)
+        r["duplicate_note"] = f"⚠ {n} results share this name" if n > 1 else ""
     return results
