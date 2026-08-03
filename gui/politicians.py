@@ -142,5 +142,5 @@ def candidacy_display(candidacies) -> str:
     text = "; ".join(label for label, _active in shown)
     extra = len(pairs) - len(shown)
     if extra:
-        text += f", +{extra} more"
+        text += f"; +{extra} more"
     return f"running: {text}" if any(active for _label, active in pairs) else text

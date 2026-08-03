@@ -139,8 +139,10 @@ def test_candidacy_display_leads_with_running_when_any_is_active():
 def test_candidacy_display_caps_at_three_and_counts_the_rest():
     cands = [_cand(position_name=f"Office {i}") for i in range(5)]
     out = candidacy_display(cands)
-    assert out.count("; ") == 2          # 3 shown => 2 separators
-    assert out.endswith("+2 more")
+    # 3 shown => 2 separators between them, plus one before the "+N more" tail,
+    # which is itself just another item in the list.
+    assert out.count("; ") == 3
+    assert out.endswith("; +2 more")
     assert "Office 3" not in out
 
 
