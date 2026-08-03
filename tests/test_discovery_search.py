@@ -1,6 +1,8 @@
 import sys
 import types
 
+import pytest
+
 from src.discovery import search
 from src.discovery.models import RawItem
 
@@ -53,7 +55,7 @@ def test_ytsearch_maps_entries_and_skips_blank(monkeypatch):
     assert items[0].via == "search"
 
 
-def test_ytsearch_swallows_extractor_errors(monkeypatch):
+def test_ytsearch_propagates_extractor_errors(monkeypatch):
     class _Boom(_FakeYDL):
         def extract_info(self, query, download=False):
             raise RuntimeError("bot check")
@@ -61,7 +63,8 @@ def test_ytsearch_swallows_extractor_errors(monkeypatch):
     mod = types.ModuleType("yt_dlp")
     mod.YoutubeDL = _Boom
     monkeypatch.setitem(sys.modules, "yt_dlp", mod)
-    assert search.ytsearch("q", limit=5) == []
+    with pytest.raises(RuntimeError):
+        search.ytsearch("q", limit=5)
 
 
 def test_hydrate_fills_only_missing_fields(monkeypatch):

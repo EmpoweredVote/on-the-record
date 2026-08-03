@@ -125,17 +125,65 @@ def test_outlet_failure_is_nonfatal(monkeypatch):
 
 def test_sweep_queries_each_candidate_and_records(monkeypatch):
     inserted = []
+    recorded = []
     queries = []
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: recorded.append(rid))
 
     def fake_search(q):
         queries.append(q)
         return [GOOD_ITEM]
 
-    stats, provider = _run(monkeypatch, inserted, skip_watchlist=True,
-                           ytsearch_fn=fake_search)
+    provider = _FakeProvider(
+        '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
+        ' "event_kind": "debate", "source_tier": 1, "original_vs_clip": "original",'
+        ' "route": "ingest", "why": "long full debate"}')
+    stats = engine.run_discovery(
+        _FakeConn(), provider=provider,
+        fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
+        hydrate_fn=lambda item: item, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True)
+
     assert len(queries) == 8               # 2 candidates x 4 terms
     assert provider.calls == 1             # dedup: same item after first insert
     assert stats.inserted_pending == 1
+    assert recorded == ["r1"]              # no errors this race -> cadence resets
+
+
+def test_sweep_search_error_skips_record_but_commits(monkeypatch):
+    inserted = []
+    recorded = []
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: recorded.append(rid))
+
+    def raising_search(q):
+        raise RuntimeError("bot check")
+
+    conn = _FakeConn()
+    stats = engine.run_discovery(
+        conn, provider=_FakeProvider("irrelevant"),
+        fetch_feed_items=lambda o: [], ytsearch_fn=raising_search,
+        hydrate_fn=lambda item: item, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True)
+
+    assert stats.failures                  # loud -- not silently swallowed to 0 results
+    assert recorded == []                  # a bot-check wave must not reset the cadence clock
+    assert conn.commits >= 1               # commit stays unconditional
+    assert inserted == []
 
 
 def test_sweep_interval_days_bands():

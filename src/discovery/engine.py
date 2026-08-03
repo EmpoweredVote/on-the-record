@@ -195,6 +195,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                 print("SPEND CAP: deferring remaining sweeps to next run")
                 break
             capped_before = stats.spend_capped
+            failures_before = len(stats.failures)
             for cand in cands:
                 for query in queries_for_candidate(cand.full_name):
                     try:
@@ -207,11 +208,13 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                         process_safe(item, [c.full_name for c in cands], race_id)
                     sleep_fn(config.DISCOVERY_SEARCH_SLEEP_SECONDS)
             if not dry_run:
-                # don't record a sweep the spend cap truncated: a future run
-                # must still cover the queries the cap made us skip. But the
-                # rows already inserted this race are paid for -- commit them
-                # regardless, or they die at the caller's conn.close().
-                if stats.spend_capped == capped_before:
+                # don't record a sweep the spend cap truncated or that hit a
+                # search failure: a future run must still cover the queries
+                # the cap/failure made us skip. But the rows already
+                # inserted this race are paid for -- commit them regardless,
+                # or they die at the caller's conn.close().
+                if (stats.spend_capped == capped_before
+                        and len(stats.failures) == failures_before):
                     db.record_sweep(cur, race_id)
                 conn.commit()
         if race_filter and race_filter not in by_race:

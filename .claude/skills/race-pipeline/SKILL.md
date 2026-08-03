@@ -71,11 +71,14 @@ doesn't ship.
 
 **Video-ingest shortlist (always).** Sourcing doubles as ingest scouting: every debate,
 candidate forum, news-clip interview, or floor-speech video found — ESPECIALLY ones too
-long or untranscribed to mine on the spot — goes into `<staged dir>/ingest-candidates.json`
-(`[{url, event, date, candidates_covered, why}]`). Ingesting these into on-the-record's
-transcript pipeline (`meetings.segments`) is how we pull verbatim, timestamp-deep-linked
-quotes later; a video covering several candidates on shared topics is the highest-value
-ingest. Reference the file in the pipeline row's `notes`.
+long or untranscribed to mine on the spot — is a discovery candidate. Insert one row per
+video into `essentials.discovered_sources` (`discovered_via='agent'`, `status='pending'`,
+`route='ingest'`, `source_key` normalized per `src/source_key.py`, `race_id` +
+`matched_politician_ids` set for this race, `why` = one sentence citing the evidence).
+Ingesting these into on-the-record's transcript pipeline (`meetings.segments`) is how we
+pull verbatim, timestamp-deep-linked quotes later; a video covering several candidates on
+shared topics is the highest-value ingest. Note in the pipeline row's `notes` that
+discovery rows were filed for this race.
 
 ### quotes_staged → published
 Run the **publish-quotes** skill on each staged batch (dry-run, user OK, --commit). It

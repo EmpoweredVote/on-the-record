@@ -14,19 +14,19 @@ def queries_for_candidate(full_name: str) -> list:
 
 def ytsearch(query: str, *, limit: "int | None" = None) -> list:
     """Flat search — one network request, no per-video page fetches.
-    Best-effort: any extractor error returns []."""
+    Extractor errors (and a missing yt_dlp) propagate: the caller (the
+    engine's per-query try/except) is what decides a search failure is
+    non-fatal and loud, so it must actually see the exception rather than
+    have it silently laundered into an empty, indistinguishable result."""
     n = limit or config.DISCOVERY_SEARCH_RESULTS_PER_QUERY
-    try:
-        import yt_dlp
-        opts = {
-            "quiet": True, "no_warnings": True, "skip_download": True,
-            "extract_flat": "in_playlist",
-            "js_runtimes": {"node": {}},
-        }
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"ytsearch{n}:{query}", download=False)
-    except Exception:
-        return []
+    import yt_dlp
+    opts = {
+        "quiet": True, "no_warnings": True, "skip_download": True,
+        "extract_flat": "in_playlist",
+        "js_runtimes": {"node": {}},
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(f"ytsearch{n}:{query}", download=False)
     items = []
     for entry in (info or {}).get("entries") or []:
         vid = entry.get("id")
