@@ -1,7 +1,8 @@
 from scripts.checks import (
     check_note_quality, check_deid_present, check_trailing_ellipsis,
     check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
-    check_unquotable_source, check_scorecard_source, topic_live_count, topic_min_candidates,
+    check_unquotable_source, check_scorecard_source, check_stance_label,
+    topic_live_count, topic_min_candidates, STANCE_LABEL_MAX_WORDS,
 )
 
 def row(**kw):
@@ -182,3 +183,45 @@ def test_scorecard_source_does_not_flag_bill_or_vote_pages():
 
 def test_scorecard_source_youtube_not_flagged():
     assert check_scorecard_source(row(source_url="https://youtu.be/x?t=1s")) is None
+
+
+# --- stance-label ---
+# A quote of <=4 words names a topic instead of taking a position on it. Calibrated against the
+# corpus: all 101 live quotes at that length read as slogans or platform bullets, while the 5-6
+# word band already holds real mechanism-bearing sentences.
+
+def test_stance_label_bare_noun_phrase_flagged():
+    for t in ("Universal Healthcare", "Medicare For All", "Anti-ICE", "Abolish ICE",
+              "Tax the rich", "Protect the unborn"):
+        f = check_stance_label(row(quote_text=t))
+        assert f is not None and f.check_id == "stance-label", t
+        assert f.severity == "medium" and f.fix_class == "decision-required"
+
+def test_stance_label_counts_words_not_characters():
+    f = check_stance_label(row(quote_text="Close the border."))
+    assert f is not None and "3 word" in f.what
+
+def test_stance_label_leaves_a_terse_real_sentence_alone():
+    # 5+ words is where genuine, mechanism-bearing quotes start; the check must stop below them.
+    for t in ("Lower Medicare eligibility to Age 55.",
+              "Rein in private insurers managing Medicaid.",
+              "We need all forms of energy.",
+              "public funds belong in public schools"):
+        assert check_stance_label(row(quote_text=t)) is None, t
+
+def test_stance_label_boundary_is_exactly_the_constant():
+    four = " ".join(["word"] * STANCE_LABEL_MAX_WORDS)
+    five = " ".join(["word"] * (STANCE_LABEL_MAX_WORDS + 1))
+    assert check_stance_label(row(quote_text=four)) is not None
+    assert check_stance_label(row(quote_text=five)) is None
+
+def test_stance_label_ignores_punctuation_and_hyphenates_as_one_word():
+    # "all-of-the-above" is one word, not four — punctuation must not inflate the count.
+    assert check_stance_label(row(quote_text="An all-of-the-above approach")) is not None
+    # ...and stray quotes/ellipses must not inflate it either
+    assert check_stance_label(row(quote_text='"Protecting the unborn"')) is not None
+
+def test_stance_label_empty_quote_not_flagged():
+    # An empty quote_text is a different defect; don't double-report it here.
+    assert check_stance_label(row(quote_text="")) is None
+    assert check_stance_label(row(quote_text=None)) is None
