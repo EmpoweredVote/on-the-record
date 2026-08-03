@@ -75,6 +75,111 @@ def create_app() -> FastAPI:
              "batch_counts": bs["counts"], "batch_pending": bs["pending"]},
         )
 
+    @app.get("/discovery", response_class=HTMLResponse)
+    def discovery_page(request: Request, flash: str = "") -> HTMLResponse:
+        from gui import discovery, races
+        rows = discovery.pending_rows()
+        labels = races.race_labels({r.race_id for r in rows if r.race_id})
+        groups: dict = {}
+        for r in rows:
+            if r.race_id and labels.get(r.race_id):
+                r.race_label = labels[r.race_id]
+            groups.setdefault(r.race_label or "Unmatched", []).append(r)
+        return _templates.TemplateResponse(
+            request, "discovery.html",
+            {"groups": list(groups.items()), "health": discovery.health(),
+             "flash": flash})
+
+    def _discovery_redirect(flash: str) -> RedirectResponse:
+        from urllib.parse import quote
+        return RedirectResponse(url=f"/discovery?flash={quote(flash)}", status_code=303)
+
+    @app.post("/discovery/{row_id}/approve-ingest")
+    def discovery_approve_ingest(row_id: str):
+        import datetime as _dt
+        from gui import batch, discovery, runner
+        from gui.formmeta import (DEFAULT_COMPUTE, DEFAULT_DIARIZER,
+                                  FIELDS_BY_KIND, MEETING_TYPE_DEFAULTS)
+        from gui.runner import RunParams
+        from src.event_kinds import EVENT_KINDS
+
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        if row.status != "pending":
+            return _discovery_redirect(f"already {row.status}")
+        existing = runner.find_meeting_by_source(row.url)
+        if existing:
+            ok = discovery.set_status(row_id, "superseded",
+                                      reason=f"already ingested as {existing}")
+            flash = f"duplicate of {existing}"
+            if not ok:
+                flash += " — SAVE FAILED, retry"
+            return _discovery_redirect(flash)
+        kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
+        if kind in ("community_meeting", "other") and row.race_id:
+            kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)
+        fields = FIELDS_BY_KIND.get(kind, ())
+        race_id = row.race_id if "race" in fields else None
+        params = RunParams(
+            input=row.url,
+            date=(row.published_at or "")[:10] or _dt.date.today().isoformat(),
+            meeting_type=MEETING_TYPE_DEFAULTS.get(kind, "Recording"),
+            event_kind=kind,
+            title=row.title,
+            compute=DEFAULT_COMPUTE,
+            diarizer=DEFAULT_DIARIZER,
+            event_orgs=[row.channel_name] if row.channel_name else [],
+            race_id=race_id,
+            race_slug=discovery.race_slug_for(race_id) if race_id else None,
+        )
+        try:
+            outcome, meeting_id = batch.launch_or_enqueue(params)
+        except ValueError as exc:
+            return _discovery_redirect(f"error: {exc}")
+        ok = discovery.set_status(row_id, "ingested")
+        flash = f"{outcome}: {meeting_id or params.title}"
+        if not ok:
+            flash += " — SAVE FAILED, retry"
+        return _discovery_redirect(flash)
+
+    @app.post("/discovery/{row_id}/quote-source")
+    def discovery_quote_source(row_id: str):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        if row.status != "pending":
+            return _discovery_redirect(f"already {row.status}")
+        ok = discovery.set_status(row_id, "approved")
+        flash = "approved as quote source"
+        if not ok:
+            flash += " — SAVE FAILED, retry"
+        return _discovery_redirect(flash)
+
+    @app.post("/discovery/{row_id}/reject")
+    def discovery_reject(row_id: str, reason: str = Form("other")):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        if row.status != "pending":
+            return _discovery_redirect(f"already {row.status}")
+        ok = discovery.set_status(row_id, "rejected", reason=reason)
+        flash = "rejected"
+        if not ok:
+            flash += " — SAVE FAILED, retry"
+        return _discovery_redirect(flash)
+
+    @app.post("/discovery/{row_id}/watch-channel")
+    def discovery_watch_channel(row_id: str):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        ok, message = discovery.watch_channel(row)
+        return _discovery_redirect(message if ok else f"error: {message}")
+
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
         if not is_safe_meeting_id(meeting_id):
@@ -289,13 +394,26 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.get("/new", response_class=HTMLResponse)
-    def new_meeting_form(request: Request, flash: str = "", label: str = "") -> HTMLResponse:
+    def new_meeting_form(request: Request, flash: str = "", label: str = "",
+                         input: str = "", date: str = "", title: str = "",
+                         event_kind: str = "", meeting_type: str = "",
+                         race_id: str = "", race_slug: str = "",
+                         race_label: str = "", event_orgs: str = "",
+                         guest: str = "") -> HTMLResponse:
         from src.event_kinds import EVENT_KINDS
         from gui.formmeta import (EVENT_KIND_HELP, COMPUTE_HELP, DIARIZER_HELP,
                                    CITY_REQUIRED_KINDS, MEETING_TYPE_DEFAULTS,
                                    FIELDS_BY_KIND, DEFAULT_COMPUTE, DEFAULT_DIARIZER)
         from gui.rosters import list_cached_rosters
         from gui import batch
+        if race_id and not race_slug:
+            from gui import discovery
+            race_slug = discovery.race_slug_for(race_id)
+        prefill = {"input": input, "date": date, "title": title,
+                   "event_kind": event_kind, "meeting_type": meeting_type,
+                   "race_id": race_id, "race_slug": race_slug,
+                   "race_label": race_label, "event_orgs": event_orgs,
+                   "guest": guest}
         return _templates.TemplateResponse(
             request, "new_meeting.html",
             {
@@ -312,6 +430,7 @@ def create_app() -> FastAPI:
                 "flash": flash,
                 "flash_label": label,
                 "batch_counts": batch.status()["counts"],
+                "prefill": prefill,
             },
         )
 

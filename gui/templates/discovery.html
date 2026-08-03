@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Discovery — Council Scribe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="batch-header">
+  <a href="/">&larr; Library</a>
+  <strong>Discovery</strong>
+  <span class="pill">{{ health.pending_total }} pending</span>
+  {% if health.stale_outlets %}
+  <span class="pill" title="{{ health.stale_outlets|join(', ') }}">
+    {{ health.stale_outlets|length }} stale feed(s)</span>
+  {% endif %}
+</header>
+<main>
+
+{% if flash %}<p class="flash">{{ flash }}</p>{% endif %}
+
+{% if health.alarms %}
+<section class="flash-pending">
+  <strong>Zero-source alarms</strong> — races inside 30 days with no approved sources:
+  <ul>
+    {% for race_id, label, date in health.alarms %}
+    <li>{{ date }} — {{ label }} <span class="pill">gap-filler needed</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if not groups %}<p>No pending discoveries.</p>{% endif %}
+
+{% for label, rows in groups %}
+<h2>{{ label }}</h2>
+<table class="library">
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="name">
+      {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
+      <div>
+        {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
+        <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+          {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
+          {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
+          · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
+        <small><em>{{ r.why }}</em></small>
+      </div>
+    </td>
+    <td>
+      <form method="post" action="/discovery/{{ r.id }}/approve-ingest">
+        <button type="submit" class="enroll">Approve &rarr; ingest</button>
+      </form>
+      <form method="post" action="/discovery/{{ r.id }}/quote-source">
+        <button type="submit">Approve &rarr; quote source</button>
+      </form>
+      <form method="post" action="/discovery/{{ r.id }}/reject">
+        <select name="reason">
+          <option value="clip-not-original">clip, not original</option>
+          <option value="wrong-person">wrong person</option>
+          <option value="tier-5">tier 5</option>
+          <option value="duplicate">duplicate</option>
+          <option value="other" selected>other</option>
+        </select>
+        <button type="submit" class="delete-btn">Reject</button>
+      </form>
+      {% if r.safe_url %}
+      <a class="pill" href="/new?{{ {'input': r.safe_url,
+          'date': (r.published_at or '')[:10], 'title': r.title or '',
+          'event_kind': r.event_kind_guess or 'news_clip',
+          'race_id': r.race_id or '', 'race_label': r.race_label or '',
+          'event_orgs': r.channel_name or ''}|urlencode }}">Edit first</a>
+      {% endif %}
+      {% if not r.outlet_id and r.channel_id %}
+      <form method="post" action="/discovery/{{ r.id }}/watch-channel">
+        <button type="submit" title="Add this channel to the watchlist">
+          + Watch this channel</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+</main>
+</body>
+</html>

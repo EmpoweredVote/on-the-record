@@ -70,3 +70,35 @@ def test_get_provider_anthropic_returns_anthropic_provider(monkeypatch):
     p = llm_providers.get_provider("haiku")
     assert isinstance(p, llm_providers.AnthropicProvider)
     assert p.model == "claude-haiku-4-5-20251001"
+
+
+class _FakeMessages:
+    def __init__(self):
+        self.kwargs = None
+
+    def create(self, **kwargs):
+        self.kwargs = kwargs
+
+        class _Msg:
+            content = [type("B", (), {"text": "ok"})()]
+
+        return _Msg()
+
+
+class _FakeAnthropic:
+    def __init__(self):
+        self.messages = _FakeMessages()
+
+
+def test_complete_accepts_custom_system_prompt():
+    client = _FakeAnthropic()
+    p = llm_providers.AnthropicProvider(model="m", client=client)
+    p.complete("hi", max_tokens=10, temperature=0.0, system="You screen videos.")
+    assert client.messages.kwargs["system"] == "You screen videos."
+
+
+def test_complete_defaults_to_speaker_id_system_prompt():
+    client = _FakeAnthropic()
+    p = llm_providers.AnthropicProvider(model="m", client=client)
+    p.complete("hi", max_tokens=10, temperature=0.0)
+    assert client.messages.kwargs["system"] == llm_providers._SYSTEM_PROMPT

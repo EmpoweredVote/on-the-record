@@ -106,14 +106,18 @@ def fetch_source_metadata(url: str) -> dict:
     the processing pipeline (normalize_audio) and the GUI new-meeting form.
     Best-effort: any extractor error yields an all-empty dict.
 
-    Returns {title, channel, upload_date ('YYYY-MM-DD'), duration (s), chapters}.
+    Returns {title, channel, upload_date ('YYYY-MM-DD'), duration (s), chapters,
+    description, channel_id, channel_url}.
     """
     empty = {"title": None, "channel": None, "upload_date": None,
-             "duration": None, "chapters": []}
+             "duration": None, "chapters": [],
+             "description": None, "channel_id": None, "channel_url": None}
     try:
         import yt_dlp
 
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
+        opts = {"quiet": True, "no_warnings": True, "skip_download": True,
+                "js_runtimes": {"node": {}}}
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception:
         return empty
@@ -127,6 +131,9 @@ def fetch_source_metadata(url: str) -> dict:
         "upload_date": _normalize_upload_date(info.get("upload_date")),
         "duration": info.get("duration") or None,
         "chapters": normalize_chapters(info),
+        "description": info.get("description") or None,
+        "channel_id": info.get("channel_id") or None,
+        "channel_url": info.get("channel_url") or None,
     }
 
 

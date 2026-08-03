@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>vote.empowered.poll-discovery</string>
+  <!-- Secrets come from the script's own .env.local load; nothing here. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/chrisandrews/Documents/GitHub/on-the-record/.venv/bin/python</string>
+    <string>/Users/chrisandrews/Documents/GitHub/on-the-record/scripts/poll_discovery.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/chrisandrews/Documents/GitHub/on-the-record</string>
+  <!-- 08:00 daily — before the 09:00 agenda poll; launchd runs missed jobs on wake. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>8</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/chrisandrews/CouncilScribe/discovery/poll.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/chrisandrews/CouncilScribe/discovery/poll.log</string>
+</dict>
+</plist>

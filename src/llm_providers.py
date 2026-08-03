@@ -22,7 +22,14 @@ class SpeakerIDProvider(Protocol):
     name: str
     model: str
 
-    def complete(self, prompt: str, *, max_tokens: int, temperature: float) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        system: "str | None" = None,
+    ) -> str:
         ...
 
 
@@ -34,12 +41,19 @@ class AnthropicProvider:
         self.model = model
         self._client = client or anthropic.Anthropic()
 
-    def complete(self, prompt: str, *, max_tokens: int, temperature: float) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        system: "str | None" = None,
+    ) -> str:
         msg = self._client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
             temperature=temperature,
-            system=_SYSTEM_PROMPT,
+            system=system or _SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         return msg.content[0].text
@@ -57,13 +71,20 @@ class OpenAICompatProvider:
             client = OpenAI(base_url=base_url, api_key=api_key)
         self._client = client
 
-    def complete(self, prompt: str, *, max_tokens: int, temperature: float) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        system: "str | None" = None,
+    ) -> str:
         resp = self._client.chat.completions.create(
             model=self.model,
             max_tokens=max_tokens,
             temperature=temperature,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": system or _SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
         )
