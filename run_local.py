@@ -40,6 +40,7 @@ if _env_file.exists():
                 os.environ.setdefault(_key.strip(), _val.strip())
 
 from src import config  # lightweight; must follow .env.local load (CS_DATA_DIR)
+from src.atomic_io import atomic_write_json
 from src.event_kinds import EVENT_KINDS, INTERVIEW_KINDS, validate_event_kind
 from src.crec_identify import parse_crec_arg
 from src.house_cdn import resolve_session
@@ -1546,8 +1547,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 print(f"  Floor structure extraction skipped ({exc}); "
                       f"continuing without floor votes.")
 
-        with open(named_transcript_path, "w") as f:
-            json.dump(meeting.to_dict(), f, indent=2)
+        atomic_write_json(named_transcript_path, meeting.to_dict())
         state.mark_complete(PipelineStage.IDENTIFIED)
 
     print()
@@ -1637,8 +1637,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     json.dump(meeting.summary.to_dict(), f, indent=2)
 
                 # Re-save named transcript with summary included
-                with open(named_transcript_path, "w") as f:
-                    json.dump(meeting.to_dict(), f, indent=2)
+                atomic_write_json(named_transcript_path, meeting.to_dict())
 
                 state.mark_complete(PipelineStage.SUMMARIZED)
 
@@ -2375,8 +2374,7 @@ def _bulk_relink_apply(args) -> None:
 
     # Persist changed transcripts.
     for mdir, meeting in touched.items():
-        with open(mdir / "transcript_named.json", "w", encoding="utf-8") as f:
-            json.dump(meeting.to_dict(), f, indent=2)
+        atomic_write_json(mdir / "transcript_named.json", meeting.to_dict())
 
     # Fold each approved person's voice profile once.
     db = load_profiles()
@@ -2477,8 +2475,7 @@ def _relink_person(args) -> None:
 
     # 3. Persist the edited transcripts.
     for mdir, meeting, _labels in changed:
-        with open(mdir / "transcript_named.json", "w", encoding="utf-8") as f:
-            json.dump(meeting.to_dict(), f, indent=2)
+        atomic_write_json(mdir / "transcript_named.json", meeting.to_dict())
     print(f"  Saved {len(changed)} transcript(s).")
 
     # 4. Re-key the voice profile (cheap fold, no audio).
@@ -2577,8 +2574,7 @@ def _fix_transcripts() -> None:
 
         if corrections:
             # Save corrected transcript
-            with open(named_path, "w") as f:
-                json.dump(meeting.to_dict(), f, indent=2)
+            atomic_write_json(named_path, meeting.to_dict())
 
             # Re-export
             export_dir = mdir / "exports"
@@ -3397,8 +3393,7 @@ def _review_meeting(meeting_id: str) -> None:
                 seg.confidence = m.confidence
                 seg.id_method = m.id_method
 
-        with open(named_path, "w") as f:
-            json.dump(meeting.to_dict(), f, indent=2)
+        atomic_write_json(named_path, meeting.to_dict())
 
         export_dir = meeting_dir / "exports"
         export_all(meeting, export_dir)
@@ -3585,8 +3580,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
                     seg.speaker_name = m.speaker_name
                     seg.confidence = m.confidence
                     seg.id_method = m.id_method
-            with open(named_path, "w") as f:
-                json.dump(meeting.to_dict(), f, indent=2)
+            atomic_write_json(named_path, meeting.to_dict())
             from src.export import export_all
             export_dir = meeting_dir / "exports"
             export_all(meeting, export_dir)

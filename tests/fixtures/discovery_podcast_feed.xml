@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>What's Next Austin</title>
+    <item>
+      <title>Maria Delgado on housing</title>
+      <description>A one-on-one with the Senate candidate.</description>
+      <link>https://example.buzzsprout.com/ep/101</link>
+      <enclosure url="https://example.buzzsprout.com/ep/101.mp3" type="audio/mpeg" length="1"/>
+      <pubDate>Sat, 01 Aug 2026 10:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Ana Ruiz on transit</title>
+      <description>Extended interview.</description>
+      <guid isPermaLink="true">https://example.buzzsprout.com/ep/102</guid>
+      <enclosure url="https://example.buzzsprout.com/ep/102.mp3" type="audio/mpeg" length="1"/>
+      <pubDate>Sun, 02 Aug 2026 10:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,7 +1,8 @@
 from scripts.checks import (
     check_note_quality, check_deid_present, check_trailing_ellipsis,
     check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
-    check_unquotable_source, topic_live_count, topic_min_candidates,
+    check_unquotable_source, check_scorecard_source, check_stance_label,
+    topic_live_count, topic_min_candidates, STANCE_LABEL_MAX_WORDS,
 )
 
 def row(**kw):
@@ -23,6 +24,12 @@ def test_note_too_long_flagged():
     long = "One sentence here. Two here. Three here. Four here."
     f = check_note_quality(row(editor_note=long))
     assert f and f.check_id == "note-too-long"
+
+def test_note_of_three_sentences_allowed():
+    """Two sentences stay the house preference, but an edited quote often needs a third to say
+    what was cut and why — a note that earns it is not a defect."""
+    three = "Trimmed from one longer sentence. The ellipsis drops a drafting aside. Verbatim otherwise."
+    assert check_note_quality(row(editor_note=three)) is None
 
 def test_good_note_passes():
     assert check_note_quality(row(editor_note="Clear housing supply position. Verbatim, no edits.")) is None
@@ -135,3 +142,86 @@ def test_run_mechanical_aggregates_quote_and_topic():
     assert "note-missing" in ids  # quote-level
     # two distinct candidates, one live each -> NOT multiple-live
     assert "multiple-live" not in ids
+
+
+# --- scorecard-source ---
+# A legislative scorecard publishes an advocacy group's rating and vote record for a member,
+# never the member's own words. All 30 scorecard-sourced live quotes came back
+# source-unverified in the 2026-08-02 full sweep — 30 of 30.
+
+def test_scorecard_source_lcv_moc_page_flagged():
+    f = check_scorecard_source(row(source_url="https://www.lcv.org/congressional-scorecard/moc/mike-carey"))
+    assert f is not None and f.check_id == "scorecard-source"
+    assert f.severity == "high" and f.fix_class == "decision-required"
+
+def test_scorecard_source_lcv_members_index_flagged():
+    f = check_scorecard_source(row(
+        source_url="https://www.lcv.org/scorecard/members-of-congress/?congress=118&state=AL&chamber=H"))
+    assert f is not None and f.check_id == "scorecard-source"
+
+def test_scorecard_source_generalizes_to_other_advocacy_groups():
+    for u in ("https://aflcio.org/scorecard/legislators/jane-doe",
+              "https://heritageaction.com/scorecard/members/jane-doe",
+              "https://example.org/environmental-scorecards/jane-doe"):
+        assert check_scorecard_source(row(source_url=u)) is not None, u
+
+def test_scorecard_source_does_not_match_a_headline_slug():
+    # Path-anchored on purpose: an article about a scorecard is still an article.
+    assert check_scorecard_source(row(
+        source_url="https://www.politico.com/news/2026/03/01/scorecard-shows-house-split-00123")) is None
+
+def test_scorecard_source_does_not_flag_rollcall_the_news_outlet():
+    # CQ Roll Call is journalism, not a vote tally — an earlier draft of this pattern caught it.
+    assert check_scorecard_source(row(source_url="https://rollcall.com/members/suhas-subramanyam/")) is None
+
+def test_scorecard_source_does_not_flag_bill_or_vote_pages():
+    # Deliberately out of scope: a congress.gov bill page verified a real quote in the sweep,
+    # so "structurally cannot carry a quote" is false for that class.
+    assert check_scorecard_source(row(
+        source_url="https://www.congress.gov/bill/119th-congress/house-bill/3069/cosponsors")) is None
+    assert check_scorecard_source(row(source_url="https://clerk.house.gov/Votes/202523")) is None
+
+def test_scorecard_source_youtube_not_flagged():
+    assert check_scorecard_source(row(source_url="https://youtu.be/x?t=1s")) is None
+
+
+# --- stance-label ---
+# A quote of <=4 words names a topic instead of taking a position on it. Calibrated against the
+# corpus: all 101 live quotes at that length read as slogans or platform bullets, while the 5-6
+# word band already holds real mechanism-bearing sentences.
+
+def test_stance_label_bare_noun_phrase_flagged():
+    for t in ("Universal Healthcare", "Medicare For All", "Anti-ICE", "Abolish ICE",
+              "Tax the rich", "Protect the unborn"):
+        f = check_stance_label(row(quote_text=t))
+        assert f is not None and f.check_id == "stance-label", t
+        assert f.severity == "medium" and f.fix_class == "decision-required"
+
+def test_stance_label_counts_words_not_characters():
+    f = check_stance_label(row(quote_text="Close the border."))
+    assert f is not None and "3 word" in f.what
+
+def test_stance_label_leaves_a_terse_real_sentence_alone():
+    # 5+ words is where genuine, mechanism-bearing quotes start; the check must stop below them.
+    for t in ("Lower Medicare eligibility to Age 55.",
+              "Rein in private insurers managing Medicaid.",
+              "We need all forms of energy.",
+              "public funds belong in public schools"):
+        assert check_stance_label(row(quote_text=t)) is None, t
+
+def test_stance_label_boundary_is_exactly_the_constant():
+    four = " ".join(["word"] * STANCE_LABEL_MAX_WORDS)
+    five = " ".join(["word"] * (STANCE_LABEL_MAX_WORDS + 1))
+    assert check_stance_label(row(quote_text=four)) is not None
+    assert check_stance_label(row(quote_text=five)) is None
+
+def test_stance_label_ignores_punctuation_and_hyphenates_as_one_word():
+    # "all-of-the-above" is one word, not four — punctuation must not inflate the count.
+    assert check_stance_label(row(quote_text="An all-of-the-above approach")) is not None
+    # ...and stray quotes/ellipses must not inflate it either
+    assert check_stance_label(row(quote_text='"Protecting the unborn"')) is not None
+
+def test_stance_label_empty_quote_not_flagged():
+    # An empty quote_text is a different defect; don't double-report it here.
+    assert check_stance_label(row(quote_text="")) is None
+    assert check_stance_label(row(quote_text=None)) is None

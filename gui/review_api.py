@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
 from src import config
+# The crash-safe writer lives in src/ so run_local.py and src/* can use it too;
+# re-exported under the old private name for this module's existing callers.
+from src.atomic_io import atomic_write_text as _atomic_write_text
 from src.models import Meeting
 
 from gui.models import CONFIDENT_THRESHOLD, ENROLL_MIN_SPEECH_SECONDS, ReviewPageData, SpeakerCard
@@ -81,13 +83,6 @@ def _load_meeting_ctx(meeting_id: str):
     except (ValueError, OSError, KeyError, TypeError, AttributeError):
         return None
     return meeting, meeting_dir, _load_roster_for(meeting_dir)
-
-
-def _atomic_write_text(path: Path, text: str) -> None:
-    """Crash-safe write: temp file in the same dir, then os.replace."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
 
 
 def _load_embeddings(meeting_dir: Path) -> dict:
@@ -353,6 +348,15 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         meeting.segments, meeting.speakers, embeddings, profile_db, show_text=True
     )
 
+    # Surface every enrollment warning (the terminal enroll flow already gets
+    # these; the GUI reviewer must too) plus, per card, the peer labels that
+    # share its name — a rename onto an existing name is usually a merge-in-waiting.
+    warnings = review.enrollment_warnings(meeting.speakers, roster)
+    peer_labels: dict[str, list[str]] = {}
+    for labels in review.duplicate_named_speakers(meeting.speakers).values():
+        for lbl in labels:
+            peer_labels[lbl] = [o for o in labels if o != lbl]
+
     from src.publish import extract_youtube_id, playback_for_meeting
 
     youtube_id = extract_youtube_id(meeting.audio_source or "")
@@ -407,6 +411,7 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
             profile_meetings=profile_meetings,
             profile_samples=profile_samples,
+            duplicate_labels=peer_labels.get(v.label, []),
         )
         (confirmed if card.is_confirmed else needs).append(card)
 
@@ -422,4 +427,5 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         hls_url=hls_url,
         needs_attention=needs,
         confirmed=confirmed,
+        warnings=warnings,
     )

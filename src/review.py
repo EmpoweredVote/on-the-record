@@ -405,8 +405,25 @@ def _ew_slug_tokens(slug):
     return set(_re.sub(r"[^a-z0-9]+", " ", (slug or "").lower()).split()) - {"h", "j", "s"}
 
 
+def duplicate_named_speakers(mappings) -> dict[str, list[str]]:
+    """{normalized name: sorted [labels]} for names claimed by 2+ labels.
+
+    The invariant this detects — two distinct diarized labels can't be the same
+    person — is enforced at identify time but can be re-created by a reviewer
+    rename, so every reader of a reviewed meeting (enrollment, GUI, publish)
+    checks through here. Excludes non_speaker and unidentified mappings: their
+    names are placeholders, not identities."""
+    by_name: dict[str, list[str]] = {}
+    for label, m in mappings.items():
+        name = getattr(m, "speaker_name", None)
+        if name and getattr(m, "speaker_status", None) not in ("non_speaker", "unidentified"):
+            by_name.setdefault(name.strip().lower(), []).append(label)
+    return {nm: sorted(labels) for nm, labels in by_name.items() if len(labels) > 1}
+
+
 def enrollment_warnings(mappings, roster=None) -> list[dict]:
-    """Flag suspicious states before enrollment. Returns [{kind, label, detail}].
+    """Flag suspicious states before enrollment. Returns [{kind, label, detail}];
+    duplicate_name entries also carry labels (the list form of the joined label).
     kinds: name_slug_mismatch, duplicate_name, unlinked_roster_match."""
     warns: list[dict] = []
     # name/slug mismatch (linked slug shares no token with the name)
@@ -417,14 +434,9 @@ def enrollment_warnings(mappings, roster=None) -> list[dict]:
                 warns.append({"kind": "name_slug_mismatch", "label": label,
                               "detail": f"{m.speaker_name!r} linked to {m.politician_slug!r}"})
     # duplicate name across labels (excluding non-speakers)
-    by_name: dict[str, list[str]] = {}
-    for label, m in mappings.items():
-        if m.speaker_name and m.speaker_status not in ("non_speaker", "unidentified"):
-            by_name.setdefault(m.speaker_name.strip().lower(), []).append(label)
-    for nm, labels in by_name.items():
-        if len(labels) > 1:
-            warns.append({"kind": "duplicate_name", "label": ",".join(sorted(labels)),
-                          "detail": f"{len(labels)} labels named {nm!r} (merge?)"})
+    for nm, labels in duplicate_named_speakers(mappings).items():
+        warns.append({"kind": "duplicate_name", "label": ",".join(labels), "labels": labels,
+                      "detail": f"{len(labels)} labels named {nm!r} (merge?)"})
     # named but unlinked, yet matches a roster member
     if roster is not None:
         from src.roster import correct_speaker_name

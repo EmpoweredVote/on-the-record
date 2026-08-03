@@ -71,11 +71,14 @@ doesn't ship.
 
 **Video-ingest shortlist (always).** Sourcing doubles as ingest scouting: every debate,
 candidate forum, news-clip interview, or floor-speech video found — ESPECIALLY ones too
-long or untranscribed to mine on the spot — goes into `<staged dir>/ingest-candidates.json`
-(`[{url, event, date, candidates_covered, why}]`). Ingesting these into on-the-record's
-transcript pipeline (`meetings.segments`) is how we pull verbatim, timestamp-deep-linked
-quotes later; a video covering several candidates on shared topics is the highest-value
-ingest. Reference the file in the pipeline row's `notes`.
+long or untranscribed to mine on the spot — is a discovery candidate. Insert one row per
+video into `essentials.discovered_sources` (`discovered_via='agent'`, `status='pending'`,
+`route='ingest'`, `source_key` normalized per `src/source_key.py`, `race_id` +
+`matched_politician_ids` set for this race, `why` = one sentence citing the evidence).
+Ingesting these into on-the-record's transcript pipeline (`meetings.segments`) is how we
+pull verbatim, timestamp-deep-linked quotes later; a video covering several candidates on
+shared topics is the highest-value ingest. Note in the pipeline row's `notes` that
+discovery rows were filed for this race.
 
 ### quotes_staged → published
 Run the **publish-quotes** skill on each staged batch (dry-run, user OK, --commit). It
@@ -95,3 +98,25 @@ a human still selects the live quote per (candidate, topic) in `/admin/readrank-
 - All quote sourcing rules live in `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` +
   `.claude/skills/audit-quotes/CHECKS.md` — read both before sourcing.
 - MI Aug 4 / WI+MN Aug 11 primaries outrank everything until they pass.
+
+## Discovery queue integration
+
+Before hunting sources for a race, check the discovery triage queue — a human
+has already vetted these:
+
+    select url, title, channel_name, why, source_tier_guess
+    from essentials.discovered_sources
+    where race_id = :race_id and status = 'approved' and route = 'quote_source'
+    order by source_tier_guess nulls last;
+
+Use them first (they still get the normal verify-then-cite treatment). After
+sourcing quotes from a row, mark it consumed:
+
+    update essentials.discovered_sources set status = 'ingested',
+      status_reason = 'quotes sourced' where id = :id;
+
+Video shortlists: rows with `route='ingest'` are handled by the GUI Discovery
+tab, not by pipeline sessions — do not ingest them from here. When your own
+research finds a NEW source worth ingesting, insert a `discovered_sources` row
+(`discovered_via='agent'`, `status='pending'`) instead of writing
+`ingest-candidates.json`.

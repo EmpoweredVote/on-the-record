@@ -53,6 +53,19 @@ MIN_RUN_WORDS = 5
 # would be a false accusation, so it becomes `source-unfetchable` instead.
 MIN_PAGE_WORDS = 50
 
+# Total words is not enough on its own. A roll-call tally or a link farm carries thousands of
+# words in one- and two-word nav labels and sails past MIN_PAGE_WORDS, so the audit would say
+# "this quote is not on that page" about a page it never really read. In the first full sweep
+# that was 86 of 330 source-unverified findings — a quarter of the bucket, every one a false
+# accusation at high severity.
+#
+# So measure the words that live in *sentence-sized* blocks. The bar has to stay low: campaign
+# platform pages, which are exactly where the real findings come from, are legitimately written
+# as short bullets ("End inflation by stopping reckless deficit spending." is 8 words). Anything
+# that would treat a bulleted platform as unreadable throws away true positives.
+PROSE_BLOCK_WORDS = 8       # a block this long is a sentence, not a nav label
+MIN_PROSE_WORDS = 50        # ...and this many such words means we genuinely read the page
+
 # Pages are cached on disk so a full-sweep audit fetches each cited URL once, not once per
 # quote. A week is long enough to cover a multi-day audit and short enough that a re-audit
 # months later sees the current page.
@@ -216,6 +229,28 @@ def extract_page_text(html):
     except Exception:                                # malformed markup: fall back to tag-stripping
         return _collapse_whitespace(re.sub(r"<[^>]+>", " ", html))
     return _collapse_whitespace("".join(parser.parts))
+
+
+def prose_word_count(page_text):
+    """Words living in sentence-sized blocks — the part of a page that could carry a quote.
+
+    Navigation, breadcrumb and link-list text arrives as a great many one- to four-word blocks;
+    prose arrives as fewer, longer ones. Summing only the long blocks separates a page we read
+    from a page whose word count is all chrome, without penalising the short-bullet platform
+    pages that make up much of the corpus."""
+    return sum(n for n in (len(b.split()) for b in page_text.split("\n"))
+               if n >= PROSE_BLOCK_WORDS)
+
+
+def looks_like_pdf(url, body):
+    """Is the cited source a PDF? `extract_page_text` would otherwise run over binary and return
+    mojibake, from which every quote is 'absent' — a confident false accusation. 16 of the 330
+    source-unverified findings in the first full sweep were PDFs (roll-call sheets, scorecards,
+    candidate questionnaires). Checked by extension and by magic bytes, since plenty of PDFs are
+    served from extensionless URLs."""
+    if url and url.lower().split("?")[0].split("#")[0].endswith(".pdf"):
+        return True
+    return (body or "").lstrip()[:5] == "%PDF-"
 
 
 # --- written sources: clip-boundary check ---
@@ -472,6 +507,13 @@ def nested_quotation(quote_text, source_text):
     return None
 
 
+def _unfetchable_finding(what, fix, base):
+    """`source-unfetchable` — we could not read the source, which is emphatically NOT a claim
+    that the quote is missing from it. Medium, and it means: go read this one yourself."""
+    return Finding(check_id="source-unfetchable", principle="source must be verifiable",
+                   severity="medium", what=what, suggested_fix=fix, **base)
+
+
 def _relayed_finding(reason, base):
     """The `source-nested-quotation` finding, shared by the video and written paths."""
     return Finding(check_id="source-nested-quotation",
@@ -542,17 +584,25 @@ def _check_written_source(row, base, fetch_page):
     if not runs:
         return None                                  # nothing verbatim to check
 
-    page = extract_page_text(fetch_page(url) or "")
-    if len(page.split()) < MIN_PAGE_WORDS:
-        return Finding(check_id="source-unfetchable", principle="source must be verifiable",
-                       severity="medium",
-                       what=f"Cited page returned no readable prose (JS-rendered, blocked or empty): {url}",
-                       suggested_fix="Open the page and check the quote by hand; if the page is gone, re-source or deselect.",
-                       **base)
+    body = fetch_page(url) or ""
+    if looks_like_pdf(url, body):
+        return _unfetchable_finding(
+            f"Cited source is a PDF, which this audit cannot read: {url}",
+            "Open the PDF and check the quote by hand; if it holds up, no change is needed.", base)
+    page = extract_page_text(body)
 
     best_len, _ = longest_verbatim_match(runs, [page])
     need = min(MIN_RUN_WORDS, max(len(r.split()) for r in runs))
     if best_len < need:
+        # The quote is not here — but only say so if we actually read the page. This test sits
+        # *after* the match, not before it, so a page whose only real prose IS the quote can
+        # never be dismissed as unreadable; matching is itself proof the page was legible.
+        if len(page.split()) < MIN_PAGE_WORDS or prose_word_count(page) < MIN_PROSE_WORDS:
+            return _unfetchable_finding(
+                f"Cited page returned no readable prose — JS-rendered, blocked, paywalled, or "
+                f"all navigation: {url}",
+                "Open the page and check the quote by hand; if the page is gone, re-source or "
+                "deselect.", base)
         return Finding(check_id="source-unverified", principle="quote must appear in its cited source",
                        severity="high",
                        what=f"No distinctive phrase from the quote appears on the cited page {url} — the text may be paraphrased, from a different page, or from a superseded version.",

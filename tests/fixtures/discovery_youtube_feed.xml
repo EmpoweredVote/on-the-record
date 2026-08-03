@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"
+      xmlns="http://www.w3.org/2005/Atom">
+  <title>KXAN</title>
+  <entry>
+    <yt:videoId>abc12345678</yt:videoId>
+    <yt:channelId>UCkxan000000000000000000</yt:channelId>
+    <title>Texas Senate debate: full video</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=abc12345678"/>
+    <author><name>KXAN</name><uri>https://www.youtube.com/channel/UCkxan000000000000000000</uri></author>
+    <published>2026-08-01T21:04:00+00:00</published>
+    <media:group>
+      <media:title>Texas Senate debate: full video</media:title>
+      <media:description>All four candidates meet in Austin.</media:description>
+    </media:group>
+  </entry>
+  <entry>
+    <yt:videoId>def12345678</yt:videoId>
+    <yt:channelId>UCkxan000000000000000000</yt:channelId>
+    <title>Morning weather update</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=def12345678"/>
+    <author><name>KXAN</name><uri>https://www.youtube.com/channel/UCkxan000000000000000000</uri></author>
+    <published>2026-08-02T12:00:00+00:00</published>
+    <media:group>
+      <media:title>Morning weather update</media:title>
+      <media:description>Hot again.</media:description>
+    </media:group>
+  </entry>
+</feed>

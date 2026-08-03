@@ -14,15 +14,15 @@
   <main class="review newpage" data-city-required="{{ city_required_kinds|join(',') }}">
     <form method="post" action="/new" class="newform" id="newform">
       <label>Source URL or file path
-        <input type="text" name="input" id="f-input" required placeholder="https://… or /path/to/video.mp4">
+        <input type="text" name="input" id="f-input" required placeholder="https://… or /path/to/video.mp4" value="{{ prefill.input or '' }}">
         <small class="help" id="source-meta-note" aria-live="polite"></small>
       </label>
       <label>Date (YYYY-MM-DD)
-        <input type="text" name="date" id="f-date" placeholder="2026-02-10" required>
+        <input type="text" name="date" id="f-date" placeholder="2026-02-10" required value="{{ prefill.date or '' }}">
       </label>
       <label>Event kind
         <select name="event_kind" id="f-kind">
-          {% for k in event_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+          {% for k in event_kinds %}<option value="{{ k }}"{% if prefill.event_kind == k %} selected{% endif %}>{{ k }}</option>{% endfor %}
         </select>
         <small class="help" id="kind-help"></small>
       </label>
@@ -45,7 +45,7 @@
 
       <div class="fieldwrap" data-field="guest">
         <label>Guest / subject — who is being interviewed
-          <input type="text" name="guest" id="f-guest" placeholder="e.g. Xavier Becerra" autocomplete="off">
+          <input type="text" name="guest" id="f-guest" placeholder="e.g. Xavier Becerra" autocomplete="off" value="{{ prefill.guest or '' }}">
           <small class="help">Optional. Folded into the meeting id/URL.</small>
         </label>
       </div>
@@ -55,10 +55,10 @@
           <div class="race-search" id="f-race" data-search-url="/api/races/search">
             <input type="text" id="f-race-input" placeholder="Search a race… (e.g. KS governor GOP primary)" autocomplete="off">
             <div class="race-results" id="f-race-results"></div>
-            <div class="race-chosen" id="f-race-chosen" hidden></div>
+            <div class="race-chosen" id="f-race-chosen"{% if not prefill.race_label %} hidden{% endif %}>{{ prefill.race_label or '' }}</div>
           </div>
-          <input type="hidden" name="race_id" id="f-race-id">
-          <input type="hidden" name="race_slug" id="f-race-slug">
+          <input type="hidden" name="race_id" id="f-race-id" value="{{ prefill.race_id or '' }}">
+          <input type="hidden" name="race_slug" id="f-race-slug" value="{{ prefill.race_slug or '' }}">
           <small class="help">Optional. Sets the race for publishing and adds it to the id/URL. Party primaries and the general are separate races — add "gop"/"dem" or "primary"/"general" to narrow.</small>
         </label>
       </div>
@@ -74,11 +74,11 @@
       </div>
 
       <label>Title — the headline shown on the site
-        <input type="text" name="title" id="f-title" placeholder="e.g. Xavier Becerra — The Race for Governor">
+        <input type="text" name="title" id="f-title" placeholder="e.g. Xavier Becerra — The Race for Governor" value="{{ prefill.title or '' }}">
         <small class="help">Optional. If blank, the site uses the video's own title, then falls back to "city + label".</small>
       </label>
       <label>Event org(s) — "Produced by …" on the site (comma-separated)
-        <input type="text" name="event_orgs" id="f-orgs" placeholder="e.g. CBS, NBC">
+        <input type="text" name="event_orgs" id="f-orgs" placeholder="e.g. CBS, NBC" value="{{ prefill.event_orgs or '' }}">
       </label>
 
       <details class="advanced"><summary>Processing &amp; advanced</summary>
@@ -101,7 +101,7 @@
           </span>
         </label>
         <label>Event label / URL slug (auto-filled from the kind — edit only if you need a specific label)
-          <input type="text" name="meeting_type" id="f-mtype" placeholder="Regular Session">
+          <input type="text" name="meeting_type" id="f-mtype" placeholder="Regular Session" value="{{ prefill.meeting_type or '' }}">
         </label>
         <p class="mid">Meeting ID (auto-derived): <span id="derived-id">—</span></p>
       </details>

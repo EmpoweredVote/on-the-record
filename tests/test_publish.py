@@ -537,3 +537,74 @@ def test_replace_votes_result_uses_outcome_when_present(monkeypatch):
     publish._replace_votes(_Cur(), m, "uuid-1")
     assert captured["rows"][0][3] == "Agreed to · 236–193"   # outcome · yea–nay
     assert captured["rows"][1][3] == "Yea 300, Nay 100"                # fallback tally
+
+
+# ---------------------------------------------------------------------------
+# publish_meeting refuses duplicate-named speakers (invariant: two diarized
+# labels can't be the same person — rename in review can re-create this)
+# ---------------------------------------------------------------------------
+
+def _speaker_meeting(speakers):
+    return Meeting(meeting_id="2026-06-10-council", city="Bloomington",
+                   date="2026-06-10", segments=[], speakers=speakers)
+
+
+def test_publish_meeting_refuses_duplicate_named_speakers(monkeypatch):
+    import src.publish as publish
+
+    class NoDB:
+        def connect(self, *a, **k):
+            raise AssertionError("psycopg2.connect must not be reached")
+
+    monkeypatch.setattr(publish, "psycopg2", NoDB())
+    speakers = {
+        "SPEAKER_19": SpeakerMapping("SPEAKER_19", "City Common Council - District 6 Zulich"),
+        "SPEAKER_07": SpeakerMapping("SPEAKER_07", "City Common Council - District 6 Zulich"),
+        "SPEAKER_00": SpeakerMapping("SPEAKER_00", "Mayor Johnson"),
+    }
+    with pytest.raises(ValueError) as exc:
+        publish.publish_meeting(_speaker_meeting(speakers))
+    msg = str(exc.value)
+    assert "Cannot publish 2026-06-10-council" in msg
+    assert "2 speakers named" in msg
+    assert "'City Common Council - District 6 Zulich'" in msg
+    assert "SPEAKER_07, SPEAKER_19" in msg
+    assert "Merge them in review" in msg
+
+
+def test_publish_meeting_clean_names_reach_db_stage(monkeypatch):
+    """Placement pin: the duplicate check sits BEFORE any DB work, and a clean
+    meeting sails past it (the sentinel at _require_db_url is what fires)."""
+    import src.publish as publish
+
+    def sentinel():
+        raise RuntimeError("reached-db-stage")
+
+    monkeypatch.setattr(publish, "_require_db_url", sentinel)
+    speakers = {
+        "SPEAKER_00": SpeakerMapping("SPEAKER_00", "Mayor Johnson"),
+        "SPEAKER_01": SpeakerMapping("SPEAKER_01", "Kate Rosenbarger"),
+    }
+    with pytest.raises(RuntimeError, match="reached-db-stage"):
+        publish.publish_meeting(_speaker_meeting(speakers))
+
+
+def test_publish_meeting_duplicate_check_ignores_placeholder_statuses(monkeypatch):
+    """Two 'Unidentified Speaker' or 'Non-speaker' rows are a valid published
+    state — placeholder names are not identities and must not block publish."""
+    import src.publish as publish
+
+    def sentinel():
+        raise RuntimeError("reached-db-stage")
+
+    monkeypatch.setattr(publish, "_require_db_url", sentinel)
+    speakers = {
+        "S0": SpeakerMapping("S0", "Unidentified Speaker", local_slug="u-1",
+                             speaker_status="unidentified"),
+        "S1": SpeakerMapping("S1", "Unidentified Speaker", local_slug="u-2",
+                             speaker_status="unidentified"),
+        "S2": SpeakerMapping("S2", "Non-speaker", speaker_status="non_speaker"),
+        "S3": SpeakerMapping("S3", "Non-speaker", speaker_status="non_speaker"),
+    }
+    with pytest.raises(RuntimeError, match="reached-db-stage"):
+        publish.publish_meeting(_speaker_meeting(speakers))
