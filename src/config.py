@@ -91,14 +91,24 @@ MERGE_GAP_SECONDS = 0.5  # merge adjacent same-speaker segments closer than this
 SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similarity above this
 
 # Chunked diarization (see docs/superpowers/specs/2026-07-31-chunked-parallel-diarization-design.md).
-# 0 disables chunking (single-pass diarization, the pre-2026-08 behaviour).
-# 60 was chosen by calibration: diarization cost is ~quadratic in window
-# length, and a meeting shorter than one chunk falls through to the untouched
-# single-pass path — so chunking engages only above ~90 min, which is exactly
-# where the single-pass cost (118 min on the 5-hour June 10 meeting) hurts.
-# Measured on June 10 at 60 min / threshold 0.50: DER 0.0439 vs single-pass,
-# 49 speakers vs 41, slowest window 111s vs 7100s.
-DIARIZE_CHUNK_MINUTES = 60
+# 0 = OFF: single-pass diarization, the long-standing behaviour. This is the
+# DEFAULT BY DELIBERATE CHOICE, not because chunking is unbuilt or unmeasured.
+#
+# Chunking works and is fast (60-min windows: 64x on the 5-hour June 10
+# meeting, 33x on May 6, DER 0.044/0.059 vs single-pass). But it reliably
+# produces MORE speaker labels than there are people (June 10: 49 vs 41),
+# because a window sees only a slice of each voice. identify._dedupe then
+# treats two labels naming one person as a mis-ID and demotes the loser to
+# unnamed+needs_review — so an unmerged fragment publishes a real person's
+# remarks attributed to NOBODY unless the reviewer catches it in the GUI.
+# Since the 118-minute single-pass cost is UNATTENDED machine time while the
+# fragmentation lands on the human review step, the trade is not worth it for
+# accuracy-first processing. Set to 60 (or pass --diarize-chunk-minutes 60)
+# when a long meeting genuinely needs fast turnaround, and watch the speaker
+# count during review. The fix that would make this default-on is
+# architectural, not a threshold: chunk for segmentation, then re-cluster
+# identity globally over per-turn embeddings (~20s for 2811 segments).
+DIARIZE_CHUNK_MINUTES = 0
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # Cosine similarity required to call a chunk-local speaker the same person as
 # an already-seen global speaker across windows. Deliberately LOWER than
