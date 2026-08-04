@@ -1,6 +1,8 @@
 #!/bin/bash
-# Entry point for the launchd agenda/memo poll. Do not call this directly for
-# ad-hoc runs — use scripts/poll_agendas.py from your own checkout for that.
+# Entry point for the launchd scheduled polls (agendas by default; pass a
+# scripts/*.py path as the first argument to run another poller, e.g.
+# scripts/poll_discovery.py). Do not call this directly for ad-hoc runs — use
+# scripts/poll_agendas.py from your own checkout for that.
 #
 # WHY THIS WRAPPER EXISTS: the scheduled job used to run
 # scripts/poll_agendas.py straight out of the main working checkout, which
@@ -53,4 +55,17 @@ else
     echo "code: $(git -C "$AUTOMATION_CHECKOUT" log --oneline -1)"
 fi
 
-exec "$PYTHON" "$AUTOMATION_CHECKOUT/scripts/poll_agendas.py" "$@"
+# First argument may name the script to run (a scripts/*.py path relative to
+# the checkout). Without one, default to the agenda poll so plists predating
+# this generalization keep working untouched.
+TARGET="scripts/poll_agendas.py"
+case "${1:-}" in
+    scripts/*.py) TARGET="$1"; shift ;;
+esac
+
+# launchd truncates output silently when a StandardOutPath's parent dir is
+# missing; make every known job log dir exist for the NEXT run (launchd opens
+# the log before exec'ing us, so this protects future runs, not this one).
+mkdir -p "$HOME/CouncilScribe/agendas" "$HOME/CouncilScribe/discovery"
+
+exec "$PYTHON" "$AUTOMATION_CHECKOUT/$TARGET" "$@"
