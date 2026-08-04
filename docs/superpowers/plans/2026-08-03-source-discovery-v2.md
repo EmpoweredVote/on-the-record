@@ -2008,6 +2008,11 @@ branch merges to main.**
    cp scripts/launchd/vote.empowered.poll-discovery.plist ~/Library/LaunchAgents/
    launchctl unload ~/Library/LaunchAgents/vote.empowered.poll-discovery.plist 2>/dev/null
    launchctl load ~/Library/LaunchAgents/vote.empowered.poll-discovery.plist
+   # Fast-forward the clone FIRST: the wrapper is read from the clone it is
+   # about to update, so a wrapper change takes effect one run later unless
+   # the clone is already current when the job fires.
+   git -C ~/CouncilScribe/automation-checkout fetch origin \
+     && git -C ~/CouncilScribe/automation-checkout checkout --detach origin/main
    launchctl kickstart gui/$(id -u)/vote.empowered.poll-discovery
    sleep 30 && tail -20 ~/CouncilScribe/discovery/poll.log
    ```
