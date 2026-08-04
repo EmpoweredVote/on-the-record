@@ -2055,6 +2055,16 @@ gold-irrelevant only for relevance reasons (clip-not-original / wrong-person /
 tier-5). Re-run the eval and watch recall, precision, and the calibration
 block (Brier + buckets). Commit the updated
 `tests/fixtures/discovery_eval_real.jsonl`.
+
+Two caveats to keep in mind reading the numbers:
+- **Real-set recall is selection-biased.** Every harvestable row was already
+  predicted relevant by the classifier (auto_filtered rows never reach triage),
+  so real examples cannot measure a genuine miss — only the synthetic file
+  carries meaningful negatives. Read the per-fixture breakdown, not just the
+  combined row.
+- **The fixture is merge-protected**: existing lines win on source_key so hand
+  corrections survive re-harvests. To rebuild from the DB (e.g. after harvest
+  logic changes), run with `--refresh`.
 ```
 
 - [ ] **Step 2: Commit**
