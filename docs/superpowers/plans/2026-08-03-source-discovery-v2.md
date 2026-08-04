@@ -2022,8 +2022,12 @@ branch merges to main.**
    (`trigger_kind='scheduled'`) visible in the GUI header.
 3. The agenda poll's installed plist still passes no script argument — the
    wrapper defaults to `scripts/poll_agendas.py`, so it keeps working
-   untouched. To make it explicit, prepend `scripts/poll_agendas.py` to its
-   ProgramArguments after the wrapper path.
+   untouched. To make it explicit, install the now-versioned
+   `scripts/launchd/vote.empowered.poll-agendas.plist` (cp + unload/load, same
+   as step 2) — and apply the SAME fast-forward-the-clone-first precaution:
+   installing it against a stale clone would feed the old wrapper a script
+   argument it treats as poll_agendas flags (argparse exit 2) and break a job
+   that currently works.
 ```
 
 6. Add a new final section:
