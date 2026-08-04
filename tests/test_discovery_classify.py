@@ -85,7 +85,7 @@ def _item():
 def test_classify_item_single_pass_when_confident():
     provider = _FakeProvider(['{"relevant": true, "confidence": 0.9, "why": "clear"}'])
     v = classify.classify_item(provider, _item(), race_label="TX Senate",
-                               roster_names=["Maria Delgado"], captions_fetcher=None)
+                               roster_names=["Maria Delgado"], peek_fetcher=None)
     assert v.confidence == 0.9 and len(provider.prompts) == 1
     assert "Maria Delgado" in provider.prompts[0]
     assert provider.systems[0] == classify._SYSTEM
@@ -98,14 +98,14 @@ def test_classify_item_mid_confidence_triggers_captions_second_pass():
     ])
     fetched = {}
 
-    def fake_captions(url):
+    def fake_peek(url):
         fetched["url"] = url
-        return "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nI will cut taxes"
+        return "you have sixty seconds Senator my question is"
 
     v = classify.classify_item(provider, _item(), race_label="TX Senate",
-                               roster_names=["Maria Delgado"], captions_fetcher=fake_captions)
+                               roster_names=["Maria Delgado"], peek_fetcher=fake_peek)
     assert v.confidence == 0.92 and len(provider.prompts) == 2
-    assert "I will cut taxes" in provider.prompts[1]
+    assert "you have sixty seconds Senator my question is" in provider.prompts[1]
     assert fetched["url"] == _item().url
 
 
@@ -114,5 +114,26 @@ def test_classify_item_drops_candidates_not_in_roster():
                               '"candidates_present": ["Maria Delgado", "Totally Fake Person"], '
                               '"why": "clear"}'])
     v = classify.classify_item(provider, _item(), race_label="TX Senate",
-                               roster_names=["Maria Delgado"], captions_fetcher=None)
+                               roster_names=["Maria Delgado"], peek_fetcher=None)
     assert v.candidates_present == ["Maria Delgado"]
+
+
+def test_page_peek_second_pass_uses_plain_excerpt_verbatim():
+    prompts = []
+
+    class _P:
+        def complete(self, prompt, *, max_tokens, temperature, system=None):
+            prompts.append(prompt)
+            reply_conf = 0.5 if len(prompts) == 1 else 0.9
+            return ('{"relevant": true, "confidence": %s,'
+                    ' "candidates_present": [], "event_kind": "debate",'
+                    ' "source_tier": 1, "original_vs_clip": "original",'
+                    ' "route": "ingest", "why": "w"}' % reply_conf)
+
+    item = RawItem(url="https://www.kctv5.com/2026/08/01/governor-debate/",
+                   title="t", description="d", channel_name="KCTV5")
+    verdict = classify.classify_item(_P(), item, race_label="KS Governor",
+                                     roster_names=["Alice Example"],
+                                     peek_fetcher=lambda url: "full debate transcript text")
+    assert verdict.confidence == 0.9
+    assert "full debate transcript text" in prompts[1]

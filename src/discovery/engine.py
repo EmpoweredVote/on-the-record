@@ -1,6 +1,6 @@
 """Discovery run orchestration.
 
-All I/O is injected (provider, feed fetcher, search, hydration, captions,
+All I/O is injected (provider, feed fetcher, search, hydration, page peek,
 sleep) so the whole run is testable with fakes. The engine owns commits:
 one per outlet and one per swept race, so a crash loses at most one unit.
 Log lines follow the poll_agendas convention: UPPERCASE verb prefixes.
@@ -64,7 +64,7 @@ def _snippet(text: "str | None", limit: int = 1500) -> "str | None":
 
 
 def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
-                  captions_fetcher, sleep_fn, meeting_keys: set, today: dt.date,
+                  peek_fetcher, sleep_fn, meeting_keys: set, today: dt.date,
                   dry_run: bool = False, race_filter: "str | None" = None,
                   classify_cap: "int | None" = None,
                   skip_watchlist: bool = False, skip_sweeps: bool = False) -> RunStats:
@@ -96,7 +96,8 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             stats.recency_filtered += 1
             print(f"STALE [{item.via}] {item.title!r} ({item.published_at})")
             return
-        if item.duration_seconds is None or item.description is None:
+        if ((item.duration_seconds is None or item.description is None)
+                and key.startswith("youtube:")):
             if key in hydrated_cache:
                 item = hydrated_cache[key]
             else:
@@ -135,7 +136,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             stats.spend_capped += 1
             return
         verdict = classify_item(provider, item, race_label=race_label,
-                                roster_names=roster, captions_fetcher=captions_fetcher)
+                                roster_names=roster, peek_fetcher=peek_fetcher)
         stats.classified += 1
         pending = (verdict.rejected_reason is None and verdict.relevant
                    and verdict.confidence >= config.DISCOVERY_CONFIDENCE_FLOOR)

@@ -53,7 +53,7 @@ def main() -> int:
                            duration_seconds=ex["duration_seconds"],
                            published_at=ex.get("published_at"), via="search")
             verdict = classify_item(provider, item, race_label=ex["race_label"],
-                                    roster_names=ex["roster"], captions_fetcher=None)
+                                    roster_names=ex["roster"], peek_fetcher=None)
             outcome = classify_outcome(ex["gold_relevant"], verdict)
             outcomes.append(outcome)
             pairs.append((ex["gold_relevant"], verdict))

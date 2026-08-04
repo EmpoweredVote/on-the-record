@@ -46,10 +46,13 @@ Set "relevant" to true ONLY for original sources of the candidates' own words �
 i.e. when original_vs_clip is "original". News packages ABOUT candidates, campaign
 ads, and highlight/clip compilations are relevant=false even when the candidate
 appears or is quoted in them.
-If captions are provided, judge DISCOURSE SHAPE: sustained first-person policy
-speech and moderator/Q&A signatures suggest an original event; third-person
-anchor narration with soundbites suggests a news package. Do not guess who is
-speaking — only whether candidate speech is present at length.
+If a captions or article-page excerpt is provided, judge DISCOURSE SHAPE: sustained
+first-person policy speech and moderator/Q&A signatures suggest an original event;
+third-person anchor narration with soundbites suggests a news package. Do not guess
+who is speaking — only whether candidate speech is present at length.
+
+For web/article items (duration unknown, non-video URL): route "quote_source"
+unless the page clearly hosts the full event video — then route "ingest".
 
 Respond with JSON only:
 {{"relevant": true/false, "confidence": 0.0-1.0,
@@ -65,7 +68,8 @@ def build_prompt(item: RawItem, *, race_label: str, roster_names: list,
     roster = "\n".join(f"- {n}" for n in roster_names) or "- (none)"
     captions_block = ""
     if captions_excerpt:
-        captions_block = f"\nUnlabeled auto-captions excerpt:\n\"\"\"\n{captions_excerpt}\n\"\"\"\n"
+        captions_block = ("\nUnlabeled captions / article-page text excerpt:\n"
+                          f"\"\"\"\n{captions_excerpt}\n\"\"\"\n")
     desc = (item.description or "")[:1500]
     return _PROMPT_TEMPLATE.format(
         race_label=race_label, roster=roster, title=item.title or "(none)",
@@ -133,22 +137,23 @@ def _filter_candidates(verdict: Verdict, roster_names: list) -> Verdict:
 
 
 def classify_item(provider, item: RawItem, *, race_label: str, roster_names: list,
-                  captions_fetcher=None) -> Verdict:
-    """One LLM pass; a second pass with captions when confidence lands in the
-    mid band and a captions_fetcher is supplied. captions_fetcher(url) returns
-    raw VTT text or None."""
+                  peek_fetcher=None) -> Verdict:
+    """One LLM pass; a second pass with a peek excerpt when confidence lands
+    in the mid band and a peek_fetcher is supplied. peek_fetcher(url) returns
+    a PLAIN-TEXT excerpt (captions already VTT-stripped, or article-page
+    text) or None."""
     text = provider.complete(
         build_prompt(item, race_label=race_label, roster_names=roster_names),
         max_tokens=config.DISCOVERY_CLASSIFY_MAX_TOKENS, temperature=0.0, system=_SYSTEM)
     verdict = parse_verdict(text)
     low, high = config.DISCOVERY_CAPTIONS_BAND
-    if (captions_fetcher is not None and verdict.rejected_reason is None
+    if (peek_fetcher is not None and verdict.rejected_reason is None
             and low <= verdict.confidence < high):
-        vtt = captions_fetcher(item.url)
-        if vtt:
+        excerpt = peek_fetcher(item.url)
+        if excerpt:
             text2 = provider.complete(
                 build_prompt(item, race_label=race_label, roster_names=roster_names,
-                             captions_excerpt=vtt_to_text(vtt)),
+                             captions_excerpt=excerpt),
                 max_tokens=config.DISCOVERY_CLASSIFY_MAX_TOKENS, temperature=0.0,
                 system=_SYSTEM)
             second = parse_verdict(text2)

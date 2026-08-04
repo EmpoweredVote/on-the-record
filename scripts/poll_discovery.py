@@ -44,18 +44,28 @@ def _meeting_source_keys() -> set:
     return keys
 
 
-def _captions_fetcher(url: str):
-    from src.download import download_captions_via_ytdlp
-    cache = config.DISCOVERY_DIR / "captions"
-    cache.mkdir(parents=True, exist_ok=True)
-    safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
-    dest = cache / f"{safe}.vtt"
-    if dest.exists():
-        return dest.read_text(encoding="utf-8", errors="replace")
-    path = download_captions_via_ytdlp(url, dest)
-    if path is None:
+def _peek_fetcher(url: str):
+    """Stage-2 peek: auto-caption text for YouTube items, article-page text
+    for web items. Returns plain text or None; never raises."""
+    from src.discovery.classify import vtt_to_text
+    if source_key(url).startswith("youtube:"):
+        from src.download import download_captions_via_ytdlp
+        cache = config.DISCOVERY_DIR / "captions"
+        cache.mkdir(parents=True, exist_ok=True)
+        safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
+        dest = cache / f"{safe}.vtt"
+        if dest.exists():
+            vtt = dest.read_text(encoding="utf-8", errors="replace")
+        else:
+            path = download_captions_via_ytdlp(url, dest)
+            vtt = (Path(path).read_text(encoding="utf-8", errors="replace")
+                   if path else None)
+        return vtt_to_text(vtt) if vtt else None
+    from src.discovery.feeds import fetch_page_text
+    try:
+        return fetch_page_text(url) or None
+    except Exception:  # noqa: BLE001 — the peek is optional; stage 2 proceeds without
         return None
-    return Path(path).read_text(encoding="utf-8", errors="replace")
 
 
 def main() -> int:
@@ -93,7 +103,7 @@ def main() -> int:
             fetch_feed_items=feeds.fetch_outlet_items,
             ytsearch_fn=lambda q: search.with_backoff(lambda: search.ytsearch(q)),
             hydrate_fn=search.hydrate_item,
-            captions_fetcher=_captions_fetcher,
+            peek_fetcher=_peek_fetcher,
             sleep_fn=time.sleep,
             meeting_keys=_meeting_source_keys(),
             today=dt.date.today(),

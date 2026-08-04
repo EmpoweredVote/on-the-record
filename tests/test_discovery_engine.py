@@ -67,7 +67,7 @@ def _run(monkeypatch, inserted, **kwargs):
         fetch_feed_items=kwargs.pop("fetch_feed_items", lambda o: [GOOD_ITEM, NOISE_ITEM]),
         ytsearch_fn=kwargs.pop("ytsearch_fn", lambda q: []),
         hydrate_fn=kwargs.pop("hydrate_fn", lambda item: item),
-        captions_fetcher=None, sleep_fn=lambda s: None,
+        peek_fetcher=None, sleep_fn=lambda s: None,
         meeting_keys=kwargs.pop("meeting_keys", set()),
         today=dt.date(2026, 8, 2), **kwargs)
     return stats, provider
@@ -148,7 +148,7 @@ def test_sweep_queries_each_candidate_and_records(monkeypatch):
     stats = engine.run_discovery(
         _FakeConn(), provider=provider,
         fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
-        hydrate_fn=lambda item: item, captions_fetcher=None,
+        hydrate_fn=lambda item: item, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True)
 
@@ -177,7 +177,7 @@ def test_sweep_search_error_skips_record_but_commits(monkeypatch):
     stats = engine.run_discovery(
         conn, provider=_FakeProvider("irrelevant"),
         fetch_feed_items=lambda o: [], ytsearch_fn=raising_search,
-        hydrate_fn=lambda item: item, captions_fetcher=None,
+        hydrate_fn=lambda item: item, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True)
 
@@ -235,7 +235,7 @@ def test_item_failure_is_nonfatal_and_run_continues(monkeypatch):
         conn, provider=provider,
         fetch_feed_items=lambda o: [GOOD_ITEM, second_item],
         ytsearch_fn=lambda q: [], hydrate_fn=lambda item: item,
-        captions_fetcher=None, sleep_fn=lambda s: None, meeting_keys=set(),
+        peek_fetcher=None, sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_sweeps=True)
 
     assert provider.calls == 2
@@ -269,7 +269,7 @@ def test_sweep_item_failure_is_nonfatal(monkeypatch):
     stats = engine.run_discovery(
         _FakeConn(), provider=_AlwaysRaisesProvider(),
         fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
-        hydrate_fn=lambda it: it, captions_fetcher=None, sleep_fn=lambda s: None,
+        hydrate_fn=lambda it: it, peek_fetcher=None, sleep_fn=lambda s: None,
         meeting_keys=set(), today=dt.date(2026, 8, 2), skip_watchlist=True)
 
     assert len(stats.failures) == 1
@@ -313,7 +313,7 @@ def test_spend_cap_mid_race_skips_record_but_commits(monkeypatch):
             ' "event_kind": "town_hall", "source_tier": 1, "original_vs_clip": "original",'
             ' "route": "ingest", "why": "town hall"}'),
         fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
-        hydrate_fn=lambda item: item, captions_fetcher=None,
+        hydrate_fn=lambda item: item, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True, classify_cap=1)
 
@@ -341,7 +341,7 @@ def test_spend_cap_defers_sweep_and_skips_record(monkeypatch, capsys):
     stats = engine.run_discovery(
         _FakeConn(), provider=_FakeProvider("irrelevant"),
         fetch_feed_items=lambda o: [], ytsearch_fn=lambda q: [GOOD_ITEM],
-        hydrate_fn=lambda item: item, captions_fetcher=None,
+        hydrate_fn=lambda item: item, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True, classify_cap=0)
 
@@ -373,7 +373,7 @@ def test_matched_politician_ids_keep_cross_race_matches(monkeypatch):
             ' "event_kind": "debate", "source_tier": 1, "original_vs_clip": "original",'
             ' "route": "ingest", "why": "cross-race debate"}'),
         fetch_feed_items=lambda o: [item], ytsearch_fn=lambda q: [],
-        hydrate_fn=lambda it: it, captions_fetcher=None, sleep_fn=lambda s: None,
+        hydrate_fn=lambda it: it, peek_fetcher=None, sleep_fn=lambda s: None,
         meeting_keys=set(), today=dt.date(2026, 8, 2), skip_sweeps=True)
 
     assert len(inserted) == 1
@@ -409,7 +409,7 @@ def test_hydration_is_cached_across_duplicate_sweep_hits(monkeypatch):
     stats = engine.run_discovery(
         _FakeConn(), provider=_FakeProvider("irrelevant"),
         fetch_feed_items=lambda o: [], ytsearch_fn=fake_search,
-        hydrate_fn=counting_hydrate, captions_fetcher=None,
+        hydrate_fn=counting_hydrate, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True)
 
@@ -489,7 +489,7 @@ def test_sweep_phase_aborts_after_consecutive_search_failures(monkeypatch):
     stats = engine.run_discovery(
         _FakeConn(), provider=_FakeProvider("irrelevant"),
         fetch_feed_items=lambda o: [], ytsearch_fn=always_boom,
-        hydrate_fn=lambda item: item, captions_fetcher=None,
+        hydrate_fn=lambda item: item, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True)
 
@@ -526,12 +526,33 @@ def test_search_failure_counter_resets_on_success(monkeypatch):
     stats = engine.run_discovery(
         _FakeConn(), provider=_FakeProvider("irrelevant"),
         fetch_feed_items=lambda o: [], ytsearch_fn=flaky,
-        hydrate_fn=lambda item: item, captions_fetcher=None,
+        hydrate_fn=lambda item: item, peek_fetcher=None,
         sleep_fn=lambda s: None, meeting_keys=set(),
         today=dt.date(2026, 8, 2), skip_watchlist=True)
 
     assert not any("sweep phase aborted" in f for f in stats.failures)
     assert len(calls) == len(fail_pattern)          # all queries attempted
+
+
+def test_web_items_are_not_hydrated(monkeypatch):
+    inserted = []
+    _patch_db(monkeypatch, inserted)
+    web_item = RawItem(url="https://www.kctv5.com/2026/08/01/governor-debate/",
+                       title="Maria Delgado and Ana Ruiz: full debate",
+                       description=None, channel_name="KCTV5",
+                       published_at="2026-08-01", outlet_id="o1", via="watchlist")
+    hydrate_calls = []
+
+    def hydrate(item):
+        hydrate_calls.append(item.url)
+        return item
+
+    stats, provider = _run(monkeypatch, inserted,
+                           fetch_feed_items=lambda outlet: [web_item],
+                           hydrate_fn=hydrate, skip_sweeps=True)
+    assert hydrate_calls == []                    # no yt-dlp on article pages
+    assert stats.classified == 1                  # still reached stage 2
+    assert inserted and inserted[0]["duration_seconds"] is None
 
 
 def test_hydrated_publish_date_also_recency_filtered(monkeypatch):
