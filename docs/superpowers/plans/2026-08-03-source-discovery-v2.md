@@ -2031,7 +2031,16 @@ branch merges to main.**
    that currently works.
 ```
 
-6. Add a new final section:
+6. In the **Manual runs** section, add one line documenting sweep-wave behavior:
+
+```markdown
+Bot-check/429 waves: each search retries ~3x with backoff (config
+DISCOVERY_BACKOFF_*), and after 5 consecutive exhausted searches the sweep
+phase aborts loudly for the run (SWEEP ABORT in poll.log; cadence clocks not
+reset) — expect the next day's run to pick the sweeps back up.
+```
+
+7. Add a new final section:
 
 ```markdown
 ## Eval upkeep
