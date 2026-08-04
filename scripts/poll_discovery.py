@@ -46,23 +46,25 @@ def _meeting_source_keys() -> set:
 
 def _peek_fetcher(url: str):
     """Stage-2 peek: auto-caption text for YouTube items, article-page text
-    for web items. Returns plain text or None; never raises."""
-    from src.discovery.classify import vtt_to_text
-    if source_key(url).startswith("youtube:"):
-        from src.download import download_captions_via_ytdlp
-        cache = config.DISCOVERY_DIR / "captions"
-        cache.mkdir(parents=True, exist_ok=True)
-        safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
-        dest = cache / f"{safe}.vtt"
-        if dest.exists():
-            vtt = dest.read_text(encoding="utf-8", errors="replace")
-        else:
-            path = download_captions_via_ytdlp(url, dest)
-            vtt = (Path(path).read_text(encoding="utf-8", errors="replace")
-                   if path else None)
-        return vtt_to_text(vtt) if vtt else None
-    from src.discovery.feeds import fetch_page_text
+    for web items. Returns plain text or None; never raises — the whole body
+    is one try/except, since the YouTube branch can also fail (disk/
+    permission errors on the caption cache), not just the web branch."""
     try:
+        from src.discovery.classify import vtt_to_text
+        if source_key(url).startswith("youtube:"):
+            from src.download import download_captions_via_ytdlp
+            cache = config.DISCOVERY_DIR / "captions"
+            cache.mkdir(parents=True, exist_ok=True)
+            safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
+            dest = cache / f"{safe}.vtt"
+            if dest.exists():
+                vtt = dest.read_text(encoding="utf-8", errors="replace")
+            else:
+                path = download_captions_via_ytdlp(url, dest)
+                vtt = (Path(path).read_text(encoding="utf-8", errors="replace")
+                       if path else None)
+            return vtt_to_text(vtt) if vtt else None
+        from src.discovery.feeds import fetch_page_text
         return fetch_page_text(url) or None
     except Exception:  # noqa: BLE001 — the peek is optional; stage 2 proceeds without
         return None

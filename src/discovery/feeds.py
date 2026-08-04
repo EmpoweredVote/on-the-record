@@ -318,24 +318,55 @@ def parse_news_feed(xml_text: "str | bytes", *, outlet_id: "str | None" = None,
 
 _ARTICLE_OR_MAIN_RE = re.compile(r"<(article|main)\b[^>]*>[\s\S]*?</\1>", re.IGNORECASE)
 
+_PAGE_TEXT_CONTENT_TYPES = ("text/html", "text/plain", "application/xhtml")
+_PAGE_TEXT_MAX_BYTES = 500_000
+
+
+def _fetch_page_bytes(url: str, *, max_bytes: int = _PAGE_TEXT_MAX_BYTES) -> "tuple[str, bytes]":
+    """Streaming bytes fetch for the page-text peek only (the feed/robots
+    fetches keep using _fetch_bytes). Reads at most max_bytes of body — a
+    slow or huge page shouldn't stall the peek or bloat memory/prompt size —
+    and hands the caller the response's raw Content-Type so it can refuse
+    non-HTML/text content before ever decoding it (a podcast .mp3 enclosure
+    or a PDF must not dump binary into a prompt)."""
+    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": WEB_USER_AGENT},
+                        stream=True)
+    resp.raise_for_status()
+    content_type = resp.headers.get("Content-Type", "")
+    chunks = []
+    total = 0
+    for chunk in resp.iter_content(chunk_size=8192):
+        if not chunk:
+            continue
+        chunks.append(chunk)
+        total += len(chunk)
+        if total >= max_bytes:
+            break
+    return content_type, b"".join(chunks)[:max_bytes]
+
 
 def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> str:
     """Article-page text for the stage-2 page peek (web analog of the
     captions peek). Robots-gated and paced like every other web-lane fetch;
-    returns '' when disallowed. Strips comments/block-chrome FIRST, then
-    prefers the LONGEST remaining <article>/<main> slice, falling back to
-    the whole cleaned page when the best slice is too short (~200 chars) to
-    be the real body. Slicing raw HTML instead let a small <article> teaser
-    nested in an <aside>/<template> rail (a normal station template shape)
-    hijack the peek — stripping block chrome first removes the teaser along
-    with its wrapper before slicing ever sees it. _html_to_text re-running
-    the strips on the chosen slice is idempotent."""
+    returns '' when disallowed OR when the Content-Type isn't text/html,
+    text/plain, or application/xhtml (a non-HTML enclosure must not reach
+    the classify prompt). Strips comments/block-chrome FIRST, then prefers
+    the LONGEST remaining <article>/<main> slice, falling back to the whole
+    cleaned page when the best slice is too short (~200 chars) to be the
+    real body. Slicing raw HTML instead let a small <article> teaser nested
+    in an <aside>/<template> rail (a normal station template shape) hijack
+    the peek — stripping block chrome first removes the teaser along with
+    its wrapper before slicing ever sees it. _html_to_text re-running the
+    strips on the chosen slice is idempotent."""
     if not _robots_allowed(url):
         return ""
     origin = _origin(url)
     _polite_pause(origin, crawl_delay=_crawl_delay_for(origin), sleep_fn=sleep_fn)
-    raw = _fetch_bytes(url)
-    html_str = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
+    content_type, raw = _fetch_page_bytes(url)
+    ctype = content_type.split(";")[0].strip().lower()
+    if not ctype.startswith(_PAGE_TEXT_CONTENT_TYPES):
+        return ""
+    html_str = raw.decode("utf-8", errors="replace")
     cleaned = _BLOCK_RE.sub(" ", _COMMENT_RE.sub(" ", html_str))
     match = max(_ARTICLE_OR_MAIN_RE.finditer(cleaned),
                 key=lambda m: len(m.group(0)), default=None)

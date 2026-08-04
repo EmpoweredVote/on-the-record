@@ -41,14 +41,29 @@ def main() -> int:
     fixture_stems = [p.stem for p in FIXTURES if p.exists()]
     rows = []
     cal_by_model = []
+    route_stats_by_model = []
+    # human-labeled route ground truth, real fixture only: 'ingested' means a
+    # human routed it to the real pipeline (route=ingest), 'approved' means a
+    # human routed it to quote-sourcing (route=quote_source). The 8 synthetic
+    # discovery_eval.jsonl examples carry no status/source_key -- they fall
+    # back to the https://example.test/eval URL below and read as "web page"
+    # in the prompt even though most are YouTube-shaped; acceptable since
+    # they're not part of this route-accuracy readout.
+    _EXPECTED_ROUTE = {"ingested": "ingest", "approved": "quote_source"}
     for model in args.models:
         provider = get_provider(model)
         outcomes = []
         pairs = []
         by_fixture_outcomes = {stem: [] for stem in fixture_stems}
         by_fixture_pairs = {stem: [] for stem in fixture_stems}
+        route_correct = {stem: 0 for stem in fixture_stems}
+        route_total = {stem: 0 for stem in fixture_stems}
         for ex in examples:
-            item = RawItem(url="https://example.test/eval", title=ex["title"],
+            source_key_val = ex.get("source_key", "")
+            url = (f"https://www.youtube.com/watch?v={source_key_val.split(':', 1)[1]}"
+                  if source_key_val.startswith("youtube:")
+                  else ex.get("url", "https://example.test/eval"))
+            item = RawItem(url=url, title=ex["title"],
                            description=ex["description"], channel_name=ex["channel"],
                            duration_seconds=ex["duration_seconds"],
                            published_at=ex.get("published_at"), via="search")
@@ -59,6 +74,11 @@ def main() -> int:
             pairs.append((ex["gold_relevant"], verdict))
             by_fixture_outcomes[ex["_fixture"]].append(outcome)
             by_fixture_pairs[ex["_fixture"]].append((ex["gold_relevant"], verdict))
+            expected_route = _EXPECTED_ROUTE.get(ex.get("status"))
+            if expected_route is not None:
+                route_total[ex["_fixture"]] += 1
+                if verdict.route == expected_route:
+                    route_correct[ex["_fixture"]] += 1
             print(f"{model} {outcome:15s} conf={verdict.confidence:.2f} {ex['title']!r}")
         for stem in fixture_stems:
             rows.append(summarize(f"{model} · {stem}", by_fixture_outcomes[stem]))
@@ -66,6 +86,7 @@ def main() -> int:
         cal_by_model.append((model, calibration(pairs),
                             [(stem, calibration(by_fixture_pairs[stem]))
                              for stem in fixture_stems]))
+        route_stats_by_model.append((model, route_correct, route_total))
     print("\n| model | n | recall | precision | parse_failure |")
     print("|---|---|---|---|---|")
     for r in rows:
@@ -88,6 +109,12 @@ def main() -> int:
             for b in fcal["buckets"]:
                 print(f"  {b['range']}: n={b['n']} predicted={b['predicted']:.2f} "
                       f"actual={b['actual']:.2f}")
+    print()
+    for model, route_correct, route_total in route_stats_by_model:
+        for stem in fixture_stems:
+            if route_total[stem] > 0:
+                print(f"route_accuracy ({model} · {stem}): "
+                      f"{route_correct[stem]}/{route_total[stem]}")
     return 0
 
 

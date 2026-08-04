@@ -149,9 +149,9 @@ def test_fetch_page_text_strips_markup(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
     monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
-    monkeypatch.setattr(feeds, "_fetch_bytes", lambda url:
+    monkeypatch.setattr(feeds, "_fetch_page_bytes", lambda url: ("text/html; charset=utf-8",
         b"<html><script>var x=1;</script><body><h1>Debate</h1>"
-        b"<p>Watch the full governor debate &amp; forum.</p></body></html>")
+        b"<p>Watch the full governor debate &amp; forum.</p></body></html>"))
     text = fetch_page_text("https://x.example/article", sleep_fn=lambda s: None)
     assert "Debate Watch the full governor debate & forum." in text
     assert "var x" not in text
@@ -161,9 +161,9 @@ def test_fetch_page_text_prefers_article_slice(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
     monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
-    monkeypatch.setattr(feeds, "_fetch_bytes", lambda url:
+    monkeypatch.setattr(feeds, "_fetch_page_bytes", lambda url: ("text/html",
         b"<html><nav>Home About</nav><body><article><h1>Debate</h1>"
-        b"<p>Full recap here.</p></article><footer>Contact us</footer></body></html>")
+        b"<p>Full recap here.</p></article><footer>Contact us</footer></body></html>"))
     text = fetch_page_text("https://x.example/article", sleep_fn=lambda s: None)
     assert "Debate Full recap here." in text
     assert "Home About" not in text
@@ -174,12 +174,12 @@ def test_fetch_page_text_ignores_aside_teaser_prefers_main_body(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
     monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
-    monkeypatch.setattr(feeds, "_fetch_bytes", lambda url:
+    monkeypatch.setattr(feeds, "_fetch_page_bytes", lambda url: ("text/html",
         b"<html><body><aside><article>Related: Storm hits region</article></aside>"
         b"<article><h1>Governor Debate</h1><p>The candidates sparred over taxes "
         b"and education for nearly two hours in a debate broadcast statewide, "
         b"touching on infrastructure, healthcare, and rural broadband access.</p>"
-        b"</article></body></html>")
+        b"</article></body></html>"))
     text = fetch_page_text("https://x.example/article", sleep_fn=lambda s: None)
     assert "Governor Debate" in text
     assert "candidates sparred" in text
@@ -190,14 +190,46 @@ def test_fetch_page_text_falls_back_when_article_slice_too_small(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
     monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
-    monkeypatch.setattr(feeds, "_fetch_bytes", lambda url:
+    monkeypatch.setattr(feeds, "_fetch_page_bytes", lambda url: ("text/html",
         b"<html><body><h1>KCTV5 News</h1><article>Breaking.</article>"
         b"<p>Full story: county commissioners voted 4-1 to approve the new "
         b"zoning ordinance after a contentious three-hour public hearing.</p>"
-        b"</body></html>")
+        b"</body></html>"))
     text = fetch_page_text("https://x.example/article", sleep_fn=lambda s: None)
     assert "county commissioners voted 4-1" in text
     assert "KCTV5 News" in text
+
+
+def test_fetch_page_text_rejects_non_html_content_type(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("audio/mpeg", b"\xff\xfb\x90\x00" * 100))
+    text = fetch_page_text("https://x.example/episode.mp3", sleep_fn=lambda s: None)
+    assert text == ""
+
+
+def test_fetch_page_bytes_caps_body_size(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+
+    class _FakeResp:
+        headers = {"Content-Type": "text/html"}
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size=8192):
+            # Far more than the cap -- the guard must stop reading, not just
+            # truncate after accumulating everything.
+            for _ in range(1000):
+                yield b"x" * chunk_size
+
+    monkeypatch.setattr(feeds.requests, "get", lambda *a, **kw: _FakeResp())
+    content_type, body = feeds._fetch_page_bytes("https://x.example/huge", max_bytes=1000)
+    assert content_type == "text/html"
+    assert len(body) == 1000
 
 
 def test_html_to_text_preserves_less_than_greater_than_comparisons():

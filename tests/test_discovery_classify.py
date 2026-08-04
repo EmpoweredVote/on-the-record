@@ -31,6 +31,17 @@ def test_parse_verdict_clamps_and_validates():
     assert v.route == "ingest"          # unknown route falls back
 
 
+def test_build_prompt_page_kind_youtube_vs_web():
+    yt_item = RawItem(url="https://www.youtube.com/watch?v=abc12345678",
+                      title="t", description="d", channel_name="KXAN")
+    web_item = RawItem(url="https://www.kctv5.com/2026/08/01/governor-debate/",
+                       title="t", description="d", channel_name="KCTV5")
+    yt_prompt = classify.build_prompt(yt_item, race_label="r", roster_names=[])
+    web_prompt = classify.build_prompt(web_item, race_label="r", roster_names=[])
+    assert "page_kind: YouTube video" in yt_prompt
+    assert "page_kind: web page" in web_prompt
+
+
 def test_vtt_to_text_strips_cues_and_dedupes():
     vtt = """WEBVTT
 
@@ -91,6 +102,14 @@ def test_classify_item_single_pass_when_confident():
     assert provider.systems[0] == classify._SYSTEM
 
 
+# VTT-shaped: a cue-timing line and a bare-digit cue-index line. vtt_to_text
+# would strip both and dedupe -- the plain-text contract requires this to
+# arrive at the model completely unmangled, since peek_fetcher already did
+# any VTT-stripping (or there was none to do, for an article excerpt).
+_VTT_SHAPED_EXCERPT = ("12\n00:00:01.000 --> 00:00:02.000\n"
+                      "you have sixty seconds Senator my question is")
+
+
 def test_classify_item_mid_confidence_triggers_captions_second_pass():
     provider = _FakeProvider([
         '{"relevant": true, "confidence": 0.5, "why": "unsure"}',
@@ -100,12 +119,12 @@ def test_classify_item_mid_confidence_triggers_captions_second_pass():
 
     def fake_peek(url):
         fetched["url"] = url
-        return "you have sixty seconds Senator my question is"
+        return _VTT_SHAPED_EXCERPT
 
     v = classify.classify_item(provider, _item(), race_label="TX Senate",
                                roster_names=["Maria Delgado"], peek_fetcher=fake_peek)
     assert v.confidence == 0.92 and len(provider.prompts) == 2
-    assert "you have sixty seconds Senator my question is" in provider.prompts[1]
+    assert _VTT_SHAPED_EXCERPT in provider.prompts[1]
     assert fetched["url"] == _item().url
 
 
@@ -134,6 +153,6 @@ def test_page_peek_second_pass_uses_plain_excerpt_verbatim():
                    title="t", description="d", channel_name="KCTV5")
     verdict = classify.classify_item(_P(), item, race_label="KS Governor",
                                      roster_names=["Alice Example"],
-                                     peek_fetcher=lambda url: "full debate transcript text")
+                                     peek_fetcher=lambda url: _VTT_SHAPED_EXCERPT)
     assert verdict.confidence == 0.9
-    assert "full debate transcript text" in prompts[1]
+    assert _VTT_SHAPED_EXCERPT in prompts[1]
