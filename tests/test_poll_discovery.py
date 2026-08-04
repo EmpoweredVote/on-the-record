@@ -1,7 +1,11 @@
 """Wiring tests for scripts/poll_discovery.py: pins the transaction-ordering
-invariants (run record opens before the engine runs, alarms print before
-persistence, finish_run commits before record_alarms, dry-run writes
-nothing) using fakes. No DB, no network.
+invariants, each backed by its own assertion below —
+  - run record opens (and commits) before the engine runs
+  - alarms print before persistence, even when persistence then fails
+  - finish_run commits before record_alarms
+  - dry-run writes no run record
+  - a mid-run engine crash leaves the started row unfinished
+using fakes. No DB, no network.
 
 scripts/ has no package __init__, so it's added to sys.path directly.
 """
@@ -48,7 +52,7 @@ def _patch_common(monkeypatch, log):
         log.append("record_alarms")
 
     def _fake_alarm_races(cur, days=30):
-        return []
+        return [("race-1", "WI Gov", "2026-08-11")]
 
     monkeypatch.setattr(poll_discovery.db, "connect", lambda: _FakeConn(log))
     monkeypatch.setattr(poll_discovery, "get_provider", lambda *a, **kw: object())
@@ -132,3 +136,23 @@ def test_engine_crash_leaves_started_row_unfinished(monkeypatch):
     assert "insert_run" in log
     assert "commit" in log
     assert "finish_run" not in log
+
+
+def test_alarms_print_before_persistence_even_when_it_fails(monkeypatch, capsys):
+    log = []
+    _patch_common(monkeypatch, log)
+
+    def _raise_record_alarms(cur, race_ids):
+        log.append("record_alarms")
+        raise RuntimeError("db hiccup")
+
+    monkeypatch.setattr(poll_discovery.db, "record_alarms", _raise_record_alarms)
+    stats = poll_discovery.engine.RunStats()
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py"])
+
+    with pytest.raises(RuntimeError, match="db hiccup"):
+        poll_discovery.main()
+
+    assert "ALARM" in capsys.readouterr().out
