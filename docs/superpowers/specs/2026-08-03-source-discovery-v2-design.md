@@ -78,31 +78,39 @@ agenda-poll plist passes `poll_agendas.py`, the discovery plist passes
 `poll_discovery.py`); both plists' `ProgramArguments` change accordingly. The wrapper
 `mkdir -p`s the job's log dir so `poll.log` accumulates from the first unattended run.
 
-**Run records.** New table (the only new DDL in v2):
+**Run records.** New table (shipped as migration 1553 + fast-follow 1556 in ev-accounts;
+1553 also swaps the `source_outlets` kind CHECK to admit `web_rss`, and 1556 adds the
+three funnel-loss counters, catalog comments, and a `DO $$` post-verify gate — so "one
+new table" but not literally one DDL statement):
 
 ### `essentials.source_discovery_runs`
 
 *(Implementation amendment 2026-08-03: originally specced as `discovery_runs`, renamed —
 prod already has an unrelated `essentials.discovery_runs` table from migration 070, the
-per-jurisdiction candidate-discovery run log. The `source_` prefix matches the v1 family.)*
+per-jurisdiction candidate-discovery run log. The `source_` prefix matches the v1 family.
+The trigger column shipped as `trigger_kind` — TRIGGER is a Postgres keyword.)*
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid pk | |
-| `started_at`, `finished_at` | timestamptz | `finished_at` null = crashed mid-run |
-| `trigger` | text | `scheduled` \| `manual` \| `race` (forced `--race` run) |
+| `started_at`, `finished_at` | timestamptz | `finished_at` null = crashed, or in flight if recent |
+| `trigger_kind` | text | `scheduled` \| `manual` \| `race` (forced `--race` run) |
 | `items_examined` | int | stage-1 input count |
 | `classified` | int | stage-2 calls made |
 | `inserted_pending` | int | |
 | `inserted_auto_filtered` | int | |
 | `spend_capped` | int | items deferred by the cap |
+| `skipped_seen`, `prefiltered_out`, `recency_filtered` | int | funnel-loss counters (1556) |
 | `failure_count` | int | |
 | `failures` | text null | newline-joined failure summaries (truncated) |
 
 The engine writes one row per run (insert at start, update at exit — a row with null
-`finished_at` is itself a signal). The GUI health strip shows: **last scheduled run —
-when · ok/failed/crashed · examined/classified/queued/capped**, and flags when no
-scheduled run has completed in >36 h.
+`finished_at` is itself a signal). The GUI health strip shows: **the latest run of any
+trigger — informative — while the red overdue pill is scheduled-only, so a manual run
+can't mask a missing scheduled run; a failing or crashed run reddens the pill; an
+in-flight run shows "running"** — and a separate red pill flags when no scheduled run
+has completed in >36 h. The tooltip carries examined/classified/queued/capped plus the
+funnel-loss counters.
 
 **Alarm history.** When the alarm query trips for a race, write
 `discovery_race_state.last_alarm_at` (upserting the row if absent). `--print-alarms`
@@ -144,7 +152,8 @@ unchanged; `route` defaults to `quote_source` for web items, with `ingest` allow
 the page signals a full embedded video.
 
 **Approve → ingest for web items.** Before enqueueing into the batch pool, run a yt-dlp
-extractability probe (`--dump-json`, no download) against the page URL. Success →
+extractability probe (yt-dlp `extract_info(download=False)`, first item only, 15 s
+socket timeout, with HLS/resolver-owned URLs short-circuiting to pass) against the page URL. Success →
 enqueue as usual (yt-dlp's Anvato/chain extractors cover most station embeds). Failure →
 bounce to the Edit-first flow with the probe error shown, so unextractable embeds never
 poison the batch pool. `source_key` already dedups arbitrary URLs (`url:host/path`);
@@ -172,8 +181,12 @@ templated per chain. Aug/Sep primary states remain first in line.
   `duplicate` and `other` are excluded as non-relevance verdicts) into
   `tests/fixtures/discovery_eval_real.jsonl`, deduped on source_key, race context
   resolved from the row. `eval_discovery_classifier.py` reads both fixture files and
-  adds a calibration section: approve-rate per confidence bucket + Brier score. 34
-  examples exist today; re-run after each triage week.
+  adds a calibration section: approve-rate per confidence bucket + Brier score, broken
+  out per fixture (real-set recall is selection-biased — auto_filtered rows never reach
+  triage — so only the synthetic set carries meaningful negatives). Measured at ship:
+  the 34 triaged rows yield **16** harvestable examples (18 rejects are stale/duplicate/
+  other, which carry no relevance signal) — 15 gold-relevant, 1 gold-irrelevant. The
+  ≥30-real-example bar accrues over triage weeks. Re-run after each triage session.
 - **yt-dlp backoff.** Bot-check/429/rate errors during sweeps retry with exponential
   backoff + jitter (bounded, ~3 retries) inside the run. After exhaustion the error still
   propagates exactly as today — exit 1, cadence clock not reset — so a hard bot-check
@@ -226,6 +239,13 @@ templated per chain. Aug/Sep primary states remain first in line.
    recall/precision.
 5. v1 carried criteria still hold: zero already-ingested resurfacing, alarms visible
    (now also persisted), flywheel share of approvals growing.
+
+**Status at ship (2026-08-04):** 1 = machinery verified, count starts after the
+post-merge plist install. 2 = **plumbing verified only** (a real station web_rss outlet
+polls cleanly; no station item has yet flowed to a meeting — post-merge watch item).
+3 = unit-verified; real-world confirmation accrues at triage. 4 = 16 real examples at
+ship (see Eval harvest above); accrues toward 30. 5 = alarm persistence live (3 races);
+the rest are trends.
 
 ## Sequencing
 

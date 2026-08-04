@@ -41,6 +41,11 @@ DISCOVERY_BACKOFF_*), and after 5 consecutive exhausted searches the sweep
 phase aborts loudly for the run (SWEEP ABORT in poll.log; cadence clocks not
 reset) — expect the next day's run to pick the sweeps back up.
 
+Items older than `DISCOVERY_MAX_ITEM_AGE_DAYS` (630 — reaches past the previous
+general election) are dropped at stage 1 with a per-item `STALE [via] 'title'`
+line in poll.log; the count lands in the DONE line and the run record. Only
+candidate-named items are counted, so a nonzero number is worth a look.
+
 A malformed feed item (e.g. an undefined entity) fails that OUTLET for the
 run — it lands in the failure count and the stale-feed pill, and clears when
 the feed does.
