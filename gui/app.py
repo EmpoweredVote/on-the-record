@@ -85,10 +85,20 @@ def create_app() -> FastAPI:
             if r.race_id and labels.get(r.race_id):
                 r.race_label = labels[r.race_id]
             groups.setdefault(r.race_label or "Unmatched", []).append(r)
+        h = discovery.health()
+        # health() folds the outlet-stats aggregate onto its own connection
+        # (avoids a 4th DB round-trip per page load). Fall back to the
+        # standalone call only for monkeypatched/legacy health dicts that
+        # predate the fold and lack the key — every real call carries it.
+        ostats = h.get("outlet_stats")
+        if ostats is None:
+            ostats = discovery.outlet_stats()
         return _templates.TemplateResponse(
             request, "discovery.html",
-            {"groups": list(groups.items()), "health": discovery.health(),
-             "outlet_stats": discovery.outlet_stats(), "flash": flash})
+            {"groups": list(groups.items()), "health": h,
+             "outlet_stats": ostats,
+             "outletless_reviewed": h.get("outletless_reviewed", 0),
+             "flash": flash})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
         from urllib.parse import quote

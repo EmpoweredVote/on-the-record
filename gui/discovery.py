@@ -20,6 +20,11 @@ def _db_url() -> Optional[str]:
 
 _YT_ID = re.compile(r"(?:v=|youtu\.be/|/shorts/|/live/|/embed/)([A-Za-z0-9_-]{11})")
 
+# Spec Q4's zero-tolerance set for mode C. Deliberately narrower than the eval
+# harvest's GOLD_FALSE_REASONS (which adds tier-5): tier-5 already drags the
+# approve rate; identity errors are the misattribution class.
+IDENTITY_REJECT_REASONS = ("wrong-person", "clip-not-original")
+
 _SELECT = """
     select d.id::text, d.url, d.title, d.description_snippet, d.channel_name,
            d.channel_id, d.channel_url, d.outlet_id::text, d.duration_seconds,
@@ -145,7 +150,8 @@ def set_status(row_id: str, status: str, reason: "str | None" = None) -> bool:
 
 def health() -> dict:
     empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
-             "last_run": None, "scheduled_run_overdue": False}
+             "last_run": None, "scheduled_run_overdue": False,
+             "outlet_stats": [], "outletless_reviewed": 0}
     url = _db_url()
     if not url:
         return empty
@@ -192,8 +198,35 @@ def health() -> dict:
                           and finished_at > now() - interval '36 hours')
                 """)
                 overdue = bool(cur.fetchone()[0])
+                # Folded in from outlet_stats() to avoid a 4th connection per
+                # page load (discovery_page rebuilds ~115x via redirects) —
+                # identical aggregate, riding this cursor instead.
+                cur.execute("""
+                    select o.name,
+                           count(*) filter (where d.status in
+                               ('approved','ingested','rejected')) as reviewed,
+                           count(*) filter (where d.status in
+                               ('approved','ingested')) as approved,
+                           count(*) filter (where d.status = 'rejected'
+                               and d.status_reason = any(%s)) as identity_rejects
+                    from essentials.source_outlets o
+                    join essentials.discovered_sources d on d.outlet_id = o.id
+                    group by o.name
+                    having count(*) filter (where d.status in
+                        ('approved','ingested','rejected')) > 0
+                    order by 2 desc, o.name
+                """, (list(IDENTITY_REJECT_REASONS),))
+                ostats = [{"name": r[0], "reviewed": r[1], "approved": r[2],
+                           "identity_rejects": r[3]} for r in cur.fetchall()]
+                cur.execute("""
+                    select count(*) from essentials.discovered_sources
+                    where outlet_id is null
+                      and status in ('approved','ingested','rejected')
+                """)
+                outletless = cur.fetchone()[0]
             return {"alarms": alarms, "stale_outlets": stale, "pending_total": total,
-                    "last_run": last_run, "scheduled_run_overdue": overdue}
+                    "last_run": last_run, "scheduled_run_overdue": overdue,
+                    "outlet_stats": ostats, "outletless_reviewed": outletless}
         finally:
             conn.close()
     except Exception:
@@ -246,15 +279,14 @@ def outlet_stats() -> list:
                            count(*) filter (where d.status in
                                ('approved','ingested')) as approved,
                            count(*) filter (where d.status = 'rejected'
-                               and d.status_reason in
-                                   ('wrong-person','clip-not-original')) as identity_rejects
+                               and d.status_reason = any(%s)) as identity_rejects
                     from essentials.source_outlets o
                     join essentials.discovered_sources d on d.outlet_id = o.id
                     group by o.name
                     having count(*) filter (where d.status in
                         ('approved','ingested','rejected')) > 0
                     order by 2 desc, o.name
-                """)
+                """, (list(IDENTITY_REJECT_REASONS),))
                 return [{"name": r[0], "reviewed": r[1], "approved": r[2],
                          "identity_rejects": r[3]} for r in cur.fetchall()]
         finally:

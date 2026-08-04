@@ -472,13 +472,20 @@ def test_outlet_stats_empty_without_db(monkeypatch):
 
 def test_discovery_page_renders_outlet_evidence_and_group_counts(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows", lambda: [_row(), _row(id="d2")])
+    # health() now carries outlet_stats itself (the perf fold) — the standalone
+    # outlet_stats() must NOT be hit on this path.
+    called = {"hit": False}
+    monkeypatch.setattr(discovery, "outlet_stats",
+                        lambda: called.update(hit=True) or [])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 2,
-        "last_run": None, "scheduled_run_overdue": False})
-    monkeypatch.setattr(discovery, "outlet_stats", lambda: [
-        {"name": "Fountainhead Forum", "reviewed": 2, "approved": 2, "identity_rejects": 0},
-        {"name": "Milwaukee Journal Sentinel", "reviewed": 6, "approved": 0, "identity_rejects": 1},
-    ])
+        "last_run": None, "scheduled_run_overdue": False,
+        "outlet_stats": [
+            {"name": "Fountainhead Forum", "reviewed": 2, "approved": 2, "identity_rejects": 0},
+            {"name": "Milwaukee Journal Sentinel", "reviewed": 6, "approved": 0, "identity_rejects": 1},
+        ],
+        "outletless_reviewed": 9,
+    })
     import gui.races as races
     monkeypatch.setattr(races, "race_labels", lambda ids: {"r1": "TX · U.S. Senate"})
     client = TestClient(create_app())
@@ -487,4 +494,92 @@ def test_discovery_page_renders_outlet_evidence_and_group_counts(monkeypatch):
     assert "Fountainhead Forum" in resp.text
     assert "100%" in resp.text                       # 2/2 approved
     assert "Outlet evidence" in resp.text
+    assert "<summary>" in resp.text and "<thead>" in resp.text
     assert "2 pending</span></h2>" in resp.text.replace("\n", "")
+    assert "needs 4 more reviewed" in resp.text        # MJS: 6 reviewed, needs 10
+    assert "needs 8 more reviewed" in resp.text        # Fountainhead: 2 reviewed, needs 10
+    assert "9 reviewed item(s) have no outlet" in resp.text
+    assert called["hit"] is False
+
+
+def test_discovery_page_floors_approval_percent(monkeypatch):
+    """89.7% must not round up to 90% next to a >=90% qualification bar."""
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": None, "scheduled_run_overdue": False,
+        "outlet_stats": [
+            {"name": "Big Outlet", "reviewed": 39, "approved": 35, "identity_rejects": 0},
+        ],
+        "outletless_reviewed": 0,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "35 (89%)" in resp.text
+    assert "(90%)" not in resp.text   # copy elsewhere on the page legitimately says "90%"
+    assert "below bar" in resp.text   # 35/39 = 89.7% < 90%, reviewed already >= 10
+
+
+def test_discovery_page_qualifies_marker_for_a_bar_clearing_outlet(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": None, "scheduled_run_overdue": False,
+        "outlet_stats": [
+            {"name": "Great Outlet", "reviewed": 10, "approved": 10, "identity_rejects": 0},
+        ],
+        "outletless_reviewed": 0,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "&#10003; qualifies" in resp.text
+
+
+def test_discovery_page_below_bar_when_approval_rate_too_low(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": None, "scheduled_run_overdue": False,
+        "outlet_stats": [
+            {"name": "Shaky Outlet", "reviewed": 10, "approved": 5, "identity_rejects": 0},
+        ],
+        "outletless_reviewed": 0,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "below bar" in resp.text
+
+
+def test_discovery_page_uses_health_outlet_stats_when_key_present(monkeypatch):
+    """The perf fold: outlet_stats() must not be called when health() already
+    carries the key (the real DB path after this fold)."""
+    called = {"hit": False}
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats",
+                        lambda: called.update(hit=True) or [])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": None, "scheduled_run_overdue": False,
+        "outlet_stats": [], "outletless_reviewed": 0,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert resp.status_code == 200
+    assert called["hit"] is False
+
+
+def test_discovery_page_falls_back_to_outlet_stats_when_key_absent(monkeypatch):
+    """Legacy/monkeypatched health() dicts without the key still work by
+    falling back to the standalone outlet_stats() call."""
+    called = {"hit": False}
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats",
+                        lambda: called.update(hit=True) or [])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": None, "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert resp.status_code == 200
+    assert called["hit"] is True
