@@ -89,7 +89,7 @@ DISCOVERY_SEARCH_RESULTS_PER_QUERY = 10         # ytsearchN
 DISCOVERY_SEARCH_SLEEP_SECONDS = 2.0            # politeness between searches
 DISCOVERY_SHORT_CLIP_MAX_SECONDS = 8 * 60       # < this from a news channel = likely package
 DISCOVERY_FULL_EVENT_MIN_SECONDS = 25 * 60      # >= this = likely full event
-DISCOVERY_MAX_ITEM_AGE_DAYS = 420               # recency filter: > this = stale/old-cycle
+DISCOVERY_MAX_ITEM_AGE_DAYS = 630               # recency filter: > this = stale/old-cycle. 630 reaches back past the PREVIOUS general election (2024-11-05); calibrated 2026-08-04 — observed stale rejects were all >=1622 days, wanted content reached 588.
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID

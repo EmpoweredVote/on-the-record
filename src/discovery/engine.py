@@ -87,13 +87,14 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             stats.skipped_seen += 1
             return
         stats.examined += 1
-        if is_stale(item.published_at, today):
-            stats.recency_filtered += 1
-            return
         pf = prefilter_item(item.title, item.description, item.duration_seconds,
                             roster_names)
         if not pf.passed:
             stats.prefiltered_out += 1
+            return
+        if is_stale(item.published_at, today):
+            stats.recency_filtered += 1
+            print(f"STALE [{item.via}] {item.title!r} ({item.published_at})")
             return
         if item.duration_seconds is None or item.description is None:
             if key in hydrated_cache:
@@ -103,6 +104,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                 hydrated_cache[key] = item
             if is_stale(item.published_at, today):
                 stats.recency_filtered += 1
+                print(f"STALE [{item.via}] {item.title!r} ({item.published_at})")
                 return
             pf = prefilter_item(item.title, item.description, item.duration_seconds,
                                 roster_names)

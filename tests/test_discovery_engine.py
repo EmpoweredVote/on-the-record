@@ -456,6 +456,7 @@ def test_stale_watchlist_item_is_recency_filtered(monkeypatch):
     old = dataclasses.replace(GOOD_ITEM, published_at="2024-01-15")
     stats, provider = _run(monkeypatch, inserted,
                            fetch_feed_items=lambda outlet: [old], skip_sweeps=True)
+    assert stats.examined == 1                # name-matched, so it reached the stale check
     assert stats.recency_filtered == 1
     assert inserted == []
 

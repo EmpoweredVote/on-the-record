@@ -75,6 +75,9 @@ def is_stale(published_at: "str | None", today: dt.date) -> bool:
     if not published_at:
         return False
     try:
+        # [:10] truncates a date/datetime string to its calendar-date prefix
+        # rather than converting timezone -- at most a 1-day skew, immaterial
+        # against a multi-hundred-day horizon.
         published = dt.date.fromisoformat(str(published_at)[:10])
     except ValueError:
         return False
