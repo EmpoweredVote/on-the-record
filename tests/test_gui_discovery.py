@@ -369,3 +369,61 @@ def test_missing_row_404s_across_all_actions(monkeypatch, path):
     client = TestClient(create_app())
     resp = client.post(path, follow_redirects=False)
     assert resp.status_code == 404
+
+
+# --- Task 5: health strip — last-run line + overdue pill ---
+
+def test_health_defaults_include_last_run_keys_without_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    h = discovery.health()
+    assert h["last_run"] is None
+    assert h["scheduled_run_overdue"] is False
+
+
+def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
+                     "trigger": "scheduled", "examined": 120, "classified": 40,
+                     "queued": 9, "capped": 0, "failures": 0, "running": False},
+        "scheduled_run_overdue": True,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert resp.status_code == 200
+    assert "last run 2026-08-03 08:00" in resp.text
+    assert "no scheduled run in 36h" in resp.text
+
+
+def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": None,
+                     "trigger": "scheduled", "examined": 0, "classified": 0,
+                     "queued": 0, "capped": 0, "failures": 0, "running": True},
+        "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "running" in resp.text
+    assert "CRASHED" not in resp.text
+
+
+def test_discovery_page_reddens_pill_on_failures(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
+                     "trigger": "scheduled", "examined": 120, "classified": 40,
+                     "queued": 9, "capped": 0, "failures": 4, "running": False},
+        "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "4 failure(s)" in resp.text
+    assert "background:#c0392b" in resp.text   # a failing run must not render as a calm grey pill

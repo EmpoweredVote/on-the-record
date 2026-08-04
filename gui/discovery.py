@@ -144,7 +144,8 @@ def set_status(row_id: str, status: str, reason: "str | None" = None) -> bool:
 
 
 def health() -> dict:
-    empty = {"alarms": [], "stale_outlets": [], "pending_total": 0}
+    empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
+             "last_run": None, "scheduled_run_overdue": False}
     url = _db_url()
     if not url:
         return empty
@@ -164,7 +165,32 @@ def health() -> dict:
                 cur.execute("select count(*) from essentials.discovered_sources "
                             "where status = 'pending'")
                 total = cur.fetchone()[0]
-            return {"alarms": alarms, "stale_outlets": stale, "pending_total": total}
+                cur.execute("""
+                    select to_char(started_at, 'YYYY-MM-DD HH24:MI:SS'),
+                           to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS'),
+                           trigger_kind, items_examined, classified,
+                           inserted_pending, spend_capped, failure_count,
+                           (finished_at is null
+                            and started_at > now() - interval '2 hours') as running
+                    from essentials.source_discovery_runs
+                    order by started_at desc limit 1
+                """)
+                r = cur.fetchone()
+                last_run = None
+                if r:
+                    last_run = {"started_at": r[0], "finished_at": r[1],
+                                "trigger": r[2], "examined": r[3], "classified": r[4],
+                                "queued": r[5], "capped": r[6], "failures": r[7],
+                                "running": bool(r[8])}
+                cur.execute("""
+                    select not exists (
+                        select 1 from essentials.source_discovery_runs
+                        where trigger_kind = 'scheduled'
+                          and finished_at > now() - interval '36 hours')
+                """)
+                overdue = bool(cur.fetchone()[0])
+            return {"alarms": alarms, "stale_outlets": stale, "pending_total": total,
+                    "last_run": last_run, "scheduled_run_overdue": overdue}
         finally:
             conn.close()
     except Exception:
