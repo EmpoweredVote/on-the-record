@@ -43,7 +43,7 @@
 {% if not groups %}<p>No pending discoveries.</p>{% endif %}
 
 {% for label, rows in groups %}
-<h2>{{ label }}</h2>
+<h2>{{ label }} <span class="pill">{{ rows|length }} pending</span></h2>
 <table class="library">
   <tbody>
   {% for r in rows %}
@@ -96,6 +96,24 @@
   </tbody>
 </table>
 {% endfor %}
+
+{% if outlet_stats %}
+<section>
+  <h2>Outlet evidence</h2>
+  <p><small>Auto-ingest (mode C) qualification bar: ≥10 reviewed · ≥90% approved ·
+  0 identity rejects. Display only — every ingest still goes through this queue.</small></p>
+  <table class="library"><tbody>
+  {% for s in outlet_stats %}
+  <tr>
+    <td>{{ s.name }}</td>
+    <td>{{ s.reviewed }} reviewed</td>
+    <td>{{ s.approved }} approved ({{ (100 * s.approved / s.reviewed) | round | int }}%)</td>
+    <td>{{ s.identity_rejects }} identity reject(s)</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
 </main>
 </body>
 </html>

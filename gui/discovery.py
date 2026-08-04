@@ -228,6 +228,41 @@ def race_slug_for(race_id: "str | None") -> str:
     return race_slug(row[0], row[1], row[2], row[3])
 
 
+def outlet_stats() -> list:
+    """Per-outlet triage evidence toward the future mode-C flag-flip.
+    Qualification bar (spec, Q4): >=10 reviewed, >=90% approved, zero
+    identity-class rejects. Display-only — no auto-ingest path exists."""
+    url = _db_url()
+    if not url:
+        return []
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    select o.name,
+                           count(*) filter (where d.status in
+                               ('approved','ingested','rejected')) as reviewed,
+                           count(*) filter (where d.status in
+                               ('approved','ingested')) as approved,
+                           count(*) filter (where d.status = 'rejected'
+                               and d.status_reason in
+                                   ('wrong-person','clip-not-original')) as identity_rejects
+                    from essentials.source_outlets o
+                    join essentials.discovered_sources d on d.outlet_id = o.id
+                    group by o.name
+                    having count(*) filter (where d.status in
+                        ('approved','ingested','rejected')) > 0
+                    order by 2 desc, o.name
+                """)
+                return [{"name": r[0], "reviewed": r[1], "approved": r[2],
+                         "identity_rejects": r[3]} for r in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
 def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
     """Flywheel: insert the row's channel as an active outlet, reviving it
     if a prior (now-deactivated) row already claims this feed_url."""

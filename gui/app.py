@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
         return _templates.TemplateResponse(
             request, "discovery.html",
             {"groups": list(groups.items()), "health": discovery.health(),
-             "flash": flash})
+             "outlet_stats": discovery.outlet_stats(), "flash": flash})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
         from urllib.parse import quote

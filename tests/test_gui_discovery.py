@@ -461,3 +461,30 @@ def test_discovery_page_healthy_run_stays_grey(monkeypatch):
     resp = client.get("/discovery")
     assert "ok" in resp.text
     assert "background:#c0392b" not in resp.text
+
+
+# --- Task 9: mode-C evidence surface — per-outlet stats + group pending counts ---
+
+def test_outlet_stats_empty_without_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.outlet_stats() == []
+
+
+def test_discovery_page_renders_outlet_evidence_and_group_counts(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [_row(), _row(id="d2")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 2,
+        "last_run": None, "scheduled_run_overdue": False})
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [
+        {"name": "Fountainhead Forum", "reviewed": 2, "approved": 2, "identity_rejects": 0},
+        {"name": "Milwaukee Journal Sentinel", "reviewed": 6, "approved": 0, "identity_rejects": 1},
+    ])
+    import gui.races as races
+    monkeypatch.setattr(races, "race_labels", lambda ids: {"r1": "TX · U.S. Senate"})
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert resp.status_code == 200
+    assert "Fountainhead Forum" in resp.text
+    assert "100%" in resp.text                       # 2/2 approved
+    assert "Outlet evidence" in resp.text
+    assert "2 pending</span></h2>" in resp.text.replace("\n", "")
