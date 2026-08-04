@@ -329,19 +329,21 @@ def _fetch_page_bytes(url: str, *, max_bytes: int = _PAGE_TEXT_MAX_BYTES) -> "tu
     and hands the caller the response's raw Content-Type so it can refuse
     non-HTML/text content before ever decoding it (a podcast .mp3 enclosure
     or a PDF must not dump binary into a prompt)."""
-    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": WEB_USER_AGENT},
-                        stream=True)
-    resp.raise_for_status()
-    content_type = resp.headers.get("Content-Type", "")
-    chunks = []
-    total = 0
-    for chunk in resp.iter_content(chunk_size=8192):
-        if not chunk:
-            continue
-        chunks.append(chunk)
-        total += len(chunk)
-        if total >= max_bytes:
-            break
+    # Context manager matters: a capped early break leaves the body
+    # part-consumed, and an unclosed streamed response leaks its socket.
+    with requests.get(url, timeout=(30, 120),
+                      headers={"User-Agent": WEB_USER_AGENT}, stream=True) as resp:
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "")
+        chunks = []
+        total = 0
+        for chunk in resp.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            chunks.append(chunk)
+            total += len(chunk)
+            if total >= max_bytes:
+                break
     return content_type, b"".join(chunks)[:max_bytes]
 
 

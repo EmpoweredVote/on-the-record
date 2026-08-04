@@ -214,8 +214,17 @@ def test_fetch_page_bytes_caps_body_size(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
 
+    closed = []
+
     class _FakeResp:
         headers = {"Content-Type": "text/html"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            closed.append(True)   # streamed responses must be closed (socket leak)
+            return False
 
         def raise_for_status(self):
             pass
@@ -230,6 +239,7 @@ def test_fetch_page_bytes_caps_body_size(monkeypatch):
     content_type, body = feeds._fetch_page_bytes("https://x.example/huge", max_bytes=1000)
     assert content_type == "text/html"
     assert len(body) == 1000
+    assert closed == [True]   # capped early-exit must still close the response
 
 
 def test_html_to_text_preserves_less_than_greater_than_comparisons():
