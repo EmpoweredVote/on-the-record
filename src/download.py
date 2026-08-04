@@ -131,6 +131,8 @@ def download_from_url(
 
     Supports:
     - YouTube and Facebook URLs (routed through yt-dlp)
+    - Any other http(s) URL yt-dlp's extractors happen to support (tried
+      opportunistically; falls back below on any failure)
     - CATS TV page URLs (blob URL extracted automatically)
     - Any other direct video URL (mp4, m4v, mkv, etc.)
 
@@ -152,6 +154,16 @@ def download_from_url(
 
     if _is_ytdlp_url(url):
         return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
+
+    # Not a known yt-dlp domain, but yt-dlp ships 1800+ extractors (station
+    # embeds, generic video pages, ...) — try it before falling back. ANY
+    # failure (unsupported URL, no formats, network error) falls through to
+    # the CATS-page resolver + plain requests.get path below, so CATS pages
+    # and direct media links keep working exactly as before.
+    try:
+        return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
+    except Exception:
+        pass
 
     # If it's a CATS TV page URL, resolve to the blob URL
     resolved = _resolve_video_url(url)

@@ -327,11 +327,32 @@ def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
 def probe_extractable(url: str) -> "tuple[bool, str]":
     """Can yt-dlp actually get a video out of this page? Metadata-only, no
     download. Gate for approve->ingest on non-YouTube items so unextractable
-    embeds bounce to Edit-first instead of poisoning the batch pool."""
+    embeds bounce to Edit-first instead of poisoning the batch pool.
+
+    Resolver-owned URLs (podcast RSS episode pages, Brightspot/NPR pages) and
+    raw HLS manifests ingest fine without yt-dlp at all (see src/resolve.py's
+    resolve_source, src/download.py's is_hls_url) — bouncing those here would
+    be a false-positive regression, so they short-circuit True before yt-dlp
+    is even asked."""
+    from src.download import is_hls_url
+
+    if is_hls_url(url):
+        return True, ""
+    try:
+        from src.resolve import resolve_source
+
+        if resolve_source(url) is not None:
+            return True, ""
+    except Exception:
+        pass  # resolver errors fall through to the yt-dlp probe below
+
+    # One human-triggered metadata fetch — deliberately outside the watchlist
+    # lane's robots/pacing (see feeds.py); the human just previewed this page.
     try:
         import yt_dlp
         opts = {"quiet": True, "no_warnings": True, "skip_download": True,
-                "js_runtimes": {"node": {}}}
+                "js_runtimes": {"node": {}}, "socket_timeout": 15,
+                "no_color": True, "playlist_items": "1"}
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as exc:  # noqa: BLE001 — any extractor error = not extractable

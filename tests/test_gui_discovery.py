@@ -623,3 +623,147 @@ def test_approve_ingest_skips_probe_for_youtube(monkeypatch):
     resp = client.post("/discovery/d1/approve-ingest")
     assert resp.status_code == 303
     assert probed == []                            # YouTube: no probe spent
+
+
+def test_approve_ingest_enqueues_when_probe_succeeds_for_non_youtube(monkeypatch):
+    """The happy path for a non-YouTube row: probe says extractable -> the
+    row still enqueues and lands 'ingested', same as the YouTube path."""
+    import gui.batch as batch
+    import gui.runner as runner
+    row = _row(url="https://www.kctv5.com/2026/08/01/governor-debate/")
+    monkeypatch.setattr(discovery, "get_row", lambda rid: row)
+    monkeypatch.setattr(discovery, "race_slug_for", lambda rid: "us-senate-tx-general")
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    monkeypatch.setattr(discovery, "probe_extractable", lambda url: (True, ""))
+    launched = {}
+
+    def fake_enqueue(p):
+        launched["params"] = p
+        return ("started", "mid")
+
+    monkeypatch.setattr(batch, "launch_or_enqueue", fake_enqueue)
+    statuses = []
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: statuses.append(status) or True)
+    client = TestClient(create_app(), follow_redirects=False)
+    resp = client.post("/discovery/d1/approve-ingest")
+    assert resp.status_code == 303
+    assert launched["params"].input == row.url
+    assert statuses == ["ingested"]
+
+
+# --- Task 12 follow-up: probe/downloader parity — probe_extractable unit tests ---
+
+def _stub_ydl(monkeypatch, result=None, raise_exc=None):
+    """Stub yt_dlp.YoutubeDL so probe_extractable's `import yt_dlp` sees a
+    fake extractor instead of hitting the network."""
+    import yt_dlp
+
+    class _FakeYDL:
+        def __init__(self, opts):
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def extract_info(self, url, download=False):
+            if raise_exc is not None:
+                raise raise_exc
+            return result
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", _FakeYDL)
+
+
+def test_probe_extractable_false_on_extractor_error(monkeypatch):
+    _stub_ydl(monkeypatch, raise_exc=Exception("Unsupported URL: " + "x" * 250))
+    ok, err = discovery.probe_extractable("https://station.example.com/embed/x")
+    assert ok is False
+    assert len(err) <= 200
+    assert err.startswith("Unsupported URL:")
+
+
+def test_probe_extractable_true_when_formats_present(monkeypatch):
+    _stub_ydl(monkeypatch, result={"formats": [{"url": "https://cdn.example.com/x.mp4"}]})
+    ok, err = discovery.probe_extractable("https://station.example.com/embed/x")
+    assert ok is True
+    assert err == ""
+
+
+def test_probe_extractable_false_when_all_entries_falsy(monkeypatch):
+    _stub_ydl(monkeypatch, result={"entries": [None, None]})
+    ok, err = discovery.probe_extractable("https://station.example.com/embed/x")
+    assert ok is False
+    assert err
+
+
+def test_probe_extractable_skips_ytdlp_for_resolver_owned_url(monkeypatch):
+    """Podcast/Brightspot pages resolve without yt-dlp at ingest time — the
+    probe must not spend a yt-dlp attempt (or bounce) on them."""
+    touched = {"hit": False}
+    import yt_dlp
+
+    class _Boom:
+        def __init__(self, opts):
+            touched["hit"] = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def extract_info(self, url, download=False):
+            touched["hit"] = True
+            return None
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", _Boom)
+    import src.resolve as resolve_mod
+    from src.resolve import ResolvedSource
+    monkeypatch.setattr(
+        resolve_mod, "resolve_source",
+        lambda url, **kw: ResolvedSource(audio_url="https://cdn.example.com/ep.mp3",
+                                          resolver="podcast"))
+    ok, err = discovery.probe_extractable("https://show.example.com/ep-1")
+    assert ok is True and err == ""
+    assert touched["hit"] is False
+
+
+def test_probe_extractable_skips_ytdlp_for_hls_url(monkeypatch):
+    touched = {"hit": False}
+    import yt_dlp
+
+    class _Boom:
+        def __init__(self, opts):
+            touched["hit"] = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def extract_info(self, url, download=False):
+            touched["hit"] = True
+            return None
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", _Boom)
+    ok, err = discovery.probe_extractable("https://cdn.example.com/east/manifest.m3u8")
+    assert ok is True and err == ""
+    assert touched["hit"] is False
+
+
+def test_probe_extractable_falls_through_to_ytdlp_when_resolver_errors(monkeypatch):
+    """A resolver bug/exception must not crash the probe — it should just
+    fall through to the yt-dlp attempt."""
+    import src.resolve as resolve_mod
+
+    def _boom(url, **kw):
+        raise RuntimeError("resolver blew up")
+
+    monkeypatch.setattr(resolve_mod, "resolve_source", _boom)
+    _stub_ydl(monkeypatch, result={"formats": [{"url": "https://cdn.example.com/x.mp4"}]})
+    ok, err = discovery.probe_extractable("https://station.example.com/embed/x")
+    assert ok is True and err == ""

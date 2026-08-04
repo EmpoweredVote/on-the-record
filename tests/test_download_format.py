@@ -1,6 +1,8 @@
 """yt-dlp now requests a capped-resolution VIDEO stream so review clips exist."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from src import download
@@ -31,6 +33,61 @@ def test_direct_download_sends_user_agent(monkeypatch, tmp_path):
     out = tmp_path / "f.mp3"
     download.download_from_url("https://cdn.example.com/ep.mp3", out, progress=False)
     assert captured["headers"].get("User-Agent")
+
+
+def test_download_from_url_tries_ytdlp_for_unclaimed_url(monkeypatch, tmp_path):
+    """A URL that isn't in _YTDLP_DOMAINS (e.g. a news-station embed) still
+    gets a yt-dlp attempt first. This is the fix for the probe/downloader
+    mismatch: gui.discovery.probe_extractable calls yt-dlp directly, so
+    download_from_url must try the same extractor for the same URLs, or the
+    probe's verdict is a lie."""
+    calls = []
+
+    def fake_ytdlp(url, output_path, cookies_file=None, progress=True):
+        calls.append(url)
+        Path(output_path).write_bytes(b"x")
+        return Path(output_path)
+
+    monkeypatch.setattr(download, "download_via_ytdlp", fake_ytdlp)
+
+    def _boom(*a, **k):
+        raise AssertionError("legacy requests.get path must not run when yt-dlp succeeds")
+
+    monkeypatch.setattr(download.requests, "get", _boom)
+    out = tmp_path / "f.mp4"
+    url = "https://www.kctv5.com/embed/governor-debate/"
+    result = download.download_from_url(url, out, progress=False)
+    assert calls == [url]
+    assert result == out
+
+
+def test_download_from_url_falls_back_to_legacy_when_ytdlp_fails(monkeypatch, tmp_path):
+    """When yt-dlp can't extract an unclaimed URL (unsupported page, no
+    formats, ...), the legacy CATS-page / direct-media path still gets its
+    turn — this preserves today's behavior for CATS pages and direct media
+    links exactly."""
+
+    def _fail(*a, **k):
+        raise RuntimeError("Unsupported URL")
+
+    monkeypatch.setattr(download, "download_via_ytdlp", _fail)
+    captured = {}
+
+    class _Resp:
+        headers = {"content-length": "3"}
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=8192): yield b"abc"
+
+    def _fake_get(url, stream=False, timeout=None, headers=None):
+        captured["url"] = url
+        return _Resp()
+
+    monkeypatch.setattr(download.requests, "get", _fake_get)
+    out = tmp_path / "f.mp4"
+    url = "https://station.example.com/embed/governor-debate/"
+    result = download.download_from_url(url, out, progress=False)
+    assert captured["url"] == url
+    assert result == out
 
 
 def _captured_ydl_opts(monkeypatch, call) -> dict:
