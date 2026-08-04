@@ -32,8 +32,9 @@ def test_normalize_audio_uses_resolved_metadata_and_saves_reference(
     monkeypatch.setattr(ingest, "_resolve_source_safe", lambda url: resolved)
 
     downloaded = {}
-    def _fake_download(url, out, cookies_file=None, progress=True):
+    def _fake_download(url, out, cookies_file=None, progress=True, try_ytdlp=True):
         downloaded["url"] = url
+        downloaded["try_ytdlp"] = try_ytdlp
         Path(out).write_bytes(b"x")
         return Path(out)
     # download_from_url is imported inside normalize_audio from .download
@@ -44,6 +45,7 @@ def test_normalize_audio_uses_resolved_metadata_and_saves_reference(
     meta = ingest.normalize_audio("https://show/ep-1", out)
 
     assert downloaded["url"] == "https://cdn/ep.mp3"          # enclosure, not page
+    assert downloaded["try_ytdlp"] is False    # resolver already vetted this exact URL
     assert meta["source_title"] == "Ep 1"
     assert meta["source_channel"] == "What's Next LA"
     assert meta["source_upload_date"] == "2026-06-03"
@@ -66,8 +68,10 @@ def test_normalize_audio_drops_zero_intro_chapter_on_resolver_path(
     )
     monkeypatch.setattr(ingest, "_resolve_source_safe", lambda url: resolved)
     import src.download as dl
-    monkeypatch.setattr(dl, "download_from_url",
-                        lambda url, out, cookies_file=None, progress=True: (Path(out).write_bytes(b"x"), Path(out))[1])
+    monkeypatch.setattr(
+        dl, "download_from_url",
+        lambda url, out, cookies_file=None, progress=True, try_ytdlp=True:
+            (Path(out).write_bytes(b"x"), Path(out))[1])
     out = tmp_path / "audio.wav"
     meta = ingest.normalize_audio("https://show/ep", out)
     titles = [c["title"] for c in meta["source_chapters"]]
@@ -113,8 +117,10 @@ def test_normalize_audio_surfaces_resolved_enclosure_url(monkeypatch, tmp_path, 
     resolved = ResolvedSource(audio_url="https://cdn/ep.mp3", resolver="podcast")
     monkeypatch.setattr(ingest, "_resolve_source_safe", lambda url: resolved)
     import src.download as dl
-    monkeypatch.setattr(dl, "download_from_url",
-                        lambda url, out, cookies_file=None, progress=True: (Path(out).write_bytes(b"x"), Path(out))[1])
+    monkeypatch.setattr(
+        dl, "download_from_url",
+        lambda url, out, cookies_file=None, progress=True, try_ytdlp=True:
+            (Path(out).write_bytes(b"x"), Path(out))[1])
     meta = ingest.normalize_audio("https://show/ep", tmp_path / "audio.wav")
     assert meta["source_audio_url"] == "https://cdn/ep.mp3"
 

@@ -90,6 +90,37 @@ def test_download_from_url_falls_back_to_legacy_when_ytdlp_fails(monkeypatch, tm
     assert result == out
 
 
+def test_download_from_url_try_ytdlp_false_skips_ytdlp_for_resolved_enclosure(monkeypatch, tmp_path):
+    """A resolver-vetted direct media URL (e.g. a podcast/SoundCloud
+    enclosure) must NOT get a yt-dlp attempt even if yt-dlp would succeed —
+    yt-dlp succeeding can silently substitute a transcoded HLS rendition for
+    the exact file the resolver chose. try_ytdlp=False is how
+    src.ingest's resolved-enclosure call site opts out."""
+
+    def would_succeed(url, output_path, cookies_file=None, progress=True):
+        Path(output_path).write_bytes(b"x")
+        return Path(output_path)
+
+    monkeypatch.setattr(download, "download_via_ytdlp", would_succeed)
+    captured = {}
+
+    class _Resp:
+        headers = {"content-length": "3"}
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=8192): yield b"abc"
+
+    def _fake_get(url, stream=False, timeout=None, headers=None):
+        captured["url"] = url
+        return _Resp()
+
+    monkeypatch.setattr(download.requests, "get", _fake_get)
+    out = tmp_path / "f.mp3"
+    url = "https://cdn.example.com/ep.mp3"
+    result = download.download_from_url(url, out, progress=False, try_ytdlp=False)
+    assert captured["url"] == url          # legacy path ran
+    assert result == out                   # exact resolver-chosen path, no yt-dlp substitution
+
+
 def _captured_ydl_opts(monkeypatch, call) -> dict:
     """Run *call* with yt_dlp.YoutubeDL stubbed out; return the opts it was handed."""
     yt_dlp = pytest.importorskip("yt_dlp")

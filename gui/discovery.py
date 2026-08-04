@@ -341,13 +341,21 @@ def probe_extractable(url: str) -> "tuple[bool, str]":
     try:
         from src.resolve import resolve_source
 
-        if resolve_source(url) is not None:
+        def _quick_fetch(u: str) -> str:
+            import requests
+
+            r = requests.get(u, timeout=(5, 10), headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            return r.text
+
+        if resolve_source(url, fetch=_quick_fetch) is not None:
             return True, ""
     except Exception:
         pass  # resolver errors fall through to the yt-dlp probe below
 
-    # One human-triggered metadata fetch — deliberately outside the watchlist
-    # lane's robots/pacing (see feeds.py); the human just previewed this page.
+    # A few human-triggered metadata fetches (resolver peek + one bounded
+    # yt-dlp extract) — deliberately outside the watchlist lane's
+    # robots/pacing (see feeds.py); the human just previewed this page.
     try:
         import yt_dlp
         opts = {"quiet": True, "no_warnings": True, "skip_download": True,
