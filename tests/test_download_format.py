@@ -121,6 +121,37 @@ def test_download_from_url_try_ytdlp_false_skips_ytdlp_for_resolved_enclosure(mo
     assert result == out                   # exact resolver-chosen path, no yt-dlp substitution
 
 
+def test_download_from_url_catstv_page_skips_ytdlp_and_uses_blob_resolver(monkeypatch, tmp_path):
+    """A CATS TV page URL must go through the blob resolver even when
+    try_ytdlp defaults to True — a speculative yt-dlp pass finding some OTHER
+    playable asset on the page would silently preempt the resolver that owns
+    those pages."""
+
+    def must_not_run(url, output_path, cookies_file=None, progress=True):
+        raise AssertionError("yt-dlp must not preempt the CATS blob resolver")
+
+    monkeypatch.setattr(download, "download_via_ytdlp", must_not_run)
+    monkeypatch.setattr(download, "_resolve_video_url",
+                        lambda url: "https://catstv.blob.core.windows.net/videoarchive/m.mp4")
+    captured = {}
+
+    class _Resp:
+        headers = {"content-length": "3"}
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=8192): yield b"abc"
+
+    def _fake_get(url, stream=False, timeout=None, headers=None):
+        captured["url"] = url
+        return _Resp()
+
+    monkeypatch.setattr(download.requests, "get", _fake_get)
+    out = tmp_path / "f.mp4"
+    result = download.download_from_url(
+        "https://catstv.net/government.php?id=123", out, progress=False)
+    assert captured["url"].startswith("https://catstv.blob.core.windows.net/")
+    assert result == out
+
+
 def _captured_ydl_opts(monkeypatch, call) -> dict:
     """Run *call* with yt_dlp.YoutubeDL stubbed out; return the opts it was handed."""
     yt_dlp = pytest.importorskip("yt_dlp")

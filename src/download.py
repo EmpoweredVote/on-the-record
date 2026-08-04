@@ -168,8 +168,11 @@ def download_from_url(
     # failure (unsupported URL, no formats, network error) falls through to
     # the CATS-page resolver + plain requests.get path below, so CATS pages
     # and direct media links keep working exactly as before. Skipped when
-    # try_ytdlp is False (a caller already resolved a specific media URL).
-    if try_ytdlp:
+    # try_ytdlp is False (a caller already resolved a specific media URL) and
+    # for CATS hosts: the blob resolver owns those pages, and a speculative
+    # yt-dlp pass finding some OTHER playable asset on the page would
+    # silently preempt it.
+    if try_ytdlp and "catstv" not in urlparse(url).netloc.lower():
         try:
             return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
         except Exception:
