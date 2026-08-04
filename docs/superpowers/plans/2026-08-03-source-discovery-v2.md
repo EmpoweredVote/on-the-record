@@ -20,14 +20,14 @@
 **Deviations from spec wording (deliberate, small):**
 1. The `source_discovery_runs` column is named `trigger_kind`, not `trigger` (`TRIGGER` is a Postgres keyword; avoids quoting hazards).
 2. The spec said the new table is "the only new DDL" — extending `web_rss` into `source_outlets.kind` requires swapping that CHECK constraint too (v1's migration constrained the "open enum"). Both ride in one migration file.
-3. Discovered during Task 1: prod already has an unrelated `essentials.discovery_runs` (migration 070, candidate-discovery run log, 549 rows) and migration number 1534 is claimed by an uncommitted file — the v2 table is `essentials.source_discovery_runs`, migration `1535_source_discovery_runs_web_rss.sql`. Every reference in this plan has been updated.
+3. Discovered during Task 1: prod already has an unrelated `essentials.discovery_runs` (migration 070, candidate-discovery run log, 549 rows) and migration number 1534 is claimed by an uncommitted file — the v2 table is `essentials.source_discovery_runs`, migration `1553_source_discovery_runs_web_rss.sql`. Every reference in this plan has been updated.
 
 ---
 
 ## File structure
 
 **ev-accounts repo (`../ev-accounts`):**
-- Create: `backend/migrations/1535_source_discovery_runs_web_rss.sql` — run-record table + kind check swap.
+- Create: `backend/migrations/1553_source_discovery_runs_web_rss.sql` — run-record table + kind check swap.
 
 **on-the-record repo:**
 
@@ -56,10 +56,13 @@
 
 # Slice 0 — operational trust
 
-### Task 1: Migration 1535 — `source_discovery_runs` table + `web_rss` outlet kind
+### Task 1: Migration — `source_discovery_runs` table + `web_rss` outlet kind
+
+*(Executed as 1535 + fast-follow 1550; renumbered to **1553** and **1556** in the 2026-08-04
+ev-accounts master renumber+rebase — same content, same prod state.)*
 
 **Files:**
-- Create: `../ev-accounts/backend/migrations/1535_source_discovery_runs_web_rss.sql`
+- Create: `../ev-accounts/backend/migrations/1553_source_discovery_runs_web_rss.sql`
 
 - [ ] **Step 1: Confirm the kind CHECK constraint's actual name**
 
@@ -86,7 +89,7 @@ Expected: a row like `('source_outlets_kind_check', "CHECK (kind = ANY (ARRAY['y
 
 - [ ] **Step 2: Write the migration**
 
-Create `../ev-accounts/backend/migrations/1535_source_discovery_runs_web_rss.sql`:
+Create `../ev-accounts/backend/migrations/1553_source_discovery_runs_web_rss.sql`:
 
 ```sql
 -- Source discovery v2, slice 0: run records (unattended-operation evidence)
@@ -105,7 +108,7 @@ create table if not exists essentials.source_discovery_runs (
   inserted_auto_filtered integer not null default 0,
   spend_capped integer not null default 0,
   skipped_seen integer not null default 0,      -- funnel-loss counters: shipped via the
-  prefiltered_out integer not null default 0,   -- 1550_source_discovery_runs_followups.sql
+  prefiltered_out integer not null default 0,   -- 1556_source_discovery_runs_followups.sql
   recency_filtered integer not null default 0,  -- fast-follow (review-driven)
   failure_count integer not null default 0,
   failures text                      -- newline-joined summaries, truncated
@@ -129,7 +132,7 @@ import os, psycopg2
 from pathlib import Path
 from gui.env import load_env_local
 load_env_local()
-sql = Path("../ev-accounts/backend/migrations/1535_source_discovery_runs_web_rss.sql").read_text()
+sql = Path("../ev-accounts/backend/migrations/1553_source_discovery_runs_web_rss.sql").read_text()
 conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
 cur = conn.cursor()
 cur.execute(sql)
@@ -151,8 +154,8 @@ Expected: `source_discovery_runs rows: 0` and `web_rss kind accepted`. If the in
 - [ ] **Step 4: Commit (ev-accounts repo)**
 
 ```bash
-git -C ../ev-accounts add backend/migrations/1535_source_discovery_runs_web_rss.sql
-git -C ../ev-accounts commit -m "migration 1535: source_discovery_runs table + web_rss outlet kind
+git -C ../ev-accounts add backend/migrations/1553_source_discovery_runs_web_rss.sql
+git -C ../ev-accounts commit -m "migration 1553: source_discovery_runs table + web_rss outlet kind
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
