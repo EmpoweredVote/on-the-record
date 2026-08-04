@@ -1,3 +1,5 @@
+import re
+
 from src.discovery import db
 
 
@@ -129,3 +131,24 @@ def test_record_alarms_empty_is_a_noop():
     cur = _FakeCursor()
     db.record_alarms(cur, [])
     assert cur.executed == []
+
+
+def test_finish_run_sql_column_order_matches_param_order():
+    cur = _FakeCursor()
+    db.finish_run(cur, "run-1", _Stats())
+    sql, _ = cur.executed[0]
+    set_clause = sql.split("where")[0]  # exclude "where id = %s::uuid" (also matches)
+    cols = re.findall(r"(\w+) = %s", set_clause)
+    assert cols == ["items_examined", "classified", "inserted_pending",
+                    "inserted_auto_filtered", "spend_capped", "skipped_seen",
+                    "prefiltered_out", "recency_filtered", "failure_count", "failures"]
+
+
+def test_finish_run_truncates_failures_text_but_not_count():
+    class _Noisy(_Stats):
+        failures = ["x" * 3000, "y" * 3000]
+    cur = _FakeCursor()
+    db.finish_run(cur, "run-1", _Noisy())
+    _, params = cur.executed[0]
+    assert params[8] == 2                 # count stays authoritative
+    assert len(params[9]) == 4000         # text truncated

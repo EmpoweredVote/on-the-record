@@ -141,7 +141,7 @@ def finish_run(cur, run_id: str, stats) -> None:
           len(stats.failures), failures_text, run_id))
 
 
-def record_alarms(cur, race_ids: list) -> None:
+def record_alarms(cur, race_ids: "list[str]") -> None:
     """Persist alarm history (last_alarm_at) for tripped races."""
     for race_id in race_ids:
         cur.execute("""
