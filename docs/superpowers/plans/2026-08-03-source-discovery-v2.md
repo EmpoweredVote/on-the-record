@@ -1957,6 +1957,9 @@ Spec v2: `docs/superpowers/specs/2026-08-03-source-discovery-v2-design.md`
    within 36 h, status ok. A red "no scheduled run in 36h" pill or a CRASHED
    run means the scheduler is broken — check
    `~/CouncilScribe/discovery/poll.log` and `launchctl list | grep poll-discovery`.
+   The collapsed **Outlet evidence** panel tracks per-outlet approve history
+   toward the mode-C auto-ingest bar (≥10 reviewed · ≥90% approved · 0
+   identity rejects); it is display-only — no outlet auto-ingests anything.
 ```
 
 3. **Agent gap-filler** prompt: add one sentence before "Never C-SPAN.":
