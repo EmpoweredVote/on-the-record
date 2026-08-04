@@ -171,7 +171,11 @@ class _Stats:
     inserted_pending = 25
     inserted_auto_filtered = 5
     spend_capped = 3
+    skipped_seen = 7
+    prefiltered_out = 12
     failures = ["outlet X: boom", "search 'q': bot check"]
+    # no recency_filtered attr on purpose: it only exists from Task 6 on,
+    # finish_run must default it to 0 via getattr
 
 
 def test_insert_run_returns_id_and_binds_trigger_kind():
@@ -190,9 +194,12 @@ def test_finish_run_writes_counters_and_joined_failures():
     sql, params = cur.executed[0]
     assert "finished_at = now()" in sql
     assert params[0] == 40                      # items_examined
-    assert params[5] == 2                       # failure_count
-    assert params[6] == "outlet X: boom\nsearch 'q': bot check"
-    assert params[7] == "run-1"
+    assert params[5] == 7                       # skipped_seen
+    assert params[6] == 12                      # prefiltered_out
+    assert params[7] == 0                       # recency_filtered (getattr default)
+    assert params[8] == 2                       # failure_count
+    assert params[9] == "outlet X: boom\nsearch 'q': bot check"
+    assert params[10] == "run-1"
 
 
 def test_finish_run_null_failures_when_none():
@@ -201,7 +208,7 @@ def test_finish_run_null_failures_when_none():
     cur = _FakeCursor()
     db.finish_run(cur, "run-1", _Clean())
     _, params = cur.executed[0]
-    assert params[5] == 0 and params[6] is None
+    assert params[8] == 0 and params[9] is None
 
 
 def test_record_alarms_upserts_last_alarm_at_per_race():
@@ -244,10 +251,13 @@ def finish_run(cur, run_id: str, stats) -> None:
         update essentials.source_discovery_runs
         set finished_at = now(), items_examined = %s, classified = %s,
             inserted_pending = %s, inserted_auto_filtered = %s,
-            spend_capped = %s, failure_count = %s, failures = %s
+            spend_capped = %s, skipped_seen = %s, prefiltered_out = %s,
+            recency_filtered = %s, failure_count = %s, failures = %s
         where id = %s::uuid
     """, (stats.examined, stats.classified, stats.inserted_pending,
           stats.inserted_auto_filtered, stats.spend_capped,
+          stats.skipped_seen, stats.prefiltered_out,
+          getattr(stats, "recency_filtered", 0),   # RunStats grows it in Task 6
           len(stats.failures), failures_text, run_id))
 
 
@@ -501,7 +511,7 @@ def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
                      "trigger": "scheduled", "examined": 120, "classified": 40,
-                     "queued": 9, "capped": 0, "failures": 0},
+                     "queued": 9, "capped": 0, "failures": 0, "running": False},
         "scheduled_run_overdue": True,
     })
     client = TestClient(create_app())
@@ -509,6 +519,22 @@ def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
     assert resp.status_code == 200
     assert "last run 2026-08-03 08:00" in resp.text
     assert "no scheduled run in 36h" in resp.text
+
+
+def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": None,
+                     "trigger": "scheduled", "examined": 0, "classified": 0,
+                     "queued": 0, "capped": 0, "failures": 0, "running": True},
+        "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "running" in resp.text
+    assert "CRASHED" not in resp.text
 ```
 
 (`outlet_stats` doesn't exist until Task 9 — `raising=False` keeps this test valid both before and after.)
@@ -549,7 +575,9 @@ def health() -> dict:
                     select to_char(started_at, 'YYYY-MM-DD HH24:MI:SS'),
                            to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS'),
                            trigger_kind, items_examined, classified,
-                           inserted_pending, spend_capped, failure_count
+                           inserted_pending, spend_capped, failure_count,
+                           (finished_at is null
+                            and started_at > now() - interval '2 hours') as running
                     from essentials.source_discovery_runs
                     order by started_at desc limit 1
                 """)
@@ -558,7 +586,8 @@ def health() -> dict:
                 if r:
                     last_run = {"started_at": r[0], "finished_at": r[1],
                                 "trigger": r[2], "examined": r[3], "classified": r[4],
-                                "queued": r[5], "capped": r[6], "failures": r[7]}
+                                "queued": r[5], "capped": r[6], "failures": r[7],
+                                "running": bool(r[8])}
                 cur.execute("""
                     select not exists (
                         select 1 from essentials.source_discovery_runs
@@ -582,7 +611,7 @@ In `gui/templates/discovery.html`, inside `<header class="batch-header">` after 
   {% if health.last_run %}
   <span class="pill" title="examined {{ health.last_run.examined }} · classified {{ health.last_run.classified }} · queued {{ health.last_run.queued }} · capped {{ health.last_run.capped }} · failures {{ health.last_run.failures }}">
     last run {{ (health.last_run.started_at or '')[:16] }} · {{ health.last_run.trigger }} ·
-    {% if not health.last_run.finished_at %}CRASHED{% elif health.last_run.failures %}{{ health.last_run.failures }} failure(s){% else %}ok{% endif %}
+    {% if health.last_run.running %}running{% elif not health.last_run.finished_at %}CRASHED{% elif health.last_run.failures %}{{ health.last_run.failures }} failure(s){% else %}ok{% endif %}
   </span>
   {% endif %}
   {% if health.scheduled_run_overdue %}
@@ -1548,7 +1577,7 @@ def fetch_page_text(url: str, max_chars: int = 6000) -> str:
     return re.sub(r"\s+", " ", text).strip()[:max_chars]
 ```
 
-3. In `fetch_outlet_items`, before the final `return []` line, add:
+3. In `fetch_outlet_items`, replace the final `return []  # web_page: ...` line with:
 
 ```python
     if outlet.kind == "web_rss":
@@ -1557,6 +1586,21 @@ def fetch_page_text(url: str, max_chars: int = 6000) -> str:
         text = _fetch_text(outlet.feed_url)
         time.sleep(config.DISCOVERY_WEB_FETCH_SLEEP_SECONDS)  # per-domain politeness
         return parse_news_feed(text, outlet_id=outlet.id, outlet_name=outlet.name)
+    if outlet.kind == "web_page":
+        return []  # registered but unpolled (v1 behavior, unchanged)
+    raise ValueError(f"unknown outlet kind {outlet.kind!r} for {outlet.name}")
+```
+
+(The trailing raise is review-driven: an unknown kind used to poll "successfully" forever — `last_polled_at` refreshed, zero items, never stale. Now it lands in `stats.failures` via the engine's per-outlet catch.) Add this test alongside the others:
+
+```python
+def test_fetch_outlet_items_unknown_kind_is_loud():
+    outlet = Outlet(id="o9", name="Mystery", kind="mystery", feed_url="https://x")
+    try:
+        feeds.fetch_outlet_items(outlet)
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "unknown outlet kind" in str(exc)
 ```
 
 4. Update the `Outlet.kind` comment in `src/discovery/models.py` (line 30) to:
