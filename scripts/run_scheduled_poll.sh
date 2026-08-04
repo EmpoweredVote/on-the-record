@@ -27,11 +27,22 @@
 # .../.git/worktrees/automation-checkout" while python in the same job read
 # the symlinked .env.local fine. A standalone clone keeps all git metadata in
 # ~/CouncilScribe, which launchd can read.
+#
+# NOTE: this wrapper is read from the clone it fast-forwards, so a wrapper
+# change takes effect one run later; fast-forward the clone by hand before
+# kickstarting a plist that depends on new wrapper behavior.
 set -euo pipefail
 
 REPO="/Users/chrisandrews/Documents/GitHub/on-the-record"
 AUTOMATION_CHECKOUT="$HOME/CouncilScribe/automation-checkout"
 PYTHON="$REPO/.venv/bin/python"
+
+# launchd fails to open a StandardOutPath whose parent dir is missing and
+# discards the stream (the job still runs, invisibly); make every known job
+# log dir exist for the NEXT run (launchd opens the log before exec'ing us,
+# so this protects future runs, not this one).
+mkdir -p "$HOME/CouncilScribe/agendas" "$HOME/CouncilScribe/discovery" \
+    || echo "WARNING: could not create job log dirs" >&2
 
 echo "=== scheduled poll $(date '+%Y-%m-%d %H:%M:%S %Z') ==="
 
@@ -55,17 +66,16 @@ else
     echo "code: $(git -C "$AUTOMATION_CHECKOUT" log --oneline -1)"
 fi
 
+# both jobs run with the same cwd regardless of plist WorkingDirectory
+cd "$AUTOMATION_CHECKOUT"
+
 # First argument may name the script to run (a scripts/*.py path relative to
 # the checkout). Without one, default to the agenda poll so plists predating
 # this generalization keep working untouched.
 TARGET="scripts/poll_agendas.py"
 case "${1:-}" in
     scripts/*.py) TARGET="$1"; shift ;;
+    *.py|/*) echo "FATAL: target must be a scripts/*.py path relative to the checkout: $1" >&2; exit 1 ;;
 esac
-
-# launchd truncates output silently when a StandardOutPath's parent dir is
-# missing; make every known job log dir exist for the NEXT run (launchd opens
-# the log before exec'ing us, so this protects future runs, not this one).
-mkdir -p "$HOME/CouncilScribe/agendas" "$HOME/CouncilScribe/discovery"
 
 exec "$PYTHON" "$AUTOMATION_CHECKOUT/$TARGET" "$@"

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>vote.empowered.poll-agendas</string>
+  <!-- Runs from the automation-checkout clone (see run_scheduled_poll.sh header): launchd TCC cannot read ~/Documents git, and the primary checkout's branch is a coin flip. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/chrisandrews/CouncilScribe/automation-checkout/scripts/run_scheduled_poll.sh</string>
+    <string>scripts/poll_agendas.py</string>
+    <string>--days</string>
+    <string>8</string>
+    <string>--reconcile-memos</string>
+  </array>
+  <!-- 9:00 AM daily; launchd runs a missed slot on wake / next login. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/chrisandrews/CouncilScribe/agendas/poll.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/chrisandrews/CouncilScribe/agendas/poll.log</string>
+</dict>
+</plist>
