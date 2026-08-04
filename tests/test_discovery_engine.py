@@ -466,7 +466,12 @@ def test_sweep_phase_aborts_after_consecutive_search_failures(monkeypatch):
     inserted = []
     recorded = []
     calls = []
-    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    # A second race so the abort must also break the RACE loop, not just the
+    # query/candidate loops: r1 alone already supplies 8 queries (> the abort
+    # threshold), so race r2 must never be reached at all.
+    tracked = list(TRACKED) + [
+        TrackedCandidate("p3", "r2", "Carlos Diaz", "TX AG", "2026-11-03")]
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: tracked)
     monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
     monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
     monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
@@ -479,7 +484,7 @@ def test_sweep_phase_aborts_after_consecutive_search_failures(monkeypatch):
         calls.append(q)
         raise RuntimeError("boom")
 
-    # TRACKED = 2 candidates x 4 terms = 8 queries -- more than
+    # r1 = 2 candidates x 4 terms = 8 queries -- more than
     # DISCOVERY_SWEEP_ABORT_AFTER (5), so the abort must cut the sweep short.
     stats = engine.run_discovery(
         _FakeConn(), provider=_FakeProvider("irrelevant"),
@@ -490,6 +495,7 @@ def test_sweep_phase_aborts_after_consecutive_search_failures(monkeypatch):
 
     assert any("sweep phase aborted" in f for f in stats.failures)
     assert len(calls) == config.DISCOVERY_SWEEP_ABORT_AFTER
+    assert all("Carlos Diaz" not in q for q in calls)   # race r2 never reached
     assert recorded == []
 
 
