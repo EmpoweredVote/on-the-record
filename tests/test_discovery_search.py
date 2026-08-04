@@ -110,3 +110,39 @@ def test_ytsearch_skips_channel_and_playlist_entries(monkeypatch):
     ]})
     items = search.ytsearch("q", limit=5)
     assert [i.url for i in items] == ["https://www.youtube.com/watch?v=abc12345678"]
+
+
+from src.discovery.search import with_backoff
+
+
+def _flaky(fail_times, exc):
+    calls = {"n": 0}
+    def fn():
+        calls["n"] += 1
+        if calls["n"] <= fail_times:
+            raise exc
+        return "ok"
+    return fn, calls
+
+
+def test_backoff_retries_bot_check_and_succeeds():
+    fn, calls = _flaky(2, RuntimeError("Sign in to confirm you're not a bot"))
+    sleeps = []
+    assert with_backoff(fn, sleep_fn=sleeps.append) == "ok"
+    assert calls["n"] == 3
+    assert len(sleeps) == 2
+    assert sleeps[1] > sleeps[0]          # exponential: later waits are longer
+
+
+def test_backoff_exhaustion_reraises():
+    fn, calls = _flaky(99, RuntimeError("HTTP Error 429: Too Many Requests"))
+    with pytest.raises(RuntimeError):
+        with_backoff(fn, retries=2, sleep_fn=lambda s: None)
+    assert calls["n"] == 3                # 1 try + 2 retries
+
+
+def test_backoff_ignores_non_retryable_errors():
+    fn, calls = _flaky(99, ValueError("Unsupported URL: https://x"))
+    with pytest.raises(ValueError):
+        with_backoff(fn, sleep_fn=lambda s: None)
+    assert calls["n"] == 1

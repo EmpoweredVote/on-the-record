@@ -91,7 +91,7 @@ def main() -> int:
             conn,
             provider=provider,
             fetch_feed_items=feeds.fetch_outlet_items,
-            ytsearch_fn=search.ytsearch,
+            ytsearch_fn=lambda q: search.with_backoff(lambda: search.ytsearch(q)),
             hydrate_fn=search.hydrate_item,
             captions_fetcher=_captions_fetcher,
             sleep_fn=time.sleep,

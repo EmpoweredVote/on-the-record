@@ -93,6 +93,8 @@ DISCOVERY_FULL_EVENT_MIN_SECONDS = 25 * 60      # >= this = likely full event
 # general election (2024-11-05). Calibrated 2026-08-04: observed stale rejects
 # were all >=1622 days; high-confidence queued content reached 588.
 DISCOVERY_MAX_ITEM_AGE_DAYS = 630
+DISCOVERY_BACKOFF_RETRIES = 3                   # yt-dlp bot-check/429 retries per query
+DISCOVERY_BACKOFF_BASE_SECONDS = 5.0
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID
