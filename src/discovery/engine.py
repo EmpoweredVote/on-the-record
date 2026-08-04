@@ -194,7 +194,17 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
 
     if not skip_sweeps:
         state = db.fetch_sweep_state(cur)
+        # Resets to 0 on every successful ytsearch_fn call. A hard bot-check
+        # wave otherwise turns an ~65s-per-exhausted-query retry into an
+        # 18h+ run at real roster scale (467 races -> 6,428 queries) -- once
+        # the wave is confirmed (DISCOVERY_SWEEP_ABORT_AFTER in a row), stop
+        # spending the rest of the run hammering a search backend that's
+        # already told us no.
+        consecutive_search_failures = 0
+        sweep_aborted = False
         for race_id, cands in by_race.items():
+            if sweep_aborted:
+                break
             if race_filter and race_id != race_filter:
                 continue
             if not race_filter and not sweep_due(cands[0].election_date,
@@ -206,13 +216,26 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             capped_before = stats.spend_capped
             failures_before = len(stats.failures)
             for cand in cands:
+                if sweep_aborted:
+                    break
                 for query in queries_for_candidate(cand.full_name):
                     try:
                         results = ytsearch_fn(query)
                     except Exception as exc:  # noqa: BLE001
                         stats.failures.append(f"search {query!r}: {exc}")
                         print(f"FAILED search {query!r}: {exc}", file=sys.stderr)
+                        consecutive_search_failures += 1
+                        if consecutive_search_failures >= config.DISCOVERY_SWEEP_ABORT_AFTER:
+                            stats.failures.append(
+                                f"sweep phase aborted: {consecutive_search_failures} "
+                                "consecutive search failures")
+                            print(f"SWEEP ABORT: {consecutive_search_failures} consecutive "
+                                  "search failures — deferring remaining sweeps",
+                                  file=sys.stderr)
+                            sweep_aborted = True
+                            break
                         continue
+                    consecutive_search_failures = 0
                     for item in results:
                         process_safe(item, [c.full_name for c in cands], race_id)
                     sleep_fn(config.DISCOVERY_SEARCH_SLEEP_SECONDS)

@@ -1,5 +1,6 @@
 import datetime as dt
 
+from src import config
 from src.discovery import db, engine
 from src.discovery.models import Outlet, RawItem, TrackedCandidate, Verdict
 
@@ -459,6 +460,72 @@ def test_stale_watchlist_item_is_recency_filtered(monkeypatch):
     assert stats.examined == 1                # name-matched, so it reached the stale check
     assert stats.recency_filtered == 1
     assert inserted == []
+
+
+def test_sweep_phase_aborts_after_consecutive_search_failures(monkeypatch):
+    inserted = []
+    recorded = []
+    calls = []
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: recorded.append(rid))
+
+    def always_boom(q):
+        calls.append(q)
+        raise RuntimeError("boom")
+
+    # TRACKED = 2 candidates x 4 terms = 8 queries -- more than
+    # DISCOVERY_SWEEP_ABORT_AFTER (5), so the abort must cut the sweep short.
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider("irrelevant"),
+        fetch_feed_items=lambda o: [], ytsearch_fn=always_boom,
+        hydrate_fn=lambda item: item, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True)
+
+    assert any("sweep phase aborted" in f for f in stats.failures)
+    assert len(calls) == config.DISCOVERY_SWEEP_ABORT_AFTER
+    assert recorded == []
+
+
+def test_search_failure_counter_resets_on_success(monkeypatch):
+    inserted = []
+    recorded = []
+    calls = []
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered",
+                        lambda cur, row: inserted.append(row) or True)
+    monkeypatch.setattr(db, "mark_outlet_polled", lambda cur, oid: None)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: recorded.append(rid))
+
+    # 3 fails, 1 success (resets the counter), 3 fails, 1 success -- never 5
+    # consecutive, across all 8 queries (2 candidates x 4 terms).
+    fail_pattern = [True, True, True, False, True, True, True, False]
+
+    def flaky(q):
+        idx = len(calls)
+        calls.append(q)
+        if fail_pattern[idx]:
+            raise RuntimeError("boom")
+        return []
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider("irrelevant"),
+        fetch_feed_items=lambda o: [], ytsearch_fn=flaky,
+        hydrate_fn=lambda item: item, captions_fetcher=None,
+        sleep_fn=lambda s: None, meeting_keys=set(),
+        today=dt.date(2026, 8, 2), skip_watchlist=True)
+
+    assert not any("sweep phase aborted" in f for f in stats.failures)
+    assert len(calls) == len(fail_pattern)          # all queries attempted
 
 
 def test_hydrated_publish_date_also_recency_filtered(monkeypatch):

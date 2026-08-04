@@ -10,7 +10,11 @@ from src.ingest import fetch_source_metadata
 
 SEARCH_TERMS = ("debate", "forum", "town hall", "interview")
 
-RETRYABLE_MARKERS = ("429", "too many requests", "sign in to confirm", "bot")
+# "not a bot" not bare "bot": query text (candidate names) is embedded in every
+# yt-dlp search error. NOTE for future extension to hydration/captions: the age
+# gate says "Sign in to confirm your age" — do not add a bare "sign in to
+# confirm" marker back.
+RETRYABLE_MARKERS = ("429", "too many requests", "not a bot")
 
 
 def with_backoff(fn, *, retries: "int | None" = None,
@@ -21,6 +25,7 @@ def with_backoff(fn, *, retries: "int | None" = None,
     and a hard bot-check wave still exits 1 without resetting the cadence
     clock (record_sweep skips failed sweeps)."""
     tries = retries if retries is not None else config.DISCOVERY_BACKOFF_RETRIES
+    tries = max(0, tries)
     base = base_delay if base_delay is not None else config.DISCOVERY_BACKOFF_BASE_SECONDS
     for attempt in range(tries + 1):
         try:

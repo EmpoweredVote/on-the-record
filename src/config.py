@@ -95,6 +95,7 @@ DISCOVERY_FULL_EVENT_MIN_SECONDS = 25 * 60      # >= this = likely full event
 DISCOVERY_MAX_ITEM_AGE_DAYS = 630
 DISCOVERY_BACKOFF_RETRIES = 3                   # yt-dlp bot-check/429 retries per query
 DISCOVERY_BACKOFF_BASE_SECONDS = 5.0
+DISCOVERY_SWEEP_ABORT_AFTER = 5                 # consecutive exhausted searches -> abort sweep phase
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID

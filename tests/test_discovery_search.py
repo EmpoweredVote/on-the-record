@@ -5,6 +5,7 @@ import pytest
 
 from src.discovery import search
 from src.discovery.models import RawItem
+from src.discovery.search import with_backoff
 
 
 class _FakeYDL:
@@ -112,9 +113,6 @@ def test_ytsearch_skips_channel_and_playlist_entries(monkeypatch):
     assert [i.url for i in items] == ["https://www.youtube.com/watch?v=abc12345678"]
 
 
-from src.discovery.search import with_backoff
-
-
 def _flaky(fail_times, exc):
     calls = {"n": 0}
     def fn():
@@ -131,6 +129,9 @@ def test_backoff_retries_bot_check_and_succeeds():
     assert with_backoff(fn, sleep_fn=sleeps.append) == "ok"
     assert calls["n"] == 3
     assert len(sleeps) == 2
+    # invariant: attempt0 jitter ceiling base*3*0.5 == base*1.5 == attempt1 floor
+    # -- exclusive, so sleeps[1] > sleeps[0] can't flake; widening jitter past
+    # [0.5, 1.5) or dropping the 3x multiplier breaks this.
     assert sleeps[1] > sleeps[0]          # exponential: later waits are longer
 
 
