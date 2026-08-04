@@ -68,3 +68,64 @@ def test_alarm_races_excludes_races_with_approved_sources():
     assert "not exists" in sql.lower()
     assert "'approved','ingested'" in sql.replace(" ", "")
     assert params == (30,)
+
+
+class _Stats:
+    examined = 40
+    classified = 30
+    inserted_pending = 25
+    inserted_auto_filtered = 5
+    spend_capped = 3
+    skipped_seen = 7
+    prefiltered_out = 12
+    failures = ["outlet X: boom", "search 'q': bot check"]
+    # no recency_filtered attr on purpose: it only exists from Task 6 on,
+    # finish_run must default it to 0 via getattr
+
+
+def test_insert_run_returns_id_and_binds_trigger_kind():
+    cur = _FakeCursor(rows=[("run-1",)])
+    run_id = db.insert_run(cur, "scheduled")
+    assert run_id == "run-1"
+    sql, params = cur.executed[0]
+    assert "essentials.source_discovery_runs" in sql
+    assert "trigger_kind" in sql
+    assert params == ("scheduled",)
+
+
+def test_finish_run_writes_counters_and_joined_failures():
+    cur = _FakeCursor()
+    db.finish_run(cur, "run-1", _Stats())
+    sql, params = cur.executed[0]
+    assert "finished_at = now()" in sql
+    assert params[0] == 40                      # items_examined
+    assert params[5] == 7                       # skipped_seen
+    assert params[6] == 12                      # prefiltered_out
+    assert params[7] == 0                       # recency_filtered (getattr default)
+    assert params[8] == 2                       # failure_count
+    assert params[9] == "outlet X: boom\nsearch 'q': bot check"
+    assert params[10] == "run-1"
+
+
+def test_finish_run_null_failures_when_none():
+    class _Clean(_Stats):
+        failures = []
+    cur = _FakeCursor()
+    db.finish_run(cur, "run-1", _Clean())
+    _, params = cur.executed[0]
+    assert params[8] == 0 and params[9] is None
+
+
+def test_record_alarms_upserts_last_alarm_at_per_race():
+    cur = _FakeCursor()
+    db.record_alarms(cur, ["r1", "r2"])
+    assert len(cur.executed) == 2
+    sql, params = cur.executed[0]
+    assert "last_alarm_at" in sql and "on conflict (race_id)" in sql
+    assert params == ("r1",)
+
+
+def test_record_alarms_empty_is_a_noop():
+    cur = _FakeCursor()
+    db.record_alarms(cur, [])
+    assert cur.executed == []

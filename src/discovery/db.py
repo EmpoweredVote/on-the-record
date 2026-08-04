@@ -114,3 +114,38 @@ def alarm_races(cur, days: int = 30) -> list:
         order by p.election_date
     """, (days,))
     return cur.fetchall()
+
+
+def insert_run(cur, trigger_kind: str) -> str:
+    """Open a run record; the caller commits immediately so a crashed run
+    still leaves its started row (null finished_at = crashed)."""
+    cur.execute(
+        "insert into essentials.source_discovery_runs (trigger_kind) "
+        "values (%s) returning id::text", (trigger_kind,))
+    return cur.fetchone()[0]
+
+
+def finish_run(cur, run_id: str, stats) -> None:
+    failures_text = "\n".join(stats.failures)[:4000] or None
+    cur.execute("""
+        update essentials.source_discovery_runs
+        set finished_at = now(), items_examined = %s, classified = %s,
+            inserted_pending = %s, inserted_auto_filtered = %s,
+            spend_capped = %s, skipped_seen = %s, prefiltered_out = %s,
+            recency_filtered = %s, failure_count = %s, failures = %s
+        where id = %s::uuid
+    """, (stats.examined, stats.classified, stats.inserted_pending,
+          stats.inserted_auto_filtered, stats.spend_capped,
+          stats.skipped_seen, stats.prefiltered_out,
+          getattr(stats, "recency_filtered", 0),   # RunStats grows it in Task 6
+          len(stats.failures), failures_text, run_id))
+
+
+def record_alarms(cur, race_ids: list) -> None:
+    """Persist alarm history (last_alarm_at) for tripped races."""
+    for race_id in race_ids:
+        cur.execute("""
+            insert into essentials.discovery_race_state (race_id, last_alarm_at)
+            values (%s::uuid, now())
+            on conflict (race_id) do update set last_alarm_at = now()
+        """, (race_id,))
