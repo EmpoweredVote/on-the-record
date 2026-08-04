@@ -216,3 +216,22 @@ June 10's figure routinely, the next step is architectural, not another threshol
 for segmentation, then re-cluster identity **globally over per-turn embeddings** (measured
 at ~20s for 2811 segments), which replaces window-centroid matching with the global view
 that single-pass gets for free.
+
+## Follow-up SHIPPED 2026-08-03 — the architectural fix named above was built
+
+The final paragraph's proposal ("chunk for segmentation, then re-cluster identity **globally
+over per-turn embeddings**") is implemented in `src/global_identity.py`; see
+`docs/superpowers/specs/2026-08-03-global-identity-clustering-design.md`. Per-window centroid
+matching is replaced by one constrained agglomerative clustering over per-turn embeddings at
+full-meeting scope, with same-window distinctness as a hard cannot-link constraint. The chunk
+worker now returns the per-turn vectors it was already computing (no extra GPU) and filters
+non-finite vectors per turn — 7 of June 10's 86 window-local centroids had been NaN-poisoned by
+a single bad turn and so could never match at any threshold.
+
+Result on the two meetings calibrated here: June 10 **49 → 41 speakers** (DER 0.0439 → 0.0060,
+people fragmented against the human-reviewed transcript 6 → 1, which is exactly what
+single-pass itself fragments), May 6 **43 → 41** (DER 0.0589 → 0.0210), both at the same
+65× / 33× speedup. The +19.5 % drift recorded above as the residual risk is now 0.0 %.
+
+`DIARIZE_CHUNK_MINUTES` is therefore **60 (enabled)** as of that change. The residual-risk
+paragraph below is kept as the historical record of why it shipped OFF first.

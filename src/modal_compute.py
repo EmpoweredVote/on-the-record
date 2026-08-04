@@ -80,7 +80,11 @@ def plan_chunk_windows(
 
 
 def fetch_chunk_payloads(
-    app, wav_path: Path, meeting_id: str, chunk_minutes: int
+    app,
+    wav_path: Path,
+    meeting_id: str,
+    chunk_minutes: int,
+    embedders: tuple[str, ...] | None = None,
 ) -> list[str]:
     """Fan canonical windows out across Modal containers; return raw payloads.
 
@@ -92,6 +96,9 @@ def fetch_chunk_payloads(
     from . import config
     from .audio_utils import get_audio_duration
 
+    if embedders is None:
+        embedders = (config.DIARIZE_CHUNK_EMBEDDER,)
+
     duration = get_audio_duration(wav_path)
     windows = plan_chunk_windows(duration, chunk_minutes)
     overlap = float(config.DIARIZE_CHUNK_OVERLAP_SECONDS)
@@ -100,87 +107,23 @@ def fetch_chunk_payloads(
           f"{duration / 60:.1f} min of audio")
 
     args = [
-        (meeting_id, start, end, overlap, index)
+        (meeting_id, start, end, overlap, index, tuple(embedders))
         for index, (start, end) in enumerate(windows)
     ]
     with app.app.run():
         return list(app.diarize_chunk_window.starmap(args))
 
 
-def stitch_chunk_payloads(
-    payloads: list[str],
-    use_merge: bool,
-    embedding_threshold: float | None = None,
-    merge_threshold: float | None = None,
-) -> tuple[list[dict], dict[str, list[float]]]:
-    """Reconcile window payloads into the standard (segments, centroids) pair.
+def _recompute_centroids(result, per_window_centroids, per_window_speech):
+    """Duration-weighted global centroids for the sequential path.
 
-    Pure (no Modal, no GPU): `src.speaker_reconcile.reconcile_chunks` matches
-    window-local labels into stable meeting-wide labels (temporal overlap
-    first, then embedding similarity), then the existing
-    `merge_similar_speakers` handles residual fragmentation exactly as the
-    single-pass path does. Both thresholds are overridable so calibration can
-    sweep them against cached payloads.
+    `reconcile_chunks` returns turns + diagnostics but not global voiceprints.
+    Each StableTurn retains chunk_index/local_speaker, so the mapping back to
+    the chunk-local centroid that produced it is exact. (The global-identity
+    path builds centroids from its own per-turn vectors instead.)
     """
     import numpy as np
 
-    from . import config
-    from .merge import merge_similar_speakers
-    from .models import Segment
-    from .speaker_reconcile import (
-        ChunkResult,
-        ChunkWindow,
-        LocalTurn,
-        reconcile_chunks,
-    )
-
-    if embedding_threshold is None:
-        # NOT speaker_reconcile's 0.75 default — that is tuned for VibeVoice's
-        # windows and fragments pyannote per-window centroids. See the config
-        # comment for the calibration behind this value.
-        embedding_threshold = config.DIARIZE_CHUNK_STITCH_THRESHOLD
-
-    chunks: list[ChunkResult] = []
-    # local_speaker -> {(chunk_index, local_speaker): (centroid, weight)} for
-    # recomputing global centroids after reconciliation, since reconcile_chunks
-    # returns turns/diagnostics but not the global voiceprints themselves.
-    per_window_centroids: dict[int, dict[str, list[float]]] = {}
-    per_window_speech: dict[int, dict[str, float]] = {}
-    slowest_elapsed = 0.0
-    for payload in payloads:
-        data = json.loads(payload)
-        index = data["window_index"]
-        per_window_centroids[index] = data["centroids"]
-        per_window_speech[index] = data["speech_seconds"]
-        slowest_elapsed = max(slowest_elapsed, data.get("elapsed_s", 0.0))
-        chunks.append(ChunkResult(
-            window=ChunkWindow(index, data["window_start_s"], data["window_end_s"]),
-            turns=[
-                LocalTurn(index, t[0], t[1], t[2]) for t in data["turns"]
-            ],
-            embeddings={
-                label: np.asarray(vec, dtype=float)
-                for label, vec in data["centroids"].items()
-            },
-            speech_seconds=data["speech_seconds"],
-        ))
-    print(f"  Slowest window: {slowest_elapsed:.0f}s "
-          f"(vs one single-pass call over the whole meeting)")
-
-    result = reconcile_chunks(
-        chunks, embedding_threshold=embedding_threshold, label_prefix="SPEAKER_"
-    )
-    diag = result.diagnostics
-    print(f"  Reconciled to {len({t.speaker for t in result.turns})} global "
-          f"speaker(s): {len(diag['temporal_matches'])} temporal match(es), "
-          f"{len(diag['embedding_matches'])} embedding match(es), "
-          f"{len(diag['new_speakers'])} new speaker(s)")
-
-    # reconcile_chunks returns stable turns + diagnostics but not global
-    # centroids. Each StableTurn retains chunk_index/local_speaker, so the
-    # mapping back to the chunk-local centroid that produced it is exact;
-    # duration-weight-average across every (chunk, local) pair a global
-    # speaker absorbed.
     weighted_sums: dict[str, np.ndarray] = {}
     weighted_totals: dict[str, float] = {}
     seen_pairs: set[tuple[int, str, str]] = set()
@@ -212,6 +155,138 @@ def stitch_chunk_payloads(
         print(f"  WARNING: global speaker {speaker} has no centroid "
               "(every contributing window had too little speech to embed); "
               "turns still publish but voice-profile matching will skip it.")
+    return centroids
+
+
+def stitch_chunk_payloads(
+    payloads: list[str],
+    use_merge: bool,
+    embedding_threshold: float | None = None,
+    merge_threshold: float | None = None,
+    identity: str | None = None,
+    cluster_threshold: float | None = None,
+    linkage: str | None = None,
+    embedder: str | None = None,
+) -> tuple[list[dict], dict[str, list[float]]]:
+    """Reconcile window payloads into the standard (segments, centroids) pair.
+
+    Pure (no Modal, no GPU): `src.speaker_reconcile.reconcile_chunks` matches
+    window-local labels into stable meeting-wide labels (temporal overlap
+    first, then embedding similarity), then the existing
+    `merge_similar_speakers` handles residual fragmentation exactly as the
+    single-pass path does. Both thresholds are overridable so calibration can
+    sweep them against cached payloads.
+
+    `identity` selects the cross-window identity strategy: "global"
+    (src.global_identity, one constrained clustering over per-turn
+    embeddings) or "sequential" (src.speaker_reconcile, per-window centroid
+    matching). Global requires payloads carrying `turn_embeddings`; payloads
+    cached before that field existed fall back to sequential automatically, so
+    calibration can compare both on the same cached GPU work.
+    """
+    import numpy as np
+
+    from . import config
+    from .global_identity import cluster_global_identities, decode_turn_vectors
+    from .merge import merge_similar_speakers
+    from .models import Segment
+    from .speaker_reconcile import (
+        ChunkResult,
+        ChunkWindow,
+        LocalTurn,
+        reconcile_chunks,
+    )
+
+    if embedding_threshold is None:
+        # NOT speaker_reconcile's 0.75 default — that is tuned for VibeVoice's
+        # windows and fragments pyannote per-window centroids. See the config
+        # comment for the calibration behind this value.
+        embedding_threshold = config.DIARIZE_CHUNK_STITCH_THRESHOLD
+    if identity is None:
+        identity = config.DIARIZE_CHUNK_IDENTITY
+    if cluster_threshold is None:
+        cluster_threshold = config.DIARIZE_CHUNK_CLUSTER_THRESHOLD
+    if linkage is None:
+        linkage = config.DIARIZE_CHUNK_LINKAGE
+    if embedder is None:
+        embedder = config.DIARIZE_CHUNK_EMBEDDER
+
+    chunks: list[ChunkResult] = []
+    # local_speaker -> {(chunk_index, local_speaker): (centroid, weight)} for
+    # recomputing global centroids after reconciliation, since reconcile_chunks
+    # returns turns/diagnostics but not the global voiceprints themselves.
+    per_window_centroids: dict[int, dict[str, list[float]]] = {}
+    per_window_speech: dict[int, dict[str, float]] = {}
+    # {window_index: {turn_index: vector}}, for the global-identity path. Built
+    # in the same pass as `chunks` rather than a second json.loads over every
+    # payload — the payload is already parsed here.
+    turn_vectors: dict[int, dict[int, "np.ndarray"]] = {}
+    have_turn_embeddings = True
+    slowest_elapsed = 0.0
+    for payload in payloads:
+        data = json.loads(payload)
+        index = data["window_index"]
+        per_window_centroids[index] = data["centroids"]
+        per_window_speech[index] = data["speech_seconds"]
+        slowest_elapsed = max(slowest_elapsed, data.get("elapsed_s", 0.0))
+        chunks.append(ChunkResult(
+            window=ChunkWindow(index, data["window_start_s"], data["window_end_s"]),
+            turns=[
+                LocalTurn(index, t[0], t[1], t[2]) for t in data["turns"]
+            ],
+            embeddings={
+                label: np.asarray(vec, dtype=float)
+                for label, vec in data["centroids"].items()
+            },
+            speech_seconds=data["speech_seconds"],
+        ))
+
+        blocks = data.get("turn_embeddings") or {}
+        block = blocks.get(embedder)
+        if block is None and len(blocks) == 1:
+            block = next(iter(blocks.values()))  # single-embedder payload
+        if block is None:
+            have_turn_embeddings = False
+        else:
+            turn_vectors[index] = decode_turn_vectors(block)
+    print(f"  Slowest window: {slowest_elapsed:.0f}s "
+          f"(vs one single-pass call over the whole meeting)")
+
+    if identity == "global" and have_turn_embeddings:
+        global_result = cluster_global_identities(
+            chunks, turn_vectors,
+            threshold=cluster_threshold, linkage=linkage, label_prefix="SPEAKER_",
+        )
+        result = global_result
+        centroids = global_result.centroids
+        diag = global_result.diagnostics
+        print(f"  Global identity ({linkage} linkage @ {cluster_threshold:.2f}, "
+              f"{embedder}): {diag['nodes']} window-local speaker(s) -> "
+              f"{diag['clusters']} global (bounds "
+              f"{diag['window_speaker_bounds'][0]}-{diag['window_speaker_bounds'][1]}); "
+              f"{len(diag['temporal_matches'])} seam match(es), "
+              f"{len(diag['embedding_matches'])} embedding merge(s), "
+              f"{len(diag['cannot_link_blocks'])} blocked by cannot-link, "
+              f"margin {diag['margin']}")
+        for speaker in diag["speakers_without_centroid"]:
+            print(f"  WARNING: global speaker {speaker} has no centroid "
+                  "(no turn of theirs could be embedded); turns still publish "
+                  "but voice-profile matching will skip it.")
+    else:
+        if identity == "global":
+            print("  Note: payloads carry no per-turn embeddings for "
+                  f"{embedder} — falling back to sequential centroid matching.")
+        result = reconcile_chunks(
+            chunks, embedding_threshold=embedding_threshold, label_prefix="SPEAKER_"
+        )
+        diag = result.diagnostics
+        print(f"  Reconciled to {len({t.speaker for t in result.turns})} global "
+              f"speaker(s): {len(diag['temporal_matches'])} temporal match(es), "
+              f"{len(diag['embedding_matches'])} embedding match(es), "
+              f"{len(diag['new_speakers'])} new speaker(s)")
+        centroids = _recompute_centroids(
+            result, per_window_centroids, per_window_speech
+        )
 
     segments_data = [
         {
