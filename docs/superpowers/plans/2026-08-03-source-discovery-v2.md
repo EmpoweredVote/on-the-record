@@ -104,6 +104,9 @@ create table if not exists essentials.source_discovery_runs (
   inserted_pending integer not null default 0,
   inserted_auto_filtered integer not null default 0,
   spend_capped integer not null default 0,
+  skipped_seen integer not null default 0,      -- funnel-loss counters: shipped via the
+  prefiltered_out integer not null default 0,   -- 1550_source_discovery_runs_followups.sql
+  recency_filtered integer not null default 0,  -- fast-follow (review-driven)
   failure_count integer not null default 0,
   failures text                      -- newline-joined summaries, truncated
 );
@@ -336,8 +339,9 @@ Replace the block from `provider = get_provider(...)` through the `return 0` at 
         if run_id is not None:
             cur = conn.cursor()
             db.finish_run(cur, run_id, stats)
+            conn.commit()   # run record is the payload — commit before alarms so an
             db.record_alarms(cur, [a[0] for a in alarms])
-            conn.commit()
+            conn.commit()   # alarm-write hiccup can't roll the run record back with it
         for alarm in alarms:
             print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")
         if stats.failures:
@@ -757,7 +761,7 @@ In `src/discovery/engine.py`:
 
 1. Import: change the prefilter import (line 20) to
    `from src.discovery.prefilter import is_stale, normalize, prefilter_item`
-2. Add to `RunStats` (after `prefiltered_out`): `recency_filtered: int = 0`
+2. Add to `RunStats` (after `prefiltered_out`): `recency_filtered: int = 0`. Then retire the forward-compat shim in `src/discovery/db.py` `finish_run`: replace `getattr(stats, "recency_filtered", 0),` with `stats.recency_filtered,` (direct attribute access fails loudly like its siblings), and add `recency_filtered = 0` to the `_Stats` fixture in `tests/test_discovery_db.py` (update its now-stale comment)
 3. In `process()`, immediately after `stats.examined += 1` (line 88):
 
 ```python
