@@ -65,6 +65,8 @@ def main() -> int:
     ap.add_argument("--skip-sweeps", action="store_true")
     ap.add_argument("--classify-cap", type=int, default=None)
     ap.add_argument("--print-alarms", action="store_true")
+    ap.add_argument("--trigger", choices=("scheduled", "manual"), default="manual",
+                    help="how this run started (the launchd plist passes scheduled)")
     args = ap.parse_args()
 
     conn = db.connect()
@@ -79,6 +81,11 @@ def main() -> int:
             return 0
 
         provider = get_provider(config.DISCOVERY_MODEL_ACTIVE)
+        run_id = None
+        if not args.dry_run:
+            cur = conn.cursor()
+            run_id = db.insert_run(cur, "race" if args.race else args.trigger)
+            conn.commit()   # crash after this point leaves a visible started row
         stats = engine.run_discovery(
             conn,
             provider=provider,
@@ -99,7 +106,14 @@ def main() -> int:
               f"auto_filtered={stats.inserted_auto_filtered} "
               f"prefiltered_out={stats.prefiltered_out} seen={stats.skipped_seen} "
               f"classified={stats.classified} capped={stats.spend_capped}")
-        for alarm in db.alarm_races(conn.cursor()):
+        alarms = db.alarm_races(conn.cursor())
+        if run_id is not None:
+            cur = conn.cursor()
+            db.finish_run(cur, run_id, stats)
+            conn.commit()   # run record is the payload — commit before alarms so an
+            db.record_alarms(cur, [a[0] for a in alarms])
+            conn.commit()   # alarm-write hiccup can't roll the run record back with it
+        for alarm in alarms:
             print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")
         if stats.failures:
             print(f"{len(stats.failures)} failure(s)", file=sys.stderr)
