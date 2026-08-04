@@ -8,6 +8,7 @@ Usage:
   .venv/bin/python scripts/poll_discovery.py --skip-watchlist
   .venv/bin/python scripts/poll_discovery.py --classify-cap N
   .venv/bin/python scripts/poll_discovery.py --print-alarms # zero-source races, then exit
+  .venv/bin/python scripts/poll_discovery.py --trigger scheduled|manual # how this run started
 """
 import argparse
 import datetime as dt
@@ -107,14 +108,16 @@ def main() -> int:
               f"prefiltered_out={stats.prefiltered_out} seen={stats.skipped_seen} "
               f"classified={stats.classified} capped={stats.spend_capped}")
         alarms = db.alarm_races(conn.cursor())
+        for alarm in alarms:
+            print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")
+        # The run record is the payload — commit it before alarm history so an
+        # alarm-write hiccup can't roll the run record back with it.
         if run_id is not None:
             cur = conn.cursor()
             db.finish_run(cur, run_id, stats)
-            conn.commit()   # run record is the payload — commit before alarms so an
+            conn.commit()
             db.record_alarms(cur, [a[0] for a in alarms])
-            conn.commit()   # alarm-write hiccup can't roll the run record back with it
-        for alarm in alarms:
-            print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")
+            conn.commit()
         if stats.failures:
             print(f"{len(stats.failures)} failure(s)", file=sys.stderr)
             return 1

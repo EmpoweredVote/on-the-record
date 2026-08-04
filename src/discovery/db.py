@@ -126,6 +126,9 @@ def insert_run(cur, trigger_kind: str) -> str:
 
 
 def finish_run(cur, run_id: str, stats) -> None:
+    # Counters reflect engine accounting, not confirmed commits: a per-item
+    # psycopg2 rollback inside the engine can make inserted counts slightly
+    # overstate the rows actually committed.
     failures_text = "\n".join(stats.failures)[:4000] or None
     cur.execute("""
         update essentials.source_discovery_runs
