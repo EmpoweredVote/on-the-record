@@ -3,7 +3,9 @@
 Spec: `docs/superpowers/specs/2026-08-02-source-discovery-design.md`
 Spec v2: `docs/superpowers/specs/2026-08-03-source-discovery-v2-design.md`
 Job: `vote.empowered.poll-discovery` (launchd, daily 08:00) →
-`scripts/poll_discovery.py` → log at `~/CouncilScribe/discovery/poll.log`
+`scripts/run_scheduled_poll.sh` (automation-checkout clone) →
+`scripts/poll_discovery.py --trigger scheduled` → log at
+`~/CouncilScribe/discovery/poll.log`
 
 ## Daily workflow
 
