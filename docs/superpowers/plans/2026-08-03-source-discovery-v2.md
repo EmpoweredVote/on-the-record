@@ -21,6 +21,7 @@
 1. The `source_discovery_runs` column is named `trigger_kind`, not `trigger` (`TRIGGER` is a Postgres keyword; avoids quoting hazards).
 2. The spec said the new table is "the only new DDL" — extending `web_rss` into `source_outlets.kind` requires swapping that CHECK constraint too (v1's migration constrained the "open enum"). Both ride in one migration file.
 3. Discovered during Task 1: prod already has an unrelated `essentials.discovery_runs` (migration 070, candidate-discovery run log, 549 rows) and migration number 1534 is claimed by an uncommitted file — the v2 table is `essentials.source_discovery_runs`, migration `1553_source_discovery_runs_web_rss.sql`. Every reference in this plan has been updated.
+4. Post-review amendment (Task 6): `DISCOVERY_MAX_ITEM_AGE_DAYS` recalibrated 420→630 after measuring the corpus (stale rejects all ≥1622 days; 7 high-confidence pending items in the 421–630 band; a 420 rolling window would hide an already-ingested 2025 launch speech by election day). The stale check also moved to AFTER the name match (still before hydration) so `recency_filtered` counts only candidate-named drops, and each drop prints a per-item `STALE` line. The code as committed is authoritative over this plan's Task 6 snippets.
 
 ---
 

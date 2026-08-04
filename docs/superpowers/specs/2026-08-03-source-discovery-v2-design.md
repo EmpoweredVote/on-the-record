@@ -158,10 +158,14 @@ templated per chain. Aug/Sep primary states remain first in line.
 ## Ride-alongs
 
 - **Recency filter.** Stage-1 drop for items with `published_at` older than
-  `DISCOVERY_MAX_ITEM_AGE_DAYS` (default 420 — a cycle year plus slop). Applies to
-  watchlist backfill and sweeps; undated items pass (stage 2 owns them). Dropped counts
-  are logged per run (no silent caps) and included in `source_discovery_runs.items_examined`
-  accounting.
+  `DISCOVERY_MAX_ITEM_AGE_DAYS` (default 630 — reaches back past the previous general
+  election; recalibrated 2026-08-04 from the original 420 after measuring the corpus:
+  every observed human "stale" reject was ≥1622 days old, the oldest *ingested* item was
+  329 days, and 7 high-confidence pending items sat in the 421–630 band — a 420 cutoff
+  would have silently deleted wanted content). The check runs after the candidate-name
+  match, so the counter reads "named a tracked candidate but too old" — an over-drop
+  alarm — and each drop logs a per-item `STALE` line. Undated items pass (stage 2 owns
+  them). Dropped counts land in the DONE line and `source_discovery_runs`.
 - **Eval harvest + calibration.** `scripts/harvest_discovery_verdicts.py` exports
   human-triaged `discovered_sources` rows (approved/ingested → `gold_relevant: true`;
   rejected with reason `clip-not-original`/`wrong-person`/`tier-5` → `false`; `stale`,
