@@ -542,7 +542,27 @@ def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
     resp = client.get("/discovery")
     assert "running" in resp.text
     assert "CRASHED" not in resp.text
+
+
+def test_discovery_page_reddens_pill_on_failures(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
+                     "trigger": "scheduled", "examined": 120, "classified": 40,
+                     "queued": 9, "capped": 0, "failures": 4, "running": False},
+        "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "4 failure(s)" in resp.text
+    assert "background:#c0392b" in resp.text   # a failing run must not render as a calm grey pill
 ```
+
+(Design note, review-driven: the latest run shown may be any trigger — that's informative — while the
+red *overdue* pill is already scheduled-only, so a manual run can't mask a missing scheduled run; and a
+finished-but-failing run reddens the last-run pill so daily all-failure runs can't look calm.)
 
 (`outlet_stats` doesn't exist until Task 9 — `raising=False` keeps this test valid both before and after.)
 
@@ -616,7 +636,7 @@ In `gui/templates/discovery.html`, inside `<header class="batch-header">` after 
 
 ```html
   {% if health.last_run %}
-  <span class="pill" title="examined {{ health.last_run.examined }} · classified {{ health.last_run.classified }} · queued {{ health.last_run.queued }} · capped {{ health.last_run.capped }} · failures {{ health.last_run.failures }}">
+  <span class="pill" {% if not health.last_run.running and (health.last_run.failures or not health.last_run.finished_at) %}style="background:#c0392b;color:#fff" {% endif %}title="examined {{ health.last_run.examined }} · classified {{ health.last_run.classified }} · queued {{ health.last_run.queued }} · capped {{ health.last_run.capped }} · failures {{ health.last_run.failures }}">
     last run {{ (health.last_run.started_at or '')[:16] }} · {{ health.last_run.trigger }} ·
     {% if health.last_run.running %}running{% elif not health.last_run.finished_at %}CRASHED{% elif health.last_run.failures %}{{ health.last_run.failures }} failure(s){% else %}ok{% endif %}
   </span>
