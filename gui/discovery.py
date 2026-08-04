@@ -20,6 +20,11 @@ def _db_url() -> Optional[str]:
 
 _YT_ID = re.compile(r"(?:v=|youtu\.be/|/shorts/|/live/|/embed/)([A-Za-z0-9_-]{11})")
 
+# Spec Q4's zero-tolerance set for mode C. Deliberately narrower than the eval
+# harvest's GOLD_FALSE_REASONS (which adds tier-5): tier-5 already drags the
+# approve rate; identity errors are the misattribution class.
+IDENTITY_REJECT_REASONS = ("wrong-person", "clip-not-original")
+
 _SELECT = """
     select d.id::text, d.url, d.title, d.description_snippet, d.channel_name,
            d.channel_id, d.channel_url, d.outlet_id::text, d.duration_seconds,
@@ -144,7 +149,9 @@ def set_status(row_id: str, status: str, reason: "str | None" = None) -> bool:
 
 
 def health() -> dict:
-    empty = {"alarms": [], "stale_outlets": [], "pending_total": 0}
+    empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
+             "last_run": None, "scheduled_run_overdue": False,
+             "outlet_stats": [], "outletless_reviewed": 0}
     url = _db_url()
     if not url:
         return empty
@@ -164,7 +171,62 @@ def health() -> dict:
                 cur.execute("select count(*) from essentials.discovered_sources "
                             "where status = 'pending'")
                 total = cur.fetchone()[0]
-            return {"alarms": alarms, "stale_outlets": stale, "pending_total": total}
+                cur.execute("""
+                    select started_at, finished_at,
+                           trigger_kind, items_examined, classified,
+                           inserted_pending, spend_capped, failure_count,
+                           skipped_seen, prefiltered_out, recency_filtered,
+                           (finished_at is null
+                            and started_at > now() - interval '2 hours') as running
+                    from essentials.source_discovery_runs
+                    order by started_at desc limit 1
+                """)
+                r = cur.fetchone()
+                last_run = None
+                if r:
+                    def _local(ts):
+                        return ts.astimezone().strftime("%Y-%m-%d %H:%M:%S") if ts else None
+                    last_run = {"started_at": _local(r[0]), "finished_at": _local(r[1]),
+                                "trigger": r[2], "examined": r[3], "classified": r[4],
+                                "queued": r[5], "capped": r[6], "failures": r[7],
+                                "skipped": r[8], "prefiltered": r[9], "recency": r[10],
+                                "running": bool(r[11])}
+                cur.execute("""
+                    select not exists (
+                        select 1 from essentials.source_discovery_runs
+                        where trigger_kind = 'scheduled'
+                          and finished_at > now() - interval '36 hours')
+                """)
+                overdue = bool(cur.fetchone()[0])
+                # Folded in from outlet_stats() to avoid a 4th connection per
+                # page load (discovery_page rebuilds ~115x via redirects) —
+                # identical aggregate, riding this cursor instead.
+                cur.execute("""
+                    select o.name,
+                           count(*) filter (where d.status in
+                               ('approved','ingested','rejected')) as reviewed,
+                           count(*) filter (where d.status in
+                               ('approved','ingested')) as approved,
+                           count(*) filter (where d.status = 'rejected'
+                               and d.status_reason = any(%s)) as identity_rejects
+                    from essentials.source_outlets o
+                    join essentials.discovered_sources d on d.outlet_id = o.id
+                    group by o.name
+                    having count(*) filter (where d.status in
+                        ('approved','ingested','rejected')) > 0
+                    order by 2 desc, o.name
+                """, (list(IDENTITY_REJECT_REASONS),))
+                ostats = [{"name": r[0], "reviewed": r[1], "approved": r[2],
+                           "identity_rejects": r[3]} for r in cur.fetchall()]
+                cur.execute("""
+                    select count(*) from essentials.discovered_sources
+                    where outlet_id is null
+                      and status in ('approved','ingested','rejected')
+                """)
+                outletless = cur.fetchone()[0]
+            return {"alarms": alarms, "stale_outlets": stale, "pending_total": total,
+                    "last_run": last_run, "scheduled_run_overdue": overdue,
+                    "outlet_stats": ostats, "outletless_reviewed": outletless}
         finally:
             conn.close()
     except Exception:
@@ -199,6 +261,40 @@ def race_slug_for(race_id: "str | None") -> str:
     return race_slug(row[0], row[1], row[2], row[3])
 
 
+def outlet_stats() -> list:
+    """Per-outlet triage evidence toward the future mode-C flag-flip.
+    Qualification bar (spec, Q4): >=10 reviewed, >=90% approved, zero
+    identity-class rejects. Display-only — no auto-ingest path exists."""
+    url = _db_url()
+    if not url:
+        return []
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    select o.name,
+                           count(*) filter (where d.status in
+                               ('approved','ingested','rejected')) as reviewed,
+                           count(*) filter (where d.status in
+                               ('approved','ingested')) as approved,
+                           count(*) filter (where d.status = 'rejected'
+                               and d.status_reason = any(%s)) as identity_rejects
+                    from essentials.source_outlets o
+                    join essentials.discovered_sources d on d.outlet_id = o.id
+                    group by o.name
+                    having count(*) filter (where d.status in
+                        ('approved','ingested','rejected')) > 0
+                    order by 2 desc, o.name
+                """, (list(IDENTITY_REJECT_REASONS),))
+                return [{"name": r[0], "reviewed": r[1], "approved": r[2],
+                         "identity_rejects": r[3]} for r in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
 def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
     """Flywheel: insert the row's channel as an active outlet, reviving it
     if a prior (now-deactivated) row already claims this feed_url."""
@@ -226,3 +322,51 @@ def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
             conn.close()
     except Exception:
         return False, "failed to add outlet (db error)"
+
+
+def probe_extractable(url: str) -> "tuple[bool, str]":
+    """Can yt-dlp actually get a video out of this page? Metadata-only, no
+    download. Gate for approve->ingest on non-YouTube items so unextractable
+    embeds bounce to Edit-first instead of poisoning the batch pool.
+
+    Resolver-owned URLs (podcast RSS episode pages, Brightspot/NPR pages) and
+    raw HLS manifests ingest fine without yt-dlp at all (see src/resolve.py's
+    resolve_source, src/download.py's is_hls_url) — bouncing those here would
+    be a false-positive regression, so they short-circuit True before yt-dlp
+    is even asked."""
+    from src.download import is_hls_url
+
+    if is_hls_url(url):
+        return True, ""
+    try:
+        from src.resolve import resolve_source
+
+        def _quick_fetch(u: str) -> str:
+            import requests
+
+            r = requests.get(u, timeout=(5, 10), headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            return r.text
+
+        if resolve_source(url, fetch=_quick_fetch) is not None:
+            return True, ""
+    except Exception:
+        pass  # resolver errors fall through to the yt-dlp probe below
+
+    # A few human-triggered metadata fetches (resolver peek + one bounded
+    # yt-dlp extract) — deliberately outside the watchlist lane's
+    # robots/pacing (see feeds.py); the human just previewed this page.
+    try:
+        import yt_dlp
+        opts = {"quiet": True, "no_warnings": True, "skip_download": True,
+                "js_runtimes": {"node": {}}, "socket_timeout": 15,
+                "no_color": True, "playlist_items": "1"}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:  # noqa: BLE001 — any extractor error = not extractable
+        return False, str(exc)[:200]
+    if not info:
+        return False, "no media found"
+    if info.get("entries") is not None and not [e for e in info["entries"] if e]:
+        return False, "page has no extractable video"
+    return True, ""

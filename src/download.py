@@ -126,11 +126,15 @@ def download_from_url(
     output_path: str | Path,
     cookies_file: str | None = None,
     progress: bool = True,
+    try_ytdlp: bool = True,
 ) -> Path:
     """Download a video file from a URL.
 
     Supports:
     - YouTube and Facebook URLs (routed through yt-dlp)
+    - Any other http(s) URL yt-dlp's extractors happen to support, when
+      try_ytdlp is True (tried opportunistically; falls back below on any
+      failure)
     - CATS TV page URLs (blob URL extracted automatically)
     - Any other direct video URL (mp4, m4v, mkv, etc.)
 
@@ -140,6 +144,12 @@ def download_from_url(
         cookies_file: Path to a Netscape-format cookies file (used by yt-dlp for
             authenticated downloads, e.g. private Facebook videos).
         progress: If True, print download progress.
+        try_ytdlp: If True (default), an unclaimed http(s) URL (not a known
+            yt-dlp domain, not HLS) gets a yt-dlp attempt first. Callers that
+            already resolved a specific direct media URL (e.g. a podcast
+            enclosure via src.resolve) should pass False — yt-dlp succeeding
+            on, say, a SoundCloud enclosure would silently substitute a
+            transcoded HLS rendition for the exact file the resolver chose.
 
     Returns:
         Path to the downloaded file (may differ from output_path for yt-dlp downloads).
@@ -152,6 +162,21 @@ def download_from_url(
 
     if _is_ytdlp_url(url):
         return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
+
+    # Not a known yt-dlp domain, but yt-dlp ships 1800+ extractors (station
+    # embeds, generic video pages, ...) — try it before falling back. ANY
+    # failure (unsupported URL, no formats, network error) falls through to
+    # the CATS-page resolver + plain requests.get path below, so CATS pages
+    # and direct media links keep working exactly as before. Skipped when
+    # try_ytdlp is False (a caller already resolved a specific media URL) and
+    # for CATS hosts: the blob resolver owns those pages, and a speculative
+    # yt-dlp pass finding some OTHER playable asset on the page would
+    # silently preempt it.
+    if try_ytdlp and "catstv" not in urlparse(url).netloc.lower():
+        try:
+            return download_via_ytdlp(url, output_path, cookies_file=cookies_file, progress=progress)
+        except Exception:
+            pass
 
     # If it's a CATS TV page URL, resolve to the blob URL
     resolved = _resolve_video_url(url)

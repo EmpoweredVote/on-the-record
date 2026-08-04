@@ -15,6 +15,15 @@
   <span class="pill" title="{{ health.stale_outlets|join(', ') }}">
     {{ health.stale_outlets|length }} stale feed(s)</span>
   {% endif %}
+  {% if health.last_run %}
+  <span class="pill" {% if not health.last_run.running and (health.last_run.failures or not health.last_run.finished_at) %}style="background:#c0392b;color:#fff" {% endif %}title="examined {{ health.last_run.examined }} · classified {{ health.last_run.classified }} · queued {{ health.last_run.queued }} · capped {{ health.last_run.capped }} · failures {{ health.last_run.failures }} · seen-skip {{ health.last_run.skipped }} · prefiltered {{ health.last_run.prefiltered }} · stale {{ health.last_run.recency }}">
+    last run {{ (health.last_run.started_at or '')[:16] }} · {{ health.last_run.trigger }} ·
+    {% if health.last_run.running %}running{% elif not health.last_run.finished_at %}CRASHED{% elif health.last_run.failures %}{{ health.last_run.failures }} failure(s){% else %}ok{% endif %}
+  </span>
+  {% endif %}
+  {% if health.scheduled_run_overdue %}
+  <span class="pill" style="background:#c0392b;color:#fff">no scheduled run in 36h</span>
+  {% endif %}
 </header>
 <main>
 
@@ -31,10 +40,41 @@
 </section>
 {% endif %}
 
+{% if outlet_stats %}
+<details>
+  <summary>Outlet evidence ({{ outlet_stats|length }} outlets)</summary>
+  <p><small>Auto-ingest (mode C) qualification bar: ≥10 reviewed · ≥90% approved ·
+  0 identity rejects. Display only — every ingest still goes through this queue.</small></p>
+  <table class="library">
+    <thead>
+      <tr><th>Outlet</th><th>Reviewed</th><th>Approved</th><th>Identity rejects</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+    {% for s in outlet_stats %}
+    {% set qualified = s.reviewed >= 10 and s.identity_rejects == 0 and 10 * s.approved >= 9 * s.reviewed %}
+    <tr>
+      <td>{{ s.name }}</td>
+      <td>{{ s.reviewed }}</td>
+      <td>{{ s.approved }} ({{ (100 * s.approved / s.reviewed) | round(0, 'floor') | int if s.reviewed else 0 }}%)</td>
+      <td>{{ s.identity_rejects }}</td>
+      <td>
+        {% if qualified %}&#10003; qualifies
+        {% elif s.reviewed < 10 %}needs {{ 10 - s.reviewed }} more reviewed
+        {% else %}below bar
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p><small>{{ outletless_reviewed }} reviewed item(s) have no outlet (search/agent finds) and are excluded.</small></p>
+</details>
+{% endif %}
+
 {% if not groups %}<p>No pending discoveries.</p>{% endif %}
 
 {% for label, rows in groups %}
-<h2>{{ label }}</h2>
+<h2>{{ label }} <span class="pill">{{ rows|length }} pending</span></h2>
 <table class="library">
   <tbody>
   {% for r in rows %}

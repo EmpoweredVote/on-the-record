@@ -85,9 +85,19 @@ def create_app() -> FastAPI:
             if r.race_id and labels.get(r.race_id):
                 r.race_label = labels[r.race_id]
             groups.setdefault(r.race_label or "Unmatched", []).append(r)
+        h = discovery.health()
+        # health() folds the outlet-stats aggregate onto its own connection
+        # (avoids a 4th DB round-trip per page load). Fall back to the
+        # standalone call only for monkeypatched/legacy health dicts that
+        # predate the fold and lack the key — every real call carries it.
+        ostats = h.get("outlet_stats")
+        if ostats is None:
+            ostats = discovery.outlet_stats()
         return _templates.TemplateResponse(
             request, "discovery.html",
-            {"groups": list(groups.items()), "health": discovery.health(),
+            {"groups": list(groups.items()), "health": h,
+             "outlet_stats": ostats,
+             "outletless_reviewed": h.get("outletless_reviewed", 0),
              "flash": flash})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
@@ -116,6 +126,12 @@ def create_app() -> FastAPI:
             if not ok:
                 flash += " — SAVE FAILED, retry"
             return _discovery_redirect(flash)
+        from src.source_key import source_key as _source_key
+        if not _source_key(row.url).startswith("youtube:"):
+            ok_probe, err = discovery.probe_extractable(row.url)
+            if not ok_probe:
+                return _discovery_redirect(
+                    f"no extractable video ({err or 'nothing found'}) — use Edit first")
         kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
         if kind in ("community_meeting", "other") and row.race_id:
             kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)

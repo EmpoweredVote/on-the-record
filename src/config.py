@@ -84,11 +84,19 @@ DISCOVERY_MODEL_ACTIVE = "haiku"                # key into SPEAKER_ID_MODELS reg
 DISCOVERY_CLASSIFY_MAX_TOKENS = 500
 DISCOVERY_CLASSIFY_CAP_PER_RUN = 200            # spend cap; truncation is logged loudly
 DISCOVERY_CONFIDENCE_FLOOR = 0.30               # below -> stored as auto_filtered
-DISCOVERY_CAPTIONS_BAND = (0.35, 0.75)          # mid-confidence band triggers captions peek
+DISCOVERY_CAPTIONS_BAND = (0.35, 0.75)          # mid-confidence band triggers the stage-2 peek (captions or page text)
 DISCOVERY_SEARCH_RESULTS_PER_QUERY = 10         # ytsearchN
 DISCOVERY_SEARCH_SLEEP_SECONDS = 2.0            # politeness between searches
 DISCOVERY_SHORT_CLIP_MAX_SECONDS = 8 * 60       # < this from a news channel = likely package
 DISCOVERY_FULL_EVENT_MIN_SECONDS = 25 * 60      # >= this = likely full event
+# Recency filter: > this = stale/old-cycle. 630 reaches back past the PREVIOUS
+# general election (2024-11-05). Calibrated 2026-08-04: observed stale rejects
+# were all >=1622 days; high-confidence queued content reached 588.
+DISCOVERY_MAX_ITEM_AGE_DAYS = 630
+DISCOVERY_BACKOFF_RETRIES = 3                   # yt-dlp bot-check/429 retries per query
+DISCOVERY_BACKOFF_BASE_SECONDS = 5.0
+DISCOVERY_WEB_FETCH_SLEEP_SECONDS = 2.0         # per-domain politeness for web_rss
+DISCOVERY_SWEEP_ABORT_AFTER = 5                 # consecutive exhausted searches -> abort sweep phase
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID

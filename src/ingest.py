@@ -231,7 +231,10 @@ def normalize_audio(
         resolved = _resolve_source_safe(source_str)
         if resolved is not None:
             print(f"  Resolved {resolved.resolver} source; downloading audio...")
-            actual_path = download_from_url(resolved.audio_url, download_path)
+            # The resolver already vetted this exact media URL — don't let
+            # yt-dlp opportunistically substitute a different (e.g. transcoded
+            # HLS) rendition for it.
+            actual_path = download_from_url(resolved.audio_url, download_path, try_ytdlp=False)
             ffmpeg_input = str(actual_path)
             source_title = resolved.title
             source_channel = resolved.outlet
