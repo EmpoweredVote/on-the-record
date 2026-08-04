@@ -427,3 +427,37 @@ def test_discovery_page_reddens_pill_on_failures(monkeypatch):
     resp = client.get("/discovery")
     assert "4 failure(s)" in resp.text
     assert "background:#c0392b" in resp.text   # a failing run must not render as a calm grey pill
+
+
+def test_discovery_page_shows_crashed_for_stale_unfinished_run(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-01 08:00:04", "finished_at": None,
+                     "trigger": "scheduled", "examined": 0, "classified": 0,
+                     "queued": 0, "capped": 0, "failures": 0,
+                     "skipped": 3, "prefiltered": 2, "recency": 1, "running": False},
+        "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "CRASHED" in resp.text
+    assert "background:#c0392b" in resp.text
+
+
+def test_discovery_page_healthy_run_stays_grey(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
+                     "trigger": "scheduled", "examined": 120, "classified": 40,
+                     "queued": 9, "capped": 0, "failures": 0,
+                     "skipped": 5, "prefiltered": 8, "recency": 2, "running": False},
+        "scheduled_run_overdue": False,
+    })
+    client = TestClient(create_app())
+    resp = client.get("/discovery")
+    assert "ok" in resp.text
+    assert "background:#c0392b" not in resp.text

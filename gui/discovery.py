@@ -166,10 +166,10 @@ def health() -> dict:
                             "where status = 'pending'")
                 total = cur.fetchone()[0]
                 cur.execute("""
-                    select to_char(started_at, 'YYYY-MM-DD HH24:MI:SS'),
-                           to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS'),
+                    select started_at, finished_at,
                            trigger_kind, items_examined, classified,
                            inserted_pending, spend_capped, failure_count,
+                           skipped_seen, prefiltered_out, recency_filtered,
                            (finished_at is null
                             and started_at > now() - interval '2 hours') as running
                     from essentials.source_discovery_runs
@@ -178,10 +178,13 @@ def health() -> dict:
                 r = cur.fetchone()
                 last_run = None
                 if r:
-                    last_run = {"started_at": r[0], "finished_at": r[1],
+                    def _local(ts):
+                        return ts.astimezone().strftime("%Y-%m-%d %H:%M:%S") if ts else None
+                    last_run = {"started_at": _local(r[0]), "finished_at": _local(r[1]),
                                 "trigger": r[2], "examined": r[3], "classified": r[4],
                                 "queued": r[5], "capped": r[6], "failures": r[7],
-                                "running": bool(r[8])}
+                                "skipped": r[8], "prefiltered": r[9], "recency": r[10],
+                                "running": bool(r[11])}
                 cur.execute("""
                     select not exists (
                         select 1 from essentials.source_discovery_runs

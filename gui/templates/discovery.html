@@ -16,7 +16,7 @@
     {{ health.stale_outlets|length }} stale feed(s)</span>
   {% endif %}
   {% if health.last_run %}
-  <span class="pill" {% if not health.last_run.running and (health.last_run.failures or not health.last_run.finished_at) %}style="background:#c0392b;color:#fff" {% endif %}title="examined {{ health.last_run.examined }} · classified {{ health.last_run.classified }} · queued {{ health.last_run.queued }} · capped {{ health.last_run.capped }} · failures {{ health.last_run.failures }}">
+  <span class="pill" {% if not health.last_run.running and (health.last_run.failures or not health.last_run.finished_at) %}style="background:#c0392b;color:#fff" {% endif %}title="examined {{ health.last_run.examined }} · classified {{ health.last_run.classified }} · queued {{ health.last_run.queued }} · capped {{ health.last_run.capped }} · failures {{ health.last_run.failures }} · seen-skip {{ health.last_run.skipped }} · prefiltered {{ health.last_run.prefiltered }} · stale {{ health.last_run.recency }}">
     last run {{ (health.last_run.started_at or '')[:16] }} · {{ health.last_run.trigger }} ·
     {% if health.last_run.running %}running{% elif not health.last_run.finished_at %}CRASHED{% elif health.last_run.failures %}{{ health.last_run.failures }} failure(s){% else %}ok{% endif %}
   </span>
