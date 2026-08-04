@@ -583,3 +583,43 @@ def test_discovery_page_falls_back_to_outlet_stats_when_key_absent(monkeypatch):
     resp = client.get("/discovery")
     assert resp.status_code == 200
     assert called["hit"] is True
+
+
+# --- Task 12: extractability probe on approve->ingest for non-YouTube items ---
+
+def test_approve_ingest_probes_non_youtube_and_bounces_on_failure(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    row = _row(url="https://www.kctv5.com/2026/08/01/governor-debate/")
+    monkeypatch.setattr(discovery, "get_row", lambda rid: row)
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    monkeypatch.setattr(discovery, "probe_extractable",
+                        lambda url: (False, "Unsupported URL"))
+    launched = []
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda params: launched.append(params) or ("queued", "m1"))
+    statuses = []
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: statuses.append(status) or True)
+    client = TestClient(create_app(), follow_redirects=False)
+    resp = client.post("/discovery/d1/approve-ingest")
+    assert resp.status_code == 303
+    assert "use Edit first" in _flash(resp)
+    assert launched == [] and statuses == []      # nothing enqueued, still pending
+
+
+def test_approve_ingest_skips_probe_for_youtube(monkeypatch):
+    import gui.batch as batch
+    import gui.runner as runner
+    row = _row()                                   # default _row url is YouTube
+    monkeypatch.setattr(discovery, "get_row", lambda rid: row)
+    monkeypatch.setattr(runner, "find_meeting_by_source", lambda url: None)
+    probed = []
+    monkeypatch.setattr(discovery, "probe_extractable",
+                        lambda url: probed.append(url) or (True, ""))
+    monkeypatch.setattr(batch, "launch_or_enqueue", lambda params: ("queued", "m1"))
+    monkeypatch.setattr(discovery, "set_status", lambda rid, s, reason=None: True)
+    client = TestClient(create_app(), follow_redirects=False)
+    resp = client.post("/discovery/d1/approve-ingest")
+    assert resp.status_code == 303
+    assert probed == []                            # YouTube: no probe spent

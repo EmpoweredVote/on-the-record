@@ -126,6 +126,12 @@ def create_app() -> FastAPI:
             if not ok:
                 flash += " — SAVE FAILED, retry"
             return _discovery_redirect(flash)
+        from src.source_key import source_key as _source_key
+        if not _source_key(row.url).startswith("youtube:"):
+            ok_probe, err = discovery.probe_extractable(row.url)
+            if not ok_probe:
+                return _discovery_redirect(
+                    f"no extractable video ({err or 'nothing found'}) — use Edit first")
         kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
         if kind in ("community_meeting", "other") and row.race_id:
             kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)

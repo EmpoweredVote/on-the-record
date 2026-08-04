@@ -322,3 +322,22 @@ def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
             conn.close()
     except Exception:
         return False, "failed to add outlet (db error)"
+
+
+def probe_extractable(url: str) -> "tuple[bool, str]":
+    """Can yt-dlp actually get a video out of this page? Metadata-only, no
+    download. Gate for approve->ingest on non-YouTube items so unextractable
+    embeds bounce to Edit-first instead of poisoning the batch pool."""
+    try:
+        import yt_dlp
+        opts = {"quiet": True, "no_warnings": True, "skip_download": True,
+                "js_runtimes": {"node": {}}}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:  # noqa: BLE001 — any extractor error = not extractable
+        return False, str(exc)[:200]
+    if not info:
+        return False, "no media found"
+    if info.get("entries") is not None and not [e for e in info["entries"] if e]:
+        return False, "page has no extractable video"
+    return True, ""
