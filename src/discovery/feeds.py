@@ -117,7 +117,9 @@ _COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
 _BLOCK_RE = re.compile(
     r"<(script|style|nav|header|footer|aside|form|noscript|svg|iframe|template)"
     r"\b[\s\S]*?</\1>", re.IGNORECASE)
-_TAG_RE = re.compile(r"<[^>]+>")
+_TAG_RE = re.compile(r"<[/!]?[a-zA-Z][^>]*>")  # requires a letter (optionally
+# after / or !) right after '<' — political headlines legitimately contain
+# "< 50%" / "> 40%" comparisons that the looser <[^>]+> pattern ate whole
 
 
 def _html_to_text(raw: "str | bytes", max_chars: "int | None" = None) -> str:
@@ -249,8 +251,13 @@ def parse_news_feed(xml_text: "str | bytes", *, outlet_id: "str | None" = None,
     encoding declaration). Raises on an unrecognized root — an RDF/Atom-0.3
     feed silently yielding [] would otherwise let mark_outlet_polled keep an
     outlet looking healthy forever."""
-    xml_text = xml_text.lstrip()  # a leading blank line before the XML
-    # declaration otherwise raises ParseError, for both str and bytes
+    # A leading blank line before the XML declaration raises ParseError, for
+    # both str and bytes; a leading UTF-8 BOM (common from CMSes that don't
+    # strip it) compounds this when followed by whitespace/newlines.
+    if isinstance(xml_text, bytes):
+        xml_text = xml_text.lstrip(b"\xef\xbb\xbf \t\r\n")
+    else:
+        xml_text = xml_text.lstrip("﻿").lstrip()
     root = ET.fromstring(xml_text)
     items = []
     if root.tag == f"{_ATOM_NS}feed":
@@ -315,17 +322,24 @@ _ARTICLE_OR_MAIN_RE = re.compile(r"<(article|main)\b[^>]*>[\s\S]*?</\1>", re.IGN
 def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> str:
     """Article-page text for the stage-2 page peek (web analog of the
     captions peek). Robots-gated and paced like every other web-lane fetch;
-    returns '' when disallowed. Prefers the <article>/<main> slice of the
-    page when present (regex-extract the first match; fall back to the
-    whole page) so nav/sidebar/footer chrome doesn't dilute the peek."""
+    returns '' when disallowed. Strips comments/block-chrome FIRST, then
+    prefers the LONGEST remaining <article>/<main> slice, falling back to
+    the whole cleaned page when the best slice is too short (~200 chars) to
+    be the real body. Slicing raw HTML instead let a small <article> teaser
+    nested in an <aside>/<template> rail (a normal station template shape)
+    hijack the peek — stripping block chrome first removes the teaser along
+    with its wrapper before slicing ever sees it. _html_to_text re-running
+    the strips on the chosen slice is idempotent."""
     if not _robots_allowed(url):
         return ""
     origin = _origin(url)
     _polite_pause(origin, crawl_delay=_crawl_delay_for(origin), sleep_fn=sleep_fn)
     raw = _fetch_bytes(url)
     html_str = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
-    match = _ARTICLE_OR_MAIN_RE.search(html_str)
-    slice_ = match.group(0) if match else html_str
+    cleaned = _BLOCK_RE.sub(" ", _COMMENT_RE.sub(" ", html_str))
+    match = max(_ARTICLE_OR_MAIN_RE.finditer(cleaned),
+                key=lambda m: len(m.group(0)), default=None)
+    slice_ = match.group(0) if match and len(match.group(0)) >= 200 else cleaned
     return _html_to_text(slice_, max_chars=max_chars)
 
 

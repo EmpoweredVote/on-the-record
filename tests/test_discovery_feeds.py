@@ -170,6 +170,41 @@ def test_fetch_page_text_prefers_article_slice(monkeypatch):
     assert "Contact us" not in text
 
 
+def test_fetch_page_text_ignores_aside_teaser_prefers_main_body(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_bytes", lambda url:
+        b"<html><body><aside><article>Related: Storm hits region</article></aside>"
+        b"<article><h1>Governor Debate</h1><p>The candidates sparred over taxes "
+        b"and education for nearly two hours in a debate broadcast statewide, "
+        b"touching on infrastructure, healthcare, and rural broadband access.</p>"
+        b"</article></body></html>")
+    text = fetch_page_text("https://x.example/article", sleep_fn=lambda s: None)
+    assert "Governor Debate" in text
+    assert "candidates sparred" in text
+    assert "Related: Storm hits region" not in text
+
+
+def test_fetch_page_text_falls_back_when_article_slice_too_small(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_bytes", lambda url:
+        b"<html><body><h1>KCTV5 News</h1><article>Breaking.</article>"
+        b"<p>Full story: county commissioners voted 4-1 to approve the new "
+        b"zoning ordinance after a contentious three-hour public hearing.</p>"
+        b"</body></html>")
+    text = fetch_page_text("https://x.example/article", sleep_fn=lambda s: None)
+    assert "county commissioners voted 4-1" in text
+    assert "KCTV5 News" in text
+
+
+def test_html_to_text_preserves_less_than_greater_than_comparisons():
+    text = feeds._html_to_text("Turnout < 50% but > 40% statewide")
+    assert text == "Turnout < 50% but > 40% statewide"
+
+
 NEWS_RSS_CDATA_DESC = """<?xml version="1.0"?>
 <rss version="2.0"><channel>
   <title>KS Statehouse</title>
@@ -204,6 +239,22 @@ def test_parse_news_feed_accepts_bytes_and_keeps_accents():
     items = parse_news_feed(NEWS_RSS_BYTES, outlet_id="o9")
     assert len(items) == 1
     assert items[0].title == "José Núñez wins primary"
+
+
+NEWS_RSS_BOM_THEN_NEWLINE = (
+    b"\xef\xbb\xbf\n"
+    b'<?xml version="1.0"?>\n'
+    b'<rss version="2.0"><channel><title>Wire</title>'
+    b'<item><title>Item</title>'
+    b'<link>https://example.com/a</link></item>'
+    b'</channel></rss>'
+)
+
+
+def test_parse_news_feed_bom_then_newline_bytes():
+    items = parse_news_feed(NEWS_RSS_BOM_THEN_NEWLINE, outlet_id="o9")
+    assert len(items) == 1
+    assert items[0].url == "https://example.com/a"
 
 
 RDF_FEED = """<?xml version="1.0"?>
