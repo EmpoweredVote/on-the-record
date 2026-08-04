@@ -45,7 +45,7 @@ def calibration(pairs: list) -> dict:
     brier = sum((p - (1.0 if gold else 0.0)) ** 2 for gold, p in scored) / len(scored)
     buckets = []
     for i in range(5):
-        lo, hi = i * 0.2, (i + 1) * 0.2
+        lo, hi = i / 5, (i + 1) / 5
         in_bucket = [(gold, p) for gold, p in scored
                      if lo <= p < hi or (hi == 1.0 and p == 1.0)]
         if in_bucket:

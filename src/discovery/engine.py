@@ -57,7 +57,7 @@ def sweep_due(election_date: "str | None", last_swept_at, today: dt.date) -> boo
     return (today - last).days >= sweep_interval_days(days_to)
 
 
-def _snippet(text: "str | None", limit: int = 500) -> "str | None":
+def _snippet(text: "str | None", limit: int = 1500) -> "str | None":
     if not text:
         return None
     return text[:limit]

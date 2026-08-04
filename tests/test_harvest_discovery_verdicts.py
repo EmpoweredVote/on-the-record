@@ -6,8 +6,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from harvest_discovery_verdicts import merge_examples, to_example
 
 ROW = ("youtube:abc12345678", "Full debate", "All four candidates", "KXAN",
-       3480, "ingested", None, "TX · U.S. Senate · General · 2026",
-       ["Ana Ruiz", "Maria Delgado"])
+       3480, "2026-07-01", "ingested", None, "ingest",
+       "TX · U.S. Senate · General · 2026", ["Ana Ruiz", "Maria Delgado"])
 
 
 def test_to_example_approved_is_gold_true():
@@ -18,18 +18,20 @@ def test_to_example_approved_is_gold_true():
         "race_label": "TX · U.S. Senate · General · 2026",
         "roster": ["Ana Ruiz", "Maria Delgado"],
         "gold_relevant": True, "source_key": "youtube:abc12345678",
+        "published_at": "2026-07-01", "status": "ingested",
+        "status_reason": None, "route": "ingest",
     }
 
 
 def test_to_example_relevance_rejects_are_gold_false():
     for reason in ("clip-not-original", "wrong-person", "tier-5"):
-        row = ROW[:5] + ("rejected", reason) + ROW[7:]
+        row = ROW[:6] + ("rejected", reason) + ROW[8:]
         assert to_example(row)["gold_relevant"] is False
 
 
 def test_to_example_non_relevance_rejects_are_skipped():
     for reason in ("stale", "duplicate", "other"):
-        row = ROW[:5] + ("rejected", reason) + ROW[7:]
+        row = ROW[:6] + ("rejected", reason) + ROW[8:]
         assert to_example(row) is None
 
 

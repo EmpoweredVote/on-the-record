@@ -4,10 +4,11 @@ Every approved/ingested row is a gold-relevant example; rejects are gold-
 irrelevant ONLY when the reason is a relevance verdict (clip-not-original,
 wrong-person, tier-5). stale/duplicate/other say nothing about relevance and
 are skipped. Existing fixture lines win on source_key so hand corrections
-survive re-harvests.
+survive re-harvests — pass --refresh to rebuild from the DB instead.
 
 Usage:
-  .venv/bin/python scripts/harvest_discovery_verdicts.py            # write
+  .venv/bin/python scripts/harvest_discovery_verdicts.py            # write (existing wins)
+  .venv/bin/python scripts/harvest_discovery_verdicts.py --refresh  # rebuild from DB, drop hand corrections
   .venv/bin/python scripts/harvest_discovery_verdicts.py --dry-run  # counts only
 """
 import argparse
@@ -29,11 +30,14 @@ GOLD_FALSE_REASONS = {"clip-not-original", "wrong-person", "tier-5"}
 
 QUERY = """
     select d.source_key, d.title, d.description_snippet, d.channel_name,
-           d.duration_seconds, d.status, d.status_reason,
+           d.duration_seconds, d.published_at::text, d.status, d.status_reason,
+           d.route,
            coalesce(p.race_label, '(unknown race)'),
            coalesce((select array_agg(rc.full_name order by rc.full_name)
                      from essentials.race_candidates rc
-                     where rc.race_id = d.race_id and rc.full_name is not null),
+                     where rc.race_id = d.race_id and rc.full_name is not null
+                       and coalesce(rc.candidate_status, 'active')
+                           not in ('withdrawn','removed')),
                     '{}')
     from essentials.discovered_sources d
     left join essentials.readrank_race_pipeline p on p.race_id = d.race_id
@@ -43,8 +47,8 @@ QUERY = """
 
 
 def to_example(row) -> "dict | None":
-    (source_key, title, snippet, channel, duration, status, reason,
-     race_label, roster) = row
+    (source_key, title, snippet, channel, duration, published_at, status, reason,
+     route, race_label, roster) = row
     if status == "rejected" and reason not in GOLD_FALSE_REASONS:
         return None
     return {
@@ -53,6 +57,8 @@ def to_example(row) -> "dict | None":
         "race_label": race_label, "roster": list(roster or []),
         "gold_relevant": status in ("approved", "ingested"),
         "source_key": source_key,
+        "published_at": published_at, "status": status, "status_reason": reason,
+        "route": route,
     }
 
 
@@ -67,6 +73,9 @@ def merge_examples(existing: list, harvested: list) -> list:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--refresh", action="store_true",
+                    help="rebuild from the DB, skipping the existing fixture "
+                         "entirely (drops hand corrections)")
     args = ap.parse_args()
     conn = db.connect()
     try:
@@ -78,8 +87,9 @@ def main() -> int:
     harvested = [to_example(r) for r in rows]
     kept = [e for e in harvested if e]
     existing = []
-    if FIXTURE.exists():
-        existing = [json.loads(line) for line in FIXTURE.read_text().splitlines() if line]
+    if not args.refresh and FIXTURE.exists():
+        existing = [json.loads(line) for line in
+                    FIXTURE.read_text(encoding="utf-8").splitlines() if line]
     merged = merge_examples(existing, kept)
     gold_true = sum(1 for e in merged if e["gold_relevant"])
     print(f"triaged rows={len(rows)} harvestable={len(kept)} "
@@ -87,7 +97,9 @@ def main() -> int:
           f"gold_irrelevant={len(merged) - gold_true})")
     if args.dry_run:
         return 0
-    FIXTURE.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in merged))
+    FIXTURE.write_text(
+        "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in merged),
+        encoding="utf-8")
     print(f"wrote {FIXTURE}")
     return 0
 

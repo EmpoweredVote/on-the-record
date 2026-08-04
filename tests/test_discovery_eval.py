@@ -43,3 +43,10 @@ def test_calibration_skips_parse_failures_and_buckets():
     assert out["n"] == 2
     top = [b for b in out["buckets"] if b["range"] == "0.8–1.0"]
     assert top and top[0]["n"] == 2 and abs(top[0]["actual"] - 0.5) < 1e-9
+
+
+def test_calibration_bucket_edge_uses_exact_fifths():
+    # 3 * 0.2 float-misbins p=0.6 into the 0.4-0.6 bucket; i/5 is exact.
+    out = calibration([(True, _v(True, 0.6))])
+    ranges = [b["range"] for b in out["buckets"]]
+    assert ranges == ["0.6–0.8"]
