@@ -140,7 +140,7 @@ def finish_run(cur, run_id: str, stats) -> None:
     """, (stats.examined, stats.classified, stats.inserted_pending,
           stats.inserted_auto_filtered, stats.spend_capped,
           stats.skipped_seen, stats.prefiltered_out,
-          getattr(stats, "recency_filtered", 0),   # RunStats grows it in Task 6
+          stats.recency_filtered,
           len(stats.failures), failures_text, run_id))
 
 

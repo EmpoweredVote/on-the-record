@@ -65,7 +65,7 @@ def _run(monkeypatch, inserted, **kwargs):
         _FakeConn(), provider=provider,
         fetch_feed_items=kwargs.pop("fetch_feed_items", lambda o: [GOOD_ITEM, NOISE_ITEM]),
         ytsearch_fn=kwargs.pop("ytsearch_fn", lambda q: []),
-        hydrate_fn=lambda item: item,
+        hydrate_fn=kwargs.pop("hydrate_fn", lambda item: item),
         captions_fetcher=None, sleep_fn=lambda s: None,
         meeting_keys=kwargs.pop("meeting_keys", set()),
         today=dt.date(2026, 8, 2), **kwargs)
@@ -447,3 +447,32 @@ def test_unknown_race_filter_is_loud_failure(monkeypatch):
                            race_filter="bogus-race-id")
     assert stats.failures
     assert any("bogus-race-id" in f for f in stats.failures)
+
+
+def test_stale_watchlist_item_is_recency_filtered(monkeypatch):
+    import dataclasses
+    inserted = []
+    _patch_db(monkeypatch, inserted)
+    old = dataclasses.replace(GOOD_ITEM, published_at="2024-01-15")
+    stats, provider = _run(monkeypatch, inserted,
+                           fetch_feed_items=lambda outlet: [old], skip_sweeps=True)
+    assert stats.recency_filtered == 1
+    assert inserted == []
+
+
+def test_hydrated_publish_date_also_recency_filtered(monkeypatch):
+    import dataclasses
+    inserted = []
+    _patch_db(monkeypatch, inserted)
+    undated = dataclasses.replace(GOOD_ITEM, published_at=None, description=None)
+
+    def hydrate(item):
+        item.description = "d"
+        item.published_at = "2024-01-15"
+        return item
+
+    stats, provider = _run(monkeypatch, inserted,
+                           fetch_feed_items=lambda outlet: [undated],
+                           hydrate_fn=hydrate, skip_sweeps=True)
+    assert stats.recency_filtered == 1
+    assert inserted == []

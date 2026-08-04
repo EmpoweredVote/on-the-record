@@ -1,5 +1,7 @@
+import datetime as dt
+
 from src.discovery.prefilter import (
-    duration_signal, match_names, normalize, prefilter_item,
+    duration_signal, is_stale, match_names, normalize, prefilter_item,
 )
 
 
@@ -62,3 +64,25 @@ def test_prefilter_passes_long_video_with_name():
                        55 * 60, ["Maria Delgado", "Ana Ruiz"])
     assert v.passed and set(v.matched_names) == {"Maria Delgado", "Ana Ruiz"}
     assert v.duration_signal == "long"
+
+
+TODAY = dt.date(2026, 8, 3)
+
+
+def test_is_stale_old_item_dropped():
+    assert is_stale("2024-05-01", TODAY) is True          # prior cycle
+
+
+def test_is_stale_recent_and_boundary_pass():
+    assert is_stale("2026-08-01", TODAY) is False
+    assert is_stale((TODAY - dt.timedelta(days=420)).isoformat(), TODAY) is False
+
+
+def test_is_stale_undated_and_junk_pass():
+    assert is_stale(None, TODAY) is False                 # stage 2 owns undated
+    assert is_stale("", TODAY) is False
+    assert is_stale("not-a-date", TODAY) is False
+
+
+def test_is_stale_datetime_prefix_ok():
+    assert is_stale("2024-05-01T09:30:00+00:00", TODAY) is True

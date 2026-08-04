@@ -89,6 +89,7 @@ DISCOVERY_SEARCH_RESULTS_PER_QUERY = 10         # ytsearchN
 DISCOVERY_SEARCH_SLEEP_SECONDS = 2.0            # politeness between searches
 DISCOVERY_SHORT_CLIP_MAX_SECONDS = 8 * 60       # < this from a news channel = likely package
 DISCOVERY_FULL_EVENT_MIN_SECONDS = 25 * 60      # >= this = likely full event
+DISCOVERY_MAX_ITEM_AGE_DAYS = 420               # recency filter: > this = stale/old-cycle
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID

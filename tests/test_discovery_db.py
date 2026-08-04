@@ -80,9 +80,8 @@ class _Stats:
     spend_capped = 3
     skipped_seen = 7
     prefiltered_out = 12
+    recency_filtered = 0
     failures = ["outlet X: boom", "search 'q': bot check"]
-    # no recency_filtered attr on purpose: it only exists from Task 6 on,
-    # finish_run must default it to 0 via getattr
 
 
 def test_insert_run_returns_id_and_binds_trigger_kind():
@@ -103,7 +102,7 @@ def test_finish_run_writes_counters_and_joined_failures():
     assert params[0] == 40                      # items_examined
     assert params[5] == 7                       # skipped_seen
     assert params[6] == 12                      # prefiltered_out
-    assert params[7] == 0                       # recency_filtered (getattr default)
+    assert params[7] == 0                       # recency_filtered
     assert params[8] == 2                       # failure_count
     assert params[9] == "outlet X: boom\nsearch 'q': bot check"
     assert params[10] == "run-1"

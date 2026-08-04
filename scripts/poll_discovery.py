@@ -105,7 +105,8 @@ def main() -> int:
         )
         print(f"DONE examined={stats.examined} queued={stats.inserted_pending} "
               f"auto_filtered={stats.inserted_auto_filtered} "
-              f"prefiltered_out={stats.prefiltered_out} seen={stats.skipped_seen} "
+              f"prefiltered_out={stats.prefiltered_out} "
+              f"recency_filtered={stats.recency_filtered} seen={stats.skipped_seen} "
               f"classified={stats.classified} capped={stats.spend_capped}")
         alarms = db.alarm_races(conn.cursor())
         for alarm in alarms:

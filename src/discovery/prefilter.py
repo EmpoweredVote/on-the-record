@@ -5,6 +5,7 @@ stage-2 LLM verdict. Tuned for recall — the human gate owns precision.
 """
 from __future__ import annotations
 
+import datetime as dt
 import re
 import unicodedata
 
@@ -65,3 +66,16 @@ def prefilter_item(title, description, duration_seconds, full_names) -> Prefilte
     if sig == "short" and not _has_event_term(title, description):
         return PrefilterVerdict(False, matched, sig, "short clip without event term")
     return PrefilterVerdict(True, matched, sig, "name match")
+
+
+def is_stale(published_at: "str | None", today: dt.date) -> bool:
+    """True when the item predates the recency window (old-cycle noise —
+    the biggest observed reject class). Undated or unparseable dates pass:
+    stage 2 owns them."""
+    if not published_at:
+        return False
+    try:
+        published = dt.date.fromisoformat(str(published_at)[:10])
+    except ValueError:
+        return False
+    return (today - published).days > config.DISCOVERY_MAX_ITEM_AGE_DAYS

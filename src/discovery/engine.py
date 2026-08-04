@@ -17,7 +17,7 @@ import psycopg2
 from src import config
 from src.discovery import db
 from src.discovery.classify import classify_item
-from src.discovery.prefilter import normalize, prefilter_item
+from src.discovery.prefilter import is_stale, normalize, prefilter_item
 from src.discovery.search import queries_for_candidate
 from src.source_key import source_key
 
@@ -27,6 +27,7 @@ class RunStats:
     examined: int = 0
     skipped_seen: int = 0
     prefiltered_out: int = 0
+    recency_filtered: int = 0
     classified: int = 0
     inserted_pending: int = 0
     inserted_auto_filtered: int = 0
@@ -86,6 +87,9 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             stats.skipped_seen += 1
             return
         stats.examined += 1
+        if is_stale(item.published_at, today):
+            stats.recency_filtered += 1
+            return
         pf = prefilter_item(item.title, item.description, item.duration_seconds,
                             roster_names)
         if not pf.passed:
@@ -97,6 +101,9 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             else:
                 item = hydrate_fn(item)
                 hydrated_cache[key] = item
+            if is_stale(item.published_at, today):
+                stats.recency_filtered += 1
+                return
             pf = prefilter_item(item.title, item.description, item.duration_seconds,
                                 roster_names)
             if not pf.passed:
