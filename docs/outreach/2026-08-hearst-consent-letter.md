@@ -9,8 +9,9 @@ Dear Hearst Television legal team,
 I run Empowered Vote (empowered.vote), a free, non-commercial voter-education
 project. We help voters compare candidates in their own words: we locate public
 recordings of candidate debates, forums, town halls, and interviews, transcribe
-them, attribute speakers, and publish short verbatim quotes — each deep-linked
-back to the original recording on the publisher's own page or player.
+them, attribute speakers, and publish short verbatim quotes — each linked back to the original recording on
+the publisher's own page or player (with a timestamp where the platform
+supports it).
 
 Your terms prohibit use of station content for AI training. Empowered Vote does
 not train AI models on any content, yours included — our tools only transcribe
@@ -28,9 +29,11 @@ attributed verbatim candidate quotes for voter education.
 **What we expressly do NOT do.**
 - No AI model training on your content, of any kind.
 - No republication of full video or articles — we publish short quotes with
-  attribution and a deep link to your page/player at the cited timestamp.
-- No paywall or authentication circumvention; we honor robots.txt and poll only
-  public syndication endpoints, with per-domain politeness delays.
+  attribution and a link back to your page/player.
+- No paywall or authentication circumvention; our monitoring polls only public
+  syndication endpoints, honors robots.txt, and applies per-domain politeness
+  delays; individual items are fetched for processing only after a human
+  approves them.
 - No commercial use: Empowered Vote has no advertising, no donations, and no
   paid tier.
 
