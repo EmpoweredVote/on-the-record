@@ -45,7 +45,7 @@ def main() -> int:
     tier_stats_by_model = []
     # human-labeled route ground truth, real fixture only: 'ingested' means a
     # human routed it to the real pipeline (route=ingest), 'approved' means a
-    # human routed it to quote-sourcing (route=quote_source). The 8 synthetic
+    # human routed it to quote-sourcing (route=quote_source). The synthetic
     # discovery_eval.jsonl examples carry no status/source_key -- they fall
     # back to the https://example.test/eval URL below and read as "web page"
     # in the prompt even though most are YouTube-shaped; acceptable since
