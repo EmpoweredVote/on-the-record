@@ -37,7 +37,7 @@ def roster_for_race(cur, race_id: str) -> list:
 
 def reclassify_row(cur, provider, row) -> tuple:
     """Returns (old_tier, new_tier); new_tier is None when the verdict
-    failed to parse (row left untouched)."""
+    failed to parse or carried no usable tier (row left untouched)."""
     (row_id, url, title, desc, channel, duration, published,
      race_id, race_label, old_tier) = row
     roster = roster_for_race(cur, race_id) if race_id else []
@@ -47,7 +47,7 @@ def reclassify_row(cur, provider, row) -> tuple:
     verdict = classify_item(provider, item,
                             race_label=race_label or "(unknown race)",
                             roster_names=roster, peek_fetcher=None)
-    if verdict.rejected_reason is not None:
+    if verdict.rejected_reason is not None or verdict.source_tier_guess is None:
         return old_tier, None
     cur.execute("""
         update essentials.discovered_sources

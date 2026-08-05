@@ -52,3 +52,14 @@ def test_reclassify_row_skips_on_parse_failure():
     old_tier, new_tier = reclassify.reclassify_row(cur, provider, _ROW)
     assert (old_tier, new_tier) == (3, None)
     assert all("update" not in sql for sql, _ in cur.executed)
+
+
+def test_reclassify_row_skips_when_verdict_has_no_tier():
+    provider = _FakeProvider(['{"relevant": true, "confidence": 0.9,'
+                              ' "event_kind": "forum",'
+                              ' "original_vs_clip": "original",'
+                              ' "route": "ingest", "why": "no tier emitted"}'])
+    cur = _FakeCursor({"fetchall": [("Alice Example",)]})
+    old_tier, new_tier = reclassify.reclassify_row(cur, provider, _ROW)
+    assert (old_tier, new_tier) == (3, None)
+    assert all("update" not in sql for sql, _ in cur.executed)

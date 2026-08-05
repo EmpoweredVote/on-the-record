@@ -42,8 +42,8 @@ def main() -> int:
                 old_tier, new_tier = reclassify.reclassify_row(cur, provider, row)
                 title = (row[2] or "")[:60]
                 if new_tier is None:
-                    moves["parse_failure"] += 1
-                    print(f"  PARSE-FAIL tier={old_tier} {title!r}")
+                    moves["skipped_no_verdict"] += 1
+                    print(f"  SKIPPED (no usable verdict) tier={old_tier} {title!r}")
                 else:
                     moves[f"{old_tier}->{new_tier}"] += 1
                     marker = " " if old_tier == new_tier else "*"
