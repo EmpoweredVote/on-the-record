@@ -175,6 +175,11 @@ tier-5). Re-run the eval and watch recall, precision, and the calibration
 block (Brier + buckets). Commit the updated
 `tests/fixtures/discovery_eval_real.jsonl`.
 
+Newly harvested rows arrive without `expected_tier` and must be hand-labeled
+per the questioner-independence ladder before the `tier_accuracy` readout
+means anything — unlabeled rows silently drop out of the metric rather than
+count as wrong.
+
 Two caveats to keep in mind reading the numbers:
 - **Real-set recall is selection-biased.** Every harvestable row was already
   predicted relevant by the classifier (auto_filtered rows never reach triage),
