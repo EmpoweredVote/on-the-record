@@ -30,10 +30,11 @@ attributed verbatim candidate quotes for voter education.
 - No AI model training on your content, of any kind.
 - No republication of full video or articles — we publish short quotes with
   attribution and a link back to your page/player.
-- No paywall or authentication circumvention; our monitoring polls only public
-  syndication endpoints, honors robots.txt, and applies per-domain politeness
-  delays; individual items are fetched for processing only after a human
-  approves them.
+- No paywall or authentication circumvention; ongoing monitoring polls only
+  public syndication endpoints, honors robots.txt, and applies per-domain
+  politeness delays. Judging whether a specific item is relevant may include a
+  brief automated read of that item's own page text; full content extraction
+  and transcription of an item happens only after a human approves it.
 - No commercial use: Empowered Vote has no advertising, no donations, and no
   paid tier.
 
