@@ -117,7 +117,7 @@ def check_source_tier(r) -> Optional[Finding]:
         return None
     if CAMPAIGN_SITE.search(url):
         return Finding(check_id="source-tier-4", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
-                       race_id=r["race_id"], candidate=r["candidate"], principle="prefer tier 1-2 spoken sources",
+                       race_id=r["race_id"], candidate=r["candidate"], principle="prefer tier 1-2 sources (questioner-independent)",
                        severity="medium", fix_class="decision-required",
                        what=f"Source looks like a campaign/written page (tier 4): {url}",
                        suggested_fix="Confirm it's a verbatim first-person sentence (not a summary); prefer a tier-1 spoken quote if available.")
