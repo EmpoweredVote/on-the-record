@@ -67,7 +67,13 @@ For each alarmed race, run a one-shot deep hunt in a Claude session:
 > debates/forums; hunt for recordings of past ones, and record upcoming
 > events as a note in `why` (advance notice is evidence for the calendar layer).
 >
-> Never C-SPAN. Do not ingest anything.
+> Also check astartingpoint.com's per-politician contributor page for each
+> candidate (sitemap/contributors.xml lists them) — verified officials speaking
+> direct-to-camera; prefer the YouTube copies (channel UCED8Eh7FNPUu-uQ7135PD8A,
+> a registered outlet) for ingest rows.
+>
+> Never C-SPAN. Do not ingest anything. Do not insert video hosted by Gray
+> Media, Graham Media, Hearst, or Nexstar stations (explicit AI/ML ToS bars).
 
 ## Outlet packs (rolling seed)
 
