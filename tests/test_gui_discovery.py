@@ -767,3 +767,13 @@ def test_probe_extractable_falls_through_to_ytdlp_when_resolver_errors(monkeypat
     _stub_ydl(monkeypatch, result={"formats": [{"url": "https://cdn.example.com/x.mp4"}]})
     ok, err = discovery.probe_extractable("https://station.example.com/embed/x")
     assert ok is True and err == ""
+
+
+# --- Task 4: pending queue orders by tier before confidence ---
+
+def test_pending_order_ranks_tier_before_confidence():
+    order = discovery._PENDING_ORDER
+    assert "election_date asc" in order
+    tier_pos = order.index("source_tier_guess asc")
+    conf_pos = order.index("confidence desc")
+    assert tier_pos < conf_pos
