@@ -68,7 +68,9 @@ who is speaking — only whether candidate speech is present at length.
 For "web page" items: Q&A-shaped text — an interviewer/panel back-and-forth, or a
 per-candidate questionnaire page with the candidate's unedited answers to fixed
 questions — is the most valuable quote_source; use event_kind "questionnaire" for
-the questionnaire shape. Route "quote_source" unless the page clearly hosts the
+the questionnaire shape, and treat a page carrying the candidate's substantial
+unedited answers as "original" (the answers are the candidate's own words, written
+not spoken). Route "quote_source" unless the page clearly hosts the
 full event recording (full video embed or full podcast episode) — then "ingest".
 
 Respond with JSON only:

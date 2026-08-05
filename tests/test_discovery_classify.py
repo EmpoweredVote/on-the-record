@@ -172,7 +172,9 @@ def test_build_prompt_tiers_by_questioner_independence():
                                    roster_names=["Maria Delgado"])
     # town halls are tier 1, not tier 3
     assert "town hall (independent moderator, opponents, or citizen questioning)" in prompt
+    # rung 4 must be present so its absence can't silently pass the split below
+    assert "4 =" in prompt
     # prepared remarks live in tier 3 alongside sympathetic-questioner interviews
     assert "stump speech" in prompt.split("4 =")[0].split("3 =")[1]
-    # questionnaire is an emittable kind
-    assert "questionnaire" in prompt
+    # questionnaire is an emittable kind (pins the JSON enum, not just the tier sentence)
+    assert "community_meeting|questionnaire|other" in prompt

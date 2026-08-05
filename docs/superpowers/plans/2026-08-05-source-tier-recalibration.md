@@ -1052,3 +1052,13 @@ After the next `harvest_discovery_verdicts.py` run grows the real fixture set, a
 | 3. §5 / SKILL / CHECKS / runbook all state one ladder | 6, 7, 8 |
 | 4. `source_outlets.county` live + county-pack runbook section | 6, 9 |
 | 5. Three consent letters drafted for review | 10 |
+
+## Post-review amendments (Task 2, 2026-08-05)
+
+Code review of Task 2 (retiered classifier prompt + `questionnaire` kind) approved "with fixes." The following were applied after the initial commit, as a second commit on the same branch:
+
+- **Web-page paragraph gained an "original" carve-out for questionnaires.** Review finding: the preamble frames relevance around the candidates' *spoken* words and defines "original" as "the full event... where the candidate speaks at length," so a model could coherently judge a questionnaire page `original_vs_clip: "clip"` → `relevant: false` → auto-filtered, even though the page is exactly the quote_source the tier-2 rung was written for. Added a clause instructing the model to treat a page carrying the candidate's substantial unedited answers as "original" (the answers are the candidate's own words, written not spoken).
+- **`test_build_prompt_tiers_by_questioner_independence` tightened**: added `assert "4 =" in prompt` before the split-based tier-3 assertion (so a missing rung 4 can't silently pass), and replaced the loose `assert "questionnaire" in prompt` with `assert "community_meeting|questionnaire|other" in prompt`, which pins the JSON `event_kind` enum rather than just the tier-block prose.
+- **One synthetic questionnaire fixture added** to `tests/fixtures/discovery_eval.jsonl` (`gold_relevant: true`, `expected_tier: 2`), a WyoFile-style "we asked every candidate the same eight questions" item with no `source_key`, so the eval harness routes it through the "web page" lane and exercises the new original-vs-clip clause. (Not run here — API credits are out; the eval run is handled separately.)
+
+The code in `src/discovery/classify.py` and `tests/test_discovery_classify.py` is authoritative over Task 2's verbatim prompt/test blocks quoted earlier in this plan; where they differ, the shipped code reflects this amendment.
