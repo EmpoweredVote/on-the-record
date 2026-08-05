@@ -156,3 +156,23 @@ def test_page_peek_second_pass_uses_plain_excerpt_verbatim():
                                      peek_fetcher=lambda url: _VTT_SHAPED_EXCERPT)
     assert verdict.confidence == 0.9
     assert _VTT_SHAPED_EXCERPT in prompts[1]
+
+
+def test_parse_verdict_accepts_questionnaire_kind():
+    v = classify.parse_verdict(
+        '{"relevant": true, "confidence": 0.8, "event_kind": "questionnaire",'
+        ' "source_tier": 2, "route": "quote_source", "why": "unedited answers"}')
+    assert v.event_kind_guess == "questionnaire"
+    assert v.source_tier_guess == 2
+    assert v.route == "quote_source"
+
+
+def test_build_prompt_tiers_by_questioner_independence():
+    prompt = classify.build_prompt(_item(), race_label="TX Senate",
+                                   roster_names=["Maria Delgado"])
+    # town halls are tier 1, not tier 3
+    assert "town hall (independent moderator, opponents, or citizen questioning)" in prompt
+    # prepared remarks live in tier 3 alongside sympathetic-questioner interviews
+    assert "stump speech" in prompt.split("4 =")[0].split("3 =")[1]
+    # questionnaire is an emittable kind
+    assert "questionnaire" in prompt

@@ -21,7 +21,7 @@ _SYSTEM = (
 )
 
 ALLOWED_KINDS = {"debate", "forum", "news_clip", "press_conference",
-                 "podcast", "community_meeting", "other"}
+                 "podcast", "community_meeting", "questionnaire", "other"}
 ALLOWED_ROUTES = {"ingest", "quote_source"}
 
 _PROMPT_TEMPLATE = """A tracked election race and a newly found video/audio item are below.
@@ -41,8 +41,19 @@ Item metadata:
 - published: {published}
 - description (truncated): {description}
 {captions_block}
-Source tiers: 1 = debate/candidate forum; 2 = news interview; 3 = prepared public
-remarks (stump speech, town hall, testimony); 4 = candidate-bylined written.
+Source tiers — rank by QUESTIONER INDEPENDENCE (how hard is it for the candidate
+to only say what they came to say):
+1 = debate, candidate forum, or town hall (independent moderator, opponents, or citizen questioning);
+2 = interview or Q&A with an independent questioner: established news organizations
+(network/local TV, radio, nonpartisan nonprofit newsrooms), A Starting Point videos,
+or a published candidate questionnaire carrying the candidate's own unedited answers;
+3 = sympathetic-questioner interview (partisan/ideological podcast or web show,
+party-aligned host, candidate-friendly platform — an interview podcast or web show
+that is not itself a news organization belongs here) OR prepared public remarks
+(stump speech, rally, campaign launch, floor speech, testimony);
+4 = candidate-bylined written (op-ed, platform page).
+If the outlet's character is genuinely undeterminable and the item is not a
+podcast/web show, use tier 2.
 "original_vs_clip": "original" = the full event / substantial segment where the
 candidate speaks at length; "clip" = a short excerpt or a package about them.
 Set "relevant" to true ONLY for original sources of the candidates' own words —
@@ -54,13 +65,16 @@ first-person policy speech and moderator/Q&A signatures suggest an original even
 third-person anchor narration with soundbites suggests a news package. Do not guess
 who is speaking — only whether candidate speech is present at length.
 
-For "web page" items: route "quote_source" unless the page clearly hosts the
+For "web page" items: Q&A-shaped text — an interviewer/panel back-and-forth, or a
+per-candidate questionnaire page with the candidate's unedited answers to fixed
+questions — is the most valuable quote_source; use event_kind "questionnaire" for
+the questionnaire shape. Route "quote_source" unless the page clearly hosts the
 full event recording (full video embed or full podcast episode) — then "ingest".
 
 Respond with JSON only:
 {{"relevant": true/false, "confidence": 0.0-1.0,
   "candidates_present": ["names from the tracked list that appear"],
-  "event_kind": "debate|forum|news_clip|press_conference|podcast|community_meeting|other",
+  "event_kind": "debate|forum|news_clip|press_conference|podcast|community_meeting|questionnaire|other",
   "source_tier": 1-4, "original_vs_clip": "original|clip",
   "route": "ingest|quote_source",
   "why": "one sentence citing your strongest evidence"}}"""
