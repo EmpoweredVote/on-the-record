@@ -16,7 +16,7 @@ load_env_local()
 
 from src import config  # noqa: E402
 from src.discovery.classify import classify_item  # noqa: E402
-from src.discovery.eval import calibration, classify_outcome, summarize  # noqa: E402
+from src.discovery.eval import calibration, classify_outcome, summarize, tier_accuracy  # noqa: E402
 from src.discovery.models import RawItem  # noqa: E402
 from src.llm_providers import get_provider  # noqa: E402
 
@@ -42,6 +42,7 @@ def main() -> int:
     rows = []
     cal_by_model = []
     route_stats_by_model = []
+    tier_stats_by_model = []
     # human-labeled route ground truth, real fixture only: 'ingested' means a
     # human routed it to the real pipeline (route=ingest), 'approved' means a
     # human routed it to quote-sourcing (route=quote_source). The 8 synthetic
@@ -58,6 +59,7 @@ def main() -> int:
         by_fixture_pairs = {stem: [] for stem in fixture_stems}
         route_correct = {stem: 0 for stem in fixture_stems}
         route_total = {stem: 0 for stem in fixture_stems}
+        tier_pairs = {stem: [] for stem in fixture_stems}
         for ex in examples:
             source_key_val = ex.get("source_key", "")
             url = (f"https://www.youtube.com/watch?v={source_key_val.split(':', 1)[1]}"
@@ -79,6 +81,7 @@ def main() -> int:
                 route_total[ex["_fixture"]] += 1
                 if verdict.route == expected_route:
                     route_correct[ex["_fixture"]] += 1
+            tier_pairs[ex["_fixture"]].append((ex.get("expected_tier"), verdict))
             print(f"{model} {outcome:15s} conf={verdict.confidence:.2f} {ex['title']!r}")
         for stem in fixture_stems:
             rows.append(summarize(f"{model} · {stem}", by_fixture_outcomes[stem]))
@@ -87,6 +90,7 @@ def main() -> int:
                             [(stem, calibration(by_fixture_pairs[stem]))
                              for stem in fixture_stems]))
         route_stats_by_model.append((model, route_correct, route_total))
+        tier_stats_by_model.append((model, tier_pairs))
     print("\n| model | n | recall | precision | parse_failure |")
     print("|---|---|---|---|---|")
     for r in rows:
@@ -115,6 +119,14 @@ def main() -> int:
             if route_total[stem] > 0:
                 print(f"route_accuracy ({model} · {stem}): "
                       f"{route_correct[stem]}/{route_total[stem]}")
+    for model, tier_pairs in tier_stats_by_model:
+        all_pairs = [p for stem in fixture_stems for p in tier_pairs[stem]]
+        for label, pairs_subset in ([(stem, tier_pairs[stem]) for stem in fixture_stems]
+                                    + [("combined", all_pairs)]):
+            ta = tier_accuracy(pairs_subset)
+            if ta["accuracy"] is not None:
+                print(f"tier_accuracy ({model} · {label}): "
+                      f"{ta['correct']}/{ta['n']} = {ta['accuracy']:.2f}  (non-gating)")
     return 0
 
 
