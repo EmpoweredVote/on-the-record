@@ -1,4 +1,4 @@
-from src.discovery.eval import calibration, classify_outcome, summarize
+from src.discovery.eval import calibration, classify_outcome, summarize, tier_accuracy
 from src.discovery.models import Verdict
 
 
@@ -50,3 +50,22 @@ def test_calibration_bucket_edge_uses_exact_fifths():
     out = calibration([(True, _v(True, 0.6))])
     ranges = [b["range"] for b in out["buckets"]]
     assert ranges == ["0.6–0.8"]
+
+
+def test_tier_accuracy_scores_only_labeled_verdicts():
+    pairs = [
+        (1, Verdict(True, 0.9, source_tier_guess=1)),   # correct
+        (2, Verdict(True, 0.8, source_tier_guess=3)),   # wrong
+        (None, Verdict(True, 0.8, source_tier_guess=2)),  # unlabeled -> skipped
+        (3, Verdict(False, 0.0, rejected_reason="no JSON in reply")),  # parse failure -> skipped
+        (2, Verdict(True, 0.7, source_tier_guess=None)),  # model gave no tier -> counted wrong
+    ]
+    out = tier_accuracy(pairs)
+    assert out["n"] == 3
+    assert out["correct"] == 1
+    assert abs(out["accuracy"] - 1 / 3) < 1e-9
+
+
+def test_tier_accuracy_empty():
+    out = tier_accuracy([])
+    assert out == {"n": 0, "correct": 0, "accuracy": None}

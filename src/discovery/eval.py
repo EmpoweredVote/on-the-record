@@ -55,3 +55,17 @@ def calibration(pairs: list) -> dict:
                 "actual": sum(1 for gold, _ in in_bucket if gold) / len(in_bucket),
             })
     return {"n": len(scored), "brier": brier, "buckets": buckets}
+
+
+def tier_accuracy(pairs: list) -> dict:
+    """pairs = [(expected_tier, Verdict)]. Non-gating ride-along: measures the
+    tier ladder judgment on the subset of examples that carry an expected_tier
+    label (unlabeled and parse-failure examples are skipped; a labeled example
+    where the model returned no tier counts as wrong)."""
+    scored = [(exp, v.source_tier_guess) for exp, v in pairs
+              if exp is not None and v.rejected_reason is None]
+    if not scored:
+        return {"n": 0, "correct": 0, "accuracy": None}
+    correct = sum(1 for exp, got in scored if got == exp)
+    return {"n": len(scored), "correct": correct,
+            "accuracy": correct / len(scored)}

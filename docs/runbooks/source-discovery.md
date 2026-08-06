@@ -55,8 +55,11 @@ the feed does.
 For each alarmed race, run a one-shot deep hunt in a Claude session:
 
 > Find original sources of the candidates' own spoken words for RACE_LABEL
-> (election ELECTION_DATE). Tier order: debates/forums, news interviews,
-> prepared remarks, candidate-bylined written. Search the open web, local TV
+> (election ELECTION_DATE). Tier order (questioner independence):
+> debates/forums/town halls; independent-press interviews and candidate
+> questionnaires (unedited answers — Vote411, LWV chapters, WyoFile-style
+> outlet questionnaire pages); partisan-podcast interviews and prepared
+> remarks; candidate-bylined written. Search the open web, local TV
 > and newspaper sites, LWV/civic orgs, candidate sites/channels. For each find,
 > insert a row into essentials.discovered_sources (discovered_via='agent',
 > status='pending', route='ingest' for video/audio or 'quote_source' for text,
@@ -71,6 +74,11 @@ For each alarmed race, run a one-shot deep hunt in a Claude session:
 > candidate (sitemap/contributors.xml lists them) — verified officials speaking
 > direct-to-camera; prefer the YouTube copies (channel UCED8Eh7FNPUu-uQ7135PD8A,
 > a registered outlet) for ingest rows.
+>
+> For minor-party and independent candidates, explicitly search podcast
+> interviews: a sympathetic-host podcast is tier 3, but it is never excluded
+> when it is that candidate's only sourceable speech (per-candidate rule,
+> QUOTE-CURATION-PRINCIPLES §5) — note "only sourceable speech" in `why`.
 >
 > Never C-SPAN. Do not ingest anything. Do not insert video hosted by Gray
 > Media, Graham Media, Hearst, or Nexstar stations (explicit AI/ML ToS bars).
@@ -94,6 +102,27 @@ disqualify: we poll only public syndication endpoints, respect robots.txt
 mechanically, and never touch auth/paywalls. Set `state`, and record the ToS
 verdict in `notes`. Outlets are active on insert — the per-item triage gate is
 the guard.
+
+## County source packs (on demand)
+
+State/federal outlet packs do not reach county-level races. When a county race
+enters the pipeline queue (or trips the zero-source alarm), run a pack agent
+scoped to the county — do NOT build county packs speculatively.
+
+Order of value:
+1. **LWV chapter channels first** — county/local League chapters record forums
+   and post them on YouTube; they are also debate co-producers whose copies
+   sidestep barred-chain station sites.
+2. **Hyperlocal news second** — county papers, local digital newsrooms. The
+   registration ToS gate applies with extra care: several hyperlocals are
+   already barred (Upslope Media's County17 / Oil City / CapCity, County 10,
+   Sweetwater Now — see the chain scoreboard in the source-discovery memory).
+3. County civic orgs (chambers of commerce, community foundations) that host
+   candidate forums.
+
+Set `state` AND `county` on every outlet row (`county` is the bare county name,
+e.g. `Monroe` with `state='IN'`). Everything else matches the state-pack recipe
+above (register both surfaces, ToS verdict in `notes`, active on insert).
 
 ## Scheduler setup / upgrade
 
@@ -145,6 +174,11 @@ gold-irrelevant only for relevance reasons (clip-not-original / wrong-person /
 tier-5). Re-run the eval and watch recall, precision, and the calibration
 block (Brier + buckets). Commit the updated
 `tests/fixtures/discovery_eval_real.jsonl`.
+
+Newly harvested rows arrive without `expected_tier` and must be hand-labeled
+per the questioner-independence ladder before the `tier_accuracy` readout
+means anything — unlabeled rows silently drop out of the metric rather than
+count as wrong.
 
 Two caveats to keep in mind reading the numbers:
 - **Real-set recall is selection-biased.** Every harvestable row was already

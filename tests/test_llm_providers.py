@@ -55,8 +55,8 @@ def test_openai_compat_provider_calls_chat_and_returns_text():
 
 
 def test_get_provider_openai_compat_raises_when_key_missing(monkeypatch):
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
         llm_providers.get_provider("deepseek")
 
 

@@ -61,9 +61,12 @@ major candidate has an `essentials.politicians` row (quotes attach to politician
 create minimal rows if missing. Roster is done when every ballot-listed candidate is present.
 
 ### needs_quotes → quotes_staged
-Per candidate, work DOWN the source hierarchy (QUOTE-CURATION-PRINCIPLES §5): 1 debates &
-forums, 2 news interviews, 3 prepared remarks, 4 candidate-bylined written (verbatim
-sentences only + justification note). Tier 5 (hot-mic/gotcha) is banned. Curate against
+Per candidate, work DOWN the source hierarchy (QUOTE-CURATION-PRINCIPLES §5, ranked by
+questioner independence): 1 debates, forums & town halls; 2 independent-press interviews &
+candidate questionnaires; 3 partisan-host interviews & prepared remarks; 4 candidate-bylined
+written. Tiers 3–4 need a justification note; any WRITTEN source at any tier yields verbatim
+sentences only. Tier 5 (hot-mic/gotcha) is banned. A tier-3 podcast is never excluded when it
+is a candidate's only sourceable speech — the justification note says so. Curate against
 `.claude/skills/audit-quotes/CHECKS.md` UP FRONT: forward-looking operative clause, answers
 the topic's ranking question, honest de-id, no partisan tells, prefer the HOW. Stage as a
 publish-quotes `batch.json` per candidate. Goal: >= 2 candidates per topic or the topic

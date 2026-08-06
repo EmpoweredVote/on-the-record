@@ -53,7 +53,7 @@ human to resolve even though the *detection* is mechanical.
 | `deid-missing` | quote | blind text required | high | guided |
 | `trailing-ellipsis` | quote | no trailing ellipsis | low | **mechanical** (auto-fix: regex strip) |
 | `partisan-tell` | quote | no partisan/side tell on blind card | high | guided |
-| `source-tier-4` | quote | prefer tier 1–2 spoken sources | medium | decision-required |
+| `source-tier-4` | quote | prefer tier 1–2 sources (questioner-independent) | medium | decision-required |
 | `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
 | `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
 | `scorecard-source` | quote | a scorecard publishes votes and ratings, not utterances — **re-source** | high | decision-required |
@@ -327,7 +327,7 @@ not pattern-matching. A Claude agent applies them per race (or race×topic) usin
 | `question-override` | A per-race ranking-question override (`stance.override_active` is true) has drifted from its Compass topic: it shifts the **axis/dimension** away from `stance.compass_question_text` (should be a Compass fix or re-home, not an override), or it names/leaks a candidate (not blind), or it is not derived from the race's actual question. Axis-invariance is what keeps responsiveness and coupling valid (QUOTE-CURATION-PRINCIPLES §7.3). | high | decision-required |
 | `deid-dishonest` | `deidentified_text` was produced by paraphrasing/summarizing instead of marking (`…`, `[brackets]`), or it still leaks a self-identifying clause ("as governor," "in my district") or a named third person that should have been depersonalized. | high | guided |
 | `note-not-self-contained` | `editor_note` doesn't state how the quote aligns with the candidate's current Compass stance on the topic, or a skeptical reader who hasn't read the principles doc couldn't follow it without outside context. | medium | guided |
-| `source-summary` | A written / tier-4 source (op-ed, platform page) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
+| `source-summary` | A written source at ANY tier (op-ed, platform page, questionnaire answer) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
 | `coupling-in-tension` | The quote pulls against the direction of the candidate's synthesized Compass `value` for this topic (as opposed to reinforcing it or elaborating on a different sub-dimension). This doesn't mean the quote is wrong — it means the tension needs resolving before the quote is surfaced next to the value. | medium | decision-required |
 | `non-differentiating-goal` | The quote clears responsiveness but states only an **agreeable goal no candidate in the race would contest** ("who wouldn't want safe streets?") **and names no mechanism/approach/means** — the HOW. Both conditions required: a contested/directional goal without a mechanism is fine and does not trip this. A preference, not a gate. | medium | decision-required |
 
@@ -392,7 +392,7 @@ each topic has a `quotes` array. Each quote has:
   never seen the principles doc understand why this quote was chosen and how it relates
   to the candidate's current Compass stance on the topic — without citing internal
   section numbers or jargon.
-- **Verbatim, not summary.** For written/lower-tier sources (op-eds, platform pages), the
+- **Verbatim, not summary.** For written sources at any tier (op-eds, platform pages, questionnaire answers), the
   quote must be an actual sentence the candidate wrote — never a curator-authored summary
   or bullet list dressed up as a quote.
 - **Coupling to the Compass value.** Among quotes that already pass the responsiveness
@@ -424,7 +424,7 @@ For every quote in the bundle, apply these judgment checks:
   or named person (severity high, guided)
 - `note-not-self-contained` — note doesn't state Compass-stance alignment / needs the
   principles doc to parse (severity medium, guided)
-- `source-summary` — a written/tier-4 quote is a summarized bullet list, not a verbatim
+- `source-summary` — a written-source quote is a summarized bullet list, not a verbatim
   sentence (severity high, decision-required)
 - `coupling-in-tension` — quote pulls against the candidate's Compass value (severity
   medium, decision-required)

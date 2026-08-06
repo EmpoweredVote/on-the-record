@@ -36,6 +36,13 @@ _SELECT = """
     left join essentials.elections e on e.id = r.election_id
 """
 
+_PENDING_ORDER = """
+    where d.status = 'pending'
+    order by e.election_date asc nulls last,
+             d.source_tier_guess asc nulls last,
+             d.confidence desc nulls last, d.created_at desc
+"""
+
 
 @dataclass
 class DiscoveredRow:
@@ -98,11 +105,7 @@ def pending_rows() -> list:
         conn = psycopg2.connect(url)
         try:
             with conn.cursor() as cur:
-                cur.execute(_SELECT + """
-                    where d.status = 'pending'
-                    order by e.election_date asc nulls last,
-                             d.confidence desc nulls last, d.created_at desc
-                """)
+                cur.execute(_SELECT + _PENDING_ORDER)
                 return [_to_row(r) for r in cur.fetchall()]
         finally:
             conn.close()

@@ -61,26 +61,38 @@ AGENDA_ALIGN_MAX_TOKENS = 4000
 # final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
 SPEAKER_ID_ACTIVE = "haiku"
 SPEAKER_ID_MAX_TOKENS = 150
+_OPENROUTER_URL = "https://openrouter.ai/api/v1"
+
 SPEAKER_ID_MODELS = {
     "haiku":  {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"},
     "sonnet": {"provider": "anthropic", "model": "claude-sonnet-4-5"},
-    # OpenAI-compatible endpoints. Model ids / base_urls are placeholders to be
-    # verified against each provider's current docs before first use; they are
-    # only reachable when their api_key_env is set (the eval skips the rest).
-    "gemini-flash": {"provider": "openai_compat", "model": "gemini-2.5-flash",
-                     "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                     "api_key_env": "GEMINI_API_KEY"},
-    "deepseek": {"provider": "openai_compat", "model": "deepseek-chat",
-                 "base_url": "https://api.deepseek.com", "api_key_env": "DEEPSEEK_API_KEY"},
-    "kimi": {"provider": "openai_compat", "model": "moonshot-v1-8k",
-             "base_url": "https://api.moonshot.ai/v1", "api_key_env": "MOONSHOT_API_KEY"},
-    "glm": {"provider": "openai_compat", "model": "glm-4-flash",
-            "base_url": "https://open.bigmodel.cn/api/paas/v4", "api_key_env": "ZHIPU_API_KEY"},
+    # OpenRouter: one OpenAI-compatible endpoint + one key (OPENROUTER_API_KEY)
+    # for many models. Model ids + prices ($/M in / out) verified against the
+    # live catalog 2026-08-05. "haiku-or" is the SAME weights as "haiku",
+    # billed through OpenRouter — the same-model reference for eval runs.
+    "haiku-or": {"provider": "openai_compat", "model": "anthropic/claude-haiku-4.5",
+                 "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 1.00/5.00
+    "gemini-flash": {"provider": "openai_compat", "model": "google/gemini-2.5-flash",
+                     "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.30/2.50
+    "gemini-flash-lite": {"provider": "openai_compat", "model": "google/gemini-2.5-flash-lite",
+                          "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.10/0.40
+    "gpt5-mini": {"provider": "openai_compat", "model": "openai/gpt-5-mini",
+                  "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.25/2.00
+    "gpt5-nano": {"provider": "openai_compat", "model": "openai/gpt-5-nano",
+                  "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.05/0.40
+    "deepseek": {"provider": "openai_compat", "model": "deepseek/deepseek-chat-v3.1",
+                 "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.25/0.95
+    "qwen3-30b": {"provider": "openai_compat", "model": "qwen/qwen3-30b-a3b-instruct-2507",
+                  "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.048/0.193
 }
 
 # --- Source discovery (docs/superpowers/specs/2026-08-02-source-discovery-design.md) ---
 DISCOVERY_DIR = DRIVE_ROOT / "discovery"        # poll.log + caption cache
-DISCOVERY_MODEL_ACTIVE = "haiku"                # key into SPEAKER_ID_MODELS registry
+# Key into SPEAKER_ID_MODELS. Switched haiku -> deepseek 2026-08-05 on the
+# 25-fixture eval: recall 0.95 vs 0.85, Brier 0.043 vs 0.113, route 14/15 and
+# tier 0.90 tied, 0 parse failures, ~4x cheaper. Every verdict is still
+# human-triaged; re-check after each harvest grows the eval set.
+DISCOVERY_MODEL_ACTIVE = "deepseek"
 DISCOVERY_CLASSIFY_MAX_TOKENS = 500
 DISCOVERY_CLASSIFY_CAP_PER_RUN = 200            # spend cap; truncation is logged loudly
 DISCOVERY_CONFIDENCE_FLOOR = 0.30               # below -> stored as auto_filtered
