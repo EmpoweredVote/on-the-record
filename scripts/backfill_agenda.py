@@ -19,8 +19,9 @@ Refuses to touch a meeting that already has agenda_items rows unless
 --replace is given (item ids are public permalinks; replacing mints new ones
 and orphans anything keyed on them, e.g. votes.agenda_item_id).
 
-Requires DATABASE_URL (and ANTHROPIC_API_KEY unless --no-interpret) in
-.env.local.
+Requires DATABASE_URL (and the active LLM backend's API key — see
+src.llm_providers.make_llm_client / config.LLM_CLIENT_BACKEND — unless
+--no-interpret) in .env.local.
 """
 from __future__ import annotations
 

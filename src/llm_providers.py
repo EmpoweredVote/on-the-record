@@ -115,13 +115,13 @@ def get_provider(name: str) -> SpeakerIDProvider:
 # agenda_align/publish) --------------------------------------------------------
 #
 # Those modules call client.messages.create(model=..., max_tokens=..., system=...,
-# messages=[...]) and read response.content[0].text (and, in a couple of
-# truncation-detection spots, response.stop_reason). The client itself is
-# injected, constructed at 5 entry points (src/summarize.py, src/publish.py,
-# scripts/poll_agendas.py, scripts/backfill_agenda.py,
-# scripts/calibrate_alignment.py). make_llm_client() below gives those entry
-# points a single seam to swap billing (Anthropic direct vs OpenRouter) without
-# touching any call site.
+# messages=[...]) and read response.content[0].text. response.stop_reason is
+# supported for SDK-shape fidelity; no production reader today. The client
+# itself is injected, constructed at entry points across src/summarize.py,
+# src/publish.py, run_local.py, scripts/poll_agendas.py,
+# scripts/backfill_agenda.py, scripts/calibrate_alignment.py. make_llm_client()
+# below gives those entry points a single seam to swap billing (Anthropic
+# direct vs OpenRouter) without touching any call site.
 
 # Model-ID map for the Anthropic-compat adapter: Anthropic API ids -> OpenRouter
 # ids. Anything not listed passes through unchanged (so a config value that is
@@ -150,6 +150,7 @@ class AnthropicCompatClient:
     client-injected call site switch billing without code changes."""
 
     def __init__(self, base_url: str, api_key: str, client=None):
+        self.base_url = base_url
         if client is None:
             from openai import OpenAI
 
@@ -159,7 +160,10 @@ class AnthropicCompatClient:
 
     def create(self, *, model: str, max_tokens: int, messages: list,
                system: "str | None" = None, temperature: "float | None" = None,
-               **_ignored):
+               **extra):
+        if extra:
+            raise TypeError(
+                f"AnthropicCompatClient.create: unsupported kwargs {sorted(extra)}")
         oai_messages = ([{"role": "system", "content": system}] if system else [])
         oai_messages += messages
         kwargs = dict(model=_OPENROUTER_MODEL_MAP.get(model, model),
@@ -189,3 +193,9 @@ def make_llm_client():
                 "OPENROUTER_API_KEY is not set")
         return AnthropicCompatClient(config._OPENROUTER_URL, key)
     raise ValueError(f"unknown LLM_CLIENT_BACKEND {backend!r}")
+
+
+def llm_client_env_key() -> str:
+    """Name of the env var the active LLM_CLIENT_BACKEND needs."""
+    return {"anthropic": "ANTHROPIC_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY"}[config.LLM_CLIENT_BACKEND]

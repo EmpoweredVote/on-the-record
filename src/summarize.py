@@ -586,7 +586,8 @@ def generate_summary(
       2. Summarize each section (Sonnet for discussions, Haiku for extraction)
       3. Generate executive summary (Sonnet)
 
-    Requires ANTHROPIC_API_KEY environment variable.
+    Requires the active LLM backend's API key (see
+    src.llm_providers.make_llm_client / config.LLM_CLIENT_BACKEND).
 
     Args:
         meeting: Meeting object with named segments.

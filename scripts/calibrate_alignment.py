@@ -12,7 +12,8 @@ NO database access anywhere — this is a read-fixtures, call-API, print job.
 Usage:
   .venv/bin/python scripts/calibrate_alignment.py
 
-Requires ANTHROPIC_API_KEY in .env.local (gui.env loader pattern, same as
+Requires the active LLM backend's API key (see src.llm_providers.make_llm_client
+/ config.LLM_CLIENT_BACKEND) in .env.local (gui.env loader pattern, same as
 scripts/poll_agendas.py).
 """
 from __future__ import annotations
@@ -26,7 +27,7 @@ sys.path.insert(0, str(REPO))
 
 from gui.env import load_env_local
 
-load_env_local()  # before src.config so ANTHROPIC_API_KEY is visible
+load_env_local()  # before src.config so the active LLM backend's API key is visible
 
 from src.agenda_align import SegmentRef, align_items, apply_oracle, find_ref_anchors
 from src.agenda_parse import parse_agenda

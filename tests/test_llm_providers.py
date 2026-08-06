@@ -209,11 +209,21 @@ def test_anthropic_compat_client_maps_length_finish_reason_to_max_tokens_stop_re
     assert resp.stop_reason == "max_tokens"
 
 
+def test_anthropic_compat_client_rejects_unsupported_kwargs():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    with pytest.raises(TypeError, match="stop_sequences"):
+        client.create(model="m", max_tokens=10,
+                       messages=[{"role": "user", "content": "hi"}],
+                       stop_sequences=["STOP"])
+
+
 def test_make_llm_client_returns_anthropic_compat_client_for_openrouter(monkeypatch):
     monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "openrouter")
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     client = llm_providers.make_llm_client()
     assert isinstance(client, llm_providers.AnthropicCompatClient)
+    assert client.base_url == llm_providers.config._OPENROUTER_URL
 
 
 def test_make_llm_client_raises_when_openrouter_key_missing(monkeypatch):
@@ -235,3 +245,13 @@ def test_make_llm_client_raises_valueerror_on_unknown_backend(monkeypatch):
     monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "bogus")
     with pytest.raises(ValueError, match="bogus"):
         llm_providers.make_llm_client()
+
+
+def test_llm_client_env_key_openrouter(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "openrouter")
+    assert llm_providers.llm_client_env_key() == "OPENROUTER_API_KEY"
+
+
+def test_llm_client_env_key_anthropic(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "anthropic")
+    assert llm_providers.llm_client_env_key() == "ANTHROPIC_API_KEY"

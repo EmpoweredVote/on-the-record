@@ -1316,12 +1316,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
     reconciled_marker = meeting_dir / "reconciled.done"
     if reference_path.exists() and not reconciled_marker.exists() and segments:
         try:
-            import anthropic
-
             from src import config as _cfg
+            from src.llm_providers import make_llm_client
             from src.reconcile import reconcile_segments
 
-            client = anthropic.Anthropic()
+            client = make_llm_client()
 
             def _call_llm(prompt: str) -> str:
                 msg = client.messages.create(
@@ -1592,9 +1591,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
         print("  Skipped (--skip-summary).")
         state.mark_complete(PipelineStage.SUMMARIZED)
     else:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            print("  No ANTHROPIC_API_KEY found. Skipping summary generation.")
+        from src.llm_providers import llm_client_env_key
+
+        env_key = llm_client_env_key()
+        if not os.environ.get(env_key):
+            print(f"  No {env_key} found. Skipping summary generation.")
             print("  Set the environment variable or use --skip-summary to silence this.")
             state.mark_complete(PipelineStage.SUMMARIZED)
         else:
@@ -1607,22 +1608,22 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     print(f"    {step}...")
 
             t0 = time.time()
-            print("  Generating meeting summary via Anthropic API...")
+            print("  Generating meeting summary via the configured LLM API...")
             try:
                 meeting.summary = generate_summary(meeting, progress_callback=summary_progress)
             except Exception as e:
-                # The summary stage is the only stage that needs the Anthropic API.
+                # The summary stage is the only stage that needs the LLM API.
                 # If it fails (e.g. out of credits, bad key, network), don't crash the
                 # whole pipeline — report it clearly and continue. The stage is left
                 # incomplete so it will be retried automatically on the next run.
                 meeting.summary = None
                 detail = str(e)
                 if "credit balance is too low" in detail:
-                    reason = "Anthropic API credit balance is too low."
-                    hint = "Add credits at https://console.anthropic.com (Plans & Billing), then re-run to generate the summary."
+                    reason = "LLM API credit balance is too low."
+                    hint = f"Check the active LLM backend's account balance ({env_key}), then re-run to generate the summary."
                 elif "authentication" in detail.lower() or "invalid x-api-key" in detail.lower():
-                    reason = "Anthropic API key was rejected."
-                    hint = "Check ANTHROPIC_API_KEY, then re-run to generate the summary."
+                    reason = "LLM API key was rejected."
+                    hint = f"Check {env_key}, then re-run to generate the summary."
                 else:
                     reason = f"Summary generation failed: {detail}"
                     hint = "Re-run once the issue is resolved to generate the summary."
@@ -1668,8 +1669,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print("  No DATABASE_URL — skipping topic classification (vocabulary lives in the DB).")
         else:
             try:
-                import anthropic
                 import psycopg2
+                from src.llm_providers import make_llm_client
                 from src.topics import fetch_live_topics, classify_sections
 
                 conn = psycopg2.connect(db_url)
@@ -1678,7 +1679,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 finally:
                     conn.close()
                 print(f"  Classifying topics against {len(vocab)} live Compass topics...")
-                client = anthropic.Anthropic()
+                client = make_llm_client()
                 meeting.section_topics = classify_sections(client, meeting.summary.sections, vocab)
                 with open(topics_path, "w") as f:
                     json.dump([st.to_dict() for st in meeting.section_topics], f, indent=2)
@@ -3693,7 +3694,7 @@ Environment Variables:
     parser.add_argument("--skip-llm", action="store_true",
                         help="Skip LLM-based speaker identification (Layer 3)")
     parser.add_argument("--skip-summary", action="store_true",
-                        help="Skip meeting summary generation (requires ANTHROPIC_API_KEY)")
+                        help="Skip meeting summary generation (requires the active LLM backend's API key)")
     parser.add_argument("--confirm-enroll", action="store_true",
                         help="Interactively confirm enrollment for borderline speakers (0.70-0.85 confidence)")
     parser.add_argument("--merge", action="store_true",
