@@ -49,18 +49,26 @@ from src.house_cdn import resolve_session
 def should_run_llm(skip_llm: bool, crec_request, event_kind=None) -> bool:
     """Whether to run Layer-3 LLM speaker identification.
 
-    Off when --skip-llm is set, off on a Congressional Record run
-    (``crec_request`` truthy): CREC is authoritative for who spoke, and the local
-    LLM hallucinates congressional names, so an unresolved floor speaker should go
-    to review as 'unidentified' rather than get a garbage guess.
+    Off entirely when ``config.SPEAKER_ID_LLM_ENABLED`` is False (the shipped
+    default as of 2026-08-06 — see src/config.py): an 88-interview eval measured
+    ~13-16% correct-name coverage across five models, and in practice names come
+    from human review. This is checked first and short-circuits every other
+    condition below.
+
+    When the switch is on, off when --skip-llm is set, off on a Congressional
+    Record run (``crec_request`` truthy): CREC is authoritative for who spoke,
+    and the local LLM hallucinates congressional names, so an unresolved floor
+    speaker should go to review as 'unidentified' rather than get a garbage
+    guess.
 
     Also off for interview-kind meetings (``event_kind in INTERVIEW_KINDS`` —
-    news_clip/press_conference/podcast): an 88-interview eval (2026-08-05) found
-    ~13% correct-name coverage there, because the anchor rule requires names
-    spoken in the transcript and interview guests are rarely full-named on air.
-    Names come from review instead. Civic kinds and debates/forums are
-    unaffected.
+    news_clip/press_conference/podcast): the same eval found the anchor rule
+    requires names spoken in the transcript and interview guests are rarely
+    full-named on air. Names come from review instead. Civic kinds and
+    debates/forums are unaffected.
     """
+    if not config.SPEAKER_ID_LLM_ENABLED:
+        return False
     return (not skip_llm) and (crec_request is None) and (event_kind not in INTERVIEW_KINDS)
 
 
@@ -1432,8 +1440,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 new_dim = next(iter(speaker_embeddings.values())).shape[0]
                 print(f"  Re-extracted {len(speaker_embeddings)} embeddings ({new_dim}-dim)")
 
-        # Layer 3: LLM (optional; skipped on Congressional Record runs and on
-        # interview-kind meetings)
+        # Layer 3: LLM (off by default — config.SPEAKER_ID_LLM_ENABLED; also
+        # skipped on Congressional Record runs and on interview-kind meetings
+        # when explicitly re-enabled)
         llm_fn = None
         if should_run_llm(args.skip_llm, crec_request, event_kind=state.event_kind):
             from src.llm_providers import get_provider
@@ -1447,6 +1456,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 event_kind=_llm_event_kind, roster=roster, roster_hint=roster_hint,
                 partial_results_path=llm_partial_path,
             )
+        elif not config.SPEAKER_ID_LLM_ENABLED:
+            print("  Skipping LLM speaker ID (disabled — config.SPEAKER_ID_LLM_ENABLED; "
+                  "layers 1-2 and review unaffected).")
         elif crec_request and not args.skip_llm:
             print("  Skipping LLM speaker ID (Congressional Record run — CREC is "
                   "authoritative; unresolved speakers go to review).")
