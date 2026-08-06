@@ -20,6 +20,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from gui.env import load_env_local  # noqa: E402
+
+load_env_local()  # before src.config so API keys (incl. OPENROUTER_API_KEY) are visible
+
 from src import config
 from src.event_kinds import INTERVIEW_KINDS
 from src.llm_providers import get_provider
