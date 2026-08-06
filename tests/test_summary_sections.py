@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from src.models import MeetingSummary, SummarySection, Segment
 from src.summary_sections import (
+    normalize_raw_sections,
+    normalize_sections,
     reindex_sections_from_times,
     sections_index_into,
     stale_sections,
@@ -125,6 +127,91 @@ def test_sections_index_into_current_segments():
     segs = [_seg(0, 0.0, 10.0), _seg(1, 10.0, 20.0)]
     assert sections_index_into([_sec(0.0, 10.0, 0, 1)], segs)
     assert not sections_index_into([_sec(0.0, 10.0, 0, 139)], segs)
+
+
+# --- Structural guards on classifier output ------------------------------------
+#
+# The classifier's JSON is consumed as-is, and the prompt never requires sections
+# to be ordered or well-formed. Two real defects reached production:
+# 2025-10-06-interview had a section emitted after the final one but covering the
+# middle of the transcript, and 2026-06-24-cd1-republican-primary-debate had a
+# section whose end_segment was below its start_segment.
+
+def test_raw_sections_sorted_chronologically():
+    raw = [{"type": "topic", "title": "Late",  "start_segment": 110, "end_segment": 127},
+           {"type": "topic", "title": "Early", "start_segment": 46,  "end_segment": 80}]
+    ordered, clamped, moved = normalize_raw_sections(raw)
+    assert [s["title"] for s in ordered] == ["Early", "Late"]
+    assert (clamped, moved) == (0, True)
+
+
+def test_raw_sections_tie_break_on_end_segment():
+    raw = [{"title": "Wide",   "start_segment": 5, "end_segment": 11},
+           {"title": "Narrow", "start_segment": 5, "end_segment": 6}]
+    ordered, _, _ = normalize_raw_sections(raw)
+    assert [s["title"] for s in ordered] == ["Narrow", "Wide"]
+
+
+def test_raw_sections_inverted_range_is_clamped():
+    """An inverted range makes _full_section_transcript return '', so the section
+    is summarised from nothing and comes out with empty content. Clamping before
+    Pass 2 means it gets a real transcript instead."""
+    raw = [{"type": "procedural", "title": "Candidate Introduction",
+            "start_segment": 5, "end_segment": 4}]
+    ordered, clamped, _ = normalize_raw_sections(raw)
+    assert (ordered[0]["start_segment"], ordered[0]["end_segment"]) == (5, 5)
+    assert clamped == 1
+
+
+def test_raw_sections_preserves_other_keys_and_does_not_mutate_input():
+    raw = [{"type": "topic", "title": "T", "start_segment": 5, "end_segment": 4, "extra": "keep"}]
+    ordered, _, _ = normalize_raw_sections(raw)
+    assert ordered[0]["extra"] == "keep"
+    assert raw[0]["end_segment"] == 4          # caller's dict untouched
+
+
+def test_raw_sections_already_well_formed_is_unchanged():
+    raw = [{"title": "A", "start_segment": 0, "end_segment": 4},
+           {"title": "B", "start_segment": 5, "end_segment": 9}]
+    ordered, clamped, moved = normalize_raw_sections(raw)
+    assert ordered == raw and (clamped, moved) == (0, False)
+
+
+def test_raw_sections_missing_end_defaults_to_start():
+    raw = [{"title": "A", "start_segment": 7}]
+    ordered, clamped, _ = normalize_raw_sections(raw)
+    assert (ordered[0]["start_segment"], ordered[0]["end_segment"]) == (7, 7)
+    assert clamped == 0                        # absent, not inverted
+
+
+def test_raw_sections_empty_input():
+    assert normalize_raw_sections([]) == ([], 0, False)
+
+
+def test_normalize_sections_repairs_built_sections():
+    """The same two repairs applied to already-built SummarySection objects, for
+    summaries that were generated before the guards existed."""
+    late = _sec(1537.2, 1731.1, 110, 127, title="Late")
+    middle = _sec(646.7, 997.1, 46, 80, title="Middle")
+    inverted = _sec(126.0, 126.0, 5, 4, title="Inverted")
+    ordered, clamped, moved = normalize_sections([late, middle, inverted])
+    assert [s.title for s in ordered] == ["Inverted", "Middle", "Late"]
+    assert (inverted.start_segment, inverted.end_segment) == (5, 5)
+    assert (clamped, moved) == (1, True)
+
+
+def test_normalize_sections_leaves_good_order_alone():
+    a, b = _sec(0.0, 10.0, 0, 4), _sec(10.0, 20.0, 5, 9)
+    ordered, clamped, moved = normalize_sections([a, b])
+    assert ordered == [a, b] and (clamped, moved) == (0, False)
+
+
+def test_normalize_sections_permits_legitimate_overlap():
+    """A merged segment straddling a topic boundary makes two sections share it.
+    Ordering must not treat that as something to repair."""
+    a, b = _sec(586.0, 962.0, 26, 53), _sec(962.8, 1229.3, 53, 64)
+    ordered, clamped, moved = normalize_sections([a, b])
+    assert ordered == [a, b] and (clamped, moved) == (0, False)
 
 
 def test_stale_sections_reports_the_overrun():

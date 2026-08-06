@@ -158,3 +158,72 @@ def test_show_notes_hint_empty_when_absent():
 
     m = Meeting(meeting_id="x", city=None, date="2026-06-16")
     assert _show_notes_hint(m) == ""
+
+
+def _multi_segment_meeting(event_kind: str) -> Meeting:
+    m = make_meeting(event_kind)
+    m.segments = [
+        Segment(segment_id=i, start_time=i * 10.0, end_time=i * 10.0 + 9.0,
+                speaker_label="SPEAKER_00", text=f"Turn {i}.")
+        for i in range(6)
+    ]
+    return m
+
+
+def _sectioned_client(sections_json: str):
+    """Mock client: first call classifies, later calls return section/exec bodies."""
+    client = MagicMock()
+    calls = {"n": 0}
+
+    def side_effect(**kwargs):
+        n = calls["n"]
+        calls["n"] += 1
+        if n == 0:
+            text = sections_json
+        elif kwargs.get("system", "").startswith("You are writing"):
+            text = '{"executive_summary": "Exec.", "highlights": []}'
+        else:
+            text = "Section body."
+        msg = MagicMock()
+        msg.content = [MagicMock(text=text)]
+        return msg
+
+    client.messages.create.side_effect = side_effect
+    return client
+
+
+def test_generate_summary_orders_out_of_order_sections():
+    """Regression: 2025-10-06-interview had its middle topic emitted last, so the
+    published outline ended by jumping backwards."""
+    meeting = _multi_segment_meeting("news_clip")
+    client = _sectioned_client(
+        '{"sections": ['
+        '{"type": "topic", "start_segment": 0, "end_segment": 1, "title": "First"},'
+        '{"type": "topic", "start_segment": 4, "end_segment": 5, "title": "Last"},'
+        '{"type": "topic", "start_segment": 2, "end_segment": 3, "title": "Middle"}]}'
+    )
+    with patch("src.summarize.make_llm_client", return_value=client):
+        result = generate_summary(meeting)
+
+    assert [s.title for s in result.sections] == ["First", "Middle", "Last"]
+    starts = [s.start_segment for s in result.sections]
+    assert starts == sorted(starts)
+
+
+def test_generate_summary_clamps_inverted_range_and_still_summarizes_it():
+    """Regression: 2026-06-24-cd1-republican-primary-debate had a section with
+    end_segment 4 below start_segment 5, which yielded an empty transcript and so
+    a published section with a title and no content."""
+    meeting = _multi_segment_meeting("council")
+    meeting.city = "Bloomington"
+    client = _sectioned_client(
+        '{"sections": ['
+        '{"type": "discussion", "start_segment": 3, "end_segment": 2, "title": "Inverted"}]}'
+    )
+    with patch("src.summarize.make_llm_client", return_value=client):
+        result = generate_summary(meeting)
+
+    sec = result.sections[0]
+    assert (sec.start_segment, sec.end_segment) == (3, 3)
+    assert sec.content.strip()          # summarized from a real transcript
+    assert sec.end_time == 39.0         # end_time now tracks the clamped boundary

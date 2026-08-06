@@ -108,6 +108,75 @@ def reindex_sections_from_times(sections: Iterable, segments: Sequence) -> int:
     return changed
 
 
+def normalize_raw_sections(raw_sections: Sequence[dict]) -> tuple[list[dict], int, bool]:
+    """Sort classifier output chronologically and repair inverted ranges.
+
+    Returns ``(sections, clamped, moved)`` — the normalized list, how many ranges
+    were clamped, and whether the order changed. The input dicts are not mutated;
+    a clamped section is replaced by a copy.
+
+    The classifier's JSON is otherwise consumed exactly as returned, and neither
+    prompt requires sections to be ordered or well-formed. Both failures have
+    reached production:
+
+    *Out of order* — a section emitted after the final one but covering the middle
+    of the transcript. Everything downstream assumes list order is document order
+    (the web outline says so explicitly), so the meeting page's topic list ends by
+    jumping backwards. Sorting by ``(start_segment, end_segment)`` puts a section
+    before any section that starts later, and before a wider section starting at
+    the same place.
+
+    *Inverted range* (``end_segment < start_segment``) — the section transcript
+    comes back empty, so the section is summarised from nothing and is published
+    with a title and no content. Clamping here, before Pass 2, means it is handed
+    a real transcript instead.
+
+    Neither guard touches overlap. Sections legitimately overlap when a merged
+    segment straddles a topic boundary, and topics in a compilation interview —
+    the same question put to candidate after candidate — genuinely interleave and
+    cannot be partitioned into contiguous spans.
+    """
+    clamped = 0
+    normalized = []
+    for sec in raw_sections or []:
+        start = sec.get("start_segment", 0)
+        end = sec.get("end_segment", start)
+        if end < start:
+            end = start
+            clamped += 1
+        if sec.get("end_segment") != end or "start_segment" not in sec:
+            # Materialize the effective range so the sort key can rely on it —
+            # an absent end_segment would otherwise sort as 0.
+            sec = {**sec, "start_segment": start, "end_segment": end}
+        normalized.append(sec)
+
+    ordered = sorted(normalized,
+                     key=lambda s: (s["start_segment"], s["end_segment"]))
+    moved = any(a is not b for a, b in zip(normalized, ordered))
+    return ordered, clamped, moved
+
+
+def normalize_sections(sections: Sequence) -> tuple[list, int, bool]:
+    """The same two repairs on already-built ``SummarySection`` objects, for
+    summaries generated before the guards existed.
+
+    Clamps in place and returns ``(ordered, clamped, moved)``. Only the segment
+    boundaries are touched — a section's times, title and content are left as
+    generated, so this cannot alter what a summary says. Note that clamping an
+    inverted range after the fact does not backfill the content the section never
+    got; only a fresh summary run can do that.
+    """
+    sections = list(sections or [])
+    clamped = 0
+    for sec in sections:
+        if sec.end_segment < sec.start_segment:
+            sec.end_segment = sec.start_segment
+            clamped += 1
+    ordered = sorted(sections, key=lambda s: (s.start_segment, s.end_segment))
+    moved = any(a is not b for a, b in zip(sections, ordered))
+    return ordered, clamped, moved
+
+
 def sections_index_into(sections: Iterable, segments: Sequence) -> bool:
     """True when every section boundary is a segment id present in ``segments``."""
     ids = {s.segment_id for s in segments or []}
