@@ -63,13 +63,23 @@ AGENDA_ALIGN_MODEL = "claude-sonnet-4-5"
 AGENDA_ALIGN_MAX_TOKENS = 4000
 
 # --- Layer-3 speaker identification (LLM) ---
+# Layer-3 LLM speaker-ID master switch. OFF BY DELIBERATE CHOICE (2026-08-06):
+# the 88-interview eval measured ~13-16% correct-name coverage across five
+# models (transcript-anchor is the ceiling — guests are rarely full-named on
+# air), and in practice names come from human review. Layers 1-2 (voice
+# profiles/embeddings) and the CREC oracle are unaffected. The eval harness
+# (scripts/eval_speaker_id.py) bypasses this switch by calling the provider
+# directly. Flip to True to re-enable (interview kinds stay excluded).
+SPEAKER_ID_LLM_ENABLED = False
+
 # Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
 # final value. "haiku-or" is the same Claude weights as "haiku", billed through
 # OpenRouter instead of direct Anthropic — needs OPENROUTER_API_KEY, not
 # ANTHROPIC_API_KEY (the account has no direct-Anthropic credit). Note this
 # layer no longer runs at all on interview-kind meetings (news_clip,
 # press_conference, podcast) as of 2026-08-05 — see run_local.should_run_llm —
-# so this key now only governs civic-kind and debate/forum runs.
+# so this key now only governs civic-kind and debate/forum runs, and only when
+# SPEAKER_ID_LLM_ENABLED is True.
 SPEAKER_ID_ACTIVE = "haiku-or"
 SPEAKER_ID_MAX_TOKENS = 150
 _OPENROUTER_URL = "https://openrouter.ai/api/v1"
