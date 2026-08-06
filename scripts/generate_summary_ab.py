@@ -1,0 +1,251 @@
+#!/usr/bin/env python
+"""Generate a BLIND A/B comparison of the summary SYNTHESIS stage (discussion/
+topic prose + executive summary) between candidate models and the reference
+(the meeting's already-accepted summary.json).
+
+For each selected meeting and each --models entry, this re-runs ONLY the
+synthesis stage over the meeting's ACCEPTED section boundaries (from
+summary.json) — never the classify stage, and never touches the pipeline or
+its stored artifacts. Non-synthesis section types (roll_call/vote/opening/
+closing/procedural) are carried through from the accepted summary unchanged,
+so a reviewer comparing two discussion-section rewrites (or two executive
+summaries) is judging prose quality, not different section boundaries.
+
+Writes, into --out (default ~/CouncilScribe/eval/summary-ab/<date>/):
+  ab_pairs.md      — reviewer-facing: judging instructions + "Option 1" /
+                      "Option 2" text pairs in RANDOMIZED order (no model
+                      names or candidate/reference labels).
+  answer_key.json  — meeting -> pair_key -> {candidate_model, option_N_is}.
+
+The Option 1/2 order is deterministic per (meeting id, model, pair key) — see
+src.summary_ab_pairing — NOT per wall-clock run, so re-running this script
+reproduces the same file byte-for-byte given the same inputs.
+
+Usage:
+  .venv/bin/python scripts/generate_summary_ab.py --meetings 2025-09-22-press-conference-hans-truelson --models deepseek/deepseek-chat-v3.1
+  .venv/bin/python scripts/generate_summary_ab.py --limit 5 --models deepseek/deepseek-chat-v3.1 gemini-2.5-flash
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from gui.env import load_env_local  # noqa: E402
+
+load_env_local()  # before src.config so API keys (incl. OPENROUTER_API_KEY) are visible
+
+from src.event_kinds import INTERVIEW_KINDS  # noqa: E402
+from src.eval_llm_client import build_eval_client  # noqa: E402
+from src.eval_meeting_sampling import discover_meetings, select_diverse_sample  # noqa: E402
+from src.models import Meeting, SummarySection  # noqa: E402
+from src.summary_ab_pairing import build_answer_key, build_pair, meeting_rng, render_pair_markdown  # noqa: E402
+from src.summarize import (  # noqa: E402
+    _full_section_transcript,
+    _generate_executive_summary,
+    _generate_interview_executive_summary,
+    _summarize_discussion,
+    _summarize_interview_topic,
+)
+
+DEFAULT_MEETINGS_DIR = os.path.expanduser("~/CouncilScribe/meetings")
+CIVIC_SYNTHESIS_TYPES = ("discussion", "public_comment", "consent_agenda")
+
+JUDGING_INSTRUCTIONS = """\
+# Summary Synthesis A/B Pairs
+
+For each pair below, read Option 1 and Option 2 and decide which is
+better — WITHOUT knowing which model produced which option. Record your pick
+(e.g. "meeting_id / pair_key: Option 1") separately; answer_key.json is
+intentionally not shown here so the review stays blind.
+
+Judging suggestions:
+- Prefer faithful attribution of quotes/positions to the correct speaker.
+- Prefer concrete outcomes (votes, motions, specific claims) over vague summary.
+- Penalize hallucinated detail not supported by the transcript.
+- For executive summaries, prefer ones a citizen could act on in 60 seconds.
+"""
+
+
+def _is_synthesis_eligible(section_type: str, is_interview: bool) -> bool:
+    if is_interview:
+        return True  # every interview "topic" section is prose synthesis output
+    return section_type in CIVIC_SYNTHESIS_TYPES
+
+
+def _reference_view(gold_summary: dict, is_interview: bool) -> dict:
+    """The accepted summary.json's synthesis-eligible content, unchanged."""
+    sections = [
+        {"title": s.get("title", ""), "section_type": s.get("section_type", ""),
+         "content": s.get("content", "")}
+        for s in gold_summary.get("sections", [])
+        if _is_synthesis_eligible(s.get("section_type", ""), is_interview)
+    ]
+    return {
+        "executive_summary": gold_summary.get("executive_summary", ""),
+        "highlights": gold_summary.get("highlights") or gold_summary.get("key_decisions", []),
+        "sections": sections,
+    }
+
+
+def synthesize_candidate(client, model_override, meeting: Meeting, gold_sections: list) -> dict:
+    """Re-run the synthesis stage over meeting's ACCEPTED section boundaries
+    with model_override. Non-synthesis-eligible sections are copied through
+    from gold_sections verbatim (see module docstring)."""
+    segments = [s for s in meeting.segments if s.text]
+    is_interview = meeting.event_kind in INTERVIEW_KINDS
+
+    candidate_sections: list[SummarySection] = []
+    regenerated: list[dict] = []  # synthesis-eligible only, in gold order
+    for sec in gold_sections:
+        sec_type = sec.get("section_type", "procedural")
+        title = sec.get("title", "")
+        start_seg = sec.get("start_segment", 0)
+        end_seg = sec.get("end_segment", start_seg)
+
+        if _is_synthesis_eligible(sec_type, is_interview):
+            section_transcript = _full_section_transcript(segments, start_seg, end_seg)
+            if is_interview:
+                content = _summarize_interview_topic(client, section_transcript, title, model=model_override)
+            else:
+                content = _summarize_discussion(client, section_transcript, title, model=model_override)
+            regenerated.append({"title": title, "section_type": sec_type, "content": content})
+        else:
+            content = sec.get("content", "")  # reused verbatim from the accepted summary
+
+        candidate_sections.append(SummarySection(
+            section_type=sec_type, title=title, content=content,
+            start_time=sec.get("start_time", 0.0), end_time=sec.get("end_time", 0.0),
+            start_segment=start_seg, end_segment=end_seg,
+        ))
+
+    if is_interview:
+        executive, highlights = _generate_interview_executive_summary(
+            client, candidate_sections, meeting, model=model_override)
+    else:
+        executive, highlights = _generate_executive_summary(
+            client, candidate_sections, meeting, model=model_override)
+
+    return {"executive_summary": executive, "highlights": highlights, "sections": regenerated}
+
+
+def build_meeting_pairs(meeting_id: str, model_key: str, candidate_view: dict, reference_view: dict) -> list:
+    """[build_pair(...), ...] for one (meeting, model): the executive summary
+    first, then each synthesis-eligible section in gold order (candidate and
+    reference sections are built from the SAME gold section list in
+    synthesize_candidate/_reference_view, so index i is title-matched).
+
+    A fresh rng, seeded only from meeting_id, is used per (meeting, model)
+    call — so adding/removing a candidate model from a run never reshuffles
+    another model's already-assigned pairs for this meeting."""
+    rng = meeting_rng(meeting_id)
+    pairs = [
+        build_pair(meeting_id, f"{model_key}::executive_summary", model_key,
+                   candidate_view["executive_summary"], reference_view["executive_summary"], rng)
+    ]
+    for i, (cand_sec, ref_sec) in enumerate(zip(candidate_view["sections"], reference_view["sections"])):
+        pair_key = f"{model_key}::section_{i}:{ref_sec['title']}"
+        pairs.append(build_pair(meeting_id, pair_key, model_key, cand_sec["content"], ref_sec["content"], rng))
+    return pairs
+
+
+def _pair_title(pair_key: str) -> str:
+    # pair_key looks like "<model>::executive_summary" or "<model>::section_0:Title"
+    _, _, rest = pair_key.partition("::")
+    if rest == "executive_summary":
+        return "Executive Summary"
+    _, _, title = rest.partition(":")
+    return title or rest
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--meetings", nargs="+", default=None, help="explicit meeting ids")
+    ap.add_argument("--limit", type=int, default=5,
+                     help="sample size when --meetings isn't given (deterministic, diverse kinds)")
+    ap.add_argument("--models", nargs="+", required=True,
+                     help="'current' or OpenRouter model ids to compare against the accepted summary")
+    ap.add_argument("--meetings-dir", default=DEFAULT_MEETINGS_DIR)
+    ap.add_argument("--out", default=None,
+                     help="output dir (default ~/CouncilScribe/eval/summary-ab/<today>/)")
+    args = ap.parse_args()
+
+    meetings_dir = Path(os.path.expanduser(args.meetings_dir))
+    out_dir = Path(os.path.expanduser(args.out)) if args.out else (
+        Path(os.path.expanduser("~/CouncilScribe/eval/summary-ab")) / date.today().isoformat()
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.meetings:
+        sample = []
+        for meeting_id in args.meetings:
+            mdir = meetings_dir / meeting_id
+            if not (mdir / "transcript_named.json").exists() or not (mdir / "summary.json").exists():
+                print(f"! skipping {meeting_id}: missing transcript_named.json or summary.json")
+                continue
+            sample.append(meeting_id)
+    else:
+        all_meetings = discover_meetings(meetings_dir)
+        sample = select_diverse_sample(all_meetings, args.limit)
+    print(f"Selected {len(sample)} meeting(s): {sample}\n")
+
+    all_pairs = []
+    md_sections = []
+
+    for meeting_id in sample:
+        mdir = meetings_dir / meeting_id
+        try:
+            transcript_data = json.loads((mdir / "transcript_named.json").read_text())
+            gold_summary = json.loads((mdir / "summary.json").read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"! {meeting_id}: could not read artifacts ({e}) — skipping")
+            continue
+        meeting = Meeting.from_dict(transcript_data)
+        gold_sections = gold_summary.get("sections", [])
+        is_interview = meeting.event_kind in INTERVIEW_KINDS
+        reference_view = _reference_view(gold_summary, is_interview)
+
+        for model_key in args.models:
+            try:
+                client, model_override = build_eval_client(model_key)
+            except RuntimeError as e:
+                print(f"! skipping {model_key}: {e}")
+                continue
+            try:
+                candidate_view = synthesize_candidate(client, model_override, meeting, gold_sections)
+            except Exception as e:
+                print(f"! {model_key}/{meeting_id}: {e} — skipping")
+                continue
+
+            pairs = build_meeting_pairs(meeting_id, model_key, candidate_view, reference_view)
+            all_pairs.extend(pairs)
+            print(f"  {model_key}/{meeting_id}: {len(pairs)} pairs "
+                  f"({len(candidate_view['sections'])} synthesis sections + 1 executive summary)")
+
+            md_sections.append(f"## {meeting_id} — {model_key}\n")
+            for pair in pairs:
+                md_sections.append(render_pair_markdown(pair, _pair_title(pair["pair_key"])))
+
+    ab_pairs_path = out_dir / "ab_pairs.md"
+    ab_pairs_path.write_text(JUDGING_INSTRUCTIONS + "\n" + "\n".join(md_sections), encoding="utf-8")
+
+    answer_key = {
+        "note": "Withheld from ab_pairs.md — for scoring after the blind review only.",
+        "pairs": build_answer_key(all_pairs),
+    }
+    answer_key_path = out_dir / "answer_key.json"
+    answer_key_path.write_text(json.dumps(answer_key, indent=2), encoding="utf-8")
+
+    print(f"\nWrote {len(all_pairs)} pairs across {len(sample)} meeting(s) to:")
+    print(f"  {ab_pairs_path}")
+    print(f"  {answer_key_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
