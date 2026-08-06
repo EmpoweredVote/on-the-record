@@ -94,6 +94,10 @@ def score_meeting(
     gold_labels = label_segments(gold_sections, valid_ids, "section_type")
     cand_labels = label_segments(candidate_sections, valid_ids, "type")
     n = len(gold_labels)
+    # Denominator is gold-covered segments only: a candidate labeling segments
+    # OUTSIDE gold's coverage is not penalized here by design — that's an
+    # over-segmentation/coverage-drift signal, and section_count_delta below
+    # is what's meant to catch it, not this per-segment agreement ratio.
     agree = sum(1 for sid, label in gold_labels.items() if cand_labels.get(sid) == label)
     agreement = agree / n if n else None
     return {

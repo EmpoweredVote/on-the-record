@@ -13,13 +13,21 @@ summaries) is judging prose quality, not different section boundaries.
 
 Writes, into --out (default ~/CouncilScribe/eval/summary-ab/<date>/):
   ab_pairs.md      — reviewer-facing: judging instructions + "Option 1" /
-                      "Option 2" text pairs in RANDOMIZED order (no model
-                      names or candidate/reference labels).
-  answer_key.json  — meeting -> pair_key -> {candidate_model, option_N_is}.
+                      "Option 2" text pairs in RANDOMIZED order. Group headers
+                      read "<meeting_id> — Comparison N" and each pair carries
+                      a visible, model-blind id ("pair-7") — no model names or
+                      candidate/reference labels anywhere in this file.
+  answer_key.json  — withheld from ab_pairs.md; maps each visible pair id (and
+                      the internal meeting/pair_key) back to candidate_model
+                      and which option was which.
 
 The Option 1/2 order is deterministic per (meeting id, model, pair key) — see
-src.summary_ab_pairing — NOT per wall-clock run, so re-running this script
-reproduces the same file byte-for-byte given the same inputs.
+src.summary_ab_pairing.pair_rng — NOT per wall-clock run, so re-running this
+script reproduces the same file byte-for-byte given the same inputs. Seeding
+includes the model (not just the meeting id) so two candidate models compared
+against the same meeting get independent draw sequences — otherwise the
+reference text would land in the same option slot for every model, a pattern
+a reviewer could learn across a multi-model run.
 
 Usage:
   .venv/bin/python scripts/generate_summary_ab.py --meetings 2025-09-22-press-conference-hans-truelson --models deepseek/deepseek-chat-v3.1
@@ -44,7 +52,15 @@ from src.event_kinds import INTERVIEW_KINDS  # noqa: E402
 from src.eval_llm_client import build_eval_client  # noqa: E402
 from src.eval_meeting_sampling import discover_meetings, select_diverse_sample  # noqa: E402
 from src.models import Meeting, SummarySection  # noqa: E402
-from src.summary_ab_pairing import build_answer_key, build_pair, meeting_rng, render_pair_markdown  # noqa: E402
+from src.summary_ab_pairing import (  # noqa: E402
+    assign_visible_ids,
+    build_answer_key,
+    build_pair,
+    build_visible_id_index,
+    pair_rng,
+    render_pair_markdown,
+)
+from src.summary_classify_eval import gold_sections_valid  # noqa: E402
 from src.summarize import (  # noqa: E402
     _full_section_transcript,
     _generate_executive_summary,
@@ -61,8 +77,8 @@ JUDGING_INSTRUCTIONS = """\
 
 For each pair below, read Option 1 and Option 2 and decide which is
 better — WITHOUT knowing which model produced which option. Record your pick
-(e.g. "meeting_id / pair_key: Option 1") separately; answer_key.json is
-intentionally not shown here so the review stays blind.
+using the pair id shown next to each comparison (e.g. "pair-7: Option 1");
+answer_key.json is intentionally not shown here so the review stays blind.
 
 Judging suggestions:
 - Prefer faithful attribution of quotes/positions to the correct speaker.
@@ -88,7 +104,6 @@ def _reference_view(gold_summary: dict, is_interview: bool) -> dict:
     ]
     return {
         "executive_summary": gold_summary.get("executive_summary", ""),
-        "highlights": gold_summary.get("highlights") or gold_summary.get("key_decisions", []),
         "sections": sections,
     }
 
@@ -124,14 +139,20 @@ def synthesize_candidate(client, model_override, meeting: Meeting, gold_sections
             start_segment=start_seg, end_segment=end_seg,
         ))
 
+    # _generate_executive_summary/_generate_interview_executive_summary return
+    # (executive_summary, highlights) from ONE call — highlights can't be
+    # skipped at the API level without a different (production-diverging)
+    # prompt. But build_meeting_pairs() never pairs highlights (only
+    # executive_summary + the regenerated sections), so there's no reason to
+    # carry the unused value any further than this local discard.
     if is_interview:
-        executive, highlights = _generate_interview_executive_summary(
+        executive, _highlights = _generate_interview_executive_summary(
             client, candidate_sections, meeting, model=model_override)
     else:
-        executive, highlights = _generate_executive_summary(
+        executive, _highlights = _generate_executive_summary(
             client, candidate_sections, meeting, model=model_override)
 
-    return {"executive_summary": executive, "highlights": highlights, "sections": regenerated}
+    return {"executive_summary": executive, "sections": regenerated}
 
 
 def build_meeting_pairs(meeting_id: str, model_key: str, candidate_view: dict, reference_view: dict) -> list:
@@ -140,10 +161,11 @@ def build_meeting_pairs(meeting_id: str, model_key: str, candidate_view: dict, r
     reference sections are built from the SAME gold section list in
     synthesize_candidate/_reference_view, so index i is title-matched).
 
-    A fresh rng, seeded only from meeting_id, is used per (meeting, model)
-    call — so adding/removing a candidate model from a run never reshuffles
-    another model's already-assigned pairs for this meeting."""
-    rng = meeting_rng(meeting_id)
+    A fresh rng, seeded from (meeting_id, model_key), is used per (meeting,
+    model) call — so adding/removing a candidate model from a run never
+    reshuffles another model's already-assigned pairs for this meeting, and
+    two models compared against the same meeting get independent orderings."""
+    rng = pair_rng(meeting_id, model_key)
     pairs = [
         build_pair(meeting_id, f"{model_key}::executive_summary", model_key,
                    candidate_view["executive_summary"], reference_view["executive_summary"], rng)
@@ -156,11 +178,29 @@ def build_meeting_pairs(meeting_id: str, model_key: str, candidate_view: dict, r
 
 def _pair_title(pair_key: str) -> str:
     # pair_key looks like "<model>::executive_summary" or "<model>::section_0:Title"
+    # — used only to derive a reviewer-facing title; the model prefix is
+    # discarded and never rendered.
     _, _, rest = pair_key.partition("::")
     if rest == "executive_summary":
         return "Executive Summary"
     _, _, title = rest.partition(":")
     return title or rest
+
+
+def assemble_markdown(comparisons: list) -> str:
+    """comparisons: [{"meeting_id": str, "comparison_index": int, "pairs": [...]}],
+    each pair already carrying a "visible_id" (see assign_visible_ids).
+    Produces the FULL ab_pairs.md text: judging instructions, then one
+    "## <meeting_id> — Comparison N" section per comparison with each pair
+    rendered under its visible id. Anonymous by construction — no model name
+    or candidate/reference role is ever written here (see
+    tests/test_generate_summary_ab_script.py for the leak-proof check)."""
+    parts = [JUDGING_INSTRUCTIONS]
+    for comp in comparisons:
+        parts.append(f"## {comp['meeting_id']} — Comparison {comp['comparison_index']}\n")
+        for pair in comp["pairs"]:
+            parts.append(render_pair_markdown(pair, _pair_title(pair["pair_key"]), pair.get("visible_id")))
+    return "\n".join(parts)
 
 
 def main() -> int:
@@ -194,8 +234,19 @@ def main() -> int:
         sample = select_diverse_sample(all_meetings, args.limit)
     print(f"Selected {len(sample)} meeting(s): {sample}\n")
 
+    # Build each model's client ONCE, not once per meeting.
+    clients = {}
+    for model_key in args.models:
+        try:
+            clients[model_key] = build_eval_client(model_key)
+        except RuntimeError as e:
+            print(f"! skipping {model_key}: {e}")
+    if not clients:
+        print("No models ran (missing API keys?).")
+
     all_pairs = []
-    md_sections = []
+    comparisons = []
+    next_visible_id = 1
 
     for meeting_id in sample:
         mdir = meetings_dir / meeting_id
@@ -208,14 +259,23 @@ def main() -> int:
         meeting = Meeting.from_dict(transcript_data)
         gold_sections = gold_summary.get("sections", [])
         is_interview = meeting.event_kind in INTERVIEW_KINDS
+
+        # Stale-gold guard (mirrors scripts/eval_summary_classify.py): a
+        # meeting whose accepted summary.json boundaries no longer index into
+        # its current transcript (segment-renumbering backfill that never
+        # re-published the standalone file) can't be fed to
+        # _full_section_transcript at all — skip before any model call.
+        segments = [s for s in meeting.segments if s.text]
+        valid_ids = {s.segment_id for s in segments}
+        ok, reason = gold_sections_valid(gold_sections, valid_ids)
+        if not ok:
+            print(f"! {meeting_id}: SKIPPED ({reason})")
+            continue
+
         reference_view = _reference_view(gold_summary, is_interview)
 
-        for model_key in args.models:
-            try:
-                client, model_override = build_eval_client(model_key)
-            except RuntimeError as e:
-                print(f"! skipping {model_key}: {e}")
-                continue
+        comparison_index = 0
+        for model_key, (client, model_override) in clients.items():
             try:
                 candidate_view = synthesize_candidate(client, model_override, meeting, gold_sections)
             except Exception as e:
@@ -223,19 +283,25 @@ def main() -> int:
                 continue
 
             pairs = build_meeting_pairs(meeting_id, model_key, candidate_view, reference_view)
+            pairs = assign_visible_ids(pairs, start=next_visible_id)
+            next_visible_id += len(pairs)
             all_pairs.extend(pairs)
+
+            comparison_index += 1
+            comparisons.append({
+                "meeting_id": meeting_id,
+                "comparison_index": comparison_index,
+                "pairs": pairs,
+            })
             print(f"  {model_key}/{meeting_id}: {len(pairs)} pairs "
                   f"({len(candidate_view['sections'])} synthesis sections + 1 executive summary)")
 
-            md_sections.append(f"## {meeting_id} — {model_key}\n")
-            for pair in pairs:
-                md_sections.append(render_pair_markdown(pair, _pair_title(pair["pair_key"])))
-
     ab_pairs_path = out_dir / "ab_pairs.md"
-    ab_pairs_path.write_text(JUDGING_INSTRUCTIONS + "\n" + "\n".join(md_sections), encoding="utf-8")
+    ab_pairs_path.write_text(assemble_markdown(comparisons), encoding="utf-8")
 
     answer_key = {
         "note": "Withheld from ab_pairs.md — for scoring after the blind review only.",
+        "by_pair_id": build_visible_id_index(all_pairs),
         "pairs": build_answer_key(all_pairs),
     }
     answer_key_path = out_dir / "answer_key.json"

@@ -126,7 +126,7 @@ def main() -> int:
 
     if not rows:
         print("No models ran (missing API keys?).")
-        return 0
+        return 1
 
     cols = ["model", "meetings", "segments", "label_agreement", "avg_section_count_delta", "parse_failures"]
     print("\n| " + " | ".join(cols) + " |")
