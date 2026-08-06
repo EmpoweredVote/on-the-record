@@ -23,9 +23,11 @@ until it succeeds or ages out of the window. An unchanged marker whose
 memo-stripe votes have gone missing from the DB self-heals by
 re-reconciling instead of trusting the marker.
 
-Requires DATABASE_URL (and ANTHROPIC_API_KEY unless --no-interpret) in
-.env.local. Failures are loud, per-meeting, and non-fatal: each failed
-meeting prints FAILED to stderr and the script exits 1 if any failed.
+Requires DATABASE_URL (and the active LLM backend's API key — see
+src.llm_providers.make_llm_client / config.LLM_CLIENT_BACKEND — unless
+--no-interpret) in .env.local. Failures are loud, per-meeting, and
+non-fatal: each failed meeting prints FAILED to stderr and the script
+exits 1 if any failed.
 """
 from __future__ import annotations
 
@@ -157,8 +159,8 @@ def main() -> int:
 
     client = None
     if not args.no_interpret and work:
-        import anthropic
-        client = anthropic.Anthropic()
+        from src.llm_providers import make_llm_client
+        client = make_llm_client()
 
     failures = 0
     for w in work:

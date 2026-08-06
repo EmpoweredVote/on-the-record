@@ -38,6 +38,12 @@ WHISPER_MODEL_CPU = "medium"
 WHISPER_COMPUTE_GPU = "float16"
 WHISPER_COMPUTE_CPU = "int8"
 
+# Which client the meeting pipeline's Anthropic-shaped call sites use.
+# "openrouter" routes the SAME Claude models through OpenRouter billing
+# (model ids mapped in llm_providers._OPENROUTER_MODEL_MAP); "anthropic"
+# is the direct path (needs ANTHROPIC_API_KEY credit).
+LLM_CLIENT_BACKEND = "openrouter"
+
 # --- Summary generation (Anthropic API) ---
 SUMMARY_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"    # Section classification
 SUMMARY_SYNTHESIZE_MODEL = "claude-sonnet-4-5"  # Discussion summaries & executive summary
@@ -58,8 +64,13 @@ AGENDA_ALIGN_MAX_TOKENS = 4000
 
 # --- Layer-3 speaker identification (LLM) ---
 # Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
-# final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
-SPEAKER_ID_ACTIVE = "haiku"
+# final value. "haiku-or" is the same Claude weights as "haiku", billed through
+# OpenRouter instead of direct Anthropic — needs OPENROUTER_API_KEY, not
+# ANTHROPIC_API_KEY (the account has no direct-Anthropic credit). Note this
+# layer no longer runs at all on interview-kind meetings (news_clip,
+# press_conference, podcast) as of 2026-08-05 — see run_local.should_run_llm —
+# so this key now only governs civic-kind and debate/forum runs.
+SPEAKER_ID_ACTIVE = "haiku-or"
 SPEAKER_ID_MAX_TOKENS = 150
 _OPENROUTER_URL = "https://openrouter.ai/api/v1"
 

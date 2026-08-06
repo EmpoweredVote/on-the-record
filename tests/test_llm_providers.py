@@ -102,3 +102,156 @@ def test_complete_defaults_to_speaker_id_system_prompt():
     p = llm_providers.AnthropicProvider(model="m", client=client)
     p.complete("hi", max_tokens=10, temperature=0.0)
     assert client.messages.kwargs["system"] == llm_providers._SYSTEM_PROMPT
+
+
+# --- AnthropicCompatClient / make_llm_client (meeting-pipeline OpenRouter seam) ---
+
+
+class _FakeORChoice:
+    def __init__(self, text, finish_reason="stop"):
+        self.message = type("Msg", (), {"content": text})()
+        self.finish_reason = finish_reason
+
+
+class _FakeORClient:
+    """Fake OpenAI-shaped client: records kwargs, returns a canned response."""
+
+    def __init__(self, reply_text="OK", finish_reason="stop"):
+        self.chat = self
+        self.completions = self
+        self.captured = None
+        self._reply_text = reply_text
+        self._finish_reason = finish_reason
+
+    def create(self, **kwargs):
+        self.captured = kwargs
+        return type("Resp", (), {
+            "choices": [_FakeORChoice(self._reply_text, self._finish_reason)],
+        })()
+
+
+def test_anthropic_compat_client_leads_with_system_message():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="m", max_tokens=20, system="Be terse.",
+                  messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["messages"] == [
+        {"role": "system", "content": "Be terse."},
+        {"role": "user", "content": "hi"},
+    ]
+
+
+def test_anthropic_compat_client_omits_system_message_when_not_given():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="m", max_tokens=20, messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["messages"] == [{"role": "user", "content": "hi"}]
+
+
+def test_anthropic_compat_client_maps_known_sonnet_model_id():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="claude-sonnet-4-5", max_tokens=20,
+                  messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["model"] == "anthropic/claude-sonnet-4.5"
+
+
+def test_anthropic_compat_client_maps_known_haiku_model_id():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="claude-haiku-4-5-20251001", max_tokens=20,
+                  messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["model"] == "anthropic/claude-haiku-4.5"
+
+
+def test_anthropic_compat_client_unknown_model_passes_through():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="deepseek/deepseek-chat-v3.1", max_tokens=20,
+                  messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["model"] == "deepseek/deepseek-chat-v3.1"
+
+
+def test_anthropic_compat_client_max_tokens_passthrough():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="m", max_tokens=777, messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["max_tokens"] == 777
+
+
+def test_anthropic_compat_client_temperature_omitted_when_not_given():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="m", max_tokens=10, messages=[{"role": "user", "content": "hi"}])
+    assert "temperature" not in fake.captured
+
+
+def test_anthropic_compat_client_temperature_passthrough_when_given():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="m", max_tokens=10, temperature=0.2,
+                  messages=[{"role": "user", "content": "hi"}])
+    assert fake.captured["temperature"] == 0.2
+
+
+def test_anthropic_compat_client_returns_text_and_end_turn_stop_reason():
+    fake = _FakeORClient(reply_text="hello", finish_reason="stop")
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    resp = client.create(model="m", max_tokens=10, messages=[{"role": "user", "content": "hi"}])
+    assert resp.content[0].text == "hello"
+    assert resp.stop_reason == "end_turn"
+
+
+def test_anthropic_compat_client_maps_length_finish_reason_to_max_tokens_stop_reason():
+    fake = _FakeORClient(reply_text="truncated...", finish_reason="length")
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    resp = client.create(model="m", max_tokens=10, messages=[{"role": "user", "content": "hi"}])
+    assert resp.stop_reason == "max_tokens"
+
+
+def test_anthropic_compat_client_rejects_unsupported_kwargs():
+    fake = _FakeORClient()
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    with pytest.raises(TypeError, match="stop_sequences"):
+        client.create(model="m", max_tokens=10,
+                       messages=[{"role": "user", "content": "hi"}],
+                       stop_sequences=["STOP"])
+
+
+def test_make_llm_client_returns_anthropic_compat_client_for_openrouter(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    client = llm_providers.make_llm_client()
+    assert isinstance(client, llm_providers.AnthropicCompatClient)
+    assert client.base_url == llm_providers.config._OPENROUTER_URL
+
+
+def test_make_llm_client_raises_when_openrouter_key_missing(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "openrouter")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        llm_providers.make_llm_client()
+
+
+def test_make_llm_client_returns_anthropic_client_for_anthropic_backend(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "anthropic")
+    fake_anthropic_client = object()
+    monkeypatch.setattr(llm_providers.anthropic, "Anthropic", lambda: fake_anthropic_client)
+    client = llm_providers.make_llm_client()
+    assert client is fake_anthropic_client
+
+
+def test_make_llm_client_raises_valueerror_on_unknown_backend(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "bogus")
+    with pytest.raises(ValueError, match="bogus"):
+        llm_providers.make_llm_client()
+
+
+def test_llm_client_env_key_openrouter(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "openrouter")
+    assert llm_providers.llm_client_env_key() == "OPENROUTER_API_KEY"
+
+
+def test_llm_client_env_key_anthropic(monkeypatch):
+    monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "anthropic")
+    assert llm_providers.llm_client_env_key() == "ANTHROPIC_API_KEY"

@@ -70,8 +70,8 @@ def test_interview_classify_uses_topic_sections():
 
     client.messages.create.side_effect = side_effect
 
-    with patch("src.summarize.anthropic") as mock_anthropic:
-        mock_anthropic.Anthropic.return_value = client
+    with patch("src.summarize.make_llm_client") as mock_make_llm_client:
+        mock_make_llm_client.return_value = client
         result = generate_summary(meeting)
 
     assert "topic" in side_effect.classify_system.lower() or "interview" in side_effect.classify_system.lower()
@@ -99,8 +99,8 @@ def test_deliberative_classify_uses_council_sections():
 
     client.messages.create.side_effect = side_effect
 
-    with patch("src.summarize.anthropic") as mock_anthropic:
-        mock_anthropic.Anthropic.return_value = client
+    with patch("src.summarize.make_llm_client") as mock_make_llm_client:
+        mock_make_llm_client.return_value = client
         result = generate_summary(meeting)
 
     assert "council" in side_effect.classify_system.lower()
@@ -127,8 +127,8 @@ def test_interview_executive_uses_source_attribution():
 
     client.messages.create.side_effect = side_effect
 
-    with patch("src.summarize.anthropic") as mock_anthropic:
-        mock_anthropic.Anthropic.return_value = client
+    with patch("src.summarize.make_llm_client") as mock_make_llm_client:
+        mock_make_llm_client.return_value = client
         result = generate_summary(meeting)
 
     assert "California Courier" in side_effect.exec_prompt
