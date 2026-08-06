@@ -167,8 +167,8 @@ def main() -> int:
 
         client = None
         if not args.no_interpret:
-            import anthropic
-            client = anthropic.Anthropic()
+            from src.llm_providers import make_llm_client
+            client = make_llm_client()
 
         items = build_items(parsed, body, meeting.agenda_url, text, client)
 

@@ -12,10 +12,9 @@ import re
 from datetime import datetime
 from typing import Optional
 
-import anthropic as anthropic
-
 from . import config
 from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
+from .llm_providers import make_llm_client
 from .models import Meeting, MeetingSummary, Segment, SummarySection
 
 
@@ -596,7 +595,7 @@ def generate_summary(
     Returns:
         MeetingSummary with executive summary, key decisions, and section summaries.
     """
-    client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY env var
+    client = make_llm_client()
 
     segments = [s for s in meeting.segments if s.text]
     if not segments:

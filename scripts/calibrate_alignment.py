@@ -28,11 +28,10 @@ from gui.env import load_env_local
 
 load_env_local()  # before src.config so ANTHROPIC_API_KEY is visible
 
-import anthropic
-
 from src.agenda_align import SegmentRef, align_items, apply_oracle, find_ref_anchors
 from src.agenda_parse import parse_agenda
 from src.legislation_oracle import _default_fetch
+from src.llm_providers import make_llm_client
 
 FIXTURES = REPO / "tests" / "fixtures"
 AGENDA_TXT = FIXTURES / "onboard" / "agenda_2026-07-22.txt"
@@ -72,7 +71,7 @@ def main() -> int:
     print("Anchors:", {p: hits for p, hits in sorted(anchors.items())})
     print()
 
-    client = RecordingClient(anthropic.Anthropic())
+    client = RecordingClient(make_llm_client())
     spans = align_items(client, items, segments)
 
     REPLY_OUT.write_text(client.raw_reply)

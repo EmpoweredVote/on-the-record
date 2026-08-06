@@ -833,9 +833,9 @@ def align_and_flip(meeting_id: str) -> dict:
         }
 
         # LLM + oracle run OUTSIDE any transaction (slow network calls).
-        import anthropic
+        from .llm_providers import make_llm_client
 
-        client = anthropic.Anthropic()
+        client = make_llm_client()
         spans = align_items(client, items, segments)
         spans = apply_oracle(spans, items, fetch=_default_fetch)
         updates = build_alignment_updates(spans, segments)

@@ -114,8 +114,8 @@ def test_generate_summary_passes_chapter_hint_to_classifier():
          {"start_time": 60.0, "end_time": None, "title": "Second"}]
     )
     client, captured = _capture_client('{"sections": []}')
-    with patch("src.summarize.anthropic") as mock_anthropic:
-        mock_anthropic.Anthropic.return_value = client
+    with patch("src.summarize.make_llm_client") as mock_make_llm_client:
+        mock_make_llm_client.return_value = client
         generate_summary(meeting)
     # First call is the classifier; its content should carry the hint.
     assert "UNIQUEHINT topic" in captured["content"]

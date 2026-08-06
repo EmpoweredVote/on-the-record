@@ -109,3 +109,83 @@ def get_provider(name: str) -> SpeakerIDProvider:
             )
         return OpenAICompatProvider(cfg["model"], cfg["base_url"], key)
     raise ValueError(f"{name}: unknown provider {provider!r}")
+
+
+# --- Meeting-pipeline Anthropic-shaped client (summarize/topics/agenda_interpret/
+# agenda_align/publish) --------------------------------------------------------
+#
+# Those modules call client.messages.create(model=..., max_tokens=..., system=...,
+# messages=[...]) and read response.content[0].text (and, in a couple of
+# truncation-detection spots, response.stop_reason). The client itself is
+# injected, constructed at 5 entry points (src/summarize.py, src/publish.py,
+# scripts/poll_agendas.py, scripts/backfill_agenda.py,
+# scripts/calibrate_alignment.py). make_llm_client() below gives those entry
+# points a single seam to swap billing (Anthropic direct vs OpenRouter) without
+# touching any call site.
+
+# Model-ID map for the Anthropic-compat adapter: Anthropic API ids -> OpenRouter
+# ids. Anything not listed passes through unchanged (so a config value that is
+# already an OpenRouter id, e.g. "deepseek/deepseek-chat-v3.1", just works).
+_OPENROUTER_MODEL_MAP = {
+    "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
+    "claude-sonnet-4-5": "anthropic/claude-sonnet-4.5",
+}
+
+
+class _Text:
+    def __init__(self, text: str):
+        self.text = text
+
+
+class _Message:
+    def __init__(self, text: str, stop_reason: str):
+        self.content = [_Text(text)]
+        self.stop_reason = stop_reason
+
+
+class AnthropicCompatClient:
+    """Duck-types the slice of anthropic.Anthropic() the pipeline uses
+    (client.messages.create(...) -> response.content[0].text / .stop_reason),
+    backed by an OpenAI-compatible endpoint (OpenRouter). Lets every
+    client-injected call site switch billing without code changes."""
+
+    def __init__(self, base_url: str, api_key: str, client=None):
+        if client is None:
+            from openai import OpenAI
+
+            client = OpenAI(base_url=base_url, api_key=api_key)
+        self._client = client
+        self.messages = self  # so client.messages.create(...) resolves
+
+    def create(self, *, model: str, max_tokens: int, messages: list,
+               system: "str | None" = None, temperature: "float | None" = None,
+               **_ignored):
+        oai_messages = ([{"role": "system", "content": system}] if system else [])
+        oai_messages += messages
+        kwargs = dict(model=_OPENROUTER_MODEL_MAP.get(model, model),
+                      max_tokens=max_tokens, messages=oai_messages)
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        resp = self._client.chat.completions.create(**kwargs)
+        choice = resp.choices[0]
+        stop_reason = ("max_tokens" if choice.finish_reason == "length"
+                       else "end_turn")
+        return _Message(choice.message.content or "", stop_reason)
+
+
+def make_llm_client():
+    """The pipeline's Anthropic-shaped client, chosen by config.LLM_CLIENT_BACKEND:
+    "anthropic" -> anthropic.Anthropic() (needs ANTHROPIC_API_KEY),
+    "openrouter" -> AnthropicCompatClient on OpenRouter (needs OPENROUTER_API_KEY;
+    Claude model ids are mapped to their OpenRouter equivalents)."""
+    backend = config.LLM_CLIENT_BACKEND
+    if backend == "anthropic":
+        return anthropic.Anthropic()
+    if backend == "openrouter":
+        key = os.environ.get("OPENROUTER_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "LLM_CLIENT_BACKEND=openrouter: environment variable "
+                "OPENROUTER_API_KEY is not set")
+        return AnthropicCompatClient(config._OPENROUTER_URL, key)
+    raise ValueError(f"unknown LLM_CLIENT_BACKEND {backend!r}")

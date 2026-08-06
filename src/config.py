@@ -38,6 +38,12 @@ WHISPER_MODEL_CPU = "medium"
 WHISPER_COMPUTE_GPU = "float16"
 WHISPER_COMPUTE_CPU = "int8"
 
+# Which client the meeting pipeline's Anthropic-shaped call sites use.
+# "openrouter" routes the SAME Claude models through OpenRouter billing
+# (model ids mapped in llm_providers._OPENROUTER_MODEL_MAP); "anthropic"
+# is the direct path (needs ANTHROPIC_API_KEY credit).
+LLM_CLIENT_BACKEND = "openrouter"
+
 # --- Summary generation (Anthropic API) ---
 SUMMARY_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"    # Section classification
 SUMMARY_SYNTHESIZE_MODEL = "claude-sonnet-4-5"  # Discussion summaries & executive summary

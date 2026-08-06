@@ -157,8 +157,8 @@ def main() -> int:
 
     client = None
     if not args.no_interpret and work:
-        import anthropic
-        client = anthropic.Anthropic()
+        from src.llm_providers import make_llm_client
+        client = make_llm_client()
 
     failures = 0
     for w in work:
