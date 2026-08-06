@@ -181,6 +181,54 @@ def _reconcile_clip_window(
     sys.exit(2)
 
 
+def _load_summary_checkpoint(meeting, summary_path: Path) -> str:
+    """Resolve the summary on a resumed run, preferring the embedded copy.
+
+    The summary is stored twice: as the standalone summary.json stage checkpoint
+    and inside transcript_named.json, from which the identification stage has
+    already loaded it into `meeting`. The embedded copy is authoritative — the
+    segment-merge and boundary-snap backfills renumber segments and rewrite only
+    transcript_named.json, which leaves summary.json holding section
+    start/end_segment values that point at the pre-backfill numbering. Preferring
+    the checkpoint here published stale section boundaries for live meetings, so
+    the embedded copy wins and a drifted checkpoint is re-synced from it.
+
+    summary.json is still read when the transcript carries no embedded summary
+    (meetings summarized before that copy existed, or a run whose transcript
+    re-save didn't land), and is still the SUMMARIZED stage marker that
+    checkpointing and --rewind-to key on, so it is never left absent.
+
+    Returns a one-line description of the outcome for the caller to print.
+    """
+    from src.models import MeetingSummary
+
+    if meeting.summary is not None:
+        embedded = meeting.summary.to_dict()
+        on_disk = None
+        if summary_path.exists():
+            try:
+                with open(summary_path, "r") as f:
+                    # Round-trip through the model so an older on-disk spelling
+                    # (`key_decisions` for `highlights`) isn't read as drift.
+                    on_disk = MeetingSummary.from_dict(json.load(f)).to_dict()
+            except (OSError, json.JSONDecodeError, KeyError, TypeError):
+                on_disk = None  # unusable checkpoint: rewrite it from the transcript
+        count = len(meeting.summary.sections)
+        if on_disk == embedded:
+            return f"Loaded summary ({count} sections)"
+        atomic_write_json(summary_path, embedded)
+        return (f"Loaded summary ({count} sections) from the transcript; "
+                f"re-synced the out-of-date summary.json checkpoint")
+
+    if summary_path.exists():
+        with open(summary_path, "r") as f:
+            meeting.summary = MeetingSummary.from_dict(json.load(f))
+        return (f"Loaded summary ({len(meeting.summary.sections)} sections) from "
+                f"summary.json (the transcript has no embedded summary)")
+
+    return "No summary on disk — nothing to load."
+
+
 def _list_cached_rosters() -> list[tuple[str, str]]:
     """Return [(body_slug, label), ...] for each cached per-body roster.
 
@@ -1605,12 +1653,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
     summary_path = meeting_dir / "summary.json"
 
     if state.is_complete(PipelineStage.SUMMARIZED):
-        print("  Already complete. Loading from checkpoint...")
-        if summary_path.exists():
-            from src.models import MeetingSummary
-            with open(summary_path, "r") as f:
-                meeting.summary = MeetingSummary.from_dict(json.load(f))
-            print(f"  Loaded summary ({len(meeting.summary.sections)} sections)")
+        print("  Already complete.")
+        print(f"  {_load_summary_checkpoint(meeting, summary_path)}")
     elif args.skip_summary:
         print("  Skipped (--skip-summary).")
         state.mark_complete(PipelineStage.SUMMARIZED)
