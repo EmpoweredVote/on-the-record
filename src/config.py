@@ -88,7 +88,11 @@ SPEAKER_ID_MODELS = {
 
 # --- Source discovery (docs/superpowers/specs/2026-08-02-source-discovery-design.md) ---
 DISCOVERY_DIR = DRIVE_ROOT / "discovery"        # poll.log + caption cache
-DISCOVERY_MODEL_ACTIVE = "haiku"                # key into SPEAKER_ID_MODELS registry
+# Key into SPEAKER_ID_MODELS. Switched haiku -> deepseek 2026-08-05 on the
+# 25-fixture eval: recall 0.95 vs 0.85, Brier 0.043 vs 0.113, route 14/15 and
+# tier 0.90 tied, 0 parse failures, ~4x cheaper. Every verdict is still
+# human-triaged; re-check after each harvest grows the eval set.
+DISCOVERY_MODEL_ACTIVE = "deepseek"
 DISCOVERY_CLASSIFY_MAX_TOKENS = 500
 DISCOVERY_CLASSIFY_CAP_PER_RUN = 200            # spend cap; truncation is logged loudly
 DISCOVERY_CONFIDENCE_FLOOR = 0.30               # below -> stored as auto_filtered
