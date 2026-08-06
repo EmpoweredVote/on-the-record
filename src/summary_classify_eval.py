@@ -52,10 +52,9 @@ def label_segments(
     return labels
 
 
-def gold_sections_valid(gold_sections: list[dict], valid_ids: set) -> tuple:
+def gold_sections_valid(gold_sections: list[dict], all_segment_ids: set) -> tuple:
     """(True, "") when every gold section's start/end_segment is a real
-    segment id in THIS meeting's current classified population; otherwise
-    (False, reason).
+    segment id in THIS meeting's current transcript; otherwise (False, reason).
 
     Guards against a real corpus hazard: backfill_segment_merge.py renumbers
     transcript_named.json's segments (and its embedded summary copy) in
@@ -64,6 +63,14 @@ def gold_sections_valid(gold_sections: list[dict], valid_ids: set) -> tuple:
     values no longer index into the transcript we'd be replaying against.
     Scoring against stale boundaries would silently measure nothing; callers
     should skip the meeting instead.
+
+    all_segment_ids is EVERY segment id in the current transcript — deliberately
+    not label_segments()'s narrower valid_ids (the text-bearing population that
+    scoring runs over). That same reindex-by-time backfill leaves plenty of real
+    ids carrying empty text, and a gold boundary landing on one of those indexes
+    into the current transcript just fine. Narrowing this set to text-bearing
+    ids mis-reports those meetings as stale — measured 2026-08-06, it skipped
+    48 of the 149-meeting corpus that were perfectly scoreable.
     """
     if not gold_sections:
         return False, "no gold sections"
@@ -71,7 +78,7 @@ def gold_sections_valid(gold_sections: list[dict], valid_ids: set) -> tuple:
         start, end = sec.get("start_segment"), sec.get("end_segment")
         if start is None or end is None:
             return False, "gold section missing start_segment/end_segment"
-        if start not in valid_ids or end not in valid_ids:
+        if start not in all_segment_ids or end not in all_segment_ids:
             return False, (
                 f"gold segment range [{start},{end}] outside this transcript's "
                 "current segment ids (stale — likely un-republished after a "

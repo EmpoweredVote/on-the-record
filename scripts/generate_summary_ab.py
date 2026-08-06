@@ -88,6 +88,20 @@ Judging suggestions:
 """
 
 
+def gold_gate(meeting: Meeting, gold_sections: list) -> tuple:
+    """Stale-gold guard (mirrors scripts/eval_summary_classify.py's replay_one):
+    (ok, reason) for whether this meeting's accepted summary.json boundaries
+    still index into its current transcript. A meeting that fails can't be fed
+    to _full_section_transcript at all — skip it before any model call.
+
+    Passes ALL segment ids, not just text-bearing ones: backfill_segment_merge.py
+    reindexes by time and leaves real ids carrying empty text, so a boundary
+    landing on one of those is valid. Narrowing the set here would skip a third
+    of the corpus as "stale" when it is nothing of the sort.
+    """
+    return gold_sections_valid(gold_sections, {s.segment_id for s in meeting.segments})
+
+
 def _is_synthesis_eligible(section_type: str, is_interview: bool) -> bool:
     if is_interview:
         return True  # every interview "topic" section is prose synthesis output
@@ -260,14 +274,7 @@ def main() -> int:
         gold_sections = gold_summary.get("sections", [])
         is_interview = meeting.event_kind in INTERVIEW_KINDS
 
-        # Stale-gold guard (mirrors scripts/eval_summary_classify.py): a
-        # meeting whose accepted summary.json boundaries no longer index into
-        # its current transcript (segment-renumbering backfill that never
-        # re-published the standalone file) can't be fed to
-        # _full_section_transcript at all — skip before any model call.
-        segments = [s for s in meeting.segments if s.text]
-        valid_ids = {s.segment_id for s in segments}
-        ok, reason = gold_sections_valid(gold_sections, valid_ids)
+        ok, reason = gold_gate(meeting, gold_sections)
         if not ok:
             print(f"! {meeting_id}: SKIPPED ({reason})")
             continue

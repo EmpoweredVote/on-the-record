@@ -47,8 +47,14 @@ def replay_one(client, model_override, meeting: Meeting, gold_sections: list):
     """Returns (score_row, skip_reason). Exactly one is None."""
     segments = [s for s in meeting.segments if s.text]
     valid_ids = {s.segment_id for s in segments}
+    # Staleness is "does this id exist in the current transcript", so the gate
+    # sees ALL segment ids — backfill_segment_merge.py's reindex-by-time leaves
+    # real ids carrying empty text, and a gold boundary landing on one of those
+    # is valid, not stale. Scoring below stays on text-bearing ids only (the
+    # population actually shown to the classifier).
+    all_ids = {s.segment_id for s in meeting.segments}
 
-    ok, reason = gold_sections_valid(gold_sections, valid_ids)
+    ok, reason = gold_sections_valid(gold_sections, all_ids)
     if not ok:
         return None, reason
 

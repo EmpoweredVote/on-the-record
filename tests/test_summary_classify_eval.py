@@ -75,7 +75,7 @@ def test_label_segments_empty_sections():
 
 def test_gold_sections_valid_true_when_in_range():
     gold = [{"start_segment": 0, "end_segment": 3}, {"start_segment": 4, "end_segment": 9}]
-    ok, reason = gold_sections_valid(gold, valid_ids=set(range(10)))
+    ok, reason = gold_sections_valid(gold, all_segment_ids=set(range(10)))
     assert ok is True
     assert reason == ""
 
@@ -84,19 +84,19 @@ def test_gold_sections_valid_false_on_stale_segment_ids():
     # Simulates the real corpus hazard: summary.json boundaries reference
     # segment ids from before a merge/renumbering backfill.
     gold = [{"start_segment": 0, "end_segment": 292}]
-    ok, reason = gold_sections_valid(gold, valid_ids=set(range(0, 195)))
+    ok, reason = gold_sections_valid(gold, all_segment_ids=set(range(0, 195)))
     assert ok is False
     assert "stale" in reason
 
 
 def test_gold_sections_valid_false_on_missing_fields():
     gold = [{"start_segment": 0}]
-    ok, reason = gold_sections_valid(gold, valid_ids={0})
+    ok, reason = gold_sections_valid(gold, all_segment_ids={0})
     assert ok is False
 
 
 def test_gold_sections_valid_false_on_empty():
-    ok, reason = gold_sections_valid([], valid_ids={0, 1})
+    ok, reason = gold_sections_valid([], all_segment_ids={0, 1})
     assert ok is False
     assert "no gold sections" in reason
 
