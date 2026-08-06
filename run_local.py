@@ -46,15 +46,22 @@ from src.crec_identify import parse_crec_arg
 from src.house_cdn import resolve_session
 
 
-def should_run_llm(skip_llm: bool, crec_request) -> bool:
+def should_run_llm(skip_llm: bool, crec_request, event_kind=None) -> bool:
     """Whether to run Layer-3 LLM speaker identification.
 
-    Off when --skip-llm is set, and off on a Congressional Record run
+    Off when --skip-llm is set, off on a Congressional Record run
     (``crec_request`` truthy): CREC is authoritative for who spoke, and the local
     LLM hallucinates congressional names, so an unresolved floor speaker should go
     to review as 'unidentified' rather than get a garbage guess.
+
+    Also off for interview-kind meetings (``event_kind in INTERVIEW_KINDS`` —
+    news_clip/press_conference/podcast): an 88-interview eval (2026-08-05) found
+    ~13% correct-name coverage there, because the anchor rule requires names
+    spoken in the transcript and interview guests are rarely full-named on air.
+    Names come from review instead. Civic kinds and debates/forums are
+    unaffected.
     """
-    return (not skip_llm) and (crec_request is None)
+    return (not skip_llm) and (crec_request is None) and (event_kind not in INTERVIEW_KINDS)
 
 
 def _validate_diarizer_compute(args) -> None:
@@ -1425,9 +1432,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 new_dim = next(iter(speaker_embeddings.values())).shape[0]
                 print(f"  Re-extracted {len(speaker_embeddings)} embeddings ({new_dim}-dim)")
 
-        # Layer 3: LLM (optional; skipped on Congressional Record runs)
+        # Layer 3: LLM (optional; skipped on Congressional Record runs and on
+        # interview-kind meetings)
         llm_fn = None
-        if should_run_llm(args.skip_llm, crec_request):
+        if should_run_llm(args.skip_llm, crec_request, event_kind=state.event_kind):
             from src.llm_providers import get_provider
             from src.llm_utils import llm_identify_speakers
 
@@ -1442,6 +1450,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
         elif crec_request and not args.skip_llm:
             print("  Skipping LLM speaker ID (Congressional Record run — CREC is "
                   "authoritative; unresolved speakers go to review).")
+        elif (not args.skip_llm and not crec_request
+              and state.event_kind in INTERVIEW_KINDS):
+            print("  Skipping LLM speaker ID (interview-kind meeting — eval "
+                  "2026-08-05: ~13% name coverage; names come from review).")
 
         crec_mappings = None
         if crec_request:

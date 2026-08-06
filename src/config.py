@@ -64,8 +64,13 @@ AGENDA_ALIGN_MAX_TOKENS = 4000
 
 # --- Layer-3 speaker identification (LLM) ---
 # Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
-# final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
-SPEAKER_ID_ACTIVE = "haiku"
+# final value. "haiku-or" is the same Claude weights as "haiku", billed through
+# OpenRouter instead of direct Anthropic — needs OPENROUTER_API_KEY, not
+# ANTHROPIC_API_KEY (the account has no direct-Anthropic credit). Note this
+# layer no longer runs at all on interview-kind meetings (news_clip,
+# press_conference, podcast) as of 2026-08-05 — see run_local.should_run_llm —
+# so this key now only governs civic-kind and debate/forum runs.
+SPEAKER_ID_ACTIVE = "haiku-or"
 SPEAKER_ID_MAX_TOKENS = 150
 _OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
