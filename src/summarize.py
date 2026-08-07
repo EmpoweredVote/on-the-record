@@ -16,6 +16,7 @@ from . import config
 from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
 from .llm_providers import make_llm_client
 from .models import Meeting, MeetingSummary, Segment, SummarySection
+from .summary_sections import normalize_raw_sections
 
 
 def _format_ts(seconds: float) -> str:
@@ -714,6 +715,19 @@ def generate_summary(
             model=config.SUMMARY_CLASSIFY_MODEL,
             generated_at=datetime.now().isoformat(),
         )
+
+    # Both classifier paths return the model's JSON as-is, and neither prompt
+    # requires sections to be ordered or well-formed. Normalize before Pass 2 so
+    # an inverted range is summarized from a real transcript rather than an empty
+    # one, and so list order is document order for every downstream consumer.
+    raw_sections, _clamped, _moved = normalize_raw_sections(raw_sections)
+    if _clamped or _moved:
+        notes = []
+        if _moved:
+            notes.append("reordered chronologically")
+        if _clamped:
+            notes.append(f"{_clamped} inverted range(s) clamped")
+        print(f"    Section guards: {', '.join(notes)}")
 
     print(f"    Identified {len(raw_sections)} sections")
 
