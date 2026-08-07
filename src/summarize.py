@@ -173,10 +173,20 @@ def _classify_sections_chunk(
     condensed: str,
     seg_offset: int = 0,
     chapter_hint: str = "",
+    model: Optional[str] = None,
+    debug: Optional[list] = None,
 ) -> list[dict]:
-    """Classify one chunk of transcript into sections using Haiku."""
+    """Classify one chunk of transcript into sections using Haiku.
+
+    model: override for config.SUMMARY_CLASSIFY_MODEL — the eval harness
+    (scripts/eval_summary_classify.py) uses this to replay classification with
+    a candidate OpenRouter model; production call sites leave it unset.
+    debug: optional list the caller can pass to record one {"parsed": bool,
+    ...} entry per call, distinguishing a genuine JSON-parse failure from a
+    model that legitimately returned zero sections. Unused in production.
+    """
     message = client.messages.create(
-        model=config.SUMMARY_CLASSIFY_MODEL,
+        model=model or config.SUMMARY_CLASSIFY_MODEL,
         max_tokens=config.SUMMARY_MAX_TOKENS_CLASSIFY,
         system=_CLASSIFY_SYSTEM,
         messages=[{
@@ -189,12 +199,19 @@ def _classify_sections_chunk(
     # Extract JSON from response (handle markdown code fences)
     json_match = re.search(r"\{[\s\S]*\}", text)
     if not json_match:
+        if debug is not None:
+            debug.append({"parsed": False, "reason": "no_json_found"})
         return []
 
     try:
         data = json.loads(json_match.group())
-        return data.get("sections", [])
+        sections = data.get("sections", [])
+        if debug is not None:
+            debug.append({"parsed": True, "n_sections": len(sections)})
+        return sections
     except json.JSONDecodeError:
+        if debug is not None:
+            debug.append({"parsed": False, "reason": "json_decode_error"})
         return []
 
 
@@ -202,13 +219,21 @@ def classify_sections(
     client,
     segments: list[Segment],
     chapter_hint: str = "",
+    model: Optional[str] = None,
+    debug: Optional[list] = None,
 ) -> list[dict]:
-    """Classify the full transcript into sections, chunking if needed."""
+    """Classify the full transcript into sections, chunking if needed.
+
+    model / debug: see _classify_sections_chunk — threaded through unchanged
+    for the eval harness; production call sites leave both unset.
+    """
     chunk_size = config.SUMMARY_CHUNK_SIZE
 
     if len(segments) <= chunk_size:
         condensed = _condensed_transcript(segments)
-        return _classify_sections_chunk(client, condensed, chapter_hint=chapter_hint)
+        return _classify_sections_chunk(
+            client, condensed, chapter_hint=chapter_hint, model=model, debug=debug
+        )
 
     # Chunked path: hint segment indices span the whole transcript, not a chunk,
     # so we do not inject it here (falls back to today's behavior).
@@ -217,7 +242,9 @@ def classify_sections(
     for i in range(0, len(segments), chunk_size):
         chunk = segments[i : i + chunk_size]
         condensed = _condensed_transcript(chunk)
-        chunk_sections = _classify_sections_chunk(client, condensed, seg_offset=i)
+        chunk_sections = _classify_sections_chunk(
+            client, condensed, seg_offset=i, model=model, debug=debug
+        )
         all_sections.extend(chunk_sections)
 
     # Merge adjacent sections of the same type at chunk boundaries
@@ -292,10 +319,17 @@ Respond with ONLY valid JSON:
 If vote details aren't clear, include what you can determine and note uncertainty in the description."""
 
 
-def _summarize_discussion(client, section_transcript: str, title: str) -> str:
-    """Generate a rich summary of a discussion section using Sonnet."""
+def _summarize_discussion(
+    client, section_transcript: str, title: str, model: Optional[str] = None
+) -> str:
+    """Generate a rich summary of a discussion section using Sonnet.
+
+    model: override for config.SUMMARY_SYNTHESIZE_MODEL — used by the
+    synthesis-stage eval harness (scripts/generate_summary_ab.py); unset in
+    production.
+    """
     message = client.messages.create(
-        model=config.SUMMARY_SYNTHESIZE_MODEL,
+        model=model or config.SUMMARY_SYNTHESIZE_MODEL,
         max_tokens=config.SUMMARY_MAX_TOKENS_SYNTHESIZE,
         system=_SUMMARIZE_DISCUSSION_SYSTEM,
         messages=[{
@@ -438,8 +472,13 @@ def _generate_executive_summary(
     client,
     sections: list[SummarySection],
     meeting: Meeting,
+    model: Optional[str] = None,
 ) -> tuple[str, list[str]]:
-    """Generate executive summary from section summaries using Sonnet."""
+    """Generate executive summary from section summaries using Sonnet.
+
+    model: override for config.SUMMARY_SYNTHESIZE_MODEL — used by the
+    synthesis-stage eval harness; unset in production.
+    """
     # Build a condensed view of all sections for the executive summary prompt
     section_text = []
     for sec in sections:
@@ -450,7 +489,7 @@ def _generate_executive_summary(
     meeting_header = f"{meeting.city} {meeting.meeting_type} — {meeting.date}"
 
     message = client.messages.create(
-        model=config.SUMMARY_SYNTHESIZE_MODEL,
+        model=model or config.SUMMARY_SYNTHESIZE_MODEL,
         max_tokens=2048,
         system=_EXECUTIVE_SYSTEM,
         messages=[{
@@ -483,11 +522,17 @@ def _classify_sections_interview(
     client,
     segments: list[Segment],
     chapter_hint: str = "",
+    model: Optional[str] = None,
+    debug: Optional[list] = None,
 ) -> list[dict]:
-    """Classify interview transcript into topic sections using Haiku."""
+    """Classify interview transcript into topic sections using Haiku.
+
+    model / debug: see _classify_sections_chunk — threaded through unchanged
+    for the eval harness; production call sites leave both unset.
+    """
     condensed = _condensed_transcript(segments)
     message = client.messages.create(
-        model=config.SUMMARY_CLASSIFY_MODEL,
+        model=model or config.SUMMARY_CLASSIFY_MODEL,
         max_tokens=config.SUMMARY_MAX_TOKENS_CLASSIFY,
         system=_INTERVIEW_CLASSIFY_SYSTEM,
         messages=[{
@@ -498,12 +543,43 @@ def _classify_sections_interview(
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
     if not json_match:
+        if debug is not None:
+            debug.append({"parsed": False, "reason": "no_json_found"})
         return []
     try:
         data = json.loads(json_match.group())
-        return data.get("sections", [])
+        sections = data.get("sections", [])
+        if debug is not None:
+            debug.append({"parsed": True, "n_sections": len(sections)})
+        return sections
     except json.JSONDecodeError:
+        if debug is not None:
+            debug.append({"parsed": False, "reason": "json_decode_error"})
         return []
+
+
+def _summarize_interview_topic(
+    client, section_transcript: str, title: str, model: Optional[str] = None
+) -> str:
+    """Generate a summary of one interview topic using Sonnet.
+
+    Extracted from generate_summary()'s inline interview branch so the
+    synthesis-stage eval harness (scripts/generate_summary_ab.py) can call the
+    exact same prompt with a candidate model override. Behavior (including the
+    empty-transcript -> "" short-circuit) is unchanged from the inline version.
+    """
+    if not section_transcript.strip():
+        return ""
+    message = client.messages.create(
+        model=model or config.SUMMARY_SYNTHESIZE_MODEL,
+        max_tokens=config.SUMMARY_MAX_TOKENS_SYNTHESIZE,
+        system=_INTERVIEW_SUMMARIZE_SYSTEM,
+        messages=[{
+            "role": "user",
+            "content": f"Topic: \"{title}\"\n\nTranscript:\n{section_transcript}",
+        }],
+    )
+    return message.content[0].text.strip()
 
 
 def _show_notes_hint(meeting: Meeting) -> str:
@@ -536,8 +612,13 @@ def _generate_interview_executive_summary(
     client,
     sections: list[SummarySection],
     meeting: Meeting,
+    model: Optional[str] = None,
 ) -> tuple[str, list[str]]:
-    """Generate source-attributed executive summary for interview/media events."""
+    """Generate source-attributed executive summary for interview/media events.
+
+    model: override for config.SUMMARY_SYNTHESIZE_MODEL — used by the
+    synthesis-stage eval harness; unset in production.
+    """
     outlet = _resolve_outlet(meeting)
 
     section_text = []
@@ -547,7 +628,7 @@ def _generate_interview_executive_summary(
         section_text.append("")
 
     message = client.messages.create(
-        model=config.SUMMARY_SYNTHESIZE_MODEL,
+        model=model or config.SUMMARY_SYNTHESIZE_MODEL,
         max_tokens=2048,
         system=_INTERVIEW_EXECUTIVE_SYSTEM,
         messages=[{
@@ -674,19 +755,7 @@ def generate_summary(
         _progress(f"summarizing: {title}", i + 1, total_sections)
 
         if is_interview:
-            if section_transcript.strip():
-                msg = client.messages.create(
-                    model=config.SUMMARY_SYNTHESIZE_MODEL,
-                    max_tokens=config.SUMMARY_MAX_TOKENS_SYNTHESIZE,
-                    system=_INTERVIEW_SUMMARIZE_SYSTEM,
-                    messages=[{
-                        "role": "user",
-                        "content": f"Topic: \"{title}\"\n\nTranscript:\n{section_transcript}",
-                    }],
-                )
-                content = msg.content[0].text.strip()
-            else:
-                content = ""
+            content = _summarize_interview_topic(client, section_transcript, title)
         elif sec_type == "roll_call":
             content = _extract_roll_call(client, section_transcript)
         elif sec_type in ("discussion", "public_comment"):
