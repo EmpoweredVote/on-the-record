@@ -5,17 +5,27 @@ backfill_segment_merge.py renumbered every meeting's segments and reindexed the
 summary sections *embedded* in transcript_named.json (from their stable times),
 but never rewrote the standalone summary.json checkpoint — so a subset of
 meetings have a summary.json whose start_segment/end_segment values still index
-into the pre-merge segment numbering. That file is read back into
-meeting.summary whenever run_local resumes past the SUMMARIZED stage, and it is
-the gold data for the summary-classification eval, so stale boundaries there
-are live hazards, not dead artifacts.
+into the pre-merge segment numbering. It is the gold data for the
+summary-classification eval, so stale boundaries there are not dead artifacts.
+
+(As of PR #153 the resume path prefers the embedded summary over summary.json,
+so summary.json can no longer push stale boundaries into a published row. That
+removes the live-hazard half of the original rationale; keeping the two copies
+consistent — for the eval, and for anything that reads the checkpoint directly —
+is what this is still for.)
 
 For each meeting where the standalone sections are stale but the embedded copy
 still indexes into the current transcript, this copies start_segment/
 end_segment from the embedded copy onto the matching standalone section
 (sections are matched pairwise — same order, section_type, title, content, and
 times — anything else is logged and skipped). Meetings where even the embedded
-copy drifted are logged for summary regeneration and left untouched.
+copy drifted are logged and left untouched by this script.
+
+(Those were `2026-04-01-ca-courier-stevehiltoninterview`,
+`2026-04-14-pod-save-america-nithya-raman` and `2026-06-27-interview`. They did
+NOT need summary regeneration in the end: their section times were intact, so
+PR #154 re-derived the boundaries from those times and republished all three.
+`backfill_segment_merge.py --sections-only` is the tool for that case.)
 
 Validity here means: every section's start/end_segment is a segment_id present
 in the meeting's current transcript_named.json (all segments, not just
@@ -24,9 +34,10 @@ empty-text segment).
 
 Publish is NOT affected by this fix: both publish paths (gui.publish_api and
 run_local --publish-meeting) load the Meeting from transcript_named.json, so
-live rows already carry the corrected embedded copy. The exception is a full
-pipeline resume (run_local stage 5 loads summary.json into meeting.summary
-before the stage-7 publish), which would have pushed stale boundaries.
+live rows already carry the corrected embedded copy. A full pipeline resume used
+to be the exception — run_local stage 5 loaded summary.json into meeting.summary
+before the stage-7 publish — but PR #153 changed that path to prefer the
+embedded summary, so that route is closed too.
 
 Usage:
     .venv/bin/python backfill_summary_sections.py [--dry-run] [--verify-only]
