@@ -53,8 +53,9 @@ def label_segments(
 
 
 def gold_sections_valid(gold_sections: list[dict], all_segment_ids: set) -> tuple:
-    """(True, "") when every gold section's start/end_segment is a real
-    segment id in THIS meeting's current transcript; otherwise (False, reason).
+    """(True, "") when every gold section's start/end_segment is a real segment id
+    in THIS meeting's current transcript AND names a forward range; otherwise
+    (False, reason).
 
     Guards against a real corpus hazard: backfill_segment_merge.py renumbers
     transcript_named.json's segments (and its embedded summary copy) in
@@ -71,6 +72,16 @@ def gold_sections_valid(gold_sections: list[dict], all_segment_ids: set) -> tupl
     into the current transcript just fine. Narrowing this set to text-bearing
     ids mis-reports those meetings as stale — measured 2026-08-06, it skipped
     48 of the 149-meeting corpus that were perfectly scoreable.
+
+    Membership is not sufficient on its own: end_segment < start_segment names two
+    perfectly real ids while describing no range at all. _full_section_transcript
+    returns "" for it, and label_segments() skips it outright — so an inverted gold
+    section does not fail loudly, it just quietly drops out of the gold labels and
+    leaves the meeting scored against an incomplete denominator. Rejecting here
+    turns that into a visible skip. Both classifier paths in src/summarize.py now
+    clamp inverted ranges before summarizing, so this should only ever fire on gold
+    generated before that guard (measured 2026-08-06: one meeting corpus-wide,
+    2026-06-24-cd1-republican-primary-debate, since repaired).
     """
     if not gold_sections:
         return False, "no gold sections"
@@ -83,6 +94,12 @@ def gold_sections_valid(gold_sections: list[dict], all_segment_ids: set) -> tupl
                 f"gold segment range [{start},{end}] outside this transcript's "
                 "current segment ids (stale — likely un-republished after a "
                 "segment-renumbering backfill)"
+            )
+        if end < start:
+            return False, (
+                f"gold segment range [{start},{end}] is inverted (end_segment "
+                "below start_segment) — it describes no segments, so the section "
+                "would silently vanish from the gold labels"
             )
     return True, ""
 

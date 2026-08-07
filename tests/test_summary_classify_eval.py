@@ -101,6 +101,38 @@ def test_gold_sections_valid_false_on_empty():
     assert "no gold sections" in reason
 
 
+def test_gold_sections_valid_false_on_inverted_range():
+    """A membership check alone passes this: 5 and 4 are both real segment ids.
+    But end_segment < start_segment makes _full_section_transcript return "",
+    so the section is unscoreable. Real case:
+    2026-06-24-cd1-republican-primary-debate had a gold section at 5-4."""
+    gold = [{"start_segment": 5, "end_segment": 4}]
+    ok, reason = gold_sections_valid(gold, all_segment_ids=set(range(10)))
+    assert ok is False
+    assert "inverted" in reason
+    assert "[5,4]" in reason
+
+
+def test_gold_sections_valid_allows_single_segment_section():
+    """start == end is a legitimate one-segment section, not an inversion."""
+    ok, reason = gold_sections_valid([{"start_segment": 3, "end_segment": 3}],
+                                     all_segment_ids=set(range(10)))
+    assert ok is True
+    assert reason == ""
+
+
+def test_inverted_gold_section_would_otherwise_vanish_silently():
+    """Why the gate has to catch this: label_segments already skips an inverted
+    section, so without the gate the meeting scores against gold that is quietly
+    missing a section — no error, just a wrong denominator."""
+    gold = [{"section_type": "opening", "start_segment": 0, "end_segment": 2},
+            {"section_type": "procedural", "start_segment": 5, "end_segment": 4}]
+    labels = label_segments(gold, valid_ids=set(range(10)), type_key="section_type")
+    assert 5 not in labels                      # the section contributes nothing
+    assert set(labels) == {0, 1, 2}
+    assert gold_sections_valid(gold, all_segment_ids=set(range(10)))[0] is False
+
+
 # --- score_meeting --------------------------------------------------------
 
 def test_score_meeting_perfect_agreement():
