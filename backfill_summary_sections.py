@@ -48,29 +48,7 @@ import argparse
 import json
 from pathlib import Path
 
-try:  # detection logic shipped on feat/summary-model-evals
-    from src.summary_classify_eval import gold_sections_valid
-except ImportError:  # pre-merge fallback — same semantics; delete once merged
-    def gold_sections_valid(gold_sections: list[dict], all_segment_ids: set) -> tuple:
-        if not gold_sections:
-            return False, "no gold sections"
-        for sec in gold_sections:
-            start, end = sec.get("start_segment"), sec.get("end_segment")
-            if start is None or end is None:
-                return False, "gold section missing start_segment/end_segment"
-            if start not in all_segment_ids or end not in all_segment_ids:
-                return False, (
-                    f"gold segment range [{start},{end}] outside this "
-                    "transcript's current segment ids"
-                )
-            # Membership alone passes an inverted range: both ids are real, but
-            # end < start describes no segments at all.
-            if end < start:
-                return False, (
-                    f"gold segment range [{start},{end}] is inverted "
-                    "(end_segment below start_segment)"
-                )
-        return True, ""
+from src.summary_classify_eval import gold_sections_valid
 
 
 def sections_stale(sections: list[dict], valid_ids: set) -> bool:
