@@ -3,7 +3,13 @@ from __future__ import annotations
 import json
 
 from src.models import Meeting, Segment, SpeakerMapping, MeetingSummary, SummarySection
-from backfill_segment_merge import remerge_meeting, backfill, reindex_summary_sections
+from backfill_segment_merge import (
+    backfill,
+    merge_would_change,
+    reindex_summary_sections,
+    remerge_meeting,
+    sections_are_stale,
+)
 
 
 def test_reindex_summary_sections_maps_times_to_merged_indices():
@@ -53,7 +59,7 @@ def _fragmented_meeting(meeting_id="2026-05-15-interview"):
 
 def test_remerge_meeting_collapses_and_reindexes():
     m = _fragmented_meeting()
-    before, after = remerge_meeting(m)
+    before, after, _ = remerge_meeting(m)
     assert before == 4 and after == 2                    # 3 Bass fragments -> 1, Host stays
     assert m.segments[0].text == "of this being the worst natural disaster"
     # section still covers the Bass block, now a single merged segment (index 0)
@@ -89,3 +95,127 @@ def test_backfill_skips_already_merged(tagged_meeting_dir, tmp_meetings_dir):
     mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
     (mdir / "transcript_named.json").write_text(json.dumps(m.to_dict()))
     assert backfill(dry_run=False) == 0                  # nothing to do
+
+
+def _already_merged_with_stale_sections():
+    """The state the three drifted meetings were actually in: segments already
+    merged, so merge_adjacent_segments is a no-op, but the summary boundaries
+    still index into the pre-merge numbering."""
+    m = _fragmented_meeting()
+    remerge_meeting(m)
+    assert len(m.segments) == 2                          # merge is now a no-op
+    m.summary.sections[0].start_segment = 0
+    m.summary.sections[0].end_segment = 139              # pre-merge overrun
+    return m
+
+
+def test_backfill_persists_reindex_when_segment_count_is_unchanged(
+        tagged_meeting_dir, tmp_meetings_dir):
+    """The hole that missed the three meetings: `remerge_meeting` reindexed in
+    memory and `if after == before: continue` threw the result away."""
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    (mdir / "transcript_named.json").write_text(
+        json.dumps(_already_merged_with_stale_sections().to_dict()))
+
+    assert backfill(dry_run=False) == 1
+    sec = json.loads((mdir / "transcript_named.json").read_text())["summary"]["sections"][0]
+    assert (sec["start_segment"], sec["end_segment"]) == (0, 0)  # section covers the Bass block
+
+
+def test_backfill_dry_run_does_not_persist_reindex(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    original = json.dumps(_already_merged_with_stale_sections().to_dict())
+    (mdir / "transcript_named.json").write_text(original)
+
+    assert backfill(dry_run=True) == 1
+    assert (mdir / "transcript_named.json").read_text() == original
+
+
+def test_backfill_resyncs_standalone_summary_json(tagged_meeting_dir, tmp_meetings_dir):
+    """summary.json is the resume-path checkpoint; it must not keep boundaries
+    the authoritative embedded copy no longer has."""
+    m = _already_merged_with_stale_sections()
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    (mdir / "transcript_named.json").write_text(json.dumps(m.to_dict()))
+    stale = m.summary.to_dict()
+    stale["sections"][0]["extra_key"] = "preserve me"
+    (mdir / "summary.json").write_text(json.dumps(stale))
+
+    backfill(dry_run=False)
+    sec = json.loads((mdir / "summary.json").read_text())["sections"][0]
+    assert (sec["start_segment"], sec["end_segment"]) == (0, 0)
+    assert sec["extra_key"] == "preserve me"             # untouched apart from boundaries
+
+
+def test_backfill_without_summary_json_does_not_raise(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    (mdir / "transcript_named.json").write_text(
+        json.dumps(_already_merged_with_stale_sections().to_dict()))
+    assert not (mdir / "summary.json").exists()
+    assert backfill(dry_run=False) == 1
+
+
+def test_backfill_leaves_valid_boundaries_alone(tagged_meeting_dir, tmp_meetings_dir):
+    """Boundaries that still index into the current segments are authoritative —
+    the summariser chose them against these very segments. Re-deriving them from
+    times can only lose information, so a valid summary is never rewritten even
+    where the time-derived answer would differ."""
+    m = _fragmented_meeting()
+    remerge_meeting(m)                                   # merge is now a no-op
+    sec = m.summary.sections[0]
+    sec.start_segment, sec.end_segment = 0, 1            # valid ids; times say (0, 0)
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    (mdir / "transcript_named.json").write_text(json.dumps(m.to_dict()))
+
+    assert backfill(dry_run=False) == 0
+    kept = json.loads((mdir / "transcript_named.json").read_text())["summary"]["sections"][0]
+    assert (kept["start_segment"], kept["end_segment"]) == (0, 1)
+
+
+def test_merge_would_change_does_not_disturb_the_meeting():
+    """merge_adjacent_segments renumbers the segment_ids of the objects it is
+    given, so probing must copy the objects, not just the list. Probing in place
+    renumbers the live segments and makes a valid summary look stale."""
+    m = _fragmented_meeting()
+    ids_before = [s.segment_id for s in m.segments]
+    ends_before = [s.end_time for s in m.segments]
+
+    assert merge_would_change(m) is True
+    assert [s.segment_id for s in m.segments] == ids_before
+    assert [s.end_time for s in m.segments] == ends_before
+    assert len(m.segments) == 4
+    assert not sections_are_stale(m)      # still valid, because nothing moved
+
+
+def test_merge_would_change_is_false_once_merged():
+    m = _fragmented_meeting()
+    remerge_meeting(m)
+    assert merge_would_change(m) is False
+
+
+def test_sections_only_repairs_stale_boundaries_without_merging(
+        tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    (mdir / "transcript_named.json").write_text(
+        json.dumps(_already_merged_with_stale_sections().to_dict()))
+
+    assert backfill(dry_run=False, sections_only=True) == 1
+    data = json.loads((mdir / "transcript_named.json").read_text())
+    assert len(data["segments"]) == 2                    # untouched
+    sec = data["summary"]["sections"][0]
+    assert (sec["start_segment"], sec["end_segment"]) == (0, 0)
+
+
+def test_sections_only_defers_meetings_that_still_need_merging(
+        tagged_meeting_dir, tmp_meetings_dir, capsys):
+    """Reindexing a meeting whose segments are about to be renumbered would just
+    have to be redone, so --sections-only leaves it for the full run."""
+    m = _fragmented_meeting()                            # 4 fragments, not merged
+    m.summary.sections[0].end_segment = 139              # and stale boundaries
+    mdir = tagged_meeting_dir("x", meeting_id="2026-05-15-interview", completed_stage=7)
+    original = json.dumps(m.to_dict())
+    (mdir / "transcript_named.json").write_text(original)
+
+    assert backfill(dry_run=False, sections_only=True) == 0
+    assert (mdir / "transcript_named.json").read_text() == original
+    assert "needs the segment merge" in capsys.readouterr().out
