@@ -5,7 +5,11 @@
 **Race:** Los Angeles Mayor — `9e888818-c50b-4c61-a106-a0839ff2479d` (Nov 3 2026 general/runoff). Most of this content was built against the Jun 2 2026 primary row `24bc3631-22cf-41ab-a731-672481502214`.  
 **Outcome:** **30 of 30 CONFIRMED** to a single event. **0 UNRESOLVED.**
 
-> No database writes were made. Everything here is read-only research plus a draft migration at `backend-migrations-draft/1566_backfill_la_mayor_debate_provenance.sql` for human review.
+> **APPLIED 2026-08-07.** The research below was read-only; the backfill was then reviewed, dry-run and committed to production as ev-accounts migration **`1566_backfill_la_mayor_debate_provenance.sql`**. All 30 rows now carry `source_url` + `source_name`, and **0** Bass/Raman quotes remain unsourced. The four lowest-similarity matches were independently re-verified against `meetings.segments` before applying — longest contiguous runs 35w / 56w / 10w / 87w, word coverage 0.97 / 1.00 / 0.88 / 1.00. The sub-1.00 scores are interior elisions across a segment boundary, as the report states.
+>
+> **Follow-up applied:** ev-accounts migration **`1567_dedupe_la_mayor_debate_quotes.sql`** resolved the duplicate pairs flagged in the Concerns section — see [Dedupe outcome](#dedupe-outcome-applied). Bass + Raman now hold **77** quotes, down from 81.
+>
+> **Still open:** `editor_note` is blank on **56** Bass/Raman quotes. Notes need house style and human sign-off; the elision annotations below are the raw material.
 
 ---
 
@@ -597,3 +601,47 @@ Kept so this ground is not re-covered. Nothing here ended UNRESOLVED, but the pa
 
 - Ballotpedia and Vote411 were not consulted. The source was confirmed directly against two transcripts, so a debate-listing page would have added nothing.
 
+
+---
+
+## Dedupe outcome (applied)
+
+Four rows repeated another row's moment from this same debate. Kept exactly one per moment,
+chosen on **content, not age** — so two of the drops are pre-existing curated rows.
+
+| Question / candidate | Kept | Dropped | Why |
+|---|---|---|---|
+| residential-zoning / Bass | `5c090c4e` | `71044f3e` | Not strict duplicates — two sentences from one answer. The keeper carries the tension ("We need absolutely more housing built, **but** SB 79…"); the drop opened with flat opposition, and its blind text rewrote "I don't support" into "[The candidate] doesn't support" instead of marking a cut. |
+| homelessness / Bass | `dd5bdce9` | `5230bec6` | The keeper is the drop **plus** its opening line, "Everybody needs to go inside." Without it Bass states only what she opposes and carries no forward position. The dropped row's `editor_note` was merged onto the keeper, adapted to cover the fuller quote. |
+| homelessness / Raman | `27f705ef` | `7d2e49cd` | The keeper retains "You don't get an opportunity to say no" — the mechanism that distinguishes her from Bass on this question. |
+| growth-and-development ∕ residential-zoning / Raman | `9ea38e55` | `84f56b9d` | `84f56b9d` was a strict substring filed under a *different* question, so the same sentence could appear twice in one race. Raman keeps a stronger residential-zoning answer (`d8f9bf5d`, exact 106-word match). |
+
+All four drops were drafts; none was a question's `origin_quote_id`. The migration guards abort if
+any had gone live or if a keeper were missing.
+
+### What this pairing produced
+
+Dropping `5230bec6` and `7d2e49cd` leaves the cleanest head-to-head in the race, both candidates
+answering the same moderator question:
+
+> **Bass:** "Everybody needs to go inside. Making it illegal and arresting people is not the way to
+> solve this problem."
+>
+> **Raman:** "Yes, people need to go inside. When they're offered shelter, they go inside. You don't
+> get an opportunity to say no."
+
+Same goal, genuinely different mechanism — Raman adds compulsion, Bass rejects criminalisation.
+Under the comparability rubric that is *commensurable* **and** *differentiated*: a real choice, and
+a good seed entry for the casebook.
+
+## Note for the contrast work
+
+This is a **primary** debate — Bass, Raman and Spencer Pratt — not a runoff debate. No Bass–Raman
+head-to-head has occurred. That is the **MI Governor** pattern from the comparability casebook, not
+the AZ-01 one: both November candidates answered the *same moderator questions in the same room*,
+which is the configuration that yields the highest comparability. The shared questions are
+recoverable from `meetings.segments` for meeting `f2cf80ef-a811-4d95-990d-b9c598284eb6` and should
+seed `readrank_questions` rows with `origin = 'moderator'`.
+
+Pratt's answers are in the same transcript. He is not on the November ballot, so he is out of scope
+for this race — but the *questions* he was asked are the same ones, and they are the durable asset.
