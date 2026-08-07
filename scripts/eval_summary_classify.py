@@ -31,7 +31,12 @@ from src.event_kinds import INTERVIEW_KINDS  # noqa: E402
 from src.eval_llm_client import build_eval_client  # noqa: E402
 from src.eval_meeting_sampling import discover_meetings, select_diverse_sample  # noqa: E402
 from src.models import Meeting  # noqa: E402
-from src.summary_classify_eval import aggregate, gold_sections_valid, score_meeting  # noqa: E402
+from src.summary_classify_eval import (  # noqa: E402
+    DEFAULT_BOUNDARY_TOLERANCE,
+    aggregate,
+    gold_sections_valid,
+    score_meeting,
+)
 from src.summarize import (  # noqa: E402
     _classify_sections_interview,
     _format_chapter_hint,
@@ -41,6 +46,20 @@ from src.summarize import (  # noqa: E402
 )
 
 DEFAULT_MEETINGS_DIR = os.path.expanduser("~/CouncilScribe/meetings")
+
+# Why the report splits rather than reporting one number: interview-kind
+# meetings are classified by _classify_sections_interview(), whose prompt
+# offers exactly one section type ("topic"). Every segment therefore carries
+# the same label, so label_agreement is a CONSTANT there — a model that
+# collapses every topic into one section still scores ~1.00. Measured
+# 2026-08-07 on the 149-meeting corpus, 99 meetings (66%) are interview-kind,
+# so a single pooled agreement number is two-thirds noise-free filler.
+# Read label_agreement on the multi-label row; read boundary_f1 everywhere.
+REPORT_GROUPS = (
+    ("all", lambda r: True),
+    ("multi-label", lambda r: not r["is_interview"]),
+    ("interview", lambda r: r["is_interview"]),
+)
 
 
 def replay_one(client, model_override, meeting: Meeting, gold_sections: list):
@@ -75,6 +94,10 @@ def replay_one(client, model_override, meeting: Meeting, gold_sections: list):
 
     parse_failures = sum(1 for d in debug if not d.get("parsed"))
     row = score_meeting(gold_sections, raw, valid_ids, parse_failures=parse_failures)
+    # Which vocabulary this meeting was classified under decides whether
+    # label_agreement carries any signal — see REPORT_GROUPS.
+    row["is_interview"] = is_interview
+    row["event_kind"] = meeting.event_kind
     return row, None
 
 
@@ -124,23 +147,52 @@ def main() -> int:
             agree_str = f"{row['agreement']:.2f}" if row["agreement"] is not None else "—"
             print(
                 f"    {model_key}/{meeting_id}: agreement={agree_str} "
+                f"boundary_f1={row['boundary_f1']:.2f} "
+                f"(P{row['boundary_precision']:.2f}/R{row['boundary_recall']:.2f} "
+                f"{row['boundary_matched']}/{row['n_gold_boundaries']} gold) "
                 f"gold_sections={row['gold_sections']} candidate_sections={row['candidate_sections']} "
                 f"delta={row['section_count_delta']} parse_failures={row['parse_failures']}"
             )
 
-        rows.append(aggregate(model_key, meeting_rows))
+        for group_name, keep in REPORT_GROUPS:
+            group_rows = [r for r in meeting_rows if keep(r)]
+            if not group_rows:
+                continue
+            agg = aggregate(model_key, group_rows)
+            agg["group"] = group_name
+            rows.append(agg)
 
     if not rows:
         print("No models ran (missing API keys?).")
         return 1
 
-    cols = ["model", "meetings", "segments", "label_agreement", "avg_section_count_delta", "parse_failures"]
+    def fmt(value, places=3):
+        return f"{value:.{places}f}" if value is not None else "—"
+
+    cols = ["model", "group", "meetings", "segments", "label_agreement",
+            "boundary_f1", "boundary_prec", "boundary_recall",
+            "avg_section_count_delta", "parse_failures"]
     print("\n| " + " | ".join(cols) + " |")
     print("|" + "|".join(["---"] * len(cols)) + "|")
     for r in rows:
-        agree = f"{r['label_agreement']:.3f}" if r["label_agreement"] is not None else "—"
-        delta = f"{r['avg_section_count_delta']:.2f}" if r["avg_section_count_delta"] is not None else "—"
-        print(f"| {r['model']} | {r['meetings']} | {r['segments']} | {agree} | {delta} | {r['parse_failures']} |")
+        # label_agreement is struck through on the interview row: it cannot vary
+        # there, so printing it as a comparable score invites false confidence.
+        agree = "n/a (1-label)" if r["group"] == "interview" else fmt(r["label_agreement"])
+        print(
+            f"| {r['model']} | {r['group']} | {r['meetings']} | {r['segments']} | {agree} | "
+            f"{fmt(r['boundary_f1'])} | {fmt(r['boundary_precision'])} | "
+            f"{fmt(r['boundary_recall'])} | {fmt(r['avg_section_count_delta'], 2)} | "
+            f"{r['parse_failures']} |"
+        )
+
+    print("\nlabel_agreement: per-segment section-type match, gold-covered segments only.")
+    print("  Not meaningful on interview-kind meetings (single-label vocabulary) — "
+          "read boundary_f1 there.")
+    print("boundary_f1: section-start placement within "
+          f"{DEFAULT_BOUNDARY_TOLERANCE} scored segment(s), one-to-one matched, "
+          "micro-averaged.")
+    print("  Low recall = missed boundaries (under-segmentation); "
+          "low precision = invented ones.")
 
     return 0
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from src.summary_classify_eval import (
     aggregate,
+    boundary_counts,
     gold_sections_valid,
     label_segments,
     score_meeting,
+    section_boundaries,
 )
 
 
@@ -208,3 +210,167 @@ def test_aggregate_empty_rows():
     assert agg["label_agreement"] is None
     assert agg["avg_section_count_delta"] is None
     assert agg["parse_failures"] == 0
+
+
+# --- section_boundaries ---------------------------------------------------
+
+def test_section_boundaries_are_section_starts_excluding_document_start():
+    # 3 sections -> 2 boundaries. Position 0 is not a decision the model made:
+    # every segmentation starts at the beginning, so counting it would hand
+    # every model a free correct boundary.
+    sections = [
+        {"start_segment": 0, "end_segment": 4},
+        {"start_segment": 5, "end_segment": 9},
+        {"start_segment": 10, "end_segment": 14},
+    ]
+    assert section_boundaries(sections, sorted(range(15))) == [5, 10]
+
+
+def test_section_boundaries_are_positions_not_raw_segment_ids():
+    # Scoring runs over text-bearing ids only, so a boundary's *position* in
+    # that population is what matters — id 10 is the 3rd scored segment here.
+    ordered = [0, 5, 10, 20]
+    sections = [{"start_segment": 0, "end_segment": 5},
+                {"start_segment": 10, "end_segment": 20}]
+    assert section_boundaries(sections, ordered) == [2]
+
+
+def test_section_boundaries_snaps_boundary_on_empty_text_segment_forward():
+    # A gold boundary can land on an empty-text id (valid, but never scored).
+    # It snaps to the next scored segment rather than being dropped.
+    ordered = [0, 1, 3, 4]          # id 2 carries empty text
+    sections = [{"start_segment": 0, "end_segment": 1},
+                {"start_segment": 2, "end_segment": 4}]
+    assert section_boundaries(sections, ordered) == [2]  # position of id 3
+
+
+def test_section_boundaries_ignores_out_of_range_and_malformed():
+    ordered = [0, 1, 2]
+    sections = [{"start_segment": 0, "end_segment": 2},
+                {"start_segment": 99, "end_segment": 120},   # past the end
+                {"start_segment": None, "end_segment": 1},   # malformed
+                {"end_segment": 1}]                          # missing start
+    assert section_boundaries(sections, ordered) == []
+
+
+def test_section_boundaries_deduplicates():
+    sections = [{"start_segment": 0, "end_segment": 3},
+                {"start_segment": 2, "end_segment": 3},
+                {"start_segment": 2, "end_segment": 5}]
+    assert section_boundaries(sections, sorted(range(6))) == [2]
+
+
+# --- boundary_counts ------------------------------------------------------
+
+def test_boundary_counts_exact_match():
+    assert boundary_counts([5, 10], [5, 10], tolerance=0) == (2, 2, 2)
+
+
+def test_boundary_counts_off_by_one_within_tolerance():
+    # A boundary one scored segment early is not a real segmentation error.
+    assert boundary_counts([5, 10], [4, 11], tolerance=1) == (2, 2, 2)
+
+
+def test_boundary_counts_outside_tolerance_does_not_match():
+    assert boundary_counts([5], [8], tolerance=1) == (0, 1, 1)
+
+
+def test_boundary_counts_matching_is_one_to_one():
+    # Three candidate boundaries crowded around one gold boundary must not
+    # each claim it — otherwise spamming boundaries would inflate recall.
+    matched, n_gold, n_cand = boundary_counts([5], [4, 5, 6], tolerance=1)
+    assert (matched, n_gold, n_cand) == (1, 1, 3)
+
+
+def test_boundary_counts_both_empty_is_a_match_not_a_failure():
+    # A single-section meeting genuinely has no interior boundaries.
+    assert boundary_counts([], [], tolerance=1) == (0, 0, 0)
+
+
+# --- boundary metric on score_meeting -------------------------------------
+
+def test_collapsing_topics_scores_perfect_agreement_but_zero_boundary_recall():
+    """The motivating case, measured on real corpus data 2026-08-07.
+
+    Interview-kind meetings are classified with a single-label vocabulary
+    ("topic"), so per-segment label agreement is a constant — deepseek
+    collapsed 2025-10-06-interview's 6 gold topics into 1 section and scored
+    agreement=1.00. The boundary metric is what has to catch that.
+    """
+    gold = [
+        {"section_type": "topic", "start_segment": 0, "end_segment": 9},
+        {"section_type": "topic", "start_segment": 10, "end_segment": 19},
+        {"section_type": "topic", "start_segment": 20, "end_segment": 29},
+    ]
+    collapsed = [{"type": "topic", "start_segment": 0, "end_segment": 29}]
+    row = score_meeting(gold, collapsed, valid_ids=set(range(30)))
+
+    assert row["agreement"] == 1.0            # the blind spot
+    assert row["boundary_recall"] == 0.0      # what now catches it
+    assert row["boundary_f1"] == 0.0
+    assert row["n_gold_boundaries"] == 2
+
+
+def test_score_meeting_perfect_boundaries():
+    gold = [{"section_type": "topic", "start_segment": 0, "end_segment": 4},
+            {"section_type": "topic", "start_segment": 5, "end_segment": 9}]
+    cand = [{"type": "topic", "start_segment": 0, "end_segment": 4},
+            {"type": "topic", "start_segment": 5, "end_segment": 9}]
+    row = score_meeting(gold, cand, valid_ids=set(range(10)))
+    assert row["boundary_f1"] == 1.0
+    assert row["boundary_precision"] == 1.0
+    assert row["boundary_recall"] == 1.0
+
+
+def test_score_meeting_over_segmentation_hurts_precision_not_recall():
+    gold = [{"section_type": "topic", "start_segment": 0, "end_segment": 9},
+            {"section_type": "topic", "start_segment": 10, "end_segment": 19}]
+    cand = [{"type": "topic", "start_segment": 0, "end_segment": 4},
+            {"type": "topic", "start_segment": 5, "end_segment": 9},
+            {"type": "topic", "start_segment": 10, "end_segment": 14},
+            {"type": "topic", "start_segment": 15, "end_segment": 19}]
+    row = score_meeting(gold, cand, valid_ids=set(range(20)))
+    assert row["boundary_recall"] == 1.0        # found the real boundary
+    assert row["boundary_precision"] == 1 / 3   # plus two invented ones
+    assert row["n_candidate_boundaries"] == 3
+
+
+def test_score_meeting_single_section_gold_and_candidate_is_perfect():
+    gold = [{"section_type": "topic", "start_segment": 0, "end_segment": 5}]
+    cand = [{"type": "topic", "start_segment": 0, "end_segment": 5}]
+    row = score_meeting(gold, cand, valid_ids=set(range(6)))
+    assert row["boundary_f1"] == 1.0
+
+
+# --- aggregate: boundary micro-averaging ----------------------------------
+
+def test_aggregate_micro_averages_boundaries_not_mean_of_f1():
+    # Meeting A: 1 of 1 boundary found. Meeting B: 0 of 9 found.
+    # Mean-of-per-meeting-F1 would say 0.50; micro-average says 1/10 recall.
+    row_a = {"n_segments": 10, "agree": 10, "agreement": 1.0,
+             "gold_sections": 2, "candidate_sections": 2, "section_count_delta": 0,
+             "parse_failures": 0, "boundary_matched": 1,
+             "n_gold_boundaries": 1, "n_candidate_boundaries": 1}
+    row_b = {"n_segments": 10, "agree": 10, "agreement": 1.0,
+             "gold_sections": 10, "candidate_sections": 1, "section_count_delta": -9,
+             "parse_failures": 0, "boundary_matched": 0,
+             "n_gold_boundaries": 9, "n_candidate_boundaries": 0}
+    agg = aggregate("test-model", [row_a, row_b])
+    assert agg["boundary_recall"] == 0.1
+    assert agg["boundary_precision"] == 1.0
+    assert abs(agg["boundary_f1"] - 2 * 1.0 * 0.1 / 1.1) < 1e-9
+
+
+def test_aggregate_tolerates_rows_without_boundary_keys():
+    # Backward compatibility: score rows predating the boundary metric.
+    row = {"n_segments": 2, "agree": 2, "agreement": 1.0, "gold_sections": 1,
+           "candidate_sections": 1, "section_count_delta": 0, "parse_failures": 0}
+    agg = aggregate("test-model", [row])
+    assert agg["boundary_f1"] is None
+
+
+def test_aggregate_boundary_f1_is_none_when_nothing_to_score():
+    agg = aggregate("test-model", [])
+    assert agg["boundary_f1"] is None
+    assert agg["boundary_precision"] is None
+    assert agg["boundary_recall"] is None

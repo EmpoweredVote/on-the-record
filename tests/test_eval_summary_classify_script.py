@@ -123,6 +123,62 @@ def test_ab_gate_still_rejects_out_of_range_gold_boundary():
     assert "stale" in reason
 
 
+# --- split reporting -----------------------------------------------------
+# label_agreement is a constant on interview-kind meetings (single-label
+# "topic" vocabulary), so the report has to separate them from the meetings
+# where it actually varies. replay_one tags each row with which it is.
+
+def _meeting_of_kind(kind: str) -> Meeting:
+    segments = [
+        Segment(segment_id=i, start_time=float(i), end_time=float(i + 1),
+                speaker_label="SPEAKER_00", text=f"Utterance {i}.")
+        for i in range(6)
+    ]
+    return Meeting(meeting_id=f"m-{kind}", city="Testville", date="2026-01-01",
+                   event_kind=kind, segments=segments)
+
+
+def test_replay_one_tags_interview_kind_rows():
+    gold = [{"section_type": "topic", "start_segment": 0, "end_segment": 5}]
+    client = _fake_client([{"type": "topic", "start_segment": 0, "end_segment": 5}])
+
+    podcast_row, _ = eval_mod.replay_one(client, None, _meeting_of_kind("podcast"), gold)
+    council_row, _ = eval_mod.replay_one(client, None, _meeting_of_kind("council"), gold)
+
+    assert podcast_row["is_interview"] is True
+    assert council_row["is_interview"] is False
+
+
+def test_report_groups_partition_rows_into_all_multilabel_and_interview():
+    rows = [{"is_interview": True}, {"is_interview": False}, {"is_interview": False}]
+    got = {name: [r for r in rows if keep(r)] for name, keep in eval_mod.REPORT_GROUPS}
+    assert len(got["all"]) == 3
+    assert len(got["multi-label"]) == 2
+    assert len(got["interview"]) == 1
+    # "all" must stay a superset — it's the number a reader compares across runs.
+    assert len(got["all"]) == len(got["multi-label"]) + len(got["interview"])
+
+
+def test_boundary_metric_separates_models_that_label_agreement_cannot():
+    """End-to-end through replay_one on a single-label (interview) meeting:
+    two candidates that score identically on label_agreement must be
+    distinguished by boundary_f1."""
+    gold = [{"section_type": "topic", "start_segment": 0, "end_segment": 2},
+            {"section_type": "topic", "start_segment": 3, "end_segment": 5}]
+    meeting = _meeting_of_kind("podcast")
+
+    faithful = _fake_client([{"type": "topic", "start_segment": 0, "end_segment": 2},
+                             {"type": "topic", "start_segment": 3, "end_segment": 5}])
+    collapsed = _fake_client([{"type": "topic", "start_segment": 0, "end_segment": 5}])
+
+    good_row, _ = eval_mod.replay_one(faithful, None, meeting, gold)
+    bad_row, _ = eval_mod.replay_one(collapsed, None, meeting, gold)
+
+    assert good_row["agreement"] == bad_row["agreement"] == 1.0  # indistinguishable
+    assert good_row["boundary_f1"] == 1.0                        # now separated
+    assert bad_row["boundary_f1"] == 0.0
+
+
 def test_both_harnesses_agree_on_admitting_the_same_meeting():
     # The regression that motivated this: the two scripts must not disagree.
     meeting = _meeting_with_empty_text_segment()
