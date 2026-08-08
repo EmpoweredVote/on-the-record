@@ -19,8 +19,7 @@ what's already there.
       *why*) and this skill's [CHECKS.md](CHECKS.md) (the *mechanics* — findings schema, the
       mechanical checks, the eleven per-quote judgment checks and the two per-set ones, both
       judgment-agent prompt templates, and the portfolio instructions). If the two ever disagree,
-      the principles doc wins — with one recorded exception, the source ladder, explained in
-      CHECKS.md §3.2.
+      the principles doc wins.
 - [ ] **Resolve scope + confirm.** Run `scripts/audit.py` with the user's scope (default: no
       flags, all races). It prints a `SCOPE:` line and `MECHANICAL FINDINGS: N`, and writes
       `.runs/<date>/context/<race>.json` bundles plus `mechanical_findings.json` and
