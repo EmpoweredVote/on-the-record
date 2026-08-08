@@ -16,7 +16,7 @@ ruling is a signal about the rubric, which is the point.
 it. Not restatements of `CHECKS.md`, and not routine applications.
 
 **Sources.** Seeded from
-`read-rank/docs/superpowers/specs/2026-07-23-readrank-comparability-model.md` §11 (TX Senate 2026,
+`on-the-record/docs/superpowers/specs/2026-07-23-readrank-comparability-model.md` §11 (TX Senate 2026,
 the first reference run; then AZ-01, MI Gov R, MI Senate Dem, KS Senate Dem) and from the LA Mayor
 provenance pass of 2026-08-07.
 
