@@ -482,3 +482,14 @@ with a skew audit" — never engineer outcome balance).
     finding is about the race's topic portfolio as a whole, not a single quote or topic.
 - If coverage is roughly comparable across candidates, emit no `coverage-skew` finding for
   that race.
+
+## 6. The casebook
+
+[CASEBOOK.md](CASEBOOK.md) carries the rulings that bind judgment calls, as
+**situation → decision → principle**. This file says what each check looks for; the casebook says
+how hard cases were actually decided — so an agent reasons by precedent, and a human can audit that
+reasoning without re-reading the source material.
+
+Consult it before every judgment pass. Propose an entry for any ruling it does not cover. If a new
+case contradicts an entry, surface both rather than overruling silently: an overturned ruling is
+information about the rubric, which is the point of keeping it.

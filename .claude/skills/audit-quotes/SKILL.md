@@ -34,11 +34,15 @@ what's already there.
       third-party sites. On a single race it's cheap — just turn it on.
       (`source-nested-quotation` is the exception: it runs on video transcripts and on every
       quote's own text without the flag — see CHECKS.md §2.3.)
+- [ ] **Read the casebook.** [CASEBOOK.md](CASEBOOK.md) holds the rulings that bind judgment calls —
+      situation → decision → principle, seeded from the reference runs. Pass it to every judgment
+      subagent alongside the principles doc. It is **precedent, not background reading**: a case
+      that matches an entry is ruled the same way.
 - [ ] **Judgment fan-out.** For each `.runs/<date>/context/<race>.json` bundle, dispatch a
       parallel `Agent`-tool subagent using the judgment-agent prompt template in CHECKS.md §4
-      (fill in `{context_bundle_json}` with the bundle; the agent also needs the principles doc).
-      Each subagent returns a JSON array of findings (empty array = clean for that race). Aggregate
-      these with the mechanical findings.
+      (fill in `{context_bundle_json}` with the bundle; the agent also needs the principles doc
+      and CASEBOOK.md). Each subagent returns a JSON array of findings (empty array = clean for
+      that race). Aggregate these with the mechanical findings.
 - [ ] **Portfolio pass.** Per race, apply the CHECKS.md §5 coverage-skew instructions over that
       race's bundle (per-candidate topic coverage, compared across candidates). Append any
       `portfolio`-level `coverage-skew` findings to the aggregate.
@@ -52,6 +56,12 @@ what's already there.
       **only** after explicit user OK. For **guided** fixes, draft the replacement text yourself and
       confirm the exact wording with the user before building the fix op. List every
       **decision-required** finding for the user to resolve manually — never auto-apply those.
+- [ ] **Append to the casebook.** For every ruling this run made that [CASEBOOK.md](CASEBOOK.md)
+      did not already cover — and for every case where following it felt wrong — propose an entry
+      in situation → decision → principle form and confirm it with the user before committing.
+      A run that surfaces a **contradiction** with an existing entry is the most valuable outcome
+      there is: surface both, never quietly overrule. An overturned ruling is information about the
+      rubric, which is the point.
 
 ## Running the scripts
 
