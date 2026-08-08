@@ -31,3 +31,52 @@ def test_scope_sql_embeds_the_race_expression():
     sql = audit_db.build_scope_sql(race=LA_GENERAL)
     assert audit_db.race_id_expr(race=LA_GENERAL) in sql
     assert "AS race_id" in sql
+
+
+class _FakeCursor:
+    """Captures what fetch_rows actually hands to psycopg2."""
+
+    def __init__(self):
+        self.sql = None
+        self.params = None
+
+    def execute(self, sql, params):
+        self.sql, self.params = sql, params
+
+    def fetchall(self):
+        return []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeConn:
+    def __init__(self, cur):
+        self._cur = cur
+
+    def cursor(self, **kwargs):
+        return self._cur
+
+
+def test_fetch_rows_forwards_race_into_the_generated_sql():
+    """Guards the wiring, not just the string builders.
+
+    The three assertions above all pass even if fetch_rows stops passing `race` to
+    build_scope_sql -- it would silently fall back to the lowest-sorting race id, which is the
+    original bug. This is the test that actually fails on that regression.
+    """
+    cur = _FakeCursor()
+    audit_db.fetch_rows(_FakeConn(cur), race=LA_GENERAL)
+    assert audit_db.race_id_expr(race=LA_GENERAL) in cur.sql
+    assert "ORDER BY rc.race_id" not in cur.sql
+    assert cur.params["race"] == LA_GENERAL
+
+
+def test_fetch_rows_unscoped_uses_the_fallback_expression():
+    cur = _FakeCursor()
+    audit_db.fetch_rows(_FakeConn(cur), race=None)
+    assert "ORDER BY rc.race_id" in cur.sql
+    assert cur.params["race"] is None
