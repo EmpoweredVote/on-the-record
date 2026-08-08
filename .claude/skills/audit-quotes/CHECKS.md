@@ -422,9 +422,16 @@ reprint and a scraped platform bullet — so the check could not stay mechanical
   `scorecard-source` detect sources that cannot carry a candidate utterance *at all*, which is
   orthogonal to directness: a level-1-looking page is still unusable if nobody said the words on it.
 
-⚠️ `QUOTE-CURATION-PRINCIPLES.md` §5 still states the medium-ordered 1–5 ladder and is **due an
-update to match**; until it lands, the two documents disagree on this one point and the ordering
-above — the project's actual decision, recorded in the casebook — is what the audit applies.
+✅ `QUOTE-CURATION-PRINCIPLES.md` §5 now states this hierarchy (2026-08-07). The two documents
+agree; the principles doc remains the authority. Its levels are **named, not numbered** —
+`answered-this-question` / `adjacent` / `curator-extracted` / `excluded` — deliberately, because
+`essentials.discovered_sources.source_tier_guess` runs 1–4 on a *different* scale.
+
+**Source discovery still ranks by questioner independence, and that is intended.** The classifier
+guesses from a title and channel name before anything has been read, where directness is not yet
+knowable; its tier is a **triage-priority** signal, not a quality claim about a quote. Do not read
+a discovery `source_tier_guess` of 4 as "this quote is `curator-extracted`" — they are different
+scales measuring different things at different times.
 
 ## 4. Judgment-agent prompt template — the **per-quote** pass
 
