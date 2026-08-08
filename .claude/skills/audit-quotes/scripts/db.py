@@ -32,9 +32,13 @@ SELECT q.id, q.topic_key, q.readrank_selected, q.quote_text, q.deidentified_text
        q.editor_note, q.source_name, q.source_url,
        q.politician_id::text AS politician_id,
        p.full_name AS candidate,
+       q.question_id::text AS question_id,
+       rq.question_text AS question_text,
+       rq.origin AS question_origin,
        {race_id_expr(race)} AS race_id
 FROM essentials.quotes q
 JOIN essentials.politicians p ON p.id = q.politician_id
+LEFT JOIN essentials.readrank_questions rq ON rq.id = q.question_id
 WHERE (%(ids)s IS NULL OR q.id = ANY(%(ids)s::uuid[]))
   AND (%(candidate)s IS NULL OR lower(p.full_name) = lower(%(candidate)s))
   AND (%(topic)s IS NULL OR q.topic_key = %(topic)s)
