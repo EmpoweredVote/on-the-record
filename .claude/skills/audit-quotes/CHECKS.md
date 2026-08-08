@@ -620,8 +620,22 @@ error you are here to catch, so never merge two questions because their topic ma
 
 1. **Discard first.** Drop from each set every quote the per-quote pass flagged
    `off-question`. Responsiveness precedes comparability — a quote that doesn't answer the
-   question was never in the set. Drop drafts too (`readrank_selected` false): the set a
-   citizen sees is the live one.
+   question was never in the set.
+
+   **Then decide what the set is, from the run's scope:**
+   - **Live-only run** (the default): the set is the live quotes (`readrank_selected` true).
+     You are grading what a citizen actually sees.
+   - **Drafts in scope** (`--include-drafts`): the set is **each candidate's single best
+     available answer** — the one the per-quote pass judged most faithful, live or draft.
+     You are answering *"is this question worth shipping, and with which answers?"*, which is
+     the reason the run included drafts. Judging only live quotes on such a run tells you
+     nothing about a race whose draft pool is large and whose live selections are sparse —
+     which is the common case, and the case the run exists to fix.
+
+   This does **not** loosen "contrast is observed, never engineered". Each candidate's best
+   answer was chosen on *faithfulness alone*, in the earlier pass, with no knowledge of what
+   the other candidate said. You are judging the set that selection produced — you are not
+   selecting.
 2. **Count what's left.** If fewer than 2 candidates remain, the question is *surfaced,
    not rankable* — a lone voice shown for inclusion. That is already reported as
    `not-rankable` by the mechanical pass; emit nothing for it. Do not double-report.
