@@ -17,8 +17,10 @@ what's already there.
 
 - [ ] **Read principles + catalog first.** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` (the
       *why*) and this skill's [CHECKS.md](CHECKS.md) (the *mechanics* — findings schema, the
-      mechanical checks, the nine judgment checks, the judgment-agent prompt template, and the
-      portfolio instructions). If the two ever disagree, the principles doc wins.
+      mechanical checks, the eleven per-quote judgment checks and the two per-set ones, both
+      judgment-agent prompt templates, and the portfolio instructions). If the two ever disagree,
+      the principles doc wins — with one recorded exception, the source ladder, explained in
+      CHECKS.md §3.2.
 - [ ] **Resolve scope + confirm.** Run `scripts/audit.py` with the user's scope (default: no
       flags, all races). It prints a `SCOPE:` line and `MECHANICAL FINDINGS: N`, and writes
       `.runs/<date>/context/<race>.json` bundles plus `mechanical_findings.json` and
@@ -38,11 +40,18 @@ what's already there.
       situation → decision → principle, seeded from the reference runs. Pass it to every judgment
       subagent alongside the principles doc. It is **precedent, not background reading**: a case
       that matches an entry is ruled the same way.
-- [ ] **Judgment fan-out.** For each `.runs/<date>/context/<race>.json` bundle, dispatch a
-      parallel `Agent`-tool subagent using the judgment-agent prompt template in CHECKS.md §4
-      (fill in `{context_bundle_json}` with the bundle; the agent also needs the principles doc
-      and CASEBOOK.md). Each subagent returns a JSON array of findings (empty array = clean for
-      that race). Aggregate these with the mechanical findings.
+- [ ] **Judgment fan-out — per-quote.** For each `.runs/<date>/context/<race>.json` bundle, dispatch
+      a parallel `Agent`-tool subagent using the **per-quote** judgment-agent prompt template in
+      CHECKS.md §4 (fill in `{context_bundle_json}` with the bundle; the agent also needs the
+      principles doc and CASEBOOK.md). Each subagent returns a JSON array of findings (empty array
+      = clean for that race). Aggregate these with the mechanical findings.
+- [ ] **Judgment fan-out — per-set.** Only **after** a race's per-quote findings are back, dispatch
+      one more subagent for that race using the **per-set** template in CHECKS.md §4.1 (fill in
+      `{questions_json}` with `bundle["questions"]` and `{per_quote_findings_json}` with that
+      race's per-quote findings). It returns `set-incommensurable` / `set-undifferentiated`
+      findings at `level: "topic"`. **The ordering is a guardrail, not scheduling convenience** —
+      running it before or alongside the per-quote pass lets contrast leak backward into which
+      quote gets chosen. Never merge the two prompts.
 - [ ] **Portfolio pass.** Per race, apply the CHECKS.md §5 coverage-skew instructions over that
       race's bundle (per-candidate topic coverage, compared across candidates). Append any
       `portfolio`-level `coverage-skew` findings to the aggregate.
