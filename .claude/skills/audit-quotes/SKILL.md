@@ -1,6 +1,6 @@
 ---
 name: audit-quotes
-description: Audit curated quotes in essentials.quotes (ev-accounts DB) against the Read & Rank curation principles — mechanical checks plus a per-race judgment pass — and surface findings with gated, human-confirmed fixes. Use when the user wants to audit quotes, review quotes, check quotes against principles, audit the quotes in the DB, or run a quote audit.
+description: Audit curated quotes in essentials.quotes (ev-accounts DB) against the Read & Rank curation principles — mechanical checks, a per-quote judgment pass, a per-set comparability pass, and a portfolio pass — and surface findings with gated, human-confirmed fixes. Use when the user wants to audit quotes, review quotes, check quotes against principles, check whether a race's questions are genuinely rankable, audit the quotes in the DB, or run a quote audit.
 ---
 
 # Audit Quotes
@@ -8,8 +8,11 @@ description: Audit curated quotes in essentials.quotes (ev-accounts DB) against 
 Audit already-curated quotes in `essentials.quotes` (the **ev-accounts** DB) against
 `essentials/docs/QUOTE-CURATION-PRINCIPLES.md`. By default the audit sweeps **all live quotes
 across all races** — narrower scopes (a candidate, a topic, explicit ids) are opt-in. It runs a
-free mechanical pass, fans out a judgment pass per race, runs a portfolio (coverage-skew) pass,
-and renders a consolidated report. Any fix is dry-run first and applied only after explicit user
+free mechanical pass, fans out a **per-quote** judgment pass per race, then a **per-set**
+comparability pass over that race's questions, runs a portfolio (coverage-skew) pass, and renders
+a consolidated report. The two judgment passes are ordered deliberately — the per-set one runs
+strictly after, so contrast cannot leak backward into which quote gets chosen.
+Any fix is dry-run first and applied only after explicit user
 sign-off. Pairs with `publish-quotes` (which sources and inserts new quotes) — this skill reviews
 what's already there.
 
@@ -26,6 +29,12 @@ what's already there.
       `mechanical_report.md`. Show the user both printed lines and **confirm before the judgment
       fan-out** — state roughly one subagent per race. The mechanical pass is free and read-only,
       so run it first regardless.
+- [ ] **Offer `--include-drafts` when the run decides what to ship.** The per-set pass judges the
+      answers a question actually carries. On a default (live-only) run it grades only what already
+      shipped; with drafts in scope it judges each candidate's *best available* answer and tells
+      you which pairing is worth selecting. Turn it on for any run whose purpose is deciding what
+      to ship — that is most runs on a race with a large draft pool and sparse live selections,
+      which is the common case. Drafts cost no network I/O, just a larger bundle.
 - [ ] **Offer `--verify-written`** (a.k.a. `--verify-sources`). Without it, quotes from candidate
       sites, op-eds and news articles are never compared to their cited source — the gap that let
       the WI-02 clip through (CHECKS.md §2.2). This is the highest-severity blind spot in the
@@ -125,3 +134,11 @@ Allowed `field` values for `set_field`/`regex_sub`: `editor_note`, `deidentified
 - **Only `trailing-ellipsis` is a truly mechanical auto-fix** (a regex strip). Note, de-id, and
   partisan-tell fixes are **guided**: draft the replacement text, confirm wording with the user,
   then apply — never rewrite and commit in the same step.
+- **Never merge the two judgment passes.** Per-set runs strictly after per-quote so contrast
+  cannot influence selection. Merging them to save a dispatch silently breaks the guardrail the
+  whole rubric rests on (QUOTE-CURATION-PRINCIPLES §4.6).
+- **Agreement is information.** An undifferentiated question is *shown as convergence*, not
+  dropped and not sharpened. Never hide agreement to make a race look sharper, and never suggest
+  sourcing or swapping a quote in order to create contrast.
+- **Demotions are policy, not automation.** Neither per-set check flips `readrank_selected`; any
+  change goes through `apply_fixes.py`'s dry-run and explicit OK like every other write.
