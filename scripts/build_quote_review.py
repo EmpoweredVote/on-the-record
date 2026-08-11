@@ -78,8 +78,81 @@ def esc(s):
     return html.escape(s or "")
 
 
+OTR = "https://on-the-record.onrender.com/meetings/"
+_YT = re.compile(r"(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]{11})")
+_T = re.compile(r"[?&]t=(\d+)")
+_DATED_SLUG = re.compile(r"^(\d{4}-\d{2}-\d{2})-(.+)$")
+
+
+def meeting_index(cur):
+    """video_url -> the ingested meeting, so a bare YouTube link can become a readable one."""
+    cur.execute("""SELECT video_url, id::text AS id, date,
+                          COALESCE(NULLIF(btrim(title), ''), slug) AS label
+                     FROM meetings.meetings WHERE video_url IS NOT NULL""")
+    return {r["video_url"]: dict(r) for r in cur.fetchall()}
+
+
+def pretty_label(label, date):
+    """'2026-05-15-governor-debate-(cbs-and-sf-examiner)' -> 'Governor debate (cbs and sf examiner)'."""
+    if not label:
+        return "meeting"
+    m = _DATED_SLUG.match(label)
+    body = m.group(2) if m else label
+    if m or "-" in body:
+        body = body.replace("-", " ").strip()
+        body = body[:1].upper() + body[1:]
+    return body
+
+
+def source_link(row, meetings):
+    """Prefer our own transcript over a bare youtube.com, and always give the link a name."""
+    url = row["source_url"]
+    if not url:
+        return '<span class="nosrc">no source</span>'
+    yt = _YT.search(url)
+    if yt and yt.group(1) in meetings:
+        m = meetings[yt.group(1)]
+        t = _T.search(url)
+        otr = f'{OTR}{m["id"]}' + (f'?t={t.group(1)}' if t else "")
+        name = esc(pretty_label(m["label"], m["date"]))
+        when = f' <span class="dim">{m["date"]}</span>' if m.get("date") else ""
+        return (f'<a href="{esc(otr)}" target="_blank" rel="noopener">{name}</a>{when}'
+                f' <a class="alt" href="{esc(url)}" target="_blank" rel="noopener">YouTube ↗</a>')
+    if yt:
+        return (f'<a href="{esc(url)}" target="_blank" rel="noopener">YouTube (not ingested)</a>')
+    if OTR.rstrip("/") in url or "on-the-record" in url or "ontherecord" in url:
+        label = esc(row["source_name"] or "On the Record transcript")
+        return f'<a href="{esc(url)}" target="_blank" rel="noopener">{label}</a>'
+    host = re.sub(r"^www\.", "", (re.search(r"://([^/]+)", url) or [None, ""])[1])
+    label = esc(row["source_name"] or host or "source")
+    return (f'<a href="{esc(url)}" target="_blank" rel="noopener">{label}</a>'
+            + (f' <span class="dim">{esc(host)}</span>' if row["source_name"] and host else ""))
+
+
+def diff_blind(canon, blind):
+    """Word-level diff of canonical -> blind, so de-identification edits are visible at a glance.
+
+    Additions and substitutions are highlighted; removals are struck through, because on a blind
+    card what was taken OUT is usually the thing that mattered.
+    """
+    import difflib
+    a, b = (canon or "").split(), (blind or "").split()
+    out = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
+        if op == "equal":
+            out.append(esc(" ".join(b[j1:j2])))
+        elif op == "insert":
+            out.append(f'<mark>{esc(" ".join(b[j1:j2]))}</mark>')
+        elif op == "delete":
+            out.append(f'<del>{esc(" ".join(a[i1:i2]))}</del>')
+        else:
+            out.append(f'<del>{esc(" ".join(a[i1:i2]))}</del> <mark>{esc(" ".join(b[j1:j2]))}</mark>')
+    return " ".join(x for x in out if x)
+
+
 def build(conn):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    meetings = meeting_index(cur)
     races = []
     for race_id, name, subtitle in RACES:
         cur.execute(SQL, (race_id,))
@@ -108,10 +181,10 @@ def build(conn):
         order = sorted(by_q.values(),
                        key=lambda q: (q["state"] != "both", q["topic"] or "", q["question_text"]))
         races.append({"name": name, "subtitle": subtitle, "cands": cands, "questions": order})
-    return races
+    return races, meetings
 
 
-def render(races):
+def render(races, meetings):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     parts = [f"""<title>Read &amp; Rank — quote review</title>
 <style>
@@ -169,6 +242,14 @@ blockquote {{ margin:0 0 8px; padding-left:12px; border-left:2px solid var(--acc
 .blind {{ font:12.5px/1.5 ui-sans-serif,system-ui; margin-top:6px; padding:8px 10px;
   background:var(--bg); border-radius:6px; }}
 .blind b {{ font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--mut); }}
+.blind mark {{ background:#ffe08a; color:#3a2c00; font-weight:700; padding:0 2px; border-radius:2px; }}
+.blind del {{ color:var(--mut); text-decoration:line-through; text-decoration-thickness:1px; opacity:.75; }}
+@media (prefers-color-scheme: dark) {{ .blind mark {{ background:#7a6320; color:#ffeec2; }} }}
+:root[data-theme="dark"] .blind mark {{ background:#7a6320; color:#ffeec2; }}
+:root[data-theme="light"] .blind mark {{ background:#ffe08a; color:#3a2c00; }}
+.meta a.alt {{ font-size:11px; color:var(--mut); margin-left:6px; }}
+.dim {{ color:var(--mut); }}
+.nosrc {{ color:var(--warn); }}
 .flag {{ display:inline-block; font:11px/1.5 ui-sans-serif,system-ui; color:var(--warn);
   background:var(--warnbg); padding:1px 7px; border-radius:4px; margin:3px 4px 0 0; }}
 .empty {{ color:var(--mut); font-style:italic; font-size:13px; padding:10px 0 16px; }}
@@ -215,14 +296,14 @@ Generated {now}.</div>
                     parts.append('<div class="empty">No answer to this question.</div>')
                 for it in items:
                     live = '<span class="chip live">live</span>' if it["readrank_selected"] else '<span class="chip">draft</span>'
-                    src = (f'<a href="{esc(it["source_url"])}" target="_blank" rel="noopener">'
-                           f'{esc(it["source_name"] or "source")}</a>') if it["source_url"] else \
-                          '<span style="color:var(--warn)">no source</span>'
+                    src = source_link(it, meetings)
                     parts.append(f'<div class="quote"><blockquote>{esc(it["quote_text"])}</blockquote>'
                                  f'<div class="meta">{live} &nbsp;·&nbsp; {src}</div>')
+                    canon = (it["quote_text"] or "").strip()
                     blind = (it["deidentified_text"] or "").strip()
-                    if blind and blind != (it["quote_text"] or "").strip():
-                        parts.append(f'<div class="blind"><b>Blind card</b><br>{esc(blind)}</div>')
+                    if blind and blind != canon:
+                        parts.append('<div class="blind"><b>Blind card — changes from canonical</b><br>'
+                                     f'{diff_blind(canon, blind)}</div>')
                     if (it["editor_note"] or "").strip():
                         parts.append(f'<div class="note">{esc(it["editor_note"])}</div>')
                     for _, label in it["flags"]:
@@ -255,8 +336,8 @@ def main():
     ap.add_argument("-o", "--out", default="quote-review.html")
     a = ap.parse_args()
     conn = psycopg2.connect(ev_accounts_database_url(__file__))
-    races = build(conn)
-    pathlib.Path(a.out).write_text(render(races), encoding="utf-8")
+    races, meetings = build(conn)
+    pathlib.Path(a.out).write_text(render(races, meetings), encoding="utf-8")
     tot = sum(len(r["questions"]) for r in races)
     iss = sum(q["issues"] for r in races for q in r["questions"])
     print(f"wrote {a.out} — {tot} questions across {len(races)} races, {iss} flagged issues")
