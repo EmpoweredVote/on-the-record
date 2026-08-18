@@ -74,7 +74,7 @@ class SpeakerMapping:
     politician_slug: Optional[str] = None   # essentials identifier
     politician_id: Optional[str] = None     # essentials UUID
     local_slug: Optional[str] = None        # site-local person slug (non-roster)
-    local_role: Optional[str] = None        # 'candidate' | 'moderator' | 'panelist'
+    local_role: Optional[str] = None        # role recorded in review; see src/event_kinds.py
     speaker_status: Optional[str] = None    # None=normal | 'unidentified' | 'non_speaker'
 
     def to_dict(self) -> dict:

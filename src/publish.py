@@ -369,6 +369,13 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
 
     Must be called BEFORE _upsert_speakers so the FK from meetings.speakers.local_slug
     to meetings.local_people.slug is satisfied at write time.
+
+    `role` is written exactly as review recorded it, and NULL when review never
+    recorded one. Defaulting an unset role to a concrete value would assert a
+    fact nobody established: only the terminal prompt in run_local.py sets
+    local_role, so every person reviewed in the GUI has none, and moderators,
+    staff and public commenters would all publish as that default.
+    Requires meetings.local_people.role to be nullable.
     """
     for mapping in meeting.speakers.values():
         slug = _published_local_slug(mapping)
@@ -387,7 +394,7 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
             (
                 slug,
                 mapping.speaker_name or slug,
-                mapping.local_role or 'candidate',
+                mapping.local_role,
             ),
         )
 
