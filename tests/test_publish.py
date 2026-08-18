@@ -608,3 +608,51 @@ def test_publish_meeting_duplicate_check_ignores_placeholder_statuses(monkeypatc
     }
     with pytest.raises(RuntimeError, match="reached-db-stage"):
         publish.publish_meeting(_speaker_meeting(speakers))
+
+
+# ---------------------------------------------------------------------------
+# local_people.role must reflect what review recorded, never a guess
+# ---------------------------------------------------------------------------
+
+def _local_people_insert(meeting):
+    """Run _upsert_local_people and return the params of the single INSERT."""
+    cur = RecordingCursor()
+    _upsert_local_people(cur, meeting)
+    return next(
+        params for sql, params in cur.calls
+        if "INSERT INTO meetings.local_people" in sql
+    )
+
+
+def _meeting_with_local_person(local_role):
+    return Meeting(
+        meeting_id="event",
+        city=None,
+        date="2026-06-02",
+        meeting_type="Event",
+        event_kind="council",
+        race_id=RACE_ID,
+        speakers={
+            "S0": SpeakerMapping(
+                speaker_label="S0",
+                speaker_name="Pearl Vinard",
+                local_slug="pearl-vinard",
+                local_role=local_role,
+            ),
+        },
+    )
+
+
+def test_local_person_without_role_publishes_null_not_candidate():
+    """An unset local_role means review never recorded one. Publishing it as
+    'candidate' asserts a fact nobody established — moderators, staff and
+    public commenters all get mislabelled. Write NULL instead."""
+    slug, name, role = _local_people_insert(_meeting_with_local_person(None))
+    assert (slug, name) == ("pearl-vinard", "Pearl Vinard")
+    assert role is None
+
+
+def test_local_person_role_publishes_verbatim():
+    """A role review did record is published unchanged, not remapped."""
+    _, _, role = _local_people_insert(_meeting_with_local_person("moderator"))
+    assert role == "moderator"
