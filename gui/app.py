@@ -391,6 +391,25 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
+    @app.post("/meetings/{meeting_id}/speakers/{label}/local-person")
+    def make_local_person_route(meeting_id: str, label: str,
+                               slug: str = Form(""), role: str = Form("")):
+        try:
+            ok = review_api.apply_make_local_person(meeting_id, label, slug, role)
+        except ValueError as exc:
+            # Malformed or colliding slug. Reported, not silently ignored: the
+            # form prefills a valid default, so this is a deliberate bad value.
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not ok:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/local-person/clear")
+    def clear_local_person_route(meeting_id: str, label: str):
+        if not review_api.apply_clear_local_person(meeting_id, label):
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
     @app.post("/meetings/{meeting_id}/speakers/{label}/unidentified")
     def unidentified_route(meeting_id: str, label: str, display_label: str = Form("")):
         if not review_api.apply_mark_unidentified(meeting_id, label, display_label):

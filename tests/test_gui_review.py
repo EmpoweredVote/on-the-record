@@ -1170,3 +1170,49 @@ def test_apply_make_local_person_guards(tagged_meeting_dir, tmp_meetings_dir):
     apply_make_local_person("2026-02-04-council", "SPEAKER_00", "taken-slug", "staff")
     with pytest.raises(ValueError, match="already used"):
         apply_make_local_person("2026-02-04-council", "SPEAKER_01", "taken-slug", "staff")
+
+
+def test_local_person_routes(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app(), follow_redirects=False)
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/local-person",
+                    data={"slug": "susan-brackney", "role": "2"})
+    assert r.status_code == 303
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.local_slug == "susan-brackney"
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/local-person/clear")
+    assert r.status_code == 303
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.local_slug is None
+
+
+def test_local_person_route_rejects_a_bad_slug_with_400(tagged_meeting_dir, tmp_meetings_dir):
+    """A silently-ignored submission is the worst outcome for a reviewer, so an
+    invalid slug is a visible 400 rather than the no-op redirect set_speaker_name
+    uses for empty input."""
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app(), follow_redirects=False)
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/local-person",
+                    data={"slug": "Susan Brackney", "role": "staff"})
+    assert r.status_code == 400
+
+
+def test_local_person_route_unknown_label_is_404(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app(), follow_redirects=False)
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_99/local-person",
+                    data={"slug": "a-b", "role": "staff"})
+    assert r.status_code == 404
