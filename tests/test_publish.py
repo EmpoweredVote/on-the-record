@@ -656,3 +656,78 @@ def test_local_person_role_publishes_verbatim():
     """A role review did record is published unchanged, not remapped."""
     _, _, role = _local_people_insert(_meeting_with_local_person("moderator"))
     assert role == "moderator"
+
+
+# ---------------------------------------------------------------------------
+# one identity per speaker: an essentials link suppresses the local person
+# ---------------------------------------------------------------------------
+
+def _meeting_with_dual_identity(**identity):
+    """A speaker carrying BOTH an essentials identity and a local_slug.
+
+    This is what the federal floor path produces: crec_identify stashes the
+    bioguide in local_slug for every resolved member, then resolve_politician_id
+    adds an essentials link on top and nothing clears the stash.
+    """
+    return Meeting(
+        meeting_id="2026-07-16-house-floor",
+        city=None,
+        date="2026-07-16",
+        meeting_type="Floor",
+        event_kind="floor",
+        race_id=None,
+        speakers={
+            "S0": SpeakerMapping(
+                speaker_label="S0",
+                speaker_name="Marcy Kaptur",
+                local_slug="congress-K000009",
+                **identity,
+            ),
+        },
+    )
+
+
+def _published_local_slug_column(meeting):
+    """The local_slug value _upsert_speakers writes, on the INSERT path."""
+    cur = RecordingCursor(select_row=None)
+    _upsert_speakers(cur, meeting, MEETING_UUID)
+    _, params = next(
+        (sql, p) for sql, p in cur.calls if "INSERT INTO meetings.speakers" in sql
+    )
+    return params[-1]
+
+
+def test_speaker_with_essentials_id_publishes_no_local_person():
+    """migration 623: either an essentials identity OR a local person, never both.
+    A resolved politician is not a site-local person, so the bioguide stash in
+    local_slug must not mint a duplicate local_people row for them."""
+    meeting = _meeting_with_dual_identity(politician_id="1938e59f-bd7c-45fb-8dd1-2f7591a0fc3d")
+
+    cur = RecordingCursor()
+    _upsert_local_people(cur, meeting)
+    assert [sql for sql, _ in cur.calls if "INSERT INTO meetings.local_people" in sql] == []
+
+    assert _published_local_slug_column(meeting) is None
+
+
+def test_speaker_with_essentials_slug_publishes_no_local_person():
+    """Same for a legacy slug-only link — 623 words the invariant as politician_slug."""
+    meeting = _meeting_with_dual_identity(politician_slug="marcy-kaptur")
+
+    cur = RecordingCursor()
+    _upsert_local_people(cur, meeting)
+    assert [sql for sql, _ in cur.calls if "INSERT INTO meetings.local_people" in sql] == []
+
+    assert _published_local_slug_column(meeting) is None
+
+
+def test_local_only_speaker_still_publishes_a_local_person():
+    """The genuine case is untouched: no essentials identity means the local person
+    is the only identity there is."""
+    meeting = _meeting_with_dual_identity()   # neither politician_id nor politician_slug
+
+    cur = RecordingCursor()
+    _upsert_local_people(cur, meeting)
+    assert len([sql for sql, _ in cur.calls if "INSERT INTO meetings.local_people" in sql]) == 1
+
+    assert _published_local_slug_column(meeting) == "congress-K000009"

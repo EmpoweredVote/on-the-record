@@ -358,8 +358,17 @@ def _upsert_event_orgs(cur, meeting_slug: str, event_orgs: list) -> None:
 def _published_local_slug(mapping) -> "str | None":
     """The local_slug to publish for a speaker, or None to publish no local
     person. An unidentified handle is a placeholder, not a public entity, so it
-    is suppressed until promoted to a real person."""
+    is suppressed until promoted to a real person.
+
+    An essentials identity also suppresses it, because migration 623's invariant is
+    one identity per speaker: either politician_* or local_slug, never both. The
+    federal floor path breaks that on its own — crec_identify stashes the bioguide in
+    local_slug for every resolved member, then resolve_politician_id adds an
+    essentials link on top and nothing clears the stash — so a resolved member would
+    otherwise mint a local_people row duplicating a politician who already exists."""
     if getattr(mapping, "speaker_status", None) == "unidentified":
+        return None
+    if mapping.politician_id or mapping.politician_slug:
         return None
     return mapping.local_slug
 
