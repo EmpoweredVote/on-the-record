@@ -2950,11 +2950,15 @@ def _prompt_create_local_person(
         return
 
     from src.event_kinds import local_roles_for, resolve_local_role
-    from src.review import assign_local_person, default_local_slug
+    from src.review import LOCAL_SLUG_RE, assign_local_person, default_local_slug
 
     default_slug = default_local_slug(name, label)
     slug_raw = input(f"  Slug [{default_slug}]: ").strip()
     slug = slug_raw or default_slug
+
+    if not LOCAL_SLUG_RE.match(slug):
+        print(f"  Invalid slug {slug!r} — left unlinked.")
+        return
 
     roles = local_roles_for(event_kind)
     options = "  ".join(f"{i + 1}) {r}" for i, r in enumerate(roles))
