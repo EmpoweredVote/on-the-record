@@ -1,7 +1,16 @@
 -- CA_0001_local_people_role_nullable.sql
 --
--- DRAFT — NOT APPLIED. Scratch path in the on-the-record repo; a human moves this to
--- ev-accounts/backend/migrations/ after review. Generated 2026-08-17, renumbered 2026-08-21.
+-- ✅ APPLIED TO PROD 2026-08-21. Authored here; the canonical copy now lives at
+-- ev-accounts/backend/migrations/CA_0001_local_people_role_nullable.sql (PR #129) — edit that one,
+-- not this. Kept here because the reasoning below is what the on-the-record side needs.
+-- Generated 2026-08-17.
+--
+-- Dry-run first with COMMIT swapped for ROLLBACK per ev-accounts house style: the post-verify gate
+-- passed inside the transaction and the rollback was confirmed reverted before the real run. After
+-- applying: role nullable, COMMENT set, CHECK untouched, distribution unchanged (candidate=25,
+-- moderator=1 — no backfill). The publish path was proved end-to-end with the exact
+-- INSERT ... ON CONFLICT that _upsert_local_people issues, role NULL, accepted then rolled back.
+-- 2026-07-16-house-floor is now republishable.
 --
 -- SLOT: CA_0001 — the first migration in Chris's `CA_` namespace, adopted in ev-accounts PR #128.
 -- `CA_1` and `1` are different slots, so this cannot collide with the shared NNNN_ sequence, and

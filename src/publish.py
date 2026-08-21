@@ -375,7 +375,8 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
     fact nobody established: only the terminal prompt in run_local.py sets
     local_role, so every person reviewed in the GUI has none, and moderators,
     staff and public commenters would all publish as that default.
-    Requires meetings.local_people.role to be nullable.
+    Requires meetings.local_people.role to be nullable — made so by ev-accounts migration
+    CA_0001, applied to prod 2026-08-21.
     """
     for mapping in meeting.speakers.values():
         slug = _published_local_slug(mapping)
