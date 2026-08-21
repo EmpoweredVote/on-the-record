@@ -84,3 +84,25 @@ def test_clear_local_person_unsets_both_fields():
 
 def test_clear_local_person_on_unknown_label_is_a_noop():
     assert clear_local_person({}, "S9") is None
+
+
+from src.review import identity_label
+
+
+def test_identity_label_prefers_politician_id_over_a_local_slug():
+    """politician_slug is NULL for ~99.4% of essentials politicians, so a federal
+    speaker carrying politician_id plus the crec bioguide stash must not read as
+    a local person. Mirrors src/enroll.py:215."""
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Marcy Kaptur",
+                       politician_id="uuid-mk", local_slug="congress-K000009")
+    assert identity_label(m) == "essentials:uuid-mk"
+
+
+def test_identity_label_still_prefers_a_slug_when_present():
+    m = SpeakerMapping(speaker_label="S0", politician_slug="marcy-kaptur")
+    assert identity_label(m) == "essentials:marcy-kaptur"
+
+
+def test_identity_label_reports_a_genuine_local_person():
+    m = SpeakerMapping(speaker_label="S0", local_slug="susan-brackney")
+    assert identity_label(m) == "local:susan-brackney"

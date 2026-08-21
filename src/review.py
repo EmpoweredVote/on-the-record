@@ -75,6 +75,10 @@ def identity_label(mapping) -> str:
         return "non-speaker"
     if mapping.speaker_status == "unidentified":
         return "unidentified"
+    if mapping.politician_id:
+        # Key on the stable UUID first: politician_slug is NULL for ~99.4% of
+        # essentials.politicians. Mirrors resolve_mapping_enrollment (enroll.py).
+        return f"essentials:{mapping.politician_id}"
     if mapping.politician_slug:
         return f"essentials:{mapping.politician_slug}"
     if mapping.local_slug:
