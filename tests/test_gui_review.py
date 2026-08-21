@@ -1096,3 +1096,19 @@ def test_review_route_clean_meeting_renders_no_warning_block(tagged_meeting_dir,
     assert resp.status_code == 200
     assert "Before you publish" not in resp.text
     assert "Same name as" not in resp.text
+
+
+def test_review_page_exposes_local_person_fields(tagged_meeting_dir, tmp_meetings_dir):
+    from src.event_kinds import local_roles_for
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    page = load_review_page("2026-02-04-council")
+
+    # role options come from the meeting's event_kind ('council'), not a hardcoded list
+    assert page.local_role_options == list(local_roles_for("council"))
+
+    card = [c for c in page.all_cards if c.label == "SPEAKER_00"][0]
+    assert card.local_slug is None
+    assert card.has_local_person is False
+    # prefilled from the speaker's name so the common path needs no typing
+    assert card.default_slug == "mayor-johnson"

@@ -16,6 +16,7 @@ from typing import Optional
 import numpy as np
 
 from src import config
+from src.event_kinds import local_roles_for
 # The crash-safe writer lives in src/ so run_local.py and src/* can use it too;
 # re-exported under the old private name for this module's existing callers.
 from src.atomic_io import atomic_write_text as _atomic_write_text
@@ -430,6 +431,9 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
             politician_id=getattr(mapping, "politician_id", None) if mapping else None,
             speaker_status=getattr(mapping, "speaker_status", None) if mapping else None,
+            local_slug=getattr(mapping, "local_slug", None) if mapping else None,
+            local_role=getattr(mapping, "local_role", None) if mapping else None,
+            default_slug=review.default_local_slug(v.current_name, v.label),
             is_enrollable=is_enrollable,
             is_enrolled=is_enrolled,
             thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
@@ -452,4 +456,5 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         needs_attention=needs,
         confirmed=confirmed,
         warnings=warnings,
+        local_role_options=list(local_roles_for(meeting.event_kind)),
     )
