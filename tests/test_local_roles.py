@@ -55,3 +55,30 @@ def test_resolve_never_silently_coerces_unknown_to_candidate():
     # The old prompt forced any unrecognized input to "candidate"; for a council
     # meeting that was always wrong. A typed role is honored instead.
     assert resolve_local_role("clerk", "council") == "clerk"
+
+
+from src.event_kinds import LOCAL_ROLE_RE, resolve_local_role
+
+
+def test_resolve_local_role_always_matches_the_db_shape():
+    """The DB CHECK added by CA_0003 requires a leading letter, so every value
+    this function can return must satisfy LOCAL_ROLE_RE — otherwise the prompt
+    accepts roles that publish cannot store."""
+    for raw in ["City Attorney", "123 Main St", "_leading", "!!!", "3rd party",
+                "  ", "x" * 200, "Dept. Head!", "ZONING board"]:
+        role = resolve_local_role(raw, "council")
+        assert LOCAL_ROLE_RE.match(role), f"{raw!r} produced {role!r}"
+
+
+def test_resolve_local_role_strips_leading_non_letters():
+    assert resolve_local_role("123 Main St", "council") == "main_st"
+
+
+def test_resolve_local_role_falls_back_when_nothing_survives():
+    # all digits normalise away entirely -> the kind's default, not an empty role
+    assert resolve_local_role("123", "council") == "public_comment"
+
+
+def test_resolve_local_role_truncates_to_forty_chars():
+    role = resolve_local_role("a" * 80, "council")
+    assert len(role) == 40
