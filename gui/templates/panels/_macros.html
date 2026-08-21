@@ -12,9 +12,10 @@
   <div class="dup-name">
     ⚠ Same name as {{ c.duplicate_labels|join(', ') }} — two labels can't be the same person
     {% for other in c.duplicate_labels %}
-    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge-inline">
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge-inline"
+          data-merge-mismatch="{{ other if other in c.merge_mismatches else '' }}">
       <input type="hidden" name="target" value="{{ other }}">
-      <button type="submit">Merge into {{ other }}</button>
+      <button type="submit">Merge into {{ other }}{% if c.merge_hints.get(other) %} ({{ c.merge_hints[other] }}){% endif %}</button>
     </form>
     {% endfor %}
   </div>
@@ -56,11 +57,12 @@
       <div class="link-results"></div>
     </div>
     {% if all_cards|length > 1 %}
-    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge">
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge"
+          data-merge-mismatch="{{ c.merge_mismatches|join(',') }}">
       <select name="target">
         <option value="">Merge into…</option>
         {% for o in all_cards %}{% if o.label != c.label %}
-        <option value="{{ o.label }}">{{ o.label }} — {{ o.display_name }}</option>
+        <option value="{{ o.label }}">{{ o.label }} — {{ o.display_name }}{% if c.merge_hints.get(o.label) %} ({{ c.merge_hints[o.label] }}){% endif %}</option>
         {% endif %}{% endfor %}
       </select>
       <button type="submit">Merge</button>
