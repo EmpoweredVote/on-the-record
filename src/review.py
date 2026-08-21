@@ -47,6 +47,26 @@ def make_unidentified_slug(meeting_id: str, label: str) -> str:
     return f"unidentified-{base}"[:100]
 
 
+# A site-local person's slug. Mirrors ev-accounts SLUG_REGEX; was an inline
+# literal in run_local.py's terminal wizard before the GUI needed it too.
+LOCAL_SLUG_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,99}$"
+LOCAL_SLUG_RE = _re.compile(LOCAL_SLUG_PATTERN)
+
+
+def default_local_slug(name, label) -> str:
+    """Kebab-case slug for a new local person, from the name or the diarized label.
+
+    Always returns a value matching LOCAL_SLUG_RE so the caller can offer it as a
+    prefilled default without validating first. Falls through name -> label ->
+    'speaker', mirroring make_unidentified_slug's fallback chain.
+    """
+    for source in ((name or "").strip(), (label or "").strip()):
+        slug = _re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")[:100].strip("-")
+        if LOCAL_SLUG_RE.match(slug):
+            return slug
+    return "speaker"
+
+
 def identity_label(mapping) -> str:
     """One-word resolved identity for the review table."""
     if mapping is None:
