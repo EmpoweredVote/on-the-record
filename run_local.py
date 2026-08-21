@@ -2935,8 +2935,8 @@ def _prompt_create_local_person(
     """Offer to create a local person record for a non-essentials speaker.
 
     No-op when not attached to a TTY, when the mapping is missing, or when the
-    speaker already has an essentials politician_slug (essentials link wins).
-    Slug validation is delegated to assign_local_person.
+    speaker already has an essentials identity (politician_slug OR politician_id —
+    essentials link wins). Slug validation is delegated to assign_local_person.
     """
     if not sys.stdin.isatty():
         return
@@ -2956,7 +2956,7 @@ def _prompt_create_local_person(
     slug_raw = input(f"  Slug [{default_slug}]: ").strip()
     slug = slug_raw or default_slug
 
-    if not LOCAL_SLUG_RE.match(slug):
+    if not LOCAL_SLUG_RE.fullmatch(slug):
         print(f"  Invalid slug {slug!r} — left unlinked.")
         return
 

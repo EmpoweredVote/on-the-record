@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from src.event_kinds import (
     DEFAULT_LOCAL_ROLES,
+    LOCAL_ROLE_PATTERN,
+    LOCAL_ROLE_RE,
     local_roles_for,
     resolve_local_role,
 )
@@ -57,9 +59,6 @@ def test_resolve_never_silently_coerces_unknown_to_candidate():
     assert resolve_local_role("clerk", "council") == "clerk"
 
 
-from src.event_kinds import LOCAL_ROLE_RE, resolve_local_role
-
-
 def test_resolve_local_role_always_matches_the_db_shape():
     """The DB CHECK added by CA_0003 requires a leading letter, so every value
     this function can return must satisfy LOCAL_ROLE_RE — otherwise the prompt
@@ -82,3 +81,25 @@ def test_resolve_local_role_falls_back_when_nothing_survives():
 def test_resolve_local_role_truncates_to_forty_chars():
     role = resolve_local_role("a" * 80, "council")
     assert len(role) == 40
+
+
+def test_resolve_local_role_handles_non_decimal_digit_characters():
+    """str.isdigit() is True for numerics int() rejects (superscripts, circled
+    digits), so resolve_local_role('²', 'council') used to raise
+    ValueError: invalid literal for int(). It must return a valid role instead —
+    the terminal wizard calls this outside a try block, and apply_make_local_person
+    (gui/review_api.py -> run_local.py) surfaces any exception as a 400."""
+    for raw in ["²", "①", "10²"]:  # ², ①, 10²
+        role = resolve_local_role(raw, "council")
+        assert LOCAL_ROLE_RE.fullmatch(role), f"{raw!r} produced {role!r}"
+
+
+def test_local_role_pattern_is_pinned_to_its_ca_0003_sql_twin():
+    """LOCAL_ROLE_PATTERN is the hand-maintained twin of the CHECK added by
+    ev-accounts migration CA_0003. The existing property test validates
+    resolve_local_role's output against this SAME constant, so editing the
+    constant alone would keep this suite green while publish starts aborting
+    whole meetings on a CheckViolation. Pin the literal so a drift is loud."""
+    assert LOCAL_ROLE_PATTERN == r"^[a-z][a-z0-9_]{0,39}$", (
+        "LOCAL_ROLE_PATTERN drifted from its twin: ev-accounts migration CA_0003's CHECK"
+    )

@@ -49,6 +49,7 @@
       <button type="submit" class="unlink">Unlink</button>
     </form>
     {% endif %}
+    {% if c.speaker_status is none %}
     {% if c.has_local_person %}
     <div class="local-person">
       <span class="localbadge">local: {{ c.local_slug }}{% if c.local_role %} · {{ c.local_role }}{% endif %}</span>
@@ -70,6 +71,7 @@
       </datalist>
       <button type="submit">Not in essentials — make local person</button>
     </form>
+    {% endif %}
     {% endif %}
     <div class="link-search"
          data-search-url="/api/politicians/search"

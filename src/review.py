@@ -62,7 +62,7 @@ def default_local_slug(name, label) -> str:
     """
     for source in ((name or "").strip(), (label or "").strip()):
         slug = _re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")[:100].strip("-")
-        if LOCAL_SLUG_RE.match(slug):
+        if LOCAL_SLUG_RE.fullmatch(slug):
             return slug
     return "speaker"
 
@@ -339,7 +339,7 @@ def assign_local_person(mappings, label, slug, role):
     from src.models import SpeakerMapping
 
     slug = (slug or "").strip()
-    if not LOCAL_SLUG_RE.match(slug):
+    if not LOCAL_SLUG_RE.fullmatch(slug):
         raise ValueError(f"invalid local slug {slug!r}; must match {LOCAL_SLUG_PATTERN}")
     for other_label, other in mappings.items():
         if other_label != label and getattr(other, "local_slug", None) == slug:
@@ -355,9 +355,23 @@ def assign_local_person(mappings, label, slug, role):
 
 
 def clear_local_person(mappings, label):
-    """Drop a speaker's local-person identity. Returns None if the label has no mapping."""
+    """Drop a speaker's local-person identity. Returns None (no mutation) if the
+    label has no mapping, OR if the mapping is an unidentified handle.
+
+    local_slug is overloaded: a reviewer sets it for a genuine local person, but
+    mark_unidentified / link_to_unidentified_handle ALSO set it — to the synthetic
+    unidentified-<meeting>-<label> handle whose entire purpose is keeping two
+    distinct unknown speakers from sharing one voice-profile enrollment key
+    (make_unidentified_slug). Clearing it would drop speaker_name back to
+    resolve_enrollment_key('Unidentified Speaker') -> the single shared key
+    'unidentified_speaker', silently merging unrelated strangers' voice
+    embeddings. So the unidentified case is refused outright rather than
+    cleared; a real local person (speaker_status is None) is unaffected.
+    """
     mapping = mappings.get(label)
     if mapping is None:
+        return None
+    if getattr(mapping, "speaker_status", None) == "unidentified":
         return None
     mapping.local_slug = None
     mapping.local_role = None

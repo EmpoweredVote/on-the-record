@@ -282,7 +282,10 @@ def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: st
 
 
 def apply_clear_local_person(meeting_id: str, label: str) -> bool:
-    """Drop a speaker's local-person identity and persist. False on unsafe/unknown."""
+    """Drop a speaker's local-person identity and persist. False on unsafe/unknown
+    meeting or label, and also when review.clear_local_person itself no-ops
+    (no mapping to clear, or the speaker is an unidentified handle whose slug
+    isn't a local person to drop) — a no-op is not success."""
     ctx = _load_meeting_ctx(meeting_id)
     if ctx is None:
         return False
@@ -292,7 +295,8 @@ def apply_clear_local_person(meeting_id: str, label: str) -> bool:
         return False
     from src import review
 
-    review.clear_local_person(meeting.speakers, label)
+    if review.clear_local_person(meeting.speakers, label) is None:
+        return False
     persist_review(meeting, meeting_dir)
     return True
 

@@ -73,7 +73,7 @@ def _shape_local_role(norm: str, default: str) -> str:
     caller's default rather than an empty role.
     """
     candidate = norm.lstrip("_0123456789")[:40].strip("_")
-    return candidate if LOCAL_ROLE_RE.match(candidate) else default
+    return candidate if LOCAL_ROLE_RE.fullmatch(candidate) else default
 
 
 def resolve_local_role(raw, event_kind):
@@ -89,7 +89,7 @@ def resolve_local_role(raw, event_kind):
     raw = (raw or "").strip()
     if not raw:
         return roles[0]
-    if raw.isdigit():
+    if raw.isdecimal():
         n = int(raw)
         return roles[n - 1] if 1 <= n <= len(roles) else roles[0]
     norm = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")

@@ -1,7 +1,15 @@
 import pytest
 
 from src.models import SpeakerMapping
-from src.review import LOCAL_SLUG_RE, default_local_slug
+from src.review import (
+    LOCAL_SLUG_PATTERN,
+    LOCAL_SLUG_RE,
+    assign_local_person,
+    clear_local_person,
+    default_local_slug,
+    identity_label,
+    link_speaker,
+)
 
 
 def test_default_local_slug_kebab_cases_the_name():
@@ -22,9 +30,6 @@ def test_default_local_slug_output_is_always_valid():
 
 def test_default_local_slug_is_bounded_at_one_hundred():
     assert len(default_local_slug("x" * 300, "S2")) == 100
-
-
-from src.review import assign_local_person, clear_local_person
 
 
 def test_assign_local_person_sets_slug_and_role():
@@ -86,7 +91,51 @@ def test_clear_local_person_on_unknown_label_is_a_noop():
     assert clear_local_person({}, "S9") is None
 
 
-from src.review import identity_label
+def test_clear_local_person_still_works_for_a_real_local_person():
+    """The normal path (speaker_status is None) must keep working: only the
+    unidentified case below is refused."""
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", local_slug="susan-brackney",
+                                     local_role="public_comment", speaker_status=None)}
+    m = clear_local_person(mappings, "S0")
+    assert (m.local_slug, m.local_role) == (None, None)
+
+
+def test_clear_local_person_refuses_an_unidentified_handle():
+    """mark_unidentified also writes local_slug — to a synthetic
+    unidentified-<meeting>-<label> handle whose whole purpose is keeping two
+    distinct unknown speakers from sharing one voice-profile enrollment key.
+    Clearing it would collapse them onto 'unidentified_speaker'. Refuse instead
+    of mutating."""
+    mappings = {"S0": SpeakerMapping(speaker_label="S0",
+                                     speaker_name="Unidentified Speaker",
+                                     local_slug="unidentified-2026-council-s0",
+                                     speaker_status="unidentified")}
+    result = clear_local_person(mappings, "S0")
+    assert result is None
+    m = mappings["S0"]
+    assert m.local_slug == "unidentified-2026-council-s0"
+    assert m.speaker_status == "unidentified"
+
+
+def test_local_slug_re_fullmatch_rejects_a_trailing_newline():
+    """Python's $ (used by .match) also matches just before a trailing newline,
+    but Postgres's SQL ~ does not — so a raw slug like 'staff\\n' would pass
+    LOCAL_SLUG_RE.match and then fail the DB CHECK at publish time.
+    assign_local_person's own .strip() happens to remove a real trailing
+    newline before the value ever reaches the regex, so this is exercised
+    directly against the pattern object (the thing the call sites share),
+    documenting why they use .fullmatch rather than .match."""
+    assert LOCAL_SLUG_RE.match("staff\n")
+    assert not LOCAL_SLUG_RE.fullmatch("staff\n")
+
+
+def test_local_slug_pattern_is_pinned_to_its_ev_accounts_sql_twin():
+    """LOCAL_SLUG_PATTERN is the hand-maintained twin of ev-accounts's
+    SLUG_REGEX. A silent edit here keeps this suite green while publish starts
+    aborting whole meetings on a CHECK violation, so pin the literal."""
+    assert LOCAL_SLUG_PATTERN == r"^[a-z0-9][a-z0-9_-]{0,99}$", (
+        "LOCAL_SLUG_PATTERN drifted from its twin: ev-accounts's SLUG_REGEX"
+    )
 
 
 def test_identity_label_prefers_politician_id_over_a_local_slug():
@@ -106,9 +155,6 @@ def test_identity_label_still_prefers_a_slug_when_present():
 def test_identity_label_reports_a_genuine_local_person():
     m = SpeakerMapping(speaker_label="S0", local_slug="susan-brackney")
     assert identity_label(m) == "local:susan-brackney"
-
-
-from src.review import link_speaker
 
 
 def test_link_speaker_clears_a_local_person():
