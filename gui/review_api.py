@@ -256,6 +256,47 @@ def apply_unlink(meeting_id: str, label: str) -> bool:
     return True
 
 
+def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: str) -> bool:
+    """Make a speaker a site-local person and persist.
+
+    `role_raw` is whatever the reviewer typed or picked; it goes through
+    resolve_local_role, which guarantees a storable shape, so a role can never be
+    invalid here. Returns False on an unsafe/unknown meeting or label. Raises
+    ValueError on a slug that is malformed or already held by another label —
+    a distinct failure the route reports as 400 rather than 404.
+    """
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+    from src.event_kinds import resolve_local_role
+
+    role = resolve_local_role(role_raw, meeting.event_kind)
+    review.assign_local_person(meeting.speakers, label, slug, role)   # may raise ValueError
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def apply_clear_local_person(meeting_id: str, label: str) -> bool:
+    """Drop a speaker's local-person identity and persist. False on unsafe/unknown."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+
+    review.clear_local_person(meeting.speakers, label)
+    persist_review(meeting, meeting_dir)
+    return True
+
+
 def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
     """Merge source speaker into target and persist (incl. diarization+embeddings).
     False on unsafe/unknown meeting, unknown/equal labels, or merge failure."""

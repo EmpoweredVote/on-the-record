@@ -1112,3 +1112,61 @@ def test_review_page_exposes_local_person_fields(tagged_meeting_dir, tmp_meeting
     assert card.has_local_person is False
     # prefilled from the speaker's name so the common path needs no typing
     assert card.default_slug == "mayor-johnson"
+
+
+def test_apply_make_and_clear_local_person(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import apply_clear_local_person, apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_01",
+                                   "susan-brackney", "2") is True
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in page.all_cards if c.label == "SPEAKER_01"][0]
+    assert card.local_slug == "susan-brackney"
+    assert card.local_role == "staff"      # option 2 for event_kind 'council'
+
+    assert apply_clear_local_person("2026-02-04-council", "SPEAKER_01") is True
+    card2 = [c for c in load_review_page("2026-02-04-council").all_cards
+             if c.label == "SPEAKER_01"][0]
+    assert card2.local_slug is None
+
+
+def test_apply_make_local_person_accepts_a_custom_role(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_01",
+                                   "jo-doe", "City Attorney") is True
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.local_role == "city_attorney"
+
+
+def test_apply_make_local_person_clears_an_essentials_link(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import apply_link, apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    apply_link("2026-02-04-council", "SPEAKER_01", "clerk-smith", "uuid-cs")
+    apply_make_local_person("2026-02-04-council", "SPEAKER_01", "clerk-smith-local", "staff")
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.is_linked is False
+
+
+def test_apply_make_local_person_guards(tagged_meeting_dir, tmp_meetings_dir):
+    import pytest
+    from gui.review_api import apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    # unknown / unsafe -> False
+    assert apply_make_local_person("ghost", "SPEAKER_00", "a-b", "staff") is False
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_99", "a-b", "staff") is False
+    assert apply_make_local_person("../x", "SPEAKER_00", "a-b", "staff") is False
+    # bad slug -> ValueError, a different failure the route reports differently
+    with pytest.raises(ValueError):
+        apply_make_local_person("2026-02-04-council", "SPEAKER_00", "Susan Brackney", "staff")
+    # slug already held by another label -> ValueError
+    apply_make_local_person("2026-02-04-council", "SPEAKER_00", "taken-slug", "staff")
+    with pytest.raises(ValueError, match="already used"):
+        apply_make_local_person("2026-02-04-council", "SPEAKER_01", "taken-slug", "staff")
