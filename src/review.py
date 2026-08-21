@@ -310,6 +310,44 @@ def link_speaker(mappings, label, politician_slug, politician_id):
     return mapping
 
 
+def assign_local_person(mappings, label, slug, role):
+    """Make `label` a site-local person with `slug` and `role`. Mutates in place.
+
+    Clears any essentials identity: migration 623's invariant is one identity per
+    speaker, and a local person is not a roster politician. Enforcing it here means
+    publish never has to suppress a contradiction it should not have received.
+
+    Raises ValueError when `slug` fails LOCAL_SLUG_RE, or when a DIFFERENT label in
+    this meeting already holds it — two diarized labels cannot be the same person.
+    """
+    from src.models import SpeakerMapping
+
+    slug = (slug or "").strip()
+    if not LOCAL_SLUG_RE.match(slug):
+        raise ValueError(f"invalid local slug {slug!r}; must match {LOCAL_SLUG_PATTERN}")
+    for other_label, other in mappings.items():
+        if other_label != label and getattr(other, "local_slug", None) == slug:
+            raise ValueError(f"local slug {slug!r} already used by label {other_label!r}")
+
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    mapping.local_slug = slug
+    mapping.local_role = role
+    mapping.politician_slug = None
+    mapping.politician_id = None
+    mappings[label] = mapping
+    return mapping
+
+
+def clear_local_person(mappings, label):
+    """Drop a speaker's local-person identity. Returns None if the label has no mapping."""
+    mapping = mappings.get(label)
+    if mapping is None:
+        return None
+    mapping.local_slug = None
+    mapping.local_role = None
+    return mapping
+
+
 def mark_unidentified(mappings, segments, label, meeting_id, display_label=None):
     """Mark a speaker as a distinct-but-unnamed person: unique handle, enrolled."""
     from src.models import SpeakerMapping
