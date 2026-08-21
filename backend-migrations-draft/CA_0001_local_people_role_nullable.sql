@@ -1,14 +1,19 @@
--- 1849_local_people_role_nullable.sql
+-- CA_0001_local_people_role_nullable.sql
 --
 -- DRAFT — NOT APPLIED. Scratch path in the on-the-record repo; a human moves this to
 -- ev-accounts/backend/migrations/ after review. Generated 2026-08-17, renumbered 2026-08-21.
 --
--- NUMBER: 1849. Verified free on 2026-08-21 against all 10 refs under refs/remotes/origin —
--- origin/master tops out at 1848 (1848_co_2026_general_races.sql) and nothing >= 1849 exists on
--- any pushed branch. Re-verify before applying:
+-- SLOT: CA_0001 — the first migration in Chris's `CA_` namespace, adopted in ev-accounts PR #128.
+-- `CA_1` and `1` are different slots, so this cannot collide with the shared NNNN_ sequence, and
+-- there is no shared max to read. Duplicates inside the namespace are still caught:
 --     git -C <ev-accounts> fetch origin && npm run check:migrations --prefix backend
--- This file was originally drafted as 1826, which was already taken by
--- 1826_dc_shadow_senator_district.sql on master. Do not resurrect that number.
+-- Cite it as CA_0001, never as "migration 1" — a bare number is ambiguous across namespaces.
+--
+-- Two earlier numbers were burned getting here, both from the shared sequence, and neither should
+-- be resurrected: 1826 (taken by 1826_dc_shadow_senator_district.sql) and 1849 (free at the time,
+-- but superseded by the namespace). The 1826 mistake came from reading a local ev-accounts working
+-- copy that topped out at 1825 without fetching, when master was at 1848 — exactly the failure the
+-- namespace removes.
 --
 -- HOUSE STYLE: no INSERT INTO supabase_migrations.schema_migrations — ev-accounts has no
 -- schema_migrations table and no number-ordered runner (see its CLAUDE.md); the number is a
