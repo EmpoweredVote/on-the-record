@@ -302,6 +302,11 @@ def speakers_needing_review(mappings) -> list[str]:
 def link_speaker(mappings, label, politician_slug, politician_id):
     """Set (or clear, when both are None) the politician identity on a mapping.
 
+    Setting an essentials link (either field non-None) supersedes any local person:
+    migration 623's invariant is one identity per speaker, and assign_local_person
+    enforces the mirror of this rule. Clearing the link (both None — this is also
+    the UNLINK path) leaves an existing local person alone.
+
     Mutates `mappings` in place; returns the updated SpeakerMapping. Creates a
     bare mapping if the label has none yet.
     """
@@ -310,6 +315,13 @@ def link_speaker(mappings, label, politician_slug, politician_id):
     mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
     mapping.politician_slug = politician_slug
     mapping.politician_id = politician_id
+    if politician_slug or politician_id:
+        # One identity per speaker (migration 623): an essentials link supersedes a
+        # local person. assign_local_person enforces the mirror of this rule. Guarded
+        # because link_speaker(None, None) is also the UNLINK path — clearing
+        # unconditionally would destroy a local person on unlink.
+        mapping.local_slug = None
+        mapping.local_role = None
     mappings[label] = mapping
     return mapping
 

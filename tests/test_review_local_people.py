@@ -106,3 +106,38 @@ def test_identity_label_still_prefers_a_slug_when_present():
 def test_identity_label_reports_a_genuine_local_person():
     m = SpeakerMapping(speaker_label="S0", local_slug="susan-brackney")
     assert identity_label(m) == "local:susan-brackney"
+
+
+from src.review import link_speaker
+
+
+def test_link_speaker_clears_a_local_person():
+    """One identity per speaker: an essentials link supersedes a local person, the
+    mirror of assign_local_person clearing the essentials fields."""
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", local_slug="jo-doe",
+                                     local_role="staff")}
+    m = link_speaker(mappings, "S0", None, "uuid-jd")
+    assert m.politician_id == "uuid-jd"
+    assert m.local_slug is None
+    assert m.local_role is None
+
+
+def test_link_speaker_by_slug_also_clears_a_local_person():
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", local_slug="jo-doe",
+                                     local_role="staff")}
+    m = link_speaker(mappings, "S0", "jo-doe-politician", None)
+    assert m.local_slug is None
+    assert m.local_role is None
+
+
+def test_unlinking_leaves_a_local_person_alone():
+    """link_speaker(None, None) is the UNLINK path. Clearing the politician link must
+    not destroy an unrelated local-person identity."""
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", local_slug="jo-doe",
+                                     local_role="staff",
+                                     politician_id="uuid-jd")}
+    m = link_speaker(mappings, "S0", None, None)
+    assert m.politician_id is None
+    assert m.politician_slug is None
+    assert m.local_slug == "jo-doe"
+    assert m.local_role == "staff"
