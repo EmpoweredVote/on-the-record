@@ -51,9 +51,27 @@
     // other action 303-redirects and we just re-fetch. Keep the publish result so
     // it can be shown in the panel's #publish-result slot after the re-render.
     const isPublish = form.matches(".publish-form");
+    const body = new FormData(form);
+    // A merge cannot be undone — it relabels every segment and drops one voice
+    // profile — and a mis-merge leaves ONE label holding two people, which every
+    // name-based detector then reads as clean. The server refuses an unconfirmed
+    // mismatch anyway; this turns that refusal into a decision instead of a
+    // silent no-op.
+    const mismatches = (form.getAttribute("data-merge-mismatch") || "")
+      .split(",").filter(Boolean);
+    if (mismatches.length) {
+      const target = (body.get("target") || "").toString();
+      if (target && mismatches.includes(target)) {
+        const from = form.action.split("/speakers/")[1].split("/")[0];
+        if (!window.confirm(
+              `${from} and ${target} do not sound like the same person.\n\n` +
+              `Merging is destructive and cannot be undone. Merge anyway?`)) return;
+        body.append("confirm", "1");
+      }
+    }
     let publishResult = "";
     try {
-      const r = await fetch(form.action, { method: "POST", body: new FormData(form), redirect: "manual" });
+      const r = await fetch(form.action, { method: "POST", body, redirect: "manual" });
       if (isPublish) publishResult = await r.text();
     } catch (_) { /* best-effort; re-fetch shows current state */ }
     await loadPanel(activeTab, false);

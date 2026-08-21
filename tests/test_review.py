@@ -289,3 +289,45 @@ def test_format_match_line_candidate_tag():
     match = {"full_name": "Jane Doe", "office_title": "", "district_label": "IN-09",
              "government_name": "", "is_incumbent": False}
     assert "[candidate]" in review.format_match_line(match, 1)
+
+
+# --- merge-time voice similarity ---------------------------------------------
+# merge_speakers is destructive and has no undo, so a merge of two labels whose
+# voice centroids clearly disagree is almost always a mis-merge: it leaves ONE
+# label holding two people under one name, which every name-based detector reads
+# as clean. Thresholds come from the 25-case duplicate-name triage: confirmed
+# same-voice pairs sat >=0.6, confirmed different-people pairs <=0.42.
+
+def _emb(*vals):
+    import numpy as np
+    return np.array(vals, dtype=float)
+
+
+def test_voice_similarity_is_cosine_between_label_centroids():
+    emb = {"A": _emb(1.0, 0.0), "B": _emb(1.0, 0.0), "C": _emb(0.0, 1.0)}
+    assert review.voice_similarity(emb, "A", "B") == pytest.approx(1.0)
+    assert review.voice_similarity(emb, "A", "C") == pytest.approx(0.0)
+
+
+def test_voice_similarity_is_none_when_unmeasurable():
+    import numpy as np
+    emb = {"A": _emb(1.0, 0.0), "NAN": _emb(np.nan, 1.0), "ZERO": _emb(0.0, 0.0)}
+    assert review.voice_similarity(emb, "A", "MISSING") is None   # no vector at all
+    assert review.voice_similarity(emb, "A", "NAN") is None       # NaN vector
+    assert review.voice_similarity(emb, "A", "ZERO") is None      # zero-norm vector
+    assert review.voice_similarity({}, "A", "B") is None           # no embeddings loaded
+
+
+def test_merge_voice_verdict_bands():
+    assert review.merge_voice_verdict(None) == "unknown"
+    # measured on real data: the Branham mis-ID sat at +0.042
+    assert review.merge_voice_verdict(0.042) == "mismatch"
+    assert review.merge_voice_verdict(review.MERGE_SIM_MISMATCH) == "mismatch"
+    assert review.merge_voice_verdict(0.50) == "uncertain"
+    # measured on real data: the Stansbury split sat at +0.649
+    assert review.merge_voice_verdict(0.649) == "match"
+    assert review.merge_voice_verdict(review.MERGE_SIM_CONFIDENT) == "match"
+
+
+def test_merge_voice_thresholds_ordered():
+    assert 0.0 < review.MERGE_SIM_MISMATCH < review.MERGE_SIM_CONFIDENT < 1.0
