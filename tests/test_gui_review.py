@@ -1330,3 +1330,128 @@ def test_local_person_route_unknown_label_is_404(tagged_meeting_dir, tmp_meeting
     r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_99/local-person",
                     data={"slug": "a-b", "role": "staff"})
     assert r.status_code == 404
+
+
+# --- merge-time voice guard ---------------------------------------------------
+
+def _write_embeddings_pair(mdir, a_vec, b_vec, a="SPEAKER_00", b="SPEAKER_01"):
+    import json as _json
+    (mdir / "embeddings.json").write_text(_json.dumps({a: list(a_vec), b: list(b_vec)}))
+
+
+ORTHOGONAL = ([1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0])   # cos 0.0 -> mismatch
+
+
+def test_merge_voice_report_bands_a_proposed_merge(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import merge_voice_report
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings_pair(mdir, *ORTHOGONAL)
+    rep = merge_voice_report("2026-02-04-council", "SPEAKER_01", "SPEAKER_00")
+    assert rep["verdict"] == "mismatch"
+    assert rep["blocked"] is True
+    assert rep["similarity"] == pytest.approx(0.0)
+
+
+def test_merge_voice_report_none_for_unknown_meeting_or_label(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import merge_voice_report
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert merge_voice_report("ghost", "SPEAKER_00", "SPEAKER_01") is None
+    assert merge_voice_report("2026-02-04-council", "SPEAKER_99", "SPEAKER_00") is None
+    assert merge_voice_report("2026-02-04-council", "SPEAKER_00", "SPEAKER_00") is None
+
+
+def test_apply_merge_refuses_a_voice_mismatch(tagged_meeting_dir, tmp_meetings_dir):
+    """The whole point: a destructive merge of two different voices must not go
+    through silently, because it leaves one label holding two people and every
+    name-based detector then reads clean."""
+    import json as _json
+    from gui.review_api import apply_merge
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings_pair(mdir, *ORTHOGONAL)
+
+    assert apply_merge("2026-02-04-council", "SPEAKER_01", "SPEAKER_00") is False
+    # and nothing was written
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    assert "SPEAKER_01" in data["speakers"]
+    assert "SPEAKER_01" in _json.loads((mdir / "embeddings.json").read_text())
+
+
+def test_apply_merge_proceeds_on_mismatch_when_confirmed(tagged_meeting_dir, tmp_meetings_dir):
+    import json as _json
+    from gui.review_api import apply_merge
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings_pair(mdir, *ORTHOGONAL)
+
+    assert apply_merge("2026-02-04-council", "SPEAKER_01", "SPEAKER_00",
+                       confirm_mismatch=True) is True
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    assert "SPEAKER_01" not in data["speakers"]
+
+
+def test_apply_merge_never_blocked_when_similarity_is_unmeasurable(tagged_meeting_dir, tmp_meetings_dir):
+    """No embeddings.json at all — 'we could not tell' must not read as a mis-merge."""
+    from gui.review_api import apply_merge, merge_voice_report
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    rep = merge_voice_report("2026-02-04-council", "SPEAKER_01", "SPEAKER_00")
+    assert rep["verdict"] == "unknown" and rep["blocked"] is False
+    assert apply_merge("2026-02-04-council", "SPEAKER_01", "SPEAKER_00") is True
+
+
+def test_review_cards_annotate_each_merge_target_with_its_voice(tagged_meeting_dir, tmp_meetings_dir):
+    """The dropdown must guide the choice BEFORE the click, so each candidate
+    target carries its own similarity and mismatches are named."""
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings_pair(mdir, *ORTHOGONAL)
+    page = load_review_page("2026-02-04-council")
+    by_label = {c.label: c for c in page.all_cards}
+    assert by_label["SPEAKER_00"].merge_mismatches == ["SPEAKER_01"]
+    assert by_label["SPEAKER_01"].merge_mismatches == ["SPEAKER_00"]
+    assert "0.00" in by_label["SPEAKER_00"].merge_hints["SPEAKER_01"]
+
+
+def test_merge_route_offers_confirmation_instead_of_404_on_a_voice_mismatch(
+        tagged_meeting_dir, tmp_meetings_dir):
+    """A blocked merge is a real UI state, not a missing resource — the route must
+    distinguish it from an unknown label (which stays a 404)."""
+    import json as _json
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings_pair(mdir, *ORTHOGONAL)
+    client = TestClient(create_app())
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/merge",
+                    data={"target": "SPEAKER_00"}, follow_redirects=False)
+    assert r.status_code == 303                      # not 404
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    assert "SPEAKER_01" in data["speakers"]          # nothing merged
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/merge",
+                    data={"target": "SPEAKER_00", "confirm": "1"}, follow_redirects=False)
+    assert r.status_code == 303
+    data = _json.loads((mdir / "transcript_named.json").read_text())
+    assert "SPEAKER_01" not in data["speakers"]      # confirmed merge went through
+
+
+def test_merge_route_still_404s_on_an_unknown_label(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    r = TestClient(create_app()).post(
+        "/meetings/2026-02-04-council/speakers/SPEAKER_99/merge",
+        data={"target": "SPEAKER_00"}, follow_redirects=False)
+    assert r.status_code == 404
+
+
+def test_merge_control_renders_each_target_with_its_voice_and_flags_mismatches(
+        tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    _write_embeddings_pair(mdir, *ORTHOGONAL)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council?tab=review").text
+    assert "voice +0.00 ✗" in body            # annotated option
+    assert "data-merge-mismatch" in body      # machine-readable for the confirm prompt

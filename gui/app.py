@@ -386,10 +386,22 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/merge")
-    def merge_speaker_route(meeting_id: str, label: str, target: str = Form("")):
-        if not review_api.apply_merge(meeting_id, label, target.strip()):
+    def merge_speaker_route(meeting_id: str, label: str, target: str = Form(""),
+                            confirm: str = Form("")):
+        # A merge is destructive and has no undo, so a pair whose voices clearly
+        # disagree is bounced back unapplied unless the reviewer confirmed. That is
+        # a real UI state, distinct from an unknown label (still a 404), which is
+        # why the verdict is asked for BEFORE applying.
+        report = review_api.merge_voice_report(meeting_id, label, target.strip())
+        if report is None:
+            raise HTTPException(status_code=404)  # unknown meeting/label, or self-merge
+        redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        if report["blocked"] and not confirm.strip():
+            return redirect
+        if not review_api.apply_merge(meeting_id, label, target.strip(),
+                                      confirm_mismatch=True):
             raise HTTPException(status_code=404)
-        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        return redirect
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/local-person")
     def make_local_person_route(meeting_id: str, label: str,

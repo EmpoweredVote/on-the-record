@@ -294,6 +294,50 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
     return MergeResult(source_label=source_label, target_label=target_label, moved_segments=moved, combined_name=combined_name)
 
 
+# Voice-similarity bands for a proposed merge. Calibrated on the 25-case
+# duplicate-name triage: every pair confirmed to be one person split across two
+# labels scored >=0.6 (with mutual nearest-neighbour), and every pair confirmed to
+# be two different people scored <=0.42. Between them is a real ambiguity band, so
+# it warns rather than deciding.
+MERGE_SIM_MISMATCH = 0.42   # at or below: the two voices are different people
+MERGE_SIM_CONFIDENT = 0.60  # at or above: the two voices are the same person
+
+
+def voice_similarity(embeddings, label_a: str, label_b: str) -> Optional[float]:
+    """Cosine similarity between two labels' voice centroids, or None when it
+    cannot be measured.
+
+    Unmeasurable means a missing, NaN, or zero-norm vector — all of which occur in
+    the corpus (NaN especially). None is a distinct answer from "dissimilar": a
+    caller must never treat "we could not tell" as evidence of a mis-merge.
+    """
+    a, b = embeddings.get(label_a) if embeddings else None, embeddings.get(label_b) if embeddings else None
+    if a is None or b is None:
+        return None
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if a.shape != b.shape or np.isnan(a).any() or np.isnan(b).any():
+        return None
+    na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
+    if na == 0.0 or nb == 0.0:
+        return None
+    return float(np.dot(a, b) / (na * nb))
+
+
+def merge_voice_verdict(similarity: Optional[float]) -> str:
+    """Band a voice_similarity into 'unknown' | 'mismatch' | 'uncertain' | 'match'.
+
+    'unknown' (unmeasurable) deliberately reads as permissive — a merge must never
+    be blocked because we lacked data to judge it.
+    """
+    if similarity is None:
+        return "unknown"
+    if similarity <= MERGE_SIM_MISMATCH:
+        return "mismatch"
+    if similarity < MERGE_SIM_CONFIDENT:
+        return "uncertain"
+    return "match"
+
+
 def speakers_needing_review(mappings) -> list[str]:
     """Labels whose mapping is flagged needs_review."""
     return [label for label, m in mappings.items() if getattr(m, "needs_review", False)]

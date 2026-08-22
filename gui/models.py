@@ -200,6 +200,12 @@ class SpeakerCard:
     profile_meetings: int = 0     # distinct meetings the stored voice profile draws from
     profile_samples: int = 0      # voice samples (embeddings) in the stored profile
     duplicate_labels: list[str] = field(default_factory=list)  # other labels sharing this speaker's name
+    # Per-candidate merge guidance, so the merge control guides the choice BEFORE
+    # the click. Keyed by the OTHER label: a short display hint, plus the labels
+    # whose voice clearly differs from this one (a merge there is almost certainly
+    # a mis-merge, and it has no undo).
+    merge_hints: dict = field(default_factory=dict)
+    merge_mismatches: list[str] = field(default_factory=list)
 
     @property
     def profile_strength(self) -> str:

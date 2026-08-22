@@ -27,6 +27,8 @@ from gui.paths import is_safe_meeting_id
 
 # Video container preference order (same set run_local.find_video_file checks).
 _VIDEO_EXTS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
+# Merge-control marks per voice verdict: same voice / ambiguous / different people.
+_VERDICT_MARK = {"match": "✓", "uncertain": "~", "mismatch": "✗", "unknown": "?"}
 _LEAD_IN = 3.0  # seconds of context before a clip, mirroring run_local._review_seek
 
 
@@ -301,9 +303,41 @@ def apply_clear_local_person(meeting_id: str, label: str) -> bool:
     return True
 
 
-def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
+def merge_voice_report(meeting_id: str, source_label: str, target_label: str) -> Optional[dict]:
+    """Voice-similarity verdict for a PROPOSED merge, without performing it.
+
+    Returns {"similarity": float|None, "verdict": str, "blocked": bool}, or None
+    when the meeting or either label is unknown (the caller maps that to 404, a
+    different condition from "this merge looks wrong").
+
+    blocked is True only for a measured mismatch — an unmeasurable pair is never
+    blocked, since a merge must not be refused for lack of evidence.
+    """
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return None
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if source_label not in known or target_label not in known or source_label == target_label:
+        return None
+    from src import review
+    sim = review.voice_similarity(_load_embeddings(meeting_dir), source_label, target_label)
+    verdict = review.merge_voice_verdict(sim)
+    return {"similarity": sim, "verdict": verdict, "blocked": verdict == "mismatch"}
+
+
+def apply_merge(meeting_id: str, source_label: str, target_label: str,
+                *, confirm_mismatch: bool = False) -> bool:
     """Merge source speaker into target and persist (incl. diarization+embeddings).
-    False on unsafe/unknown meeting, unknown/equal labels, or merge failure."""
+    False on unsafe/unknown meeting, unknown/equal labels, or merge failure.
+
+    Also False when the two labels' voices clearly disagree and the caller has not
+    passed confirm_mismatch. The merge is destructive and has no undo — it
+    relabels segments and drops the source from embeddings — and a mis-merge
+    leaves ONE label holding two people, which every name-based detector reads as
+    clean. The route asks merge_voice_report first so it can offer a confirmation
+    instead of a bare failure; this guard is the backstop for other callers.
+    """
     ctx = _load_meeting_ctx(meeting_id)
     if ctx is None:
         return False
@@ -313,6 +347,10 @@ def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
         return False
     embeddings = _load_embeddings(meeting_dir)
     from src import review
+    if not confirm_mismatch:
+        sim = review.voice_similarity(embeddings, source_label, target_label)
+        if review.merge_voice_verdict(sim) == "mismatch":
+            return False
     try:
         review.merge_speakers(meeting.segments, embeddings, meeting.speakers, source_label, target_label)
     except ValueError:
@@ -427,6 +465,22 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         for lbl in labels:
             peer_labels[lbl] = [o for o in labels if o != lbl]
 
+    # Pairwise voice similarity for the merge control: every candidate target gets
+    # its own hint, and clear mismatches are named so the UI can confirm before
+    # applying a merge that cannot be undone.
+    labels = [v.label for v in views]
+    merge_hints: dict[str, dict[str, str]] = {l: {} for l in labels}
+    merge_mismatches: dict[str, list[str]] = {l: [] for l in labels}
+    for i, a in enumerate(labels):
+        for b in labels[i + 1:]:
+            sim = review.voice_similarity(embeddings, a, b)
+            verdict = review.merge_voice_verdict(sim)
+            hint = "voice ?" if sim is None else f"voice {sim:+.2f} {_VERDICT_MARK[verdict]}"
+            merge_hints[a][b] = merge_hints[b][a] = hint
+            if verdict == "mismatch":
+                merge_mismatches[a].append(b)
+                merge_mismatches[b].append(a)
+
     from src.publish import extract_youtube_id, playback_for_meeting
 
     youtube_id = extract_youtube_id(meeting.audio_source or "")
@@ -485,6 +539,8 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             profile_meetings=profile_meetings,
             profile_samples=profile_samples,
             duplicate_labels=peer_labels.get(v.label, []),
+            merge_hints=merge_hints.get(v.label, {}),
+            merge_mismatches=sorted(merge_mismatches.get(v.label, [])),
         )
         (confirmed if card.is_confirmed else needs).append(card)
 
