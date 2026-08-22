@@ -141,3 +141,14 @@ def test_identity_key_normalized_name_fallback():
 
 def test_identity_key_none_when_unidentified():
     assert quality.identity_key(SpeakerMapping("S0", None, 0.0, None)) is None
+
+
+def test_identity_key_prefers_politician_id_over_a_local_slug():
+    """politician_slug is NULL for ~99.4% of essentials politicians, so a CREC-resolved
+    House member carries politician_id plus a `congress-<bioguide>` stash. Keying on the
+    stash made an identified politician compare as a local person; keying on the name
+    (once crec_identify stops leaving the stash behind) would be less stable than the id.
+    Mirrors src/enroll.py:215 and src/review.py::identity_label."""
+    m = SpeakerMapping(speaker_label="S0", speaker_name="Marcy Kaptur",
+                       politician_id="uuid-mk", local_slug="congress-K000009")
+    assert quality.identity_key(m) == "essentials:uuid-mk"
