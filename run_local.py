@@ -2935,8 +2935,8 @@ def _prompt_create_local_person(
     """Offer to create a local person record for a non-essentials speaker.
 
     No-op when not attached to a TTY, when the mapping is missing, or when the
-    speaker already has an essentials politician_slug (essentials link wins).
-    Slug is validated against ^[a-z0-9][a-z0-9_-]{0,99}$ before committing.
+    speaker already has an essentials identity (politician_slug OR politician_id —
+    essentials link wins). Slug validation is delegated to assign_local_person.
     """
     if not sys.stdin.isatty():
         return
@@ -2949,21 +2949,16 @@ def _prompt_create_local_person(
     if choice != "l":
         return
 
-    # Auto-generate a kebab-case default slug from the speaker name.
-    if name:
-        default_slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    else:
-        default_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    from src.event_kinds import local_roles_for, resolve_local_role
+    from src.review import LOCAL_SLUG_RE, assign_local_person, default_local_slug
 
+    default_slug = default_local_slug(name, label)
     slug_raw = input(f"  Slug [{default_slug}]: ").strip()
     slug = slug_raw or default_slug
 
-    # Validate slug against the same pattern used by ev-accounts SLUG_REGEX.
-    if not re.match(r"^[a-z0-9][a-z0-9_-]{0,99}$", slug):
-        print(f"  Invalid slug {slug!r} — must match ^[a-z0-9][a-z0-9_-]{{0,99}}$. Left unlinked.")
+    if not LOCAL_SLUG_RE.fullmatch(slug):
+        print(f"  Invalid slug {slug!r} — left unlinked.")
         return
-
-    from src.event_kinds import local_roles_for, resolve_local_role
 
     roles = local_roles_for(event_kind)
     options = "  ".join(f"{i + 1}) {r}" for i, r in enumerate(roles))
@@ -2971,8 +2966,11 @@ def _prompt_create_local_person(
     print("  (pick a number, or type a custom role)")
     role = resolve_local_role(input(f"  [1={roles[0]}]: "), event_kind)
 
-    mapping.local_slug = slug
-    mapping.local_role = role
+    try:
+        assign_local_person(mappings, label, slug, role)
+    except ValueError as exc:
+        print(f"  {exc} — left unlinked.")
+        return
     print(f"  Local person: {slug} ({role})")
 
 

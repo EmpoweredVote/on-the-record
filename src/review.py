@@ -47,6 +47,26 @@ def make_unidentified_slug(meeting_id: str, label: str) -> str:
     return f"unidentified-{base}"[:100]
 
 
+# A site-local person's slug. Mirrors ev-accounts SLUG_REGEX; was an inline
+# literal in run_local.py's terminal wizard before the GUI needed it too.
+LOCAL_SLUG_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,99}$"
+LOCAL_SLUG_RE = _re.compile(LOCAL_SLUG_PATTERN)
+
+
+def default_local_slug(name, label) -> str:
+    """Kebab-case slug for a new local person, from the name or the diarized label.
+
+    Always returns a value matching LOCAL_SLUG_RE so the caller can offer it as a
+    prefilled default without validating first. Falls through name -> label ->
+    'speaker', mirroring make_unidentified_slug's fallback chain.
+    """
+    for source in ((name or "").strip(), (label or "").strip()):
+        slug = _re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")[:100].strip("-")
+        if LOCAL_SLUG_RE.fullmatch(slug):
+            return slug
+    return "speaker"
+
+
 def identity_label(mapping) -> str:
     """One-word resolved identity for the review table."""
     if mapping is None:
@@ -55,6 +75,10 @@ def identity_label(mapping) -> str:
         return "non-speaker"
     if mapping.speaker_status == "unidentified":
         return "unidentified"
+    if mapping.politician_id:
+        # Key on the stable UUID first: politician_slug is NULL for ~99.4% of
+        # essentials.politicians. Mirrors resolve_mapping_enrollment (enroll.py).
+        return f"essentials:{mapping.politician_id}"
     if mapping.politician_slug:
         return f"essentials:{mapping.politician_slug}"
     if mapping.local_slug:
@@ -322,6 +346,11 @@ def speakers_needing_review(mappings) -> list[str]:
 def link_speaker(mappings, label, politician_slug, politician_id):
     """Set (or clear, when both are None) the politician identity on a mapping.
 
+    Setting an essentials link (either field non-None) supersedes any local person:
+    migration 623's invariant is one identity per speaker, and assign_local_person
+    enforces the mirror of this rule. Clearing the link (both None — this is also
+    the UNLINK path) leaves an existing local person alone.
+
     Mutates `mappings` in place; returns the updated SpeakerMapping. Creates a
     bare mapping if the label has none yet.
     """
@@ -330,7 +359,66 @@ def link_speaker(mappings, label, politician_slug, politician_id):
     mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
     mapping.politician_slug = politician_slug
     mapping.politician_id = politician_id
+    if politician_slug or politician_id:
+        # One identity per speaker (migration 623): an essentials link supersedes a
+        # local person. assign_local_person enforces the mirror of this rule. Guarded
+        # because link_speaker(None, None) is also the UNLINK path — clearing
+        # unconditionally would destroy a local person on unlink.
+        mapping.local_slug = None
+        mapping.local_role = None
     mappings[label] = mapping
+    return mapping
+
+
+def assign_local_person(mappings, label, slug, role):
+    """Make `label` a site-local person with `slug` and `role`. Mutates in place.
+
+    Clears any essentials identity: migration 623's invariant is one identity per
+    speaker, and a local person is not a roster politician. Enforcing it here means
+    publish never has to suppress a contradiction it should not have received.
+
+    Raises ValueError when `slug` fails LOCAL_SLUG_RE, or when a DIFFERENT label in
+    this meeting already holds it — two diarized labels cannot be the same person.
+    """
+    from src.models import SpeakerMapping
+
+    slug = (slug or "").strip()
+    if not LOCAL_SLUG_RE.fullmatch(slug):
+        raise ValueError(f"invalid local slug {slug!r}; must match {LOCAL_SLUG_PATTERN}")
+    for other_label, other in mappings.items():
+        if other_label != label and getattr(other, "local_slug", None) == slug:
+            raise ValueError(f"local slug {slug!r} already used by label {other_label!r}")
+
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    mapping.local_slug = slug
+    mapping.local_role = role
+    mapping.politician_slug = None
+    mapping.politician_id = None
+    mappings[label] = mapping
+    return mapping
+
+
+def clear_local_person(mappings, label):
+    """Drop a speaker's local-person identity. Returns None (no mutation) if the
+    label has no mapping, OR if the mapping is an unidentified handle.
+
+    local_slug is overloaded: a reviewer sets it for a genuine local person, but
+    mark_unidentified / link_to_unidentified_handle ALSO set it — to the synthetic
+    unidentified-<meeting>-<label> handle whose entire purpose is keeping two
+    distinct unknown speakers from sharing one voice-profile enrollment key
+    (make_unidentified_slug). Clearing it would drop speaker_name back to
+    resolve_enrollment_key('Unidentified Speaker') -> the single shared key
+    'unidentified_speaker', silently merging unrelated strangers' voice
+    embeddings. So the unidentified case is refused outright rather than
+    cleared; a real local person (speaker_status is None) is unaffected.
+    """
+    mapping = mappings.get(label)
+    if mapping is None:
+        return None
+    if getattr(mapping, "speaker_status", None) == "unidentified":
+        return None
+    mapping.local_slug = None
+    mapping.local_role = None
     return mapping
 
 

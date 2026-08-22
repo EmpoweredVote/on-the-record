@@ -1098,6 +1098,240 @@ def test_review_route_clean_meeting_renders_no_warning_block(tagged_meeting_dir,
     assert "Same name as" not in resp.text
 
 
+def test_review_page_exposes_local_person_fields(tagged_meeting_dir, tmp_meetings_dir):
+    from src.event_kinds import local_roles_for
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    page = load_review_page("2026-02-04-council")
+
+    # role options come from the meeting's event_kind ('council'), not a hardcoded list
+    assert page.local_role_options == list(local_roles_for("council"))
+
+    card = [c for c in page.all_cards if c.label == "SPEAKER_00"][0]
+    assert card.local_slug is None
+    assert card.has_local_person is False
+    # prefilled from the speaker's name so the common path needs no typing
+    assert card.default_slug == "mayor-johnson"
+
+
+def test_apply_make_and_clear_local_person(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import apply_clear_local_person, apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_01",
+                                   "susan-brackney", "2") is True
+    page = load_review_page("2026-02-04-council")
+    card = [c for c in page.all_cards if c.label == "SPEAKER_01"][0]
+    assert card.local_slug == "susan-brackney"
+    assert card.local_role == "staff"      # option 2 for event_kind 'council'
+
+    assert apply_clear_local_person("2026-02-04-council", "SPEAKER_01") is True
+    card2 = [c for c in load_review_page("2026-02-04-council").all_cards
+             if c.label == "SPEAKER_01"][0]
+    assert card2.local_slug is None
+
+
+def test_apply_clear_local_person_returns_false_for_a_noop(tagged_meeting_dir, tmp_meetings_dir):
+    """A label can be 'known' (it has segments) with no entry at all in
+    meeting.speakers, so review.clear_local_person returns None and nothing
+    changed. Reporting True here would tell the reviewer their click did
+    something when it did not."""
+    import json as _json
+    from src.models import Meeting, Segment, SpeakerMapping
+    from gui.review_api import apply_clear_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    segs = [Segment(segment_id=0, start_time=0.0, end_time=5.0,
+                     speaker_label="SPEAKER_00", text="hi", speaker_name=None)]
+    meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
+                      meeting_type="Regular Session", event_kind="council",
+                      segments=segs, speakers={})  # no mapping for SPEAKER_00 at all
+    (mdir / "transcript_named.json").write_text(_json.dumps(meeting.to_dict()))
+
+    assert apply_clear_local_person("2026-02-04-council", "SPEAKER_00") is False
+
+
+def test_apply_clear_local_person_refuses_an_unidentified_speaker(tagged_meeting_dir, tmp_meetings_dir):
+    """Regression guard for the Critical finding: clicking Clear on an
+    unidentified speaker must not drop the synthetic unidentified-<meeting>-
+    <label> handle, or two distinct unknown speakers merge onto one voice
+    profile."""
+    from gui.review_api import apply_clear_local_person, apply_mark_unidentified
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_mark_unidentified("2026-02-04-council", "SPEAKER_01") is True
+    before = [c for c in load_review_page("2026-02-04-council").all_cards
+              if c.label == "SPEAKER_01"][0]
+    assert before.local_slug is not None and before.speaker_status == "unidentified"
+
+    assert apply_clear_local_person("2026-02-04-council", "SPEAKER_01") is False
+
+    after = [c for c in load_review_page("2026-02-04-council").all_cards
+             if c.label == "SPEAKER_01"][0]
+    assert after.local_slug == before.local_slug
+    assert after.speaker_status == "unidentified"
+
+
+def test_apply_make_local_person_accepts_a_custom_role(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_01",
+                                   "jo-doe", "City Attorney") is True
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.local_role == "city_attorney"
+
+
+def test_apply_make_local_person_clears_an_essentials_link(tagged_meeting_dir, tmp_meetings_dir):
+    from gui.review_api import apply_link, apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    apply_link("2026-02-04-council", "SPEAKER_01", "clerk-smith", "uuid-cs")
+    apply_make_local_person("2026-02-04-council", "SPEAKER_01", "clerk-smith-local", "staff")
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.is_linked is False
+
+
+def test_apply_make_local_person_guards(tagged_meeting_dir, tmp_meetings_dir):
+    import pytest
+    from gui.review_api import apply_make_local_person
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    # unknown / unsafe -> False
+    assert apply_make_local_person("ghost", "SPEAKER_00", "a-b", "staff") is False
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_99", "a-b", "staff") is False
+    assert apply_make_local_person("../x", "SPEAKER_00", "a-b", "staff") is False
+    # bad slug -> ValueError, a different failure the route reports differently
+    with pytest.raises(ValueError):
+        apply_make_local_person("2026-02-04-council", "SPEAKER_00", "Susan Brackney", "staff")
+    # slug already held by another label -> ValueError
+    apply_make_local_person("2026-02-04-council", "SPEAKER_00", "taken-slug", "staff")
+    with pytest.raises(ValueError, match="already used"):
+        apply_make_local_person("2026-02-04-council", "SPEAKER_01", "taken-slug", "staff")
+
+
+def test_local_person_routes(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app(), follow_redirects=False)
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/local-person",
+                    data={"slug": "susan-brackney", "role": "2"})
+    assert r.status_code == 303
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.local_slug == "susan-brackney"
+
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/local-person/clear")
+    assert r.status_code == 303
+    card = [c for c in load_review_page("2026-02-04-council").all_cards
+            if c.label == "SPEAKER_01"][0]
+    assert card.local_slug is None
+
+
+def _write_meeting_local_person_states(mdir):
+    """One speaker in each local-person-relevant state, for the review-page
+    render tests: a plain unlinked speaker (make-local-person form), a genuine
+    local person (badge + Clear), a speaker linked to a politician (neither),
+    and an UNIDENTIFIED speaker (neither — the Critical's regression guard,
+    since mark_unidentified also sets local_slug to a synthetic handle)."""
+    from src.models import Meeting, Segment, SpeakerMapping
+
+    segs = [
+        Segment(segment_id=0, start_time=0.0, end_time=10.0, speaker_label="SPEAKER_00",
+                text="Good evening.", speaker_name="Random Person"),
+        Segment(segment_id=1, start_time=20.0, end_time=30.0, speaker_label="SPEAKER_01",
+                text="Comment from the floor.", speaker_name="Jo Doe"),
+        Segment(segment_id=2, start_time=40.0, end_time=50.0, speaker_label="SPEAKER_02",
+                text="Motion carries.", speaker_name="Marcy Kaptur"),
+        Segment(segment_id=3, start_time=60.0, end_time=70.0, speaker_label="SPEAKER_03",
+                text="[unclear]", speaker_name="Unidentified Speaker"),
+    ]
+    speakers = {
+        "SPEAKER_00": SpeakerMapping(speaker_label="SPEAKER_00", speaker_name="Random Person"),
+        "SPEAKER_01": SpeakerMapping(speaker_label="SPEAKER_01", speaker_name="Jo Doe",
+                                     local_slug="jo-doe", local_role="staff"),
+        "SPEAKER_02": SpeakerMapping(speaker_label="SPEAKER_02", speaker_name="Marcy Kaptur",
+                                     politician_slug="marcy-kaptur", politician_id="uuid-mk"),
+        "SPEAKER_03": SpeakerMapping(speaker_label="SPEAKER_03", speaker_name="Unidentified Speaker",
+                                     local_slug="unidentified-2026-02-04-council-speaker_03",
+                                     speaker_status="unidentified"),
+    }
+    meeting = Meeting(meeting_id=mdir.name, city="Bloomington", date="2026-02-04",
+                      meeting_type="Regular Session", event_kind="council",
+                      segments=segs, speakers=speakers)
+    (mdir / "transcript_named.json").write_text(json.dumps(meeting.to_dict()))
+
+
+def test_review_page_render_local_person_branch_selection(tagged_meeting_dir, tmp_meetings_dir):
+    """Render test for the _macros.html card: branch selection, verified by
+    inspecting the returned HTML rather than by manual inspection. This is the
+    Critical's regression guard — an unidentified speaker (SPEAKER_03) must show
+    NEITHER the create form nor the badge+Clear button, since its local_slug is
+    the synthetic unidentified-<meeting>-<label> handle, not a local person a
+    reviewer authored."""
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting_local_person_states(mdir)
+    client = TestClient(create_app())
+    r = client.get("/meetings/2026-02-04-council/panel/review")
+    assert r.status_code == 200
+    html = r.text
+
+    def create_form_present(label):
+        return f'/meetings/2026-02-04-council/speakers/{label}/local-person"' in html
+
+    def clear_button_present(label):
+        return f'/meetings/2026-02-04-council/speakers/{label}/local-person/clear"' in html
+
+    # 1. plain unlinked speaker -> shows the create form
+    assert create_form_present("SPEAKER_00") is True
+    assert clear_button_present("SPEAKER_00") is False
+
+    # 2. speaker with a local person -> shows the badge + Clear, not the create form
+    assert clear_button_present("SPEAKER_01") is True
+    assert create_form_present("SPEAKER_01") is False
+    assert "local: jo-doe" in html
+
+    # 3. speaker linked to a politician -> shows neither
+    assert create_form_present("SPEAKER_02") is False
+    assert clear_button_present("SPEAKER_02") is False
+
+    # 4. UNIDENTIFIED speaker -> shows neither (the Critical's regression guard)
+    assert create_form_present("SPEAKER_03") is False
+    assert clear_button_present("SPEAKER_03") is False
+
+
+def test_local_person_route_rejects_a_bad_slug_with_400(tagged_meeting_dir, tmp_meetings_dir):
+    """A silently-ignored submission is the worst outcome for a reviewer, so an
+    invalid slug is a visible 400 rather than the no-op redirect set_speaker_name
+    uses for empty input."""
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app(), follow_redirects=False)
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/local-person",
+                    data={"slug": "Susan Brackney", "role": "staff"})
+    assert r.status_code == 400
+
+
+def test_local_person_route_unknown_label_is_404(tagged_meeting_dir, tmp_meetings_dir):
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app(), follow_redirects=False)
+    r = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_99/local-person",
+                    data={"slug": "a-b", "role": "staff"})
+    assert r.status_code == 404
+
+
 # --- merge-time voice guard ---------------------------------------------------
 
 def _write_embeddings_pair(mdir, a_vec, b_vec, a="SPEAKER_00", b="SPEAKER_01"):

@@ -1,4 +1,4 @@
-{% macro card(c, meeting_id, all_cards) %}
+{% macro card(c, meeting_id, all_cards, local_role_options=[]) %}
 <div class="card {{ 'confirmed' if c.is_confirmed else 'attention' }}">
   <div class="card-head">
     <span class="label">{{ c.label }}</span>
@@ -49,6 +49,30 @@
     <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/unlink">
       <button type="submit" class="unlink">Unlink</button>
     </form>
+    {% endif %}
+    {% if c.speaker_status is none %}
+    {% if c.has_local_person %}
+    <div class="local-person">
+      <span class="localbadge">local: {{ c.local_slug }}{% if c.local_role %} · {{ c.local_role }}{% endif %}</span>
+      <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/local-person/clear">
+        <button type="submit" class="unlink">Clear local person</button>
+      </form>
+    </div>
+    {% elif not c.is_linked %}
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/local-person"
+          class="local-person">
+      <input type="text" name="slug" value="{{ c.default_slug }}" required
+             pattern="[a-z0-9][a-z0-9_-]{0,99}"
+             title="lowercase letters, digits, hyphen or underscore">
+      <input type="text" name="role" list="roles-{{ c.label }}" autocomplete="off"
+             value="{{ local_role_options[0] if local_role_options else '' }}"
+             placeholder="role…">
+      <datalist id="roles-{{ c.label }}">
+        {% for r in local_role_options %}<option value="{{ r }}"></option>{% endfor %}
+      </datalist>
+      <button type="submit">Not in essentials — make local person</button>
+    </form>
+    {% endif %}
     {% endif %}
     <div class="link-search"
          data-search-url="/api/politicians/search"

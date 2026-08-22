@@ -16,6 +16,7 @@ from typing import Optional
 import numpy as np
 
 from src import config
+from src.event_kinds import local_roles_for
 # The crash-safe writer lives in src/ so run_local.py and src/* can use it too;
 # re-exported under the old private name for this module's existing callers.
 from src.atomic_io import atomic_write_text as _atomic_write_text
@@ -257,6 +258,51 @@ def apply_unlink(meeting_id: str, label: str) -> bool:
     return True
 
 
+def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: str) -> bool:
+    """Make a speaker a site-local person and persist.
+
+    `role_raw` is whatever the reviewer typed or picked; it goes through
+    resolve_local_role, which guarantees a storable shape, so a role can never be
+    invalid here. Returns False on an unsafe/unknown meeting or label. Raises
+    ValueError on a slug that is malformed or already held by another label —
+    a distinct failure the route reports as 400 rather than 404.
+    """
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+    from src.event_kinds import resolve_local_role
+
+    role = resolve_local_role(role_raw, meeting.event_kind)
+    review.assign_local_person(meeting.speakers, label, slug, role)   # may raise ValueError
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def apply_clear_local_person(meeting_id: str, label: str) -> bool:
+    """Drop a speaker's local-person identity and persist. False on unsafe/unknown
+    meeting or label, and also when review.clear_local_person itself no-ops
+    (no mapping to clear, or the speaker is an unidentified handle whose slug
+    isn't a local person to drop) — a no-op is not success."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+
+    if review.clear_local_person(meeting.speakers, label) is None:
+        return False
+    persist_review(meeting, meeting_dir)
+    return True
+
+
 def merge_voice_report(meeting_id: str, source_label: str, target_label: str) -> Optional[dict]:
     """Voice-similarity verdict for a PROPOSED merge, without performing it.
 
@@ -484,6 +530,9 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
             politician_id=getattr(mapping, "politician_id", None) if mapping else None,
             speaker_status=getattr(mapping, "speaker_status", None) if mapping else None,
+            local_slug=getattr(mapping, "local_slug", None) if mapping else None,
+            local_role=getattr(mapping, "local_role", None) if mapping else None,
+            default_slug=review.default_local_slug(v.current_name, v.label),
             is_enrollable=is_enrollable,
             is_enrolled=is_enrolled,
             thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
@@ -508,4 +557,5 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         needs_attention=needs,
         confirmed=confirmed,
         warnings=warnings,
+        local_role_options=list(local_roles_for(meeting.event_kind)),
     )

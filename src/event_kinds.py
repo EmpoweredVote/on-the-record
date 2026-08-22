@@ -50,12 +50,30 @@ DEFAULT_LOCAL_ROLES = (
 )
 
 
+# Shape a local person's role must take to be storable. Kept in sync BY HAND with
+# the CHECK in ev-accounts migration CA_0003 — a regex cannot be shared between
+# Python and SQL, so that migration's comment quotes this constant by name.
+LOCAL_ROLE_PATTERN = r"^[a-z][a-z0-9_]{0,39}$"
+LOCAL_ROLE_RE = re.compile(LOCAL_ROLE_PATTERN)
+
+
 def local_roles_for(event_kind):
     """Ordered role options for a local person at the given event kind.
 
     The first element is the empty-input default.
     """
     return LOCAL_ROLE_SETS.get(event_kind or "", DEFAULT_LOCAL_ROLES)
+
+
+def _shape_local_role(norm: str, default: str) -> str:
+    """Coerce a normalized role into LOCAL_ROLE_PATTERN, or fall back to `default`.
+
+    The pattern demands a leading letter, so strip leading digits/underscores;
+    then bound the length. Anything that normalises away entirely becomes the
+    caller's default rather than an empty role.
+    """
+    candidate = norm.lstrip("_0123456789")[:40].strip("_")
+    return candidate if LOCAL_ROLE_RE.fullmatch(candidate) else default
 
 
 def resolve_local_role(raw, event_kind):
@@ -71,11 +89,11 @@ def resolve_local_role(raw, event_kind):
     raw = (raw or "").strip()
     if not raw:
         return roles[0]
-    if raw.isdigit():
+    if raw.isdecimal():
         n = int(raw)
         return roles[n - 1] if 1 <= n <= len(roles) else roles[0]
     norm = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
-    return norm or roles[0]
+    return _shape_local_role(norm, roles[0])
 
 
 # --- Interview-style event kinds (host + guest formats) --------------------
