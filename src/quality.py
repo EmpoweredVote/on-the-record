@@ -61,12 +61,17 @@ def _normalize_name(name: str) -> str:
 
 
 def identity_key(mapping: Optional[SpeakerMapping]) -> Optional[str]:
-    """Stable identity key for comparison: politician_slug > local_slug > name.
+    """Stable identity key for comparison: politician_id > politician_slug > local_slug > name.
 
     Returns None for an unidentified speaker (no name and no link).
     """
     if mapping is None:
         return None
+    if mapping.politician_id:
+        # The stable UUID first: politician_slug is NULL for ~99.4% of
+        # essentials.politicians. Mirrors src/enroll.py::resolve_mapping_enrollment
+        # and src/review.py::identity_label.
+        return f"essentials:{mapping.politician_id}"
     if mapping.politician_slug:
         return f"essentials:{mapping.politician_slug}"
     if mapping.local_slug:
