@@ -57,6 +57,17 @@ a.mlink:hover { text-decoration: underline; }
 .link-results form { margin: 0; }
 button.link-result { text-align: left; width: 100%; padding: 0.25rem 0.5rem; border: 1px solid #d0d7e2; border-radius: 0.4rem; background: #f4f7fc; cursor: pointer; font-size: 0.85rem; }
 button.link-result:hover { background: #e6edfa; }
+/* Two lines per result: identity, then which races the person is a candidate in.
+   Scoped to .link-results — the speaker-link picker — because new_meeting.js:126
+   reuses the bare .link-result class for the race picker's buttons (inside
+   .race-results) and wants the shared base look above WITHOUT the stacking.
+   Warning colour and 0.78rem match the existing .thin ("short sample") caution
+   chip rather than inventing a second one; #b32020 is reserved for errors. */
+.link-results button.link-result { display: flex; flex-direction: column; gap: 0.1rem; }
+.link-results .pr-name { display: block; }
+.link-results .pr-cand { display: block; font-size: 0.78rem; color: #5c6b82; }
+.link-results .pr-warn { color: #9a6a00; }
+.link-results .pr-dupe { display: block; font-size: 0.78rem; font-weight: 600; }
 button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius: 0.4rem; background: #fdeaea; color: #b32020; cursor: pointer; font-size: 0.85rem; }
 .link-msg { font-size: 0.8rem; color: #999; }
 .statusbadge { font-size: 0.75rem; padding: 0.05rem 0.4rem; border-radius: 0.4rem; margin-left: 0.4rem; }

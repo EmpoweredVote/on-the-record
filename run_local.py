@@ -46,15 +46,30 @@ from src.crec_identify import parse_crec_arg
 from src.house_cdn import resolve_session
 
 
-def should_run_llm(skip_llm: bool, crec_request) -> bool:
+def should_run_llm(skip_llm: bool, crec_request, event_kind=None) -> bool:
     """Whether to run Layer-3 LLM speaker identification.
 
-    Off when --skip-llm is set, and off on a Congressional Record run
-    (``crec_request`` truthy): CREC is authoritative for who spoke, and the local
-    LLM hallucinates congressional names, so an unresolved floor speaker should go
-    to review as 'unidentified' rather than get a garbage guess.
+    Off entirely when ``config.SPEAKER_ID_LLM_ENABLED`` is False (the shipped
+    default as of 2026-08-06 — see src/config.py): an 88-interview eval measured
+    ~13-16% correct-name coverage across five models, and in practice names come
+    from human review. This is checked first and short-circuits every other
+    condition below.
+
+    When the switch is on, off when --skip-llm is set, off on a Congressional
+    Record run (``crec_request`` truthy): CREC is authoritative for who spoke,
+    and the local LLM hallucinates congressional names, so an unresolved floor
+    speaker should go to review as 'unidentified' rather than get a garbage
+    guess.
+
+    Also off for interview-kind meetings (``event_kind in INTERVIEW_KINDS`` —
+    news_clip/press_conference/podcast): the same eval found the anchor rule
+    requires names spoken in the transcript and interview guests are rarely
+    full-named on air. Names come from review instead. Civic kinds and
+    debates/forums are unaffected.
     """
-    return (not skip_llm) and (crec_request is None)
+    if not config.SPEAKER_ID_LLM_ENABLED:
+        return False
+    return (not skip_llm) and (crec_request is None) and (event_kind not in INTERVIEW_KINDS)
 
 
 def _validate_diarizer_compute(args) -> None:
@@ -164,6 +179,54 @@ def _reconcile_clip_window(
         file=sys.stderr,
     )
     sys.exit(2)
+
+
+def _load_summary_checkpoint(meeting, summary_path: Path) -> str:
+    """Resolve the summary on a resumed run, preferring the embedded copy.
+
+    The summary is stored twice: as the standalone summary.json stage checkpoint
+    and inside transcript_named.json, from which the identification stage has
+    already loaded it into `meeting`. The embedded copy is authoritative — the
+    segment-merge and boundary-snap backfills renumber segments and rewrite only
+    transcript_named.json, which leaves summary.json holding section
+    start/end_segment values that point at the pre-backfill numbering. Preferring
+    the checkpoint here published stale section boundaries for live meetings, so
+    the embedded copy wins and a drifted checkpoint is re-synced from it.
+
+    summary.json is still read when the transcript carries no embedded summary
+    (meetings summarized before that copy existed, or a run whose transcript
+    re-save didn't land), and is still the SUMMARIZED stage marker that
+    checkpointing and --rewind-to key on, so it is never left absent.
+
+    Returns a one-line description of the outcome for the caller to print.
+    """
+    from src.models import MeetingSummary
+
+    if meeting.summary is not None:
+        embedded = meeting.summary.to_dict()
+        on_disk = None
+        if summary_path.exists():
+            try:
+                with open(summary_path, "r") as f:
+                    # Round-trip through the model so an older on-disk spelling
+                    # (`key_decisions` for `highlights`) isn't read as drift.
+                    on_disk = MeetingSummary.from_dict(json.load(f)).to_dict()
+            except (OSError, json.JSONDecodeError, KeyError, TypeError):
+                on_disk = None  # unusable checkpoint: rewrite it from the transcript
+        count = len(meeting.summary.sections)
+        if on_disk == embedded:
+            return f"Loaded summary ({count} sections)"
+        atomic_write_json(summary_path, embedded)
+        return (f"Loaded summary ({count} sections) from the transcript; "
+                f"re-synced the out-of-date summary.json checkpoint")
+
+    if summary_path.exists():
+        with open(summary_path, "r") as f:
+            meeting.summary = MeetingSummary.from_dict(json.load(f))
+        return (f"Loaded summary ({len(meeting.summary.sections)} sections) from "
+                f"summary.json (the transcript has no embedded summary)")
+
+    return "No summary on disk — nothing to load."
 
 
 def _list_cached_rosters() -> list[tuple[str, str]]:
@@ -1316,12 +1379,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
     reconciled_marker = meeting_dir / "reconciled.done"
     if reference_path.exists() and not reconciled_marker.exists() and segments:
         try:
-            import anthropic
-
             from src import config as _cfg
+            from src.llm_providers import make_llm_client
             from src.reconcile import reconcile_segments
 
-            client = anthropic.Anthropic()
+            client = make_llm_client()
 
             def _call_llm(prompt: str) -> str:
                 msg = client.messages.create(
@@ -1426,9 +1488,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 new_dim = next(iter(speaker_embeddings.values())).shape[0]
                 print(f"  Re-extracted {len(speaker_embeddings)} embeddings ({new_dim}-dim)")
 
-        # Layer 3: LLM (optional; skipped on Congressional Record runs)
+        # Layer 3: LLM (off by default — config.SPEAKER_ID_LLM_ENABLED; also
+        # skipped on Congressional Record runs and on interview-kind meetings
+        # when explicitly re-enabled)
         llm_fn = None
-        if should_run_llm(args.skip_llm, crec_request):
+        if should_run_llm(args.skip_llm, crec_request, event_kind=state.event_kind):
             from src.llm_providers import get_provider
             from src.llm_utils import llm_identify_speakers
 
@@ -1440,9 +1504,16 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 event_kind=_llm_event_kind, roster=roster, roster_hint=roster_hint,
                 partial_results_path=llm_partial_path,
             )
+        elif not config.SPEAKER_ID_LLM_ENABLED:
+            print("  Skipping LLM speaker ID (disabled — config.SPEAKER_ID_LLM_ENABLED; "
+                  "layers 1-2 and review unaffected).")
         elif crec_request and not args.skip_llm:
             print("  Skipping LLM speaker ID (Congressional Record run — CREC is "
                   "authoritative; unresolved speakers go to review).")
+        elif (not args.skip_llm and not crec_request
+              and state.event_kind in INTERVIEW_KINDS):
+            print("  Skipping LLM speaker ID (interview-kind meeting — eval "
+                  "2026-08-05: ~13% name coverage; names come from review).")
 
         crec_mappings = None
         if crec_request:
@@ -1582,19 +1653,17 @@ def run_pipeline(args: argparse.Namespace) -> None:
     summary_path = meeting_dir / "summary.json"
 
     if state.is_complete(PipelineStage.SUMMARIZED):
-        print("  Already complete. Loading from checkpoint...")
-        if summary_path.exists():
-            from src.models import MeetingSummary
-            with open(summary_path, "r") as f:
-                meeting.summary = MeetingSummary.from_dict(json.load(f))
-            print(f"  Loaded summary ({len(meeting.summary.sections)} sections)")
+        print("  Already complete.")
+        print(f"  {_load_summary_checkpoint(meeting, summary_path)}")
     elif args.skip_summary:
         print("  Skipped (--skip-summary).")
         state.mark_complete(PipelineStage.SUMMARIZED)
     else:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            print("  No ANTHROPIC_API_KEY found. Skipping summary generation.")
+        from src.llm_providers import llm_client_env_key
+
+        env_key = llm_client_env_key()
+        if not os.environ.get(env_key):
+            print(f"  No {env_key} found. Skipping summary generation.")
             print("  Set the environment variable or use --skip-summary to silence this.")
             state.mark_complete(PipelineStage.SUMMARIZED)
         else:
@@ -1607,22 +1676,22 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     print(f"    {step}...")
 
             t0 = time.time()
-            print("  Generating meeting summary via Anthropic API...")
+            print("  Generating meeting summary via the configured LLM API...")
             try:
                 meeting.summary = generate_summary(meeting, progress_callback=summary_progress)
             except Exception as e:
-                # The summary stage is the only stage that needs the Anthropic API.
+                # The summary stage is the only stage that needs the LLM API.
                 # If it fails (e.g. out of credits, bad key, network), don't crash the
                 # whole pipeline — report it clearly and continue. The stage is left
                 # incomplete so it will be retried automatically on the next run.
                 meeting.summary = None
                 detail = str(e)
                 if "credit balance is too low" in detail:
-                    reason = "Anthropic API credit balance is too low."
-                    hint = "Add credits at https://console.anthropic.com (Plans & Billing), then re-run to generate the summary."
+                    reason = "LLM API credit balance is too low."
+                    hint = f"Check the active LLM backend's account balance ({env_key}), then re-run to generate the summary."
                 elif "authentication" in detail.lower() or "invalid x-api-key" in detail.lower():
-                    reason = "Anthropic API key was rejected."
-                    hint = "Check ANTHROPIC_API_KEY, then re-run to generate the summary."
+                    reason = "LLM API key was rejected."
+                    hint = f"Check {env_key}, then re-run to generate the summary."
                 else:
                     reason = f"Summary generation failed: {detail}"
                     hint = "Re-run once the issue is resolved to generate the summary."
@@ -1668,8 +1737,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print("  No DATABASE_URL — skipping topic classification (vocabulary lives in the DB).")
         else:
             try:
-                import anthropic
                 import psycopg2
+                from src.llm_providers import make_llm_client
                 from src.topics import fetch_live_topics, classify_sections
 
                 conn = psycopg2.connect(db_url)
@@ -1678,7 +1747,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 finally:
                     conn.close()
                 print(f"  Classifying topics against {len(vocab)} live Compass topics...")
-                client = anthropic.Anthropic()
+                client = make_llm_client()
                 meeting.section_topics = classify_sections(client, meeting.summary.sections, vocab)
                 with open(topics_path, "w") as f:
                     json.dump([st.to_dict() for st in meeting.section_topics], f, indent=2)
@@ -2866,8 +2935,8 @@ def _prompt_create_local_person(
     """Offer to create a local person record for a non-essentials speaker.
 
     No-op when not attached to a TTY, when the mapping is missing, or when the
-    speaker already has an essentials politician_slug (essentials link wins).
-    Slug is validated against ^[a-z0-9][a-z0-9_-]{0,99}$ before committing.
+    speaker already has an essentials identity (politician_slug OR politician_id —
+    essentials link wins). Slug validation is delegated to assign_local_person.
     """
     if not sys.stdin.isatty():
         return
@@ -2880,21 +2949,16 @@ def _prompt_create_local_person(
     if choice != "l":
         return
 
-    # Auto-generate a kebab-case default slug from the speaker name.
-    if name:
-        default_slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    else:
-        default_slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    from src.event_kinds import local_roles_for, resolve_local_role
+    from src.review import LOCAL_SLUG_RE, assign_local_person, default_local_slug
 
+    default_slug = default_local_slug(name, label)
     slug_raw = input(f"  Slug [{default_slug}]: ").strip()
     slug = slug_raw or default_slug
 
-    # Validate slug against the same pattern used by ev-accounts SLUG_REGEX.
-    if not re.match(r"^[a-z0-9][a-z0-9_-]{0,99}$", slug):
-        print(f"  Invalid slug {slug!r} — must match ^[a-z0-9][a-z0-9_-]{{0,99}}$. Left unlinked.")
+    if not LOCAL_SLUG_RE.fullmatch(slug):
+        print(f"  Invalid slug {slug!r} — left unlinked.")
         return
-
-    from src.event_kinds import local_roles_for, resolve_local_role
 
     roles = local_roles_for(event_kind)
     options = "  ".join(f"{i + 1}) {r}" for i, r in enumerate(roles))
@@ -2902,8 +2966,11 @@ def _prompt_create_local_person(
     print("  (pick a number, or type a custom role)")
     role = resolve_local_role(input(f"  [1={roles[0]}]: "), event_kind)
 
-    mapping.local_slug = slug
-    mapping.local_role = role
+    try:
+        assign_local_person(mappings, label, slug, role)
+    except ValueError as exc:
+        print(f"  {exc} — left unlinked.")
+        return
     print(f"  Local person: {slug} ({role})")
 
 
@@ -3693,7 +3760,7 @@ Environment Variables:
     parser.add_argument("--skip-llm", action="store_true",
                         help="Skip LLM-based speaker identification (Layer 3)")
     parser.add_argument("--skip-summary", action="store_true",
-                        help="Skip meeting summary generation (requires ANTHROPIC_API_KEY)")
+                        help="Skip meeting summary generation (requires the active LLM backend's API key)")
     parser.add_argument("--confirm-enroll", action="store_true",
                         help="Interactively confirm enrollment for borderline speakers (0.70-0.85 confidence)")
     parser.add_argument("--merge", action="store_true",

@@ -27,7 +27,7 @@ class RawItem:
 class Outlet:
     id: str
     name: str
-    kind: str          # 'youtube_channel' | 'podcast_rss' | 'web_page'
+    kind: str          # 'youtube_channel' | 'podcast_rss' | 'web_rss' | 'web_page'
     feed_url: str
     external_channel_id: Optional[str] = None
 

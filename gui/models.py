@@ -191,12 +191,21 @@ class SpeakerCard:
     politician_slug: Optional[str] = None
     politician_id: Optional[str] = None
     speaker_status: Optional[str] = None  # None | "unidentified" | "non_speaker"
+    local_slug: Optional[str] = None
+    local_role: Optional[str] = None
+    default_slug: str = ""        # prefill for the make-local-person form
     is_enrollable: bool = False   # named, not a non-speaker, has an embedding
     is_enrolled: bool = False     # this meeting already contributed to the voice profile
     thin_sample: bool = False     # < ENROLL_MIN_SPEECH_SECONDS of speech
     profile_meetings: int = 0     # distinct meetings the stored voice profile draws from
     profile_samples: int = 0      # voice samples (embeddings) in the stored profile
     duplicate_labels: list[str] = field(default_factory=list)  # other labels sharing this speaker's name
+    # Per-candidate merge guidance, so the merge control guides the choice BEFORE
+    # the click. Keyed by the OTHER label: a short display hint, plus the labels
+    # whose voice clearly differs from this one (a merge there is almost certainly
+    # a mis-merge, and it has no undo).
+    merge_hints: dict = field(default_factory=dict)
+    merge_mismatches: list[str] = field(default_factory=list)
 
     @property
     def profile_strength(self) -> str:
@@ -229,6 +238,10 @@ class SpeakerCard:
     @property
     def is_linked(self) -> bool:
         return bool(self.politician_slug or self.politician_id)
+
+    @property
+    def has_local_person(self) -> bool:
+        return bool(self.local_slug)
 
     @property
     def is_confirmed(self) -> bool:
@@ -267,6 +280,7 @@ class ReviewPageData:
     needs_attention: list[SpeakerCard] = field(default_factory=list)
     confirmed: list[SpeakerCard] = field(default_factory=list)
     warnings: list[dict] = field(default_factory=list)  # review.enrollment_warnings dicts
+    local_role_options: list[str] = field(default_factory=list)
 
     @property
     def speaker_count(self) -> int:

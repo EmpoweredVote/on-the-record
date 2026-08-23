@@ -1,11 +1,40 @@
 """Per-race YouTube search sweeps (yt-dlp ytsearch, flat) + item hydration."""
 from __future__ import annotations
 
+import random
+import time
+
 from src import config
 from src.discovery.models import RawItem
 from src.ingest import fetch_source_metadata
 
 SEARCH_TERMS = ("debate", "forum", "town hall", "interview")
+
+# "not a bot" not bare "bot": query text (candidate names) is embedded in every
+# yt-dlp search error. NOTE for future extension to hydration/captions: the age
+# gate says "Sign in to confirm your age" — do not add a bare "sign in to
+# confirm" marker back.
+RETRYABLE_MARKERS = ("429", "too many requests", "not a bot")
+
+
+def with_backoff(fn, *, retries: "int | None" = None,
+                 base_delay: "float | None" = None, sleep_fn=time.sleep):
+    """Run fn(); on a retryable yt-dlp error (bot-check / rate limit) retry
+    with exponential backoff + jitter. Non-retryable errors and the final
+    failure propagate — the engine's per-query handler stays the decider,
+    and a hard bot-check wave still exits 1 without resetting the cadence
+    clock (record_sweep skips failed sweeps)."""
+    tries = retries if retries is not None else config.DISCOVERY_BACKOFF_RETRIES
+    tries = max(0, tries)
+    base = base_delay if base_delay is not None else config.DISCOVERY_BACKOFF_BASE_SECONDS
+    for attempt in range(tries + 1):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 — filtered by marker below
+            msg = str(exc).lower()
+            if attempt >= tries or not any(m in msg for m in RETRYABLE_MARKERS):
+                raise
+            sleep_fn(base * (3 ** attempt) * (0.5 + random.random()))
 
 
 def queries_for_candidate(full_name: str) -> list:

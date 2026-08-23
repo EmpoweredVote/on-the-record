@@ -1,4 +1,4 @@
-{% macro card(c, meeting_id, all_cards) %}
+{% macro card(c, meeting_id, all_cards, local_role_options=[]) %}
 <div class="card {{ 'confirmed' if c.is_confirmed else 'attention' }}">
   <div class="card-head">
     <span class="label">{{ c.label }}</span>
@@ -12,9 +12,10 @@
   <div class="dup-name">
     ⚠ Same name as {{ c.duplicate_labels|join(', ') }} — two labels can't be the same person
     {% for other in c.duplicate_labels %}
-    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge-inline">
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge-inline"
+          data-merge-mismatch="{{ other if other in c.merge_mismatches else '' }}">
       <input type="hidden" name="target" value="{{ other }}">
-      <button type="submit">Merge into {{ other }}</button>
+      <button type="submit">Merge into {{ other }}{% if c.merge_hints.get(other) %} ({{ c.merge_hints[other] }}){% endif %}</button>
     </form>
     {% endfor %}
   </div>
@@ -49,6 +50,30 @@
       <button type="submit" class="unlink">Unlink</button>
     </form>
     {% endif %}
+    {% if c.speaker_status is none %}
+    {% if c.has_local_person %}
+    <div class="local-person">
+      <span class="localbadge">local: {{ c.local_slug }}{% if c.local_role %} · {{ c.local_role }}{% endif %}</span>
+      <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/local-person/clear">
+        <button type="submit" class="unlink">Clear local person</button>
+      </form>
+    </div>
+    {% elif not c.is_linked %}
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/local-person"
+          class="local-person">
+      <input type="text" name="slug" value="{{ c.default_slug }}" required
+             pattern="[a-z0-9][a-z0-9_-]{0,99}"
+             title="lowercase letters, digits, hyphen or underscore">
+      <input type="text" name="role" list="roles-{{ c.label }}" autocomplete="off"
+             value="{{ local_role_options[0] if local_role_options else '' }}"
+             placeholder="role…">
+      <datalist id="roles-{{ c.label }}">
+        {% for r in local_role_options %}<option value="{{ r }}"></option>{% endfor %}
+      </datalist>
+      <button type="submit">Not in essentials — make local person</button>
+    </form>
+    {% endif %}
+    {% endif %}
     <div class="link-search"
          data-search-url="/api/politicians/search"
          data-link-action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/link">
@@ -56,11 +81,12 @@
       <div class="link-results"></div>
     </div>
     {% if all_cards|length > 1 %}
-    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge">
+    <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/merge" class="merge"
+          data-merge-mismatch="{{ c.merge_mismatches|join(',') }}">
       <select name="target">
         <option value="">Merge into…</option>
         {% for o in all_cards %}{% if o.label != c.label %}
-        <option value="{{ o.label }}">{{ o.label }} — {{ o.display_name }}</option>
+        <option value="{{ o.label }}">{{ o.label }} — {{ o.display_name }}{% if c.merge_hints.get(o.label) %} ({{ c.merge_hints[o.label] }}){% endif %}</option>
         {% endif %}{% endfor %}
       </select>
       <button type="submit">Merge</button>

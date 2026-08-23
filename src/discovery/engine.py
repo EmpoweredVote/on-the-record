@@ -1,6 +1,6 @@
 """Discovery run orchestration.
 
-All I/O is injected (provider, feed fetcher, search, hydration, captions,
+All I/O is injected (provider, feed fetcher, search, hydration, page peek,
 sleep) so the whole run is testable with fakes. The engine owns commits:
 one per outlet and one per swept race, so a crash loses at most one unit.
 Log lines follow the poll_agendas convention: UPPERCASE verb prefixes.
@@ -17,7 +17,7 @@ import psycopg2
 from src import config
 from src.discovery import db
 from src.discovery.classify import classify_item
-from src.discovery.prefilter import normalize, prefilter_item
+from src.discovery.prefilter import is_stale, normalize, prefilter_item
 from src.discovery.search import queries_for_candidate
 from src.source_key import source_key
 
@@ -27,6 +27,7 @@ class RunStats:
     examined: int = 0
     skipped_seen: int = 0
     prefiltered_out: int = 0
+    recency_filtered: int = 0
     classified: int = 0
     inserted_pending: int = 0
     inserted_auto_filtered: int = 0
@@ -56,14 +57,14 @@ def sweep_due(election_date: "str | None", last_swept_at, today: dt.date) -> boo
     return (today - last).days >= sweep_interval_days(days_to)
 
 
-def _snippet(text: "str | None", limit: int = 500) -> "str | None":
+def _snippet(text: "str | None", limit: int = 1500) -> "str | None":
     if not text:
         return None
     return text[:limit]
 
 
 def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
-                  captions_fetcher, sleep_fn, meeting_keys: set, today: dt.date,
+                  peek_fetcher, sleep_fn, meeting_keys: set, today: dt.date,
                   dry_run: bool = False, race_filter: "str | None" = None,
                   classify_cap: "int | None" = None,
                   skip_watchlist: bool = False, skip_sweeps: bool = False) -> RunStats:
@@ -91,12 +92,21 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
         if not pf.passed:
             stats.prefiltered_out += 1
             return
-        if item.duration_seconds is None or item.description is None:
+        if is_stale(item.published_at, today):
+            stats.recency_filtered += 1
+            print(f"STALE [{item.via}] {item.title!r} ({item.published_at})")
+            return
+        if ((item.duration_seconds is None or item.description is None)
+                and key.startswith("youtube:")):
             if key in hydrated_cache:
                 item = hydrated_cache[key]
             else:
                 item = hydrate_fn(item)
                 hydrated_cache[key] = item
+            if is_stale(item.published_at, today):
+                stats.recency_filtered += 1
+                print(f"STALE [{item.via}] {item.title!r} ({item.published_at})")
+                return
             pf = prefilter_item(item.title, item.description, item.duration_seconds,
                                 roster_names)
             if not pf.passed:
@@ -126,7 +136,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             stats.spend_capped += 1
             return
         verdict = classify_item(provider, item, race_label=race_label,
-                                roster_names=roster, captions_fetcher=captions_fetcher)
+                                roster_names=roster, peek_fetcher=peek_fetcher)
         stats.classified += 1
         pending = (verdict.rejected_reason is None and verdict.relevant
                    and verdict.confidence >= config.DISCOVERY_CONFIDENCE_FLOOR)
@@ -185,7 +195,17 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
 
     if not skip_sweeps:
         state = db.fetch_sweep_state(cur)
+        # Resets to 0 on every successful ytsearch_fn call. A hard bot-check
+        # wave otherwise turns an ~65s-per-exhausted-query retry into an
+        # 18h+ run at real roster scale (467 races -> 6,428 queries) -- once
+        # the wave is confirmed (DISCOVERY_SWEEP_ABORT_AFTER in a row), stop
+        # spending the rest of the run hammering a search backend that's
+        # already told us no.
+        consecutive_search_failures = 0
+        sweep_aborted = False
         for race_id, cands in by_race.items():
+            if sweep_aborted:
+                break
             if race_filter and race_id != race_filter:
                 continue
             if not race_filter and not sweep_due(cands[0].election_date,
@@ -197,13 +217,26 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             capped_before = stats.spend_capped
             failures_before = len(stats.failures)
             for cand in cands:
+                if sweep_aborted:
+                    break
                 for query in queries_for_candidate(cand.full_name):
                     try:
                         results = ytsearch_fn(query)
                     except Exception as exc:  # noqa: BLE001
                         stats.failures.append(f"search {query!r}: {exc}")
                         print(f"FAILED search {query!r}: {exc}", file=sys.stderr)
+                        consecutive_search_failures += 1
+                        if consecutive_search_failures >= config.DISCOVERY_SWEEP_ABORT_AFTER:
+                            stats.failures.append(
+                                f"sweep phase aborted: {consecutive_search_failures} "
+                                "consecutive search failures")
+                            print(f"SWEEP ABORT: {consecutive_search_failures} consecutive "
+                                  "search failures — deferring remaining sweeps",
+                                  file=sys.stderr)
+                            sweep_aborted = True
+                            break
                         continue
+                    consecutive_search_failures = 0
                     for item in results:
                         process_safe(item, [c.full_name for c in cands], race_id)
                     sleep_fn(config.DISCOVERY_SEARCH_SLEEP_SECONDS)

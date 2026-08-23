@@ -160,8 +160,12 @@ def test_crec_speaker_mappings_attaches_politician_id(tmp_path):
         search=_fed_senator_search)
     assert out["SPEAKER_00"].speaker_name == "Mitch McConnell"
     assert out["SPEAKER_00"].politician_id == "pid-McConnell"
-    assert out["SPEAKER_00"].local_slug == "congress-M000355"
+    # One identity per speaker (migration 623). The bioguide stash exists to give an
+    # unbridged member a stable key; once essentials owns the identity it is a second,
+    # competing one — it published a duplicate local_people row for a sitting member.
+    assert out["SPEAKER_00"].local_slug is None
     assert out["SPEAKER_01"].politician_id == "pid-Baldwin"
+    assert out["SPEAKER_01"].local_slug is None
 
 
 def test_crec_speaker_mappings_no_essentials_match_stays_name_only(tmp_path):
@@ -172,4 +176,7 @@ def test_crec_speaker_mappings_no_essentials_match_stays_name_only(tmp_path):
         search=lambda q, **kw: [])
     assert out["SPEAKER_00"].speaker_name == "Mitch McConnell"
     assert out["SPEAKER_00"].politician_id is None
+    # The stash SURVIVES when the bridge finds nothing: with no essentials identity it is
+    # the only stable key this member has, and src/enroll.py keys their voice profile on it
+    # (`local:congress-M000355`) so the same member enrolls consistently across meetings.
     assert out["SPEAKER_00"].local_slug == "congress-M000355"

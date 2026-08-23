@@ -16,6 +16,7 @@ from typing import Optional
 import numpy as np
 
 from src import config
+from src.event_kinds import local_roles_for
 # The crash-safe writer lives in src/ so run_local.py and src/* can use it too;
 # re-exported under the old private name for this module's existing callers.
 from src.atomic_io import atomic_write_text as _atomic_write_text
@@ -26,6 +27,8 @@ from gui.paths import is_safe_meeting_id
 
 # Video container preference order (same set run_local.find_video_file checks).
 _VIDEO_EXTS = (".m4v", ".mp4", ".mkv", ".webm", ".avi", ".mov")
+# Merge-control marks per voice verdict: same voice / ambiguous / different people.
+_VERDICT_MARK = {"match": "✓", "uncertain": "~", "mismatch": "✗", "unknown": "?"}
 _LEAD_IN = 3.0  # seconds of context before a clip, mirroring run_local._review_seek
 
 
@@ -172,8 +175,25 @@ def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
 
 
 def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
-    """Best-effort essentials name search. Returns {"results": [...], "error": None|str}
-    — never raises, so a network/HTTP/short-query failure just yields no results."""
+    """Best-effort politician search for the link picker.
+
+    Prefers gui.politicians (direct DB), which is the only path that can show
+    which races a person is actually a candidate in — the thing a curator needs,
+    because publish derives a meeting's races solely from politician_id ->
+    race_candidates. Falls back to the ev-accounts HTTP search when DATABASE_URL
+    isn't set, so a GUI run without DB access degrades to name + office instead
+    of returning nothing. Never raises.
+    """
+    from gui import politicians
+    if politicians.db_configured():
+        return politicians.search_politicians_safe(q, limit=limit)
+    return _search_politicians_http(q, limit=limit)
+
+
+def _search_politicians_http(q: str, *, limit: int = 10) -> dict:
+    """The pre-direct-DB path: ev-accounts /candidates/search-by-name. Carries no
+    candidacy data, so `candidacy_display` is '' and the renderer omits line 2."""
+    from gui import politicians
     from src.essentials_client import EssentialsClientError, search_politicians
     try:
         raw = search_politicians(q, limit=limit)
@@ -181,17 +201,24 @@ def search_politicians_safe(q: str, *, limit: int = 10) -> dict:
         return {"results": [], "error": str(exc)}
     except Exception as exc:  # transport/unexpected — stay best-effort
         return {"results": [], "error": f"search failed: {exc}"}
-    results = [
-        {
-            "politician_slug": r.get("politician_slug"),
-            "politician_id": r.get("politician_id"),
-            "full_name": r.get("full_name"),
-            "office_title": r.get("office_title"),
-            "district_label": r.get("district_label"),
-            "government_name": r.get("government_name"),
+    results = []
+    for r in raw:
+        rec = {
+            "politician_slug": r.get("politician_slug") or r.get("slug"),
+            "politician_id": r.get("politician_id") or r.get("id"),
+            "full_name": r.get("full_name") or "",
+            "office_title": r.get("office_title") or "",
+            "district_label": r.get("district_label") or "",
+            "government_name": r.get("government_name") or "",
+            "candidacies": [],
         }
-        for r in raw
-    ]
+        rec["display"] = politicians.politician_display(rec)
+        rec["candidacy_display"] = ""
+        # False, not True: without a DB we never looked, so we must not claim the
+        # person has no candidacies.
+        rec["candidacy_warn"] = False
+        rec["duplicate_note"] = ""
+        results.append(rec)
     return {"results": results, "error": None}
 
 
@@ -231,9 +258,86 @@ def apply_unlink(meeting_id: str, label: str) -> bool:
     return True
 
 
-def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
+def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: str) -> bool:
+    """Make a speaker a site-local person and persist.
+
+    `role_raw` is whatever the reviewer typed or picked; it goes through
+    resolve_local_role, which guarantees a storable shape, so a role can never be
+    invalid here. Returns False on an unsafe/unknown meeting or label. Raises
+    ValueError on a slug that is malformed or already held by another label —
+    a distinct failure the route reports as 400 rather than 404.
+    """
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+    from src.event_kinds import resolve_local_role
+
+    role = resolve_local_role(role_raw, meeting.event_kind)
+    review.assign_local_person(meeting.speakers, label, slug, role)   # may raise ValueError
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def apply_clear_local_person(meeting_id: str, label: str) -> bool:
+    """Drop a speaker's local-person identity and persist. False on unsafe/unknown
+    meeting or label, and also when review.clear_local_person itself no-ops
+    (no mapping to clear, or the speaker is an unidentified handle whose slug
+    isn't a local person to drop) — a no-op is not success."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+
+    if review.clear_local_person(meeting.speakers, label) is None:
+        return False
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def merge_voice_report(meeting_id: str, source_label: str, target_label: str) -> Optional[dict]:
+    """Voice-similarity verdict for a PROPOSED merge, without performing it.
+
+    Returns {"similarity": float|None, "verdict": str, "blocked": bool}, or None
+    when the meeting or either label is unknown (the caller maps that to 404, a
+    different condition from "this merge looks wrong").
+
+    blocked is True only for a measured mismatch — an unmeasurable pair is never
+    blocked, since a merge must not be refused for lack of evidence.
+    """
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return None
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if source_label not in known or target_label not in known or source_label == target_label:
+        return None
+    from src import review
+    sim = review.voice_similarity(_load_embeddings(meeting_dir), source_label, target_label)
+    verdict = review.merge_voice_verdict(sim)
+    return {"similarity": sim, "verdict": verdict, "blocked": verdict == "mismatch"}
+
+
+def apply_merge(meeting_id: str, source_label: str, target_label: str,
+                *, confirm_mismatch: bool = False) -> bool:
     """Merge source speaker into target and persist (incl. diarization+embeddings).
-    False on unsafe/unknown meeting, unknown/equal labels, or merge failure."""
+    False on unsafe/unknown meeting, unknown/equal labels, or merge failure.
+
+    Also False when the two labels' voices clearly disagree and the caller has not
+    passed confirm_mismatch. The merge is destructive and has no undo — it
+    relabels segments and drops the source from embeddings — and a mis-merge
+    leaves ONE label holding two people, which every name-based detector reads as
+    clean. The route asks merge_voice_report first so it can offer a confirmation
+    instead of a bare failure; this guard is the backstop for other callers.
+    """
     ctx = _load_meeting_ctx(meeting_id)
     if ctx is None:
         return False
@@ -243,6 +347,10 @@ def apply_merge(meeting_id: str, source_label: str, target_label: str) -> bool:
         return False
     embeddings = _load_embeddings(meeting_dir)
     from src import review
+    if not confirm_mismatch:
+        sim = review.voice_similarity(embeddings, source_label, target_label)
+        if review.merge_voice_verdict(sim) == "mismatch":
+            return False
     try:
         review.merge_speakers(meeting.segments, embeddings, meeting.speakers, source_label, target_label)
     except ValueError:
@@ -357,6 +465,22 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         for lbl in labels:
             peer_labels[lbl] = [o for o in labels if o != lbl]
 
+    # Pairwise voice similarity for the merge control: every candidate target gets
+    # its own hint, and clear mismatches are named so the UI can confirm before
+    # applying a merge that cannot be undone.
+    labels = [v.label for v in views]
+    merge_hints: dict[str, dict[str, str]] = {l: {} for l in labels}
+    merge_mismatches: dict[str, list[str]] = {l: [] for l in labels}
+    for i, a in enumerate(labels):
+        for b in labels[i + 1:]:
+            sim = review.voice_similarity(embeddings, a, b)
+            verdict = review.merge_voice_verdict(sim)
+            hint = "voice ?" if sim is None else f"voice {sim:+.2f} {_VERDICT_MARK[verdict]}"
+            merge_hints[a][b] = merge_hints[b][a] = hint
+            if verdict == "mismatch":
+                merge_mismatches[a].append(b)
+                merge_mismatches[b].append(a)
+
     from src.publish import extract_youtube_id, playback_for_meeting
 
     youtube_id = extract_youtube_id(meeting.audio_source or "")
@@ -406,12 +530,17 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
             politician_slug=getattr(mapping, "politician_slug", None) if mapping else None,
             politician_id=getattr(mapping, "politician_id", None) if mapping else None,
             speaker_status=getattr(mapping, "speaker_status", None) if mapping else None,
+            local_slug=getattr(mapping, "local_slug", None) if mapping else None,
+            local_role=getattr(mapping, "local_role", None) if mapping else None,
+            default_slug=review.default_local_slug(v.current_name, v.label),
             is_enrollable=is_enrollable,
             is_enrolled=is_enrolled,
             thin_sample=v.total_speech_seconds < ENROLL_MIN_SPEECH_SECONDS,
             profile_meetings=profile_meetings,
             profile_samples=profile_samples,
             duplicate_labels=peer_labels.get(v.label, []),
+            merge_hints=merge_hints.get(v.label, {}),
+            merge_mismatches=sorted(merge_mismatches.get(v.label, [])),
         )
         (confirmed if card.is_confirmed else needs).append(card)
 
@@ -428,4 +557,5 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         needs_attention=needs,
         confirmed=confirmed,
         warnings=warnings,
+        local_role_options=list(local_roles_for(meeting.event_kind)),
     )

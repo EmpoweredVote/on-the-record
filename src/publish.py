@@ -358,8 +358,17 @@ def _upsert_event_orgs(cur, meeting_slug: str, event_orgs: list) -> None:
 def _published_local_slug(mapping) -> "str | None":
     """The local_slug to publish for a speaker, or None to publish no local
     person. An unidentified handle is a placeholder, not a public entity, so it
-    is suppressed until promoted to a real person."""
+    is suppressed until promoted to a real person.
+
+    An essentials identity also suppresses it, because migration 623's invariant is
+    one identity per speaker: either politician_* or local_slug, never both. The
+    federal floor path breaks that on its own — crec_identify stashes the bioguide in
+    local_slug for every resolved member, then resolve_politician_id adds an
+    essentials link on top and nothing clears the stash — so a resolved member would
+    otherwise mint a local_people row duplicating a politician who already exists."""
     if getattr(mapping, "speaker_status", None) == "unidentified":
+        return None
+    if mapping.politician_id or mapping.politician_slug:
         return None
     return mapping.local_slug
 
@@ -369,6 +378,14 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
 
     Must be called BEFORE _upsert_speakers so the FK from meetings.speakers.local_slug
     to meetings.local_people.slug is satisfied at write time.
+
+    `role` is written exactly as review recorded it, and NULL when review never
+    recorded one. Defaulting an unset role to a concrete value would assert a
+    fact nobody established: only the terminal prompt in run_local.py sets
+    local_role, so every person reviewed in the GUI has none, and moderators,
+    staff and public commenters would all publish as that default.
+    Requires meetings.local_people.role to be nullable — made so by ev-accounts migration
+    CA_0001, applied to prod 2026-08-21.
     """
     for mapping in meeting.speakers.values():
         slug = _published_local_slug(mapping)
@@ -387,7 +404,7 @@ def _upsert_local_people(cur, meeting: Meeting) -> None:
             (
                 slug,
                 mapping.speaker_name or slug,
-                mapping.local_role or 'candidate',
+                mapping.local_role,
             ),
         )
 
@@ -505,6 +522,37 @@ def _replace_segments(
         )
 
     return len(rows)
+
+
+def _delete_vanished_speakers(cur, meeting_uuid: str, keep_labels) -> int:
+    """Delete speaker rows whose label is no longer in the transcript. Returns the count.
+
+    Publish upserts speakers by (meeting_id, label) and never removed ones that
+    disappeared, so a label merged away in review kept its row forever — two such rows
+    were live in prod, one of them a linked politician with no segments.
+
+    🔴 Must run AFTER _replace_segments. Until the old segments are deleted they still
+    reference these rows, and meetings.segments.speaker_id would block the delete. The
+    NOT EXISTS guard makes that ordering safe rather than merely conventional.
+
+    A meeting with NO labels is treated as a malformed artifact, not as an instruction to
+    wipe every speaker row: publish is destructive and has no undo.
+    """
+    keep = sorted(set(keep_labels))
+    if not keep:
+        return 0
+    cur.execute(
+        """
+        DELETE FROM meetings.speakers sp
+         WHERE sp.meeting_id = %s
+           AND sp.label <> ALL(%s)
+           AND NOT EXISTS (
+                 SELECT 1 FROM meetings.segments sg WHERE sg.speaker_id = sp.id
+               )
+        """,
+        (meeting_uuid, keep),
+    )
+    return getattr(cur, "rowcount", None) or 0
 
 
 def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
@@ -833,9 +881,9 @@ def align_and_flip(meeting_id: str) -> dict:
         }
 
         # LLM + oracle run OUTSIDE any transaction (slow network calls).
-        import anthropic
+        from .llm_providers import make_llm_client
 
-        client = anthropic.Anthropic()
+        client = make_llm_client()
         spans = align_items(client, items, segments)
         spans = apply_oracle(spans, items, fetch=_default_fetch)
         updates = build_alignment_updates(spans, segments)
@@ -1229,6 +1277,13 @@ def publish_meeting(
                 segment_count = _replace_segments(
                     cur, meeting, meeting_uuid, label_to_uuid
                 )
+                # After the segments are replaced: a vanished label now has none, so the
+                # FK cannot block the delete.
+                vanished = _delete_vanished_speakers(
+                    cur, meeting_uuid, label_to_uuid.keys()
+                )
+                if vanished:
+                    print(f"  Removed {vanished} speaker row(s) for labels no longer in the transcript")
                 _replace_topics(cur, meeting_uuid, meeting)
                 vote_count = _replace_votes(cur, meeting, meeting_uuid)
                 if vote_count:

@@ -8,6 +8,7 @@ Usage:
   .venv/bin/python scripts/poll_discovery.py --skip-watchlist
   .venv/bin/python scripts/poll_discovery.py --classify-cap N
   .venv/bin/python scripts/poll_discovery.py --print-alarms # zero-source races, then exit
+  .venv/bin/python scripts/poll_discovery.py --trigger scheduled|manual # how this run started
 """
 import argparse
 import datetime as dt
@@ -43,18 +44,30 @@ def _meeting_source_keys() -> set:
     return keys
 
 
-def _captions_fetcher(url: str):
-    from src.download import download_captions_via_ytdlp
-    cache = config.DISCOVERY_DIR / "captions"
-    cache.mkdir(parents=True, exist_ok=True)
-    safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
-    dest = cache / f"{safe}.vtt"
-    if dest.exists():
-        return dest.read_text(encoding="utf-8", errors="replace")
-    path = download_captions_via_ytdlp(url, dest)
-    if path is None:
+def _peek_fetcher(url: str):
+    """Stage-2 peek: auto-caption text for YouTube items, article-page text
+    for web items. Returns plain text or None; never raises — the whole body
+    is one try/except, since the YouTube branch can also fail (disk/
+    permission errors on the caption cache), not just the web branch."""
+    try:
+        from src.discovery.classify import vtt_to_text
+        if source_key(url).startswith("youtube:"):
+            from src.download import download_captions_via_ytdlp
+            cache = config.DISCOVERY_DIR / "captions"
+            cache.mkdir(parents=True, exist_ok=True)
+            safe = hashlib.sha256(source_key(url).encode("utf-8")).hexdigest()[:24]
+            dest = cache / f"{safe}.vtt"
+            if dest.exists():
+                vtt = dest.read_text(encoding="utf-8", errors="replace")
+            else:
+                path = download_captions_via_ytdlp(url, dest)
+                vtt = (Path(path).read_text(encoding="utf-8", errors="replace")
+                       if path else None)
+            return vtt_to_text(vtt) if vtt else None
+        from src.discovery.feeds import fetch_page_text
+        return fetch_page_text(url) or None
+    except Exception:  # noqa: BLE001 — the peek is optional; stage 2 proceeds without
         return None
-    return Path(path).read_text(encoding="utf-8", errors="replace")
 
 
 def main() -> int:
@@ -65,6 +78,8 @@ def main() -> int:
     ap.add_argument("--skip-sweeps", action="store_true")
     ap.add_argument("--classify-cap", type=int, default=None)
     ap.add_argument("--print-alarms", action="store_true")
+    ap.add_argument("--trigger", choices=("scheduled", "manual"), default="manual",
+                    help="how this run started (the launchd plist passes scheduled)")
     args = ap.parse_args()
 
     conn = db.connect()
@@ -79,13 +94,18 @@ def main() -> int:
             return 0
 
         provider = get_provider(config.DISCOVERY_MODEL_ACTIVE)
+        run_id = None
+        if not args.dry_run:
+            cur = conn.cursor()
+            run_id = db.insert_run(cur, "race" if args.race else args.trigger)
+            conn.commit()   # crash after this point leaves a visible started row
         stats = engine.run_discovery(
             conn,
             provider=provider,
             fetch_feed_items=feeds.fetch_outlet_items,
-            ytsearch_fn=search.ytsearch,
+            ytsearch_fn=lambda q: search.with_backoff(lambda: search.ytsearch(q)),
             hydrate_fn=search.hydrate_item,
-            captions_fetcher=_captions_fetcher,
+            peek_fetcher=_peek_fetcher,
             sleep_fn=time.sleep,
             meeting_keys=_meeting_source_keys(),
             today=dt.date.today(),
@@ -97,10 +117,20 @@ def main() -> int:
         )
         print(f"DONE examined={stats.examined} queued={stats.inserted_pending} "
               f"auto_filtered={stats.inserted_auto_filtered} "
-              f"prefiltered_out={stats.prefiltered_out} seen={stats.skipped_seen} "
+              f"prefiltered_out={stats.prefiltered_out} "
+              f"recency_filtered={stats.recency_filtered} seen={stats.skipped_seen} "
               f"classified={stats.classified} capped={stats.spend_capped}")
-        for alarm in db.alarm_races(conn.cursor()):
+        alarms = db.alarm_races(conn.cursor())
+        for alarm in alarms:
             print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")
+        # The run record is the payload — commit it before alarm history so an
+        # alarm-write hiccup can't roll the run record back with it.
+        if run_id is not None:
+            cur = conn.cursor()
+            db.finish_run(cur, run_id, stats)
+            conn.commit()
+            db.record_alarms(cur, [a[0] for a in alarms])
+            conn.commit()
         if stats.failures:
             print(f"{len(stats.failures)} failure(s)", file=sys.stderr)
             return 1

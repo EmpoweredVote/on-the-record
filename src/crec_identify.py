@@ -3,9 +3,10 @@
 
 Converts Phase-3 LabelResolutions into SpeakerMappings and orchestrates Phases
 1-3 (fetch -> roster -> annotate -> align -> convert) for a floor session. A
-resolved member always gets its name + bioguide (stashed in local_slug); when a
-single unambiguous essentials match is found (see crec_essentials), it is also
-enriched with a politician_id/politician_slug.
+resolved member gets its name, plus its bioguide stashed in local_slug as a stable
+key. When a single unambiguous essentials match is found (see crec_essentials) the
+mapping is enriched with a politician_id/politician_slug and the stash is DROPPED —
+one identity per speaker.
 """
 from __future__ import annotations
 
@@ -33,7 +34,8 @@ _ROLE_DISPLAY = {
 def label_resolution_to_mapping(res: LabelResolution) -> Optional[SpeakerMapping]:
     """Convert a LabelResolution to a SpeakerMapping (or None if unresolved).
 
-    Confident member -> name + `congress-<bioguide>` in local_slug (no politician_id).
+    Confident member -> name + `congress-<bioguide>` in local_slug (no politician_id;
+    the caller drops the stash if it later attaches an essentials identity).
     Role -> a human role display name. Ambiguous -> needs_review/unidentified.
     """
     if res.member is not None:
@@ -122,5 +124,12 @@ def crec_speaker_mappings(
             )
             if link:
                 m.politician_id, m.politician_slug = link
+                # One identity per speaker (migration 623). The bioguide stash gives an
+                # UNBRIDGED member a stable key — src/enroll.py keys their voice profile
+                # on `local:congress-<bioguide>`. Once essentials owns the identity the
+                # stash is a second, competing one: publish minted a meetings.local_people
+                # row duplicating a sitting member, and the review GUI offered local-person
+                # controls on a linked politician.
+                m.local_slug = None
         mappings[label] = m
     return mappings

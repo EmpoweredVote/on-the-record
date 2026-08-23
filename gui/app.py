@@ -85,9 +85,19 @@ def create_app() -> FastAPI:
             if r.race_id and labels.get(r.race_id):
                 r.race_label = labels[r.race_id]
             groups.setdefault(r.race_label or "Unmatched", []).append(r)
+        h = discovery.health()
+        # health() folds the outlet-stats aggregate onto its own connection
+        # (avoids a 4th DB round-trip per page load). Fall back to the
+        # standalone call only for monkeypatched/legacy health dicts that
+        # predate the fold and lack the key — every real call carries it.
+        ostats = h.get("outlet_stats")
+        if ostats is None:
+            ostats = discovery.outlet_stats()
         return _templates.TemplateResponse(
             request, "discovery.html",
-            {"groups": list(groups.items()), "health": discovery.health(),
+            {"groups": list(groups.items()), "health": h,
+             "outlet_stats": ostats,
+             "outletless_reviewed": h.get("outletless_reviewed", 0),
              "flash": flash})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
@@ -116,6 +126,12 @@ def create_app() -> FastAPI:
             if not ok:
                 flash += " — SAVE FAILED, retry"
             return _discovery_redirect(flash)
+        from src.source_key import source_key as _source_key
+        if not _source_key(row.url).startswith("youtube:"):
+            ok_probe, err = discovery.probe_extractable(row.url)
+            if not ok_probe:
+                return _discovery_redirect(
+                    f"no extractable video ({err or 'nothing found'}) — use Edit first")
         kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
         if kind in ("community_meeting", "other") and row.race_id:
             kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)
@@ -370,8 +386,39 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/merge")
-    def merge_speaker_route(meeting_id: str, label: str, target: str = Form("")):
-        if not review_api.apply_merge(meeting_id, label, target.strip()):
+    def merge_speaker_route(meeting_id: str, label: str, target: str = Form(""),
+                            confirm: str = Form("")):
+        # A merge is destructive and has no undo, so a pair whose voices clearly
+        # disagree is bounced back unapplied unless the reviewer confirmed. That is
+        # a real UI state, distinct from an unknown label (still a 404), which is
+        # why the verdict is asked for BEFORE applying.
+        report = review_api.merge_voice_report(meeting_id, label, target.strip())
+        if report is None:
+            raise HTTPException(status_code=404)  # unknown meeting/label, or self-merge
+        redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+        if report["blocked"] and not confirm.strip():
+            return redirect
+        if not review_api.apply_merge(meeting_id, label, target.strip(),
+                                      confirm_mismatch=True):
+            raise HTTPException(status_code=404)
+        return redirect
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/local-person")
+    def make_local_person_route(meeting_id: str, label: str,
+                               slug: str = Form(""), role: str = Form("")):
+        try:
+            ok = review_api.apply_make_local_person(meeting_id, label, slug, role)
+        except ValueError as exc:
+            # Malformed or colliding slug. Reported, not silently ignored: the
+            # form prefills a valid default, so this is a deliberate bad value.
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not ok:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/local-person/clear")
+    def clear_local_person_route(meeting_id: str, label: str):
+        if not review_api.apply_clear_local_person(meeting_id, label):
             raise HTTPException(status_code=404)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 

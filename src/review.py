@@ -47,6 +47,26 @@ def make_unidentified_slug(meeting_id: str, label: str) -> str:
     return f"unidentified-{base}"[:100]
 
 
+# A site-local person's slug. Mirrors ev-accounts SLUG_REGEX; was an inline
+# literal in run_local.py's terminal wizard before the GUI needed it too.
+LOCAL_SLUG_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,99}$"
+LOCAL_SLUG_RE = _re.compile(LOCAL_SLUG_PATTERN)
+
+
+def default_local_slug(name, label) -> str:
+    """Kebab-case slug for a new local person, from the name or the diarized label.
+
+    Always returns a value matching LOCAL_SLUG_RE so the caller can offer it as a
+    prefilled default without validating first. Falls through name -> label ->
+    'speaker', mirroring make_unidentified_slug's fallback chain.
+    """
+    for source in ((name or "").strip(), (label or "").strip()):
+        slug = _re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")[:100].strip("-")
+        if LOCAL_SLUG_RE.fullmatch(slug):
+            return slug
+    return "speaker"
+
+
 def identity_label(mapping) -> str:
     """One-word resolved identity for the review table."""
     if mapping is None:
@@ -55,6 +75,10 @@ def identity_label(mapping) -> str:
         return "non-speaker"
     if mapping.speaker_status == "unidentified":
         return "unidentified"
+    if mapping.politician_id:
+        # Key on the stable UUID first: politician_slug is NULL for ~99.4% of
+        # essentials.politicians. Mirrors resolve_mapping_enrollment (enroll.py).
+        return f"essentials:{mapping.politician_id}"
     if mapping.politician_slug:
         return f"essentials:{mapping.politician_slug}"
     if mapping.local_slug:
@@ -270,6 +294,50 @@ def merge_speakers(segments, embeddings, mappings, source_label: str, target_lab
     return MergeResult(source_label=source_label, target_label=target_label, moved_segments=moved, combined_name=combined_name)
 
 
+# Voice-similarity bands for a proposed merge. Calibrated on the 25-case
+# duplicate-name triage: every pair confirmed to be one person split across two
+# labels scored >=0.6 (with mutual nearest-neighbour), and every pair confirmed to
+# be two different people scored <=0.42. Between them is a real ambiguity band, so
+# it warns rather than deciding.
+MERGE_SIM_MISMATCH = 0.42   # at or below: the two voices are different people
+MERGE_SIM_CONFIDENT = 0.60  # at or above: the two voices are the same person
+
+
+def voice_similarity(embeddings, label_a: str, label_b: str) -> Optional[float]:
+    """Cosine similarity between two labels' voice centroids, or None when it
+    cannot be measured.
+
+    Unmeasurable means a missing, NaN, or zero-norm vector — all of which occur in
+    the corpus (NaN especially). None is a distinct answer from "dissimilar": a
+    caller must never treat "we could not tell" as evidence of a mis-merge.
+    """
+    a, b = embeddings.get(label_a) if embeddings else None, embeddings.get(label_b) if embeddings else None
+    if a is None or b is None:
+        return None
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if a.shape != b.shape or np.isnan(a).any() or np.isnan(b).any():
+        return None
+    na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
+    if na == 0.0 or nb == 0.0:
+        return None
+    return float(np.dot(a, b) / (na * nb))
+
+
+def merge_voice_verdict(similarity: Optional[float]) -> str:
+    """Band a voice_similarity into 'unknown' | 'mismatch' | 'uncertain' | 'match'.
+
+    'unknown' (unmeasurable) deliberately reads as permissive — a merge must never
+    be blocked because we lacked data to judge it.
+    """
+    if similarity is None:
+        return "unknown"
+    if similarity <= MERGE_SIM_MISMATCH:
+        return "mismatch"
+    if similarity < MERGE_SIM_CONFIDENT:
+        return "uncertain"
+    return "match"
+
+
 def speakers_needing_review(mappings) -> list[str]:
     """Labels whose mapping is flagged needs_review."""
     return [label for label, m in mappings.items() if getattr(m, "needs_review", False)]
@@ -277,6 +345,11 @@ def speakers_needing_review(mappings) -> list[str]:
 
 def link_speaker(mappings, label, politician_slug, politician_id):
     """Set (or clear, when both are None) the politician identity on a mapping.
+
+    Setting an essentials link (either field non-None) supersedes any local person:
+    migration 623's invariant is one identity per speaker, and assign_local_person
+    enforces the mirror of this rule. Clearing the link (both None — this is also
+    the UNLINK path) leaves an existing local person alone.
 
     Mutates `mappings` in place; returns the updated SpeakerMapping. Creates a
     bare mapping if the label has none yet.
@@ -286,7 +359,66 @@ def link_speaker(mappings, label, politician_slug, politician_id):
     mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
     mapping.politician_slug = politician_slug
     mapping.politician_id = politician_id
+    if politician_slug or politician_id:
+        # One identity per speaker (migration 623): an essentials link supersedes a
+        # local person. assign_local_person enforces the mirror of this rule. Guarded
+        # because link_speaker(None, None) is also the UNLINK path — clearing
+        # unconditionally would destroy a local person on unlink.
+        mapping.local_slug = None
+        mapping.local_role = None
     mappings[label] = mapping
+    return mapping
+
+
+def assign_local_person(mappings, label, slug, role):
+    """Make `label` a site-local person with `slug` and `role`. Mutates in place.
+
+    Clears any essentials identity: migration 623's invariant is one identity per
+    speaker, and a local person is not a roster politician. Enforcing it here means
+    publish never has to suppress a contradiction it should not have received.
+
+    Raises ValueError when `slug` fails LOCAL_SLUG_RE, or when a DIFFERENT label in
+    this meeting already holds it — two diarized labels cannot be the same person.
+    """
+    from src.models import SpeakerMapping
+
+    slug = (slug or "").strip()
+    if not LOCAL_SLUG_RE.fullmatch(slug):
+        raise ValueError(f"invalid local slug {slug!r}; must match {LOCAL_SLUG_PATTERN}")
+    for other_label, other in mappings.items():
+        if other_label != label and getattr(other, "local_slug", None) == slug:
+            raise ValueError(f"local slug {slug!r} already used by label {other_label!r}")
+
+    mapping = mappings.get(label) or SpeakerMapping(speaker_label=label)
+    mapping.local_slug = slug
+    mapping.local_role = role
+    mapping.politician_slug = None
+    mapping.politician_id = None
+    mappings[label] = mapping
+    return mapping
+
+
+def clear_local_person(mappings, label):
+    """Drop a speaker's local-person identity. Returns None (no mutation) if the
+    label has no mapping, OR if the mapping is an unidentified handle.
+
+    local_slug is overloaded: a reviewer sets it for a genuine local person, but
+    mark_unidentified / link_to_unidentified_handle ALSO set it — to the synthetic
+    unidentified-<meeting>-<label> handle whose entire purpose is keeping two
+    distinct unknown speakers from sharing one voice-profile enrollment key
+    (make_unidentified_slug). Clearing it would drop speaker_name back to
+    resolve_enrollment_key('Unidentified Speaker') -> the single shared key
+    'unidentified_speaker', silently merging unrelated strangers' voice
+    embeddings. So the unidentified case is refused outright rather than
+    cleared; a real local person (speaker_status is None) is unaffected.
+    """
+    mapping = mappings.get(label)
+    if mapping is None:
+        return None
+    if getattr(mapping, "speaker_status", None) == "unidentified":
+        return None
+    mapping.local_slug = None
+    mapping.local_role = None
     return mapping
 
 
@@ -421,10 +553,51 @@ def duplicate_named_speakers(mappings) -> dict[str, list[str]]:
     return {nm: sorted(labels) for nm, labels in by_name.items() if len(labels) > 1}
 
 
+# What a memo member last name can look like: letters, plus the punctuation real
+# surnames carry (Piedmont-Smith, O'Brien, initials). Deliberately excludes role
+# annotations like "(Moderator)"/"(Video)", which a clerk memo can never name — so
+# grouping on them is noise, and noisy warnings get ignored.
+_SURNAME_TOKEN = _re.compile(r"[a-z][a-z.'\-]*")
+
+
+def ambiguous_speaker_surnames(mappings) -> dict[str, list[str]]:
+    """{last name: sorted [labels]} for a surname shared by 2+ labels under
+    DIFFERENT full names.
+
+    The collision duplicate_named_speakers cannot see. memo_reconcile.match_speaker
+    resolves a memo last name T by taking every speaker whose display_name equals T
+    or ends with " " + T, so two speakers are mutually ambiguous for some T exactly
+    when they share this final word — "Isak Nti Asare" and "Council President Asare"
+    are two names, one surname, and that member's vote record is silently skipped.
+
+    Groups whose labels all carry one identical name are left out: those are
+    duplicate_named_speakers' job, and reporting them here too would double-warn
+    about a single problem. Placeholders (non_speaker/unidentified) are excluded
+    for the same reason as there — they aren't identities.
+
+    Unlike an exact duplicate this is NOT necessarily wrong: two different people
+    can share a surname. It is a warning to resolve by hand, never a hard gate.
+    """
+    by_surname: dict[str, list[tuple[str, str]]] = {}
+    for label, m in mappings.items():
+        name = getattr(m, "speaker_name", None)
+        if not name or getattr(m, "speaker_status", None) in ("non_speaker", "unidentified"):
+            continue
+        words = name.strip().lower().split()
+        if words and _SURNAME_TOKEN.fullmatch(words[-1]):
+            by_surname.setdefault(words[-1], []).append((label, " ".join(words)))
+    return {
+        surname: sorted(label for label, _ in pairs)
+        for surname, pairs in by_surname.items()
+        if len(pairs) > 1 and len({name for _, name in pairs}) > 1
+    }
+
+
 def enrollment_warnings(mappings, roster=None) -> list[dict]:
     """Flag suspicious states before enrollment. Returns [{kind, label, detail}];
-    duplicate_name entries also carry labels (the list form of the joined label).
-    kinds: name_slug_mismatch, duplicate_name, unlinked_roster_match."""
+    duplicate_name and ambiguous_surname entries also carry labels (the list form
+    of the joined label). kinds: name_slug_mismatch, duplicate_name,
+    ambiguous_surname, unlinked_roster_match."""
     warns: list[dict] = []
     # name/slug mismatch (linked slug shares no token with the name)
     for label, m in mappings.items():
@@ -437,6 +610,14 @@ def enrollment_warnings(mappings, roster=None) -> list[dict]:
     for nm, labels in duplicate_named_speakers(mappings).items():
         warns.append({"kind": "duplicate_name", "label": ",".join(labels), "labels": labels,
                       "detail": f"{len(labels)} labels named {nm!r} (merge?)"})
+    # different names sharing a last name — ambiguous to memo_reconcile.match_speaker,
+    # which silently skips that member's vote record rather than guessing
+    for surname, labels in ambiguous_speaker_surnames(mappings).items():
+        names = sorted({mappings[l].speaker_name.strip() for l in labels})
+        warns.append({"kind": "ambiguous_surname", "label": ",".join(labels), "labels": labels,
+                      "detail": f"{len(labels)} labels share the last name {surname.title()!r} "
+                                f"({', '.join(names)}) — memo vote records for that member "
+                                f"will be skipped as ambiguous"})
     # named but unlinked, yet matches a roster member
     if roster is not None:
         from src.roster import correct_speaker_name

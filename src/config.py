@@ -38,6 +38,12 @@ WHISPER_MODEL_CPU = "medium"
 WHISPER_COMPUTE_GPU = "float16"
 WHISPER_COMPUTE_CPU = "int8"
 
+# Which client the meeting pipeline's Anthropic-shaped call sites use.
+# "openrouter" routes the SAME Claude models through OpenRouter billing
+# (model ids mapped in llm_providers._OPENROUTER_MODEL_MAP); "anthropic"
+# is the direct path (needs ANTHROPIC_API_KEY credit).
+LLM_CLIENT_BACKEND = "openrouter"
+
 # --- Summary generation (Anthropic API) ---
 SUMMARY_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"    # Section classification
 SUMMARY_SYNTHESIZE_MODEL = "claude-sonnet-4-5"  # Discussion summaries & executive summary
@@ -57,38 +63,73 @@ AGENDA_ALIGN_MODEL = "claude-sonnet-4-5"
 AGENDA_ALIGN_MAX_TOKENS = 4000
 
 # --- Layer-3 speaker identification (LLM) ---
+# Layer-3 LLM speaker-ID master switch. OFF BY DELIBERATE CHOICE (2026-08-06):
+# the 88-interview eval measured ~13-16% correct-name coverage across five
+# models (transcript-anchor is the ceiling — guests are rarely full-named on
+# air), and in practice names come from human review. Layers 1-2 (voice
+# profiles/embeddings) and the CREC oracle are unaffected. The eval harness
+# (scripts/eval_speaker_id.py) bypasses this switch by calling the provider
+# directly. Flip to True to re-enable (interview kinds stay excluded).
+SPEAKER_ID_LLM_ENABLED = False
+
 # Production model key; the eval harness (scripts/eval_speaker_id.py) decides the
-# final value. Default "haiku" needs only the already-present ANTHROPIC_API_KEY.
-SPEAKER_ID_ACTIVE = "haiku"
+# final value. "haiku-or" is the same Claude weights as "haiku", billed through
+# OpenRouter instead of direct Anthropic — needs OPENROUTER_API_KEY, not
+# ANTHROPIC_API_KEY (the account has no direct-Anthropic credit). Note this
+# layer no longer runs at all on interview-kind meetings (news_clip,
+# press_conference, podcast) as of 2026-08-05 — see run_local.should_run_llm —
+# so this key now only governs civic-kind and debate/forum runs, and only when
+# SPEAKER_ID_LLM_ENABLED is True.
+SPEAKER_ID_ACTIVE = "haiku-or"
 SPEAKER_ID_MAX_TOKENS = 150
+_OPENROUTER_URL = "https://openrouter.ai/api/v1"
+
 SPEAKER_ID_MODELS = {
     "haiku":  {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"},
     "sonnet": {"provider": "anthropic", "model": "claude-sonnet-4-5"},
-    # OpenAI-compatible endpoints. Model ids / base_urls are placeholders to be
-    # verified against each provider's current docs before first use; they are
-    # only reachable when their api_key_env is set (the eval skips the rest).
-    "gemini-flash": {"provider": "openai_compat", "model": "gemini-2.5-flash",
-                     "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                     "api_key_env": "GEMINI_API_KEY"},
-    "deepseek": {"provider": "openai_compat", "model": "deepseek-chat",
-                 "base_url": "https://api.deepseek.com", "api_key_env": "DEEPSEEK_API_KEY"},
-    "kimi": {"provider": "openai_compat", "model": "moonshot-v1-8k",
-             "base_url": "https://api.moonshot.ai/v1", "api_key_env": "MOONSHOT_API_KEY"},
-    "glm": {"provider": "openai_compat", "model": "glm-4-flash",
-            "base_url": "https://open.bigmodel.cn/api/paas/v4", "api_key_env": "ZHIPU_API_KEY"},
+    # OpenRouter: one OpenAI-compatible endpoint + one key (OPENROUTER_API_KEY)
+    # for many models. Model ids + prices ($/M in / out) verified against the
+    # live catalog 2026-08-05. "haiku-or" is the SAME weights as "haiku",
+    # billed through OpenRouter — the same-model reference for eval runs.
+    "haiku-or": {"provider": "openai_compat", "model": "anthropic/claude-haiku-4.5",
+                 "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 1.00/5.00
+    "gemini-flash": {"provider": "openai_compat", "model": "google/gemini-2.5-flash",
+                     "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.30/2.50
+    "gemini-flash-lite": {"provider": "openai_compat", "model": "google/gemini-2.5-flash-lite",
+                          "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.10/0.40
+    "gpt5-mini": {"provider": "openai_compat", "model": "openai/gpt-5-mini",
+                  "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.25/2.00
+    "gpt5-nano": {"provider": "openai_compat", "model": "openai/gpt-5-nano",
+                  "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.05/0.40
+    "deepseek": {"provider": "openai_compat", "model": "deepseek/deepseek-chat-v3.1",
+                 "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.25/0.95
+    "qwen3-30b": {"provider": "openai_compat", "model": "qwen/qwen3-30b-a3b-instruct-2507",
+                  "base_url": _OPENROUTER_URL, "api_key_env": "OPENROUTER_API_KEY"},  # 0.048/0.193
 }
 
 # --- Source discovery (docs/superpowers/specs/2026-08-02-source-discovery-design.md) ---
 DISCOVERY_DIR = DRIVE_ROOT / "discovery"        # poll.log + caption cache
-DISCOVERY_MODEL_ACTIVE = "haiku"                # key into SPEAKER_ID_MODELS registry
+# Key into SPEAKER_ID_MODELS. Switched haiku -> deepseek 2026-08-05 on the
+# 25-fixture eval: recall 0.95 vs 0.85, Brier 0.043 vs 0.113, route 14/15 and
+# tier 0.90 tied, 0 parse failures, ~4x cheaper. Every verdict is still
+# human-triaged; re-check after each harvest grows the eval set.
+DISCOVERY_MODEL_ACTIVE = "deepseek"
 DISCOVERY_CLASSIFY_MAX_TOKENS = 500
 DISCOVERY_CLASSIFY_CAP_PER_RUN = 200            # spend cap; truncation is logged loudly
 DISCOVERY_CONFIDENCE_FLOOR = 0.30               # below -> stored as auto_filtered
-DISCOVERY_CAPTIONS_BAND = (0.35, 0.75)          # mid-confidence band triggers captions peek
+DISCOVERY_CAPTIONS_BAND = (0.35, 0.75)          # mid-confidence band triggers the stage-2 peek (captions or page text)
 DISCOVERY_SEARCH_RESULTS_PER_QUERY = 10         # ytsearchN
 DISCOVERY_SEARCH_SLEEP_SECONDS = 2.0            # politeness between searches
 DISCOVERY_SHORT_CLIP_MAX_SECONDS = 8 * 60       # < this from a news channel = likely package
 DISCOVERY_FULL_EVENT_MIN_SECONDS = 25 * 60      # >= this = likely full event
+# Recency filter: > this = stale/old-cycle. 630 reaches back past the PREVIOUS
+# general election (2024-11-05). Calibrated 2026-08-04: observed stale rejects
+# were all >=1622 days; high-confidence queued content reached 588.
+DISCOVERY_MAX_ITEM_AGE_DAYS = 630
+DISCOVERY_BACKOFF_RETRIES = 3                   # yt-dlp bot-check/429 retries per query
+DISCOVERY_BACKOFF_BASE_SECONDS = 5.0
+DISCOVERY_WEB_FETCH_SLEEP_SECONDS = 2.0         # per-domain politeness for web_rss
+DISCOVERY_SWEEP_ABORT_AFTER = 5                 # consecutive exhausted searches -> abort sweep phase
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID
