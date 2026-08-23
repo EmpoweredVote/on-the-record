@@ -109,3 +109,27 @@ def test_a_genuine_fragmentation_across_two_labels_is_still_reported():
     assert [f.person for f in report.fragmentation] == ["Alice"]
     assert sorted(report.fragmentation[0].labels) == ["SPEAKER_00", "SPEAKER_01"]
     assert "45.5%" in report.fragmentation_summary
+
+
+def test_a_label_overlapping_no_reference_turn_does_not_crash():
+    """A reference can have gaps — e.g. placeholder names like 'Unidentified
+    Speaker' get excluded because they lump distinct unknown voices under one
+    name, which would otherwise both punish keeping unknowns apart and reward
+    merging them. A hypothesis label that speaks only inside such a gap overlaps
+    nothing, and must be reported as unmapped rather than crashing the scorer."""
+    hypothesis = [(0.0, 30.0, "SPEAKER_00"), (200.0, 260.0, "SPEAKER_99")]
+
+    mapping = map_labels_to_reference(hypothesis, REFERENCE)
+    assert "SPEAKER_00" in mapping
+    assert "SPEAKER_99" not in mapping
+
+    report = identity_report(hypothesis, REFERENCE)
+    assert report.speakers == 2
+    assert report.unmapped_labels == ["SPEAKER_99"]
+    assert report.fragmentation == []
+    assert report.conflation == []
+
+
+def test_unmapped_labels_are_empty_when_the_reference_covers_everything():
+    hypothesis = [(0.0, 30.0, "SPEAKER_00"), (30.0, 60.0, "SPEAKER_01")]
+    assert identity_report(hypothesis, REFERENCE).unmapped_labels == []

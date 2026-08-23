@@ -465,3 +465,61 @@ untouched. Measured effect on the legacy sequential path (old cached payloads, t
   but it does change one figure #141 recorded (43 speakers), which is the honest caveat: cached
   payloads still stitch, and June 10 reproduces exactly, but May 6's sequential speaker count no
   longer matches that PR's table.
+
+## Venue validation (2026-08-23) — threshold raised 0.32 → 0.50
+
+The original calibration used three Bloomington council meetings. That is one venue and one
+recording chain, and the spec flagged it as the open risk. Re-validating on two unlike venues,
+scored against their existing human-reviewed transcripts (chunk-diarization GPU only — no
+single-pass arm, since the reviewed names are the better truth):
+
+**The 0.32 default was too low.** On the July 16 House floor it merged **Rep. Lauren Underwood
+(82 s) with Rep. Emilia Sykes (60 s)** into one speaker — a 42.2 % minority share, two real
+people rather than a boundary bleed. The reviewed transcript lists both as distinct people with
+one label each, so single-pass kept them apart: a genuine regression, and exactly the silent
+misattribution this design exists to prevent.
+
+Attribution (same within-window vs cross-window test used on May 6) located it precisely: the
+floor had only **2** window-local labels already spanning two people, but **3** conflations in
+the output — so the identity pass created exactly one, and it was that merge.
+
+| threshold | House floor (38 people) |
+|---|---|
+| ≤ 0.46 | 37 labels, **3 conflated incl. Underwood+Sykes 42.2 %** |
+| **≥ 0.48** | **38 labels, 2 conflated — both 4 s within-window bleeds** |
+
+0.48–0.60 are identical on the floor and 0.44–0.60 identical on every council meeting, so
+**0.50** was chosen: two steps above the cliff, inside the wide plateau, below where 0.55+
+starts costing fragmentation.
+
+### Final state at 0.50, all five meetings
+
+| meeting | labels | reviewed people | people fragmented | labels conflated | worst conflation |
+|---|---|---|---|---|---|
+| House floor, 200 min | **38** | 38 | 3 | 2 | 3.2 % / 4 s |
+| Council, 298 min | 44 | 39 | 2 | **0** | — |
+| Council, 244 min | 44 | 40 | 3 | 3 | 13.9 % / 4 s |
+| Council, 82 min (45-min windows) | 13 | 12 | **0** | **0** | — |
+| LA mayoral debate, 106 min | 29 | 33 | 8 | 8 | 43.2 % / 26 s |
+
+Every remaining conflation is a small within-window bleed inherited from pyannote, except on
+the debate. **Cost of the raise:** roughly +3 labels and +1 fragmented person on a 5-hour
+council meeting (June 10 went 41 → 44 labels, 1 → 2 fragmented). That is the intended trade —
+fragmentation surfaces as an extra unnamed speaker at the review gate; conflation misattributes
+quotes silently.
+
+### Limitation found: dense broadcast debate
+
+The LA mayoral debate (~33 people in 106 minutes) under-separates badly and no threshold helps —
+conflation is 8 at every value from 0.32 to 0.60. **14 of its window-local labels already span
+two people before any cross-window step**, so this is pyannote clustering inside a 60-minute
+window, not the identity pass. Prefer single-pass for dense multi-speaker debate/forum audio;
+most of it is under 90 minutes and therefore never chunks. Chunking is validated for **long
+civic meetings — council and legislative floor**.
+
+Two caveats on that meeting's evidence: its reference carries generic pseudo-names
+(`Interviewee5`, `(middle)_moderator`) that behave like placeholders, so several of its
+"conflations" are 3–4 s bleeds against non-people; and `bench/identity_score` had to be fixed
+first — it crashed on a hypothesis label overlapping no reference turn, which happens whenever
+placeholder segments are excluded and leave gaps. Such labels are now reported as
+`unmapped_labels` rather than crashing.
