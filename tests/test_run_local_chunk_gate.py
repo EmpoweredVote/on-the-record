@@ -19,16 +19,25 @@ def _args(requested=None):
     return SimpleNamespace(diarize_chunk_minutes=requested)
 
 
-def test_a_validated_kind_chunks_at_the_configured_size():
-    assert _resolve_chunk_minutes(_args(), "council") == config.DIARIZE_CHUNK_MINUTES
+@pytest.fixture
+def chunking_on(monkeypatch):
+    """The gate only has anything to do when chunking is configured on. Pin that
+    here rather than depending on the shipped default, which moves as the feature
+    is validated and un-validated."""
+    monkeypatch.setattr(config, "DIARIZE_CHUNK_MINUTES", 60)
+    return 60
 
 
-def test_an_unvalidated_kind_falls_back_to_single_pass(capsys):
+def test_a_validated_kind_chunks_at_the_configured_size(chunking_on):
+    assert _resolve_chunk_minutes(_args(), "council") == chunking_on
+
+
+def test_an_unvalidated_kind_falls_back_to_single_pass(chunking_on, capsys):
     assert _resolve_chunk_minutes(_args(), "debate") == 0
     assert "not a validated kind" in capsys.readouterr().out
 
 
-def test_a_missing_kind_falls_back_to_single_pass():
+def test_a_missing_kind_falls_back_to_single_pass(chunking_on):
     assert _resolve_chunk_minutes(_args(), None) == 0
 
 
