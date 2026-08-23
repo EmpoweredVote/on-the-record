@@ -510,3 +510,62 @@ def test_the_seam_overlap_floor_is_configurable():
 
     assert len(seed_clusters(nodes, chunks, 1.0)[1]["temporal_matches"]) == 1
     assert seed_clusters(nodes, chunks, 5.0)[1]["temporal_matches"] == []
+
+
+def test_a_seam_match_is_vetoed_when_the_voices_contradict_it():
+    """The overlap region is diarized TWICE, independently, so two windows can
+    assign the same seconds to DIFFERENT speakers. Measured on the July 22
+    council meeting: a 6.1s seam join with voice similarity 0.164 merged 157s of
+    one councilmember's speech into another's label. A must-link is applied
+    before any threshold, so it must be refused when the voices disagree."""
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 64.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(56.0, 90.0, "SPEAKER_00")]),   # 8s of overlap
+    ]
+    nodes = build_nodes(chunks, {0: {0: ALICE}, 1: {0: BOB}})    # orthogonal voices
+    stats = node_pair_statistics(nodes)
+
+    clusters, diagnostics = seed_clusters(nodes, chunks, stats=stats)
+
+    assert clusters[0] != clusters[1]
+    assert diagnostics["temporal_matches"] == []
+    assert len(diagnostics["seam_vetoed_by_voice"]) == 1
+    assert diagnostics["seam_vetoed_by_voice"][0]["overlap_seconds"] == pytest.approx(8.0)
+
+
+def test_a_seam_match_survives_when_the_voices_agree():
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 64.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(56.0, 90.0, "SPEAKER_00")]),
+    ]
+    nodes = build_nodes(chunks, {0: {0: ALICE}, 1: {0: ALICE_NOISY}})
+    stats = node_pair_statistics(nodes)
+    clusters, diagnostics = seed_clusters(nodes, chunks, stats=stats)
+    assert clusters[0] == clusters[1]
+    assert len(diagnostics["temporal_matches"]) == 1
+    assert diagnostics["seam_vetoed_by_voice"] == []
+
+
+def test_a_node_with_no_embedding_is_still_matched_temporally():
+    """Temporal-only matching is the whole point of the seam pass for speakers
+    that never embedded, so the voice veto must not apply when there is no voice
+    evidence to contradict anything."""
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 64.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(56.0, 90.0, "SPEAKER_00")]),
+    ]
+    nodes = build_nodes(chunks, {0: {0: ALICE}, 1: {}})   # window 1 has no vectors
+    stats = node_pair_statistics(nodes)
+    clusters, diagnostics = seed_clusters(nodes, chunks, stats=stats)
+    assert clusters[0] == clusters[1]
+    assert len(diagnostics["temporal_matches"]) == 1
+
+
+def test_without_stats_the_seam_pass_behaves_as_before():
+    chunks = [
+        _chunk(0, 0.0, 65.0, [(50.0, 64.0, "SPEAKER_00")]),
+        _chunk(1, 55.0, 120.0, [(56.0, 90.0, "SPEAKER_00")]),
+    ]
+    nodes = build_nodes(chunks, {0: {0: ALICE}, 1: {0: BOB}})
+    clusters, _ = seed_clusters(nodes, chunks)     # no stats -> no veto
+    assert clusters[0] == clusters[1]

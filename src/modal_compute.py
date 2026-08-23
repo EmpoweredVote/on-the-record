@@ -362,9 +362,19 @@ def stitch_chunk_payloads(
 def _run_chunked_diarization(
     app, wav_path: Path, meeting_id: str, chunk_minutes: int, use_merge: bool
 ) -> tuple[list[dict], dict[str, list[float]]]:
-    """Chunked diarization end to end: fan out to Modal, then stitch locally."""
+    """Chunked diarization end to end: fan out to Modal, then stitch locally.
+
+    `use_merge` is deliberately IGNORED: the post-reconcile merge is part of this
+    path's algorithm, not an optional extra. Global clustering runs at a
+    conservative threshold and leaves some of one person's appearances unjoined;
+    merge_similar_speakers then cleans those up at centroid level. Measured over
+    six meetings and two venue classes, merge-on is never worse and often much
+    better (June 10: 44 labels / 2 people fragmented with it, 62 / 11 without).
+    Production never passed --merge, so it silently ran the worse path — which is
+    what forced the default back off. The single-pass path still honours the flag.
+    """
     payloads = fetch_chunk_payloads(app, wav_path, meeting_id, chunk_minutes)
-    return stitch_chunk_payloads(payloads, use_merge)
+    return stitch_chunk_payloads(payloads, use_merge=True)
 
 
 def upload_audio(wav_path: Path, meeting_id: str) -> None:
