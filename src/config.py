@@ -161,15 +161,25 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 #
 # Calibrated at 60 min / average linkage / 0.32 / wespeaker against
 # human-reviewed named transcripts, not just against single-pass output:
-#   June 10 (298 min): DER 0.0060, 41 speakers vs single-pass's 41 (drift
-#     0.0%), 1 person fragmented — the SAME person single-pass itself splits —
-#     and 0 conflated. Slowest window 109s vs 7100s single-pass (65x).
-#   May 6 (244 min): DER 0.0087, 43 speakers vs 42 (drift +2.4%), 2 people
-#     fragmented — same as single-pass — and 3 conflated, ALL THREE inherited
-#     from pyannote's own within-window labels (single-pass conflates 1 here).
+#   June 10 (298 min): 44 speakers vs single-pass's 41, 2 people fragmented, 0
+#     conflated. Slowest window 109s vs 7100s single-pass (65x). At the
+#     original 0.32 it was 41 speakers / 1 fragmented / DER 0.0060; the extra
+#     labels are the measured price of the higher, venue-safe threshold.
+#   May 6 (244 min): 44 speakers vs 42, 3 people fragmented, 3 conflated — all
+#     three inherited from pyannote's own within-window labels (single-pass
+#     conflates 1 here). At the original 0.32: 43 speakers, 2 fragmented.
 #   July 29 (82 min): does not chunk at 60 min (a meeting under ~90 minutes is
 #     one window, i.e. byte-identical single-pass output, zero risk). Checked
-#     separately at 45 min: 0 people fragmented where single-pass fragments 2.
+#     separately at 45 min: 0 people fragmented, 0 conflated.
+#   July 16 House floor (200 min, 38 people): 38 speakers, 3 fragmented, 2
+#     conflated — both 4s within-window bleeds, no cross-window merge.
+#   VALIDATED VENUES are long civic meetings: council and legislative floor.
+#     A dense broadcast debate (LA mayoral, 106 min, ~33 people) under-separates
+#     badly — 29 labels for 33 people, and 14 of its window-local labels ALREADY
+#     span two people before any cross-window step, so this is pyannote inside a
+#     60-min window, not the identity pass. Prefer single-pass for dense
+#     multi-speaker debate/forum audio; most of it is under 90 min and therefore
+#     never chunks anyway.
 # People fragmented therefore equals or beats single-pass on all three, and the
 # identity pass introduces no cross-window conflation on any of them (see
 # global_identity.MIN_SEAM_OVERLAP_SECONDS for the defect that had to be fixed
@@ -226,28 +236,32 @@ DIARIZE_CHUNK_IDENTITY = "global"
 # is far worse than fragmentation (an extra unnamed speaker the review gate
 # catches), so ties break toward the HIGHER value.
 #
-# MEASURED 2026-08-03 by scripts/sweep_chunk_thresholds.py over per-turn
-# wespeaker vectors, using each meeting's human-reviewed transcript as truth.
-# The scale is much lower than the centroid path's 0.50 because these are
-# means over pairs of INDIVIDUAL TURN embeddings, not over per-window means:
-# same-person cross-window node pairs score p05 0.273 / median 0.427 while
-# different-person pairs top out at 0.322.
+# MEASURED. The scale is much lower than the centroid path's 0.50 because these
+# are means over pairs of INDIVIDUAL TURN embeddings, not over per-window means:
+# on June 10, same-person cross-window node pairs score p05 0.273 / median 0.427
+# while different-person pairs top out at 0.322. (That the value below happens to
+# equal DIARIZE_CHUNK_STITCH_THRESHOLD is a coincidence — different signal.)
 #
-#   0.36-0.40  fragments slightly (June 10: 44 speakers for 41 people)
-#   0.30-0.32  FLAT and correct (June 10: 41 speakers, DER 0.0060, 1 person
-#              fragmented — the same one single-pass splits — 0 conflated;
-#              May 6: 41 vs 42, DER 0.0210; July 29 @45min: 0 fragmented)
-#   0.28       CONFLATION CLIFF, independently on both long meetings: June 10
-#              merges Paul Gillard (140.4s, 44.6% of the label) into another
-#              speaker, May 6 merges Steve Volin (168.5s, 47.3%). DER rises
-#              with it (0.0060 -> 0.0150).
+# 0.32 shipped first, calibrated on three Bloomington council meetings where
+# nothing conflated anywhere in 0.30-0.40. Validating on two OTHER venues then
+# found 0.32 too low: on the July 16 House floor it merged Rep. Lauren Underwood
+# (82s) with Rep. Emilia Sykes (60s) into one speaker — a 42.2% minority share,
+# i.e. two real people, not a boundary bleed. The reviewed transcript shows
+# single-pass kept them apart, so that was a genuine regression.
 #
-# 0.32 is the TOP of the flat basin, one full step above a cliff that two
-# meetings agree on. Do not lower it without re-running the sweep. Note that
-# the DER + speaker-count gate PASSES even at 0.22 (4 real people conflated on
-# June 10), so DER alone cannot defend this value — the reviewed-names check in
-# bench/identity_score.py is what discriminates.
-DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.32
+#   <=0.46  House floor merges Underwood+Sykes (42.2% / 60s)
+#   >=0.48  keeps them apart; 0.48-0.60 identical there (38 labels = 38 people)
+#   0.44-0.60 identical on every council meeting tested
+#
+# 0.50 is two steps above that cliff and inside the wide flat plateau, and
+# 0.55+ starts costing fragmentation on dense content. Raising 0.32 -> 0.50
+# costs ~3 extra labels and 1 extra fragmented person on a 5-hour council
+# meeting and removes the only cross-window conflation the identity pass was
+# creating anywhere. That is the intended trade: fragmentation surfaces as an
+# extra unnamed speaker at the review gate, conflation misattributes quotes
+# silently. Do not lower this without re-running the validation over BOTH
+# venue classes — a council-only sweep is what missed the floor regression.
+DIARIZE_CHUNK_CLUSTER_THRESHOLD = 0.50
 # Cluster-distance linkage. MEASURED: "average" (mean pairwise turn
 # similarity) is the only workable choice. "complete" scores a candidate by its
 # WORST turn pair, and a real person's worst pair is often anti-correlated
