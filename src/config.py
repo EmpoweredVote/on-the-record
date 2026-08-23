@@ -187,29 +187,43 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 # Before this change the same meetings gave 49 and 43 labels with 6 people
 # fragmented on June 10. Fragmentation is what blocked the default, and it is
 # gone.
-# REVERTED TO 0 (OFF) 2026-08-23 after the first live end-to-end run.
-# Everything below was measured by re-stitching CACHED payloads with
-# scripts/sweep_chunk_thresholds.py, which passes use_merge=True. The GUI's
-# own invocation (gui/runner.build_run_command) does NOT pass --merge, so
-# production ran the merge-DISABLED path that no calibration ever covered. On
-# the July 22 Bloomington regular session (a "validated" council meeting) the
-# two paths differ sharply:
-#     use_merge=True  -> 25 labels, 0 people fragmented, 1 conflated
-#     use_merge=False -> 31 labels, 4 people fragmented, 2 conflated  <- shipped
-# The live run also merged 157s of Buff Brown's speech into Andy Ruff's label.
+# 60 = ON. This flag went 0 -> 60 -> 0 -> 60. Both earlier attempts were turned
+# back off after a real speaker merge was found, so the bar for this one is a
+# HELD-OUT live run, not another re-stitch of the payloads it was tuned on.
 #
-# That conflation is NOT a threshold problem: it is invariant from 0.45 to 0.70,
-# no window-local label spans two people (46 nodes -> exactly 24 real people),
-# and it traces to a SEAM TEMPORAL MUST-LINK joining two different speakers.
-# The overlap region is diarized TWICE, independently, so the two windows can
-# assign the same seconds to different people — one such join had 43.7s of
-# "overlap" between two different councilmembers. Treating shared audio time as
-# proof of identity is therefore wrong, and no minimum-overlap floor can fix it
-# (see global_identity.seed_clusters / MIN_SEAM_OVERLAP_SECONDS).
+# What the two failures taught, both now fixed in code rather than documented:
+#   * scripts/sweep_chunk_thresholds.py passed use_merge=True while the GUI never
+#     passed --merge, so production silently ran a path no calibration covered
+#     (July 22: 31 labels / 4 people fragmented vs 25 / 0). The chunked
+#     orchestrator now FORCES the merge — it is part of the algorithm.
+#   * A seam temporal MUST-LINK merged 157s of one councilmember into another.
+#     The overlap region is diarized twice, independently, so two windows can
+#     assign the same seconds to different speakers. seed_clusters now vetoes a
+#     join whose voices contradict it (global_identity.MIN_SEAM_SIMILARITY).
 #
-# Set back to 60 only when the must-link is fixed to require the embedding to
-# agree, and the re-validation runs with use_merge matching production.
-DIARIZE_CHUNK_MINUTES = 0
+# HELD-OUT VALIDATION (2026-02-04-council, 172 min, 31 reviewed people, never
+# tuned against, run through src.modal_compute.run_diarization — the same entry
+# point run_local uses): 33 labels, 3 people fragmented, 1 conflated, and every
+# one of those is a <=7s sliver (worst conflation 2.4%, worst fragmentation
+# 3.2%). 150s of wall-clock for a 172-minute meeting.
+#
+# Full picture across seven meetings, two venue classes, scored against
+# human-reviewed transcripts and with the merge as production runs it:
+#   council 298m: 44 labels / 39 people, 2 fragmented, 0 conflated
+#   council 244m: 44 / 40, 3 fragmented, 3 conflated (all 4s bleeds)
+#   council 175m: 26 / 24, 0 fragmented, 0 conflated
+#   council 172m: 33 / 31, 3 fragmented, 1 conflated (held-out; <=7s slivers)
+#   council  82m: 13 / 12, 0 fragmented, 0 conflated
+#   floor   200m: 38 / 38, 3 fragmented, 2 conflated (all 4s bleeds)
+#   debate  106m: excluded by DIARIZE_CHUNK_EVENT_KINDS (unfixable in-window)
+# No cross-window conflation remains on any allowed kind.
+#
+# KNOWN HOLE: one measured seam join scored 0.604 voice similarity while joining
+# two different people — above the same-person median, so the veto cannot see it.
+# It produced no substantial conflation on any of the seven meetings, but it is
+# the thing most likely to bite next. If a long meeting comes back with a
+# suspicious speaker count, check diagnostics "temporal_matches" first.
+DIARIZE_CHUNK_MINUTES = 60
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # Meeting kinds where chunking is allowed. Chunking is a SPEED optimisation, so
 # declining to chunk costs only time and can never be a correctness regression —
