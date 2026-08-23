@@ -79,6 +79,33 @@ def plan_chunk_windows(
     return windows
 
 
+def chunk_minutes_for_kind(
+    event_kind: str | None,
+    chunk_minutes: int,
+    allowed: tuple[str, ...] | None = None,
+) -> int:
+    """Zero out the chunk size for meeting kinds where chunking is not validated.
+
+    Chunking splits a meeting into windows diarized independently, which is a
+    pure speed win when each speaker holds a decent share of every window they
+    appear in. It is NOT safe when many speakers each hold little speech in a
+    window: pyannote's own within-window clustering then merges them, and no
+    cross-window threshold can undo that (measured on a dense broadcast debate —
+    29 labels for 33 people at every threshold from 0.32 to 0.60, with 14
+    window-local labels already spanning two people).
+
+    Returning 0 sends the meeting down the untouched single-pass path, so this
+    guard can only cost wall-clock, never accuracy. `allowed` overrides the
+    configured allowlist for deliberate experiments.
+    """
+    if chunk_minutes <= 0:
+        return 0
+    from . import config
+
+    permitted = config.DIARIZE_CHUNK_EVENT_KINDS if allowed is None else allowed
+    return chunk_minutes if (event_kind or "").strip() in permitted else 0
+
+
 def fetch_chunk_payloads(
     app,
     wav_path: Path,

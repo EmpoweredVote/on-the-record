@@ -189,6 +189,28 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 # gone.
 DIARIZE_CHUNK_MINUTES = 60
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
+# Meeting kinds where chunking is allowed. Chunking is a SPEED optimisation, so
+# declining to chunk costs only time and can never be a correctness regression —
+# an unlisted kind simply takes the untouched single-pass path, exactly as it did
+# before chunking existed. An explicit `run_local.py --diarize-chunk-minutes N`
+# still overrides this, loudly, for deliberate experiments.
+#
+# MEASURED GOOD: "council" (three Bloomington meetings, 82-298 min) and "floor"
+# (July 16 House floor, 200 min, 38 labels for 38 reviewed people).
+#
+# MEASURED BAD: "debate". The LA mayoral debate (~33 people in 106 min) produced
+# 29 labels for 33 people, and NO threshold helped — 14 of its window-local
+# labels already spanned two people before any cross-window step. The mechanism
+# is pyannote's own clustering inside one 60-minute window: when many speakers
+# each hold little speech in a window, it merges them. That mechanism depends on
+# speaker DENSITY and turn brevity, not on the kind label, which is why "forum"
+# is excluded too — same moderated, many-voice, fast-turn shape.
+#
+# "school_board" and "community_meeting" are included on that same mechanism
+# argument, not on measurement: they are single-room civic meetings with
+# sequential speakers, i.e. the low-density shape that was validated. Score one
+# of each against a human-reviewed transcript when the chance comes.
+DIARIZE_CHUNK_EVENT_KINDS = ("council", "school_board", "community_meeting", "floor")
 # Cosine similarity required to call a chunk-local speaker the same person as
 # an already-seen global speaker across windows. Deliberately LOWER than
 # src.speaker_reconcile.EMBEDDING_MATCH_THRESHOLD (0.75, tuned for VibeVoice's

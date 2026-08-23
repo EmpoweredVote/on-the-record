@@ -46,6 +46,35 @@ from src.crec_identify import parse_crec_arg
 from src.house_cdn import resolve_session
 
 
+def _resolve_chunk_minutes(args, event_kind) -> int:
+    """Chunk size for this run, after the meeting-kind gate.
+
+    Chunking is only validated for single-room civic meetings and legislative
+    floor sessions (config.DIARIZE_CHUNK_EVENT_KINDS). On dense, many-voice,
+    fast-turn audio pyannote merges speakers INSIDE a window, which no
+    cross-window threshold can repair, so those kinds take the single-pass path.
+    An explicit --diarize-chunk-minutes still wins — it is the escape hatch for
+    deliberate experiments — but it says so, because a silent override would
+    make a bad speaker count hard to explain later.
+    """
+    from src.modal_compute import chunk_minutes_for_kind
+
+    requested = getattr(args, "diarize_chunk_minutes", None)
+    if requested is not None:
+        if requested > 0 and chunk_minutes_for_kind(event_kind, requested) == 0:
+            print(f"  ! --diarize-chunk-minutes={requested} overrides the "
+                  f"meeting-kind gate for event_kind={event_kind!r}, which is "
+                  "NOT a validated kind for chunking. Watch the speaker count "
+                  "at review: chunking can merge speakers on dense audio.")
+        return requested
+    allowed = chunk_minutes_for_kind(event_kind, config.DIARIZE_CHUNK_MINUTES)
+    if config.DIARIZE_CHUNK_MINUTES > 0 and allowed == 0:
+        print(f"  Chunked diarization skipped: event_kind={event_kind!r} is not "
+              "a validated kind for chunking, so this runs single-pass "
+              "(slower, and the accuracy we know).")
+    return allowed
+
+
 def should_run_llm(skip_llm: bool, crec_request, event_kind=None) -> bool:
     """Whether to run Layer-3 LLM speaker identification.
 
@@ -1061,11 +1090,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     meeting_id,
                     use_merge=args.merge and args.diarizer == "oss",
                     diarizer=args.diarizer,
-                    chunk_minutes=(
-                        getattr(args, "diarize_chunk_minutes", None)
-                        if getattr(args, "diarize_chunk_minutes", None) is not None
-                        else config.DIARIZE_CHUNK_MINUTES
-                    ),
+                    chunk_minutes=_resolve_chunk_minutes(args, state.event_kind),
                 )
                 elapsed = time.time() - t0
                 segments = [Segment.from_dict(d) for d in _segs_data]
