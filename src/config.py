@@ -187,7 +187,29 @@ SPEAKER_MERGE_THRESHOLD = 0.80  # merge diarized speakers with embedding similar
 # Before this change the same meetings gave 49 and 43 labels with 6 people
 # fragmented on June 10. Fragmentation is what blocked the default, and it is
 # gone.
-DIARIZE_CHUNK_MINUTES = 60
+# REVERTED TO 0 (OFF) 2026-08-23 after the first live end-to-end run.
+# Everything below was measured by re-stitching CACHED payloads with
+# scripts/sweep_chunk_thresholds.py, which passes use_merge=True. The GUI's
+# own invocation (gui/runner.build_run_command) does NOT pass --merge, so
+# production ran the merge-DISABLED path that no calibration ever covered. On
+# the July 22 Bloomington regular session (a "validated" council meeting) the
+# two paths differ sharply:
+#     use_merge=True  -> 25 labels, 0 people fragmented, 1 conflated
+#     use_merge=False -> 31 labels, 4 people fragmented, 2 conflated  <- shipped
+# The live run also merged 157s of Buff Brown's speech into Andy Ruff's label.
+#
+# That conflation is NOT a threshold problem: it is invariant from 0.45 to 0.70,
+# no window-local label spans two people (46 nodes -> exactly 24 real people),
+# and it traces to a SEAM TEMPORAL MUST-LINK joining two different speakers.
+# The overlap region is diarized TWICE, independently, so the two windows can
+# assign the same seconds to different people — one such join had 43.7s of
+# "overlap" between two different councilmembers. Treating shared audio time as
+# proof of identity is therefore wrong, and no minimum-overlap floor can fix it
+# (see global_identity.seed_clusters / MIN_SEAM_OVERLAP_SECONDS).
+#
+# Set back to 60 only when the must-link is fixed to require the embedding to
+# agree, and the re-validation runs with use_merge matching production.
+DIARIZE_CHUNK_MINUTES = 0
 DIARIZE_CHUNK_OVERLAP_SECONDS = 60
 # Meeting kinds where chunking is allowed. Chunking is a SPEED optimisation, so
 # declining to chunk costs only time and can never be a correctness regression —
