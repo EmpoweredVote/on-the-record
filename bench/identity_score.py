@@ -28,7 +28,7 @@ Pure: no torch, no Modal, no I/O beyond what the caller passes in.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 Turns = list[tuple[float, float, str]]
 
@@ -63,6 +63,9 @@ class IdentityReport:
     mapping: dict[str, LabelMapping]
     fragmentation_summary: str
     conflation_summary: str
+    #: Hypothesis labels that overlap no reference turn at all — a reference
+    #: COVERAGE gap, not an identity error. Never silently dropped.
+    unmapped_labels: list[str] = field(default_factory=list)
 
 
 def _overlap(a0: float, a1: float, b0: float, b1: float) -> float:
@@ -83,9 +86,19 @@ def _cross_seconds(hypothesis: Turns, reference: Turns) -> dict[str, dict[str, f
 def map_labels_to_reference(
     hypothesis: Turns, reference: Turns
 ) -> dict[str, LabelMapping]:
-    """Map each hypothesis label to the reviewed person owning most of its speech."""
+    """Map each hypothesis label to the reviewed person owning most of its speech.
+
+    A label that overlaps NO reference turn is omitted rather than mapped. That
+    happens whenever the reference has gaps — most often because placeholder
+    names ("Unidentified Speaker") were excluded, since one such name covers
+    several distinct unknown voices and would otherwise both punish keeping them
+    apart and reward merging them. `IdentityReport.unmapped_labels` reports the
+    omissions so a coverage gap is visible instead of silent.
+    """
     mapping: dict[str, LabelMapping] = {}
     for label, row in _cross_seconds(hypothesis, reference).items():
+        if not row:
+            continue
         total = sum(row.values())
         person, seconds = max(row.items(), key=lambda item: item[1])
         mapping[label] = LabelMapping(
@@ -208,8 +221,12 @@ def identity_report(
         if len(labels) > 1
     ]
 
+    mapping = map_labels_to_reference(hypothesis, reference)
     return IdentityReport(
         speakers=len({label for _, _, label in hypothesis}),
+        unmapped_labels=sorted(
+            {label for _, _, label in hypothesis} - set(mapping)
+        ),
         reference_people=len({person for _, _, person in reference}),
         fragmentation=fragmentation,
         conflation=conflation,
