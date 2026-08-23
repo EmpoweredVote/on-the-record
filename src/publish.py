@@ -524,6 +524,37 @@ def _replace_segments(
     return len(rows)
 
 
+def _delete_vanished_speakers(cur, meeting_uuid: str, keep_labels) -> int:
+    """Delete speaker rows whose label is no longer in the transcript. Returns the count.
+
+    Publish upserts speakers by (meeting_id, label) and never removed ones that
+    disappeared, so a label merged away in review kept its row forever — two such rows
+    were live in prod, one of them a linked politician with no segments.
+
+    🔴 Must run AFTER _replace_segments. Until the old segments are deleted they still
+    reference these rows, and meetings.segments.speaker_id would block the delete. The
+    NOT EXISTS guard makes that ordering safe rather than merely conventional.
+
+    A meeting with NO labels is treated as a malformed artifact, not as an instruction to
+    wipe every speaker row: publish is destructive and has no undo.
+    """
+    keep = sorted(set(keep_labels))
+    if not keep:
+        return 0
+    cur.execute(
+        """
+        DELETE FROM meetings.speakers sp
+         WHERE sp.meeting_id = %s
+           AND sp.label <> ALL(%s)
+           AND NOT EXISTS (
+                 SELECT 1 FROM meetings.segments sg WHERE sg.speaker_id = sp.id
+               )
+        """,
+        (meeting_uuid, keep),
+    )
+    return getattr(cur, "rowcount", None) or 0
+
+
 def _replace_votes(cur, meeting: Meeting, meeting_uuid: str) -> int:
     """Delete then insert this meeting's recorded floor votes into meetings.votes.
 
@@ -1246,6 +1277,13 @@ def publish_meeting(
                 segment_count = _replace_segments(
                     cur, meeting, meeting_uuid, label_to_uuid
                 )
+                # After the segments are replaced: a vanished label now has none, so the
+                # FK cannot block the delete.
+                vanished = _delete_vanished_speakers(
+                    cur, meeting_uuid, label_to_uuid.keys()
+                )
+                if vanished:
+                    print(f"  Removed {vanished} speaker row(s) for labels no longer in the transcript")
                 _replace_topics(cur, meeting_uuid, meeting)
                 vote_count = _replace_votes(cur, meeting, meeting_uuid)
                 if vote_count:

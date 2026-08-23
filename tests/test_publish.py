@@ -731,3 +731,52 @@ def test_local_only_speaker_still_publishes_a_local_person():
     assert len([sql for sql, _ in cur.calls if "INSERT INTO meetings.local_people" in sql]) == 1
 
     assert _published_local_slug_column(meeting) == "congress-K000009"
+
+
+# ---------------------------------------------------------------------------
+# speaker rows for labels that vanished from the transcript
+# ---------------------------------------------------------------------------
+
+def _vanished_delete_calls(cur):
+    return [(sql, params) for sql, params in cur.calls
+            if "DELETE FROM meetings.speakers" in sql]
+
+
+def test_delete_vanished_speakers_removes_labels_no_longer_in_the_transcript():
+    """Publish upserts speakers by (meeting_id, label) and never removed ones that
+    disappeared — after a merge, the merged-away label's row lingered forever. Two
+    such rows existed in prod, one of them a linked politician with no segments."""
+    from src.publish import _delete_vanished_speakers
+
+    cur = RecordingCursor()
+    _delete_vanished_speakers(cur, MEETING_UUID, ["SPEAKER_00", "SPEAKER_01"])
+
+    calls = _vanished_delete_calls(cur)
+    assert len(calls) == 1
+    sql, params = calls[0]
+    assert params[0] == MEETING_UUID          # scoped to this meeting
+    assert sorted(params[1]) == ["SPEAKER_00", "SPEAKER_01"]   # keeps current labels
+    # never delete a row segments still point at, whatever the call order
+    assert "NOT EXISTS" in sql
+
+
+def test_delete_vanished_speakers_refuses_to_wipe_when_there_are_no_labels():
+    """An empty speakers dict is a malformed artifact, not an instruction to delete
+    every speaker row for the meeting. Publish is destructive and has no undo."""
+    from src.publish import _delete_vanished_speakers
+
+    cur = RecordingCursor()
+    deleted = _delete_vanished_speakers(cur, MEETING_UUID, [])
+
+    assert _vanished_delete_calls(cur) == []
+    assert deleted == 0
+
+
+def test_publish_deletes_vanished_speakers_after_replacing_segments():
+    """Ordering is load-bearing: until the old segments are gone they still reference
+    these rows, and meetings.segments.speaker_id would block the delete."""
+    import inspect
+    from src import publish
+
+    src = inspect.getsource(publish.publish_meeting)
+    assert src.index("_replace_segments") < src.index("_delete_vanished_speakers")
