@@ -62,3 +62,20 @@ def test_the_kind_gate_never_turns_chunking_on():
 def test_the_allowlist_is_overridable_for_a_deliberate_experiment():
     from src.modal_compute import chunk_minutes_for_kind
     assert chunk_minutes_for_kind("debate", 60, allowed=("debate",)) == 60
+
+
+def test_the_chunked_path_always_merges_regardless_of_the_flag(monkeypatch):
+    """Production never passed --merge, so it ran the merge-disabled path that no
+    calibration covered: on the July 22 council meeting that was 31 labels and 4
+    people fragmented, versus 25 and 0 with merge. The merge is part of this
+    path's algorithm, so the flag must not be able to switch it off."""
+    import src.modal_compute as mc
+
+    seen = {}
+    monkeypatch.setattr(mc, "fetch_chunk_payloads", lambda *a, **k: ["{}"])
+    monkeypatch.setattr(mc, "stitch_chunk_payloads",
+                        lambda payloads, use_merge: seen.setdefault("use_merge", use_merge) or ([], {}))
+    for flag in (True, False):
+        seen.clear()
+        mc._run_chunked_diarization(None, None, "m", 60, use_merge=flag)
+        assert seen["use_merge"] is True

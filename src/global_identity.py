@@ -76,6 +76,20 @@ def decode_turn_vectors(block: dict[str, Any]) -> dict[int, np.ndarray]:
     }
 
 
+#: A seam temporal match is a MUST-LINK, applied before and independently of the
+#: embedding threshold, so a wrong one cannot be tuned away. It is therefore only
+#: accepted when the two nodes' voices do not CONTRADICT it. Measured over 31 seam
+#: candidates on four meetings (July 22 + May 6 + June 10 council, July 16 floor),
+#: scored against human-reviewed names: at 0.30 this keeps 95.8% of same-person
+#: joins and rejects 6 of the 7 that joined DIFFERENT people — including the one
+#: that merged 157s of Buff Brown into Andy Ruff (similarity 0.164).
+#:
+#: It does NOT catch every case. One bad join scored 0.604, above the same-person
+#: median of 0.485: there the two windows AND their embeddings both agree, so no
+#: veto on voice similarity can separate it. That case needs separate work.
+MIN_SEAM_SIMILARITY = 0.30
+
+
 @dataclass
 class IdentityNode:
     """One window-local speaker: the atom of global identity.
@@ -154,6 +168,8 @@ def seed_clusters(
     nodes: list[IdentityNode],
     chunks: list[ChunkResult],
     min_seam_overlap_seconds: float = MIN_SEAM_OVERLAP_SECONDS,
+    stats: "NodePairStatistics | None" = None,
+    min_seam_similarity: float = MIN_SEAM_SIMILARITY,
 ) -> tuple[list[int], dict[str, Any]]:
     """Seed one cluster per node, then join nodes that overlap in a seam.
 
@@ -173,13 +189,21 @@ def seed_clusters(
     is two windows disagreeing about a boundary, not evidence of one speaker.
     Dropping a weak join is safe: the pair can still merge on voice similarity,
     which is the signal that should decide when temporal evidence is thin.
+
+    When `stats` is supplied, a join is additionally rejected if the two nodes'
+    voices CONTRADICT it (similarity below `min_seam_similarity`). That is needed
+    because the overlap region is diarized TWICE, independently, so the two
+    windows can assign the same seconds to different speakers — one measured join
+    had 43.7s of "overlap" between two different councilmembers. Nodes with no
+    usable embedding skip the check, since temporal-only matching is the whole
+    point of this pass for speakers that never embedded.
     """
     clusters = list(range(len(nodes)))
     index_of = {(n.chunk_index, n.local_speaker): i for i, n in enumerate(nodes)}
     windows = {chunk.window.index: chunk.window for chunk in chunks}
     diagnostics: dict[str, list[dict[str, Any]]] = {
         "temporal_matches": [], "embedding_matches": [], "new_speakers": [],
-        "cannot_link_blocks": [],
+        "cannot_link_blocks": [], "seam_vetoed_by_voice": [],
     }
 
     ordered = sorted(windows)
@@ -209,6 +233,16 @@ def seed_clusters(
         target, source = clusters[a], clusters[b]
         if target == source:
             continue
+        if stats is not None:
+            similarity = _cluster_similarity([a], [b], stats, "average")
+            if similarity != float("-inf") and similarity < min_seam_similarity:
+                diagnostics["seam_vetoed_by_voice"].append({
+                    "chunk": nodes[b].chunk_index,
+                    "local": nodes[b].local_speaker,
+                    "overlap_seconds": round(score, 3),
+                    "similarity": round(similarity, 4),
+                })
+                continue
         occupied = cannot_link_chunks(nodes, clusters, target)
         if cannot_link_chunks(nodes, clusters, source) & occupied:
             diagnostics["cannot_link_blocks"].append({
@@ -433,8 +467,10 @@ def cluster_global_identities(
     chunks = sorted(chunks, key=lambda chunk: chunk.window.index)
     windows = [chunk.window for chunk in chunks]
     nodes = build_nodes(chunks, turn_vectors)
-    seeded, diagnostics = seed_clusters(nodes, chunks)
+    # Statistics first: the seam pass needs them to veto a temporal match whose
+    # voices contradict it.
     stats = node_pair_statistics(nodes)
+    seeded, diagnostics = seed_clusters(nodes, chunks, stats=stats)
     clusters, merge_diagnostics = merge_clusters(
         nodes, seeded, stats, threshold=threshold, linkage=linkage
     )
