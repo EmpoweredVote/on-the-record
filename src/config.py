@@ -46,7 +46,13 @@ LLM_CLIENT_BACKEND = "openrouter"
 
 # --- Summary generation (Anthropic API) ---
 SUMMARY_CLASSIFY_MODEL = "claude-haiku-4-5-20251001"    # Section classification
-SUMMARY_SYNTHESIZE_MODEL = "claude-sonnet-4-5"  # Discussion summaries & executive summary
+# Discussion summaries & executive summary. Switched sonnet -> gemini-2.5-flash
+# 2026-08-24 on the blind A/B read (24 pairs, 6 meetings): Chris preferred Flash
+# 7-5 over Sonnet head-to-head — parity at ~10x lower cost. DeepSeek lost 4-8
+# and stays out of prose. NOTE: an OpenRouter model id here requires
+# LLM_CLIENT_BACKEND="openrouter" (the adapter passes unknown ids through);
+# reverting the backend to "anthropic" requires reverting this to a claude-* id.
+SUMMARY_SYNTHESIZE_MODEL = "google/gemini-2.5-flash"
 SUMMARY_MAX_TOKENS_CLASSIFY = 4096
 SUMMARY_MAX_TOKENS_SYNTHESIZE = 4096
 SUMMARY_CHUNK_SIZE = 150  # Max segments per classification chunk
