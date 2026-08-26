@@ -33,6 +33,8 @@ env/
 # Secrets
 .env
 .env.*
+!.env.example
+!.env.*.example
 
 # OS
 .DS_Store
@@ -54,3 +56,11 @@ bench/results/
 # Runtime artifacts
 logs/
 .playwright-mcp/
+
+# Editor/tooling backups. A `.env.bak` holding live credentials sat
+# untracked in ev-accounts on 2026-07-26 and a single `git add -A`
+# would have published it.
+*.bak
+*.backup
+*.orig
+*~
