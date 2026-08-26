@@ -1,0 +1,33 @@
+version: 2
+
+# Grouped updates.
+# Rationale: the ungrouped default produced 312 open alerts and 37
+# competing PRs across 8 repos in a single day (2026-08-26). Grouping
+# collapses a sweep into one PR per manifest, and the open-PR cap then
+# applies to groups rather than to individual packages.
+updates:
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "America/Indiana/Indianapolis"
+    open-pull-requests-limit: 5
+    groups:
+      # Security fixes travel together: one PR per manifest, one review.
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+      # Routine minor/patch: safe by semver contract, one PR.
+      routine:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      # Majors are grouped, NOT ignored. Ignoring semver-major risks
+      # suppressing a security fix that needs one - the vitest 2 -> 3
+      # bump on 2026-08-26 closed two critical alerts and was a major.
+      majors:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
