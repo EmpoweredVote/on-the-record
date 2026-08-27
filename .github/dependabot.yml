@@ -5,6 +5,9 @@ version: 2
 # competing PRs across 8 repos in a single day (2026-08-26). Grouping
 # collapses a sweep into one PR per manifest, and the open-PR cap then
 # applies to groups rather than to individual packages.
+#
+# Merge guidance: security and patch are safe on green CI. minor and
+# majors are decisions - read them.
 updates:
   - package-ecosystem: "npm"
     directory: "/web"
@@ -19,11 +22,23 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
-      # Routine minor/patch: safe by semver contract, one PR.
-      routine:
+      # Patch only. 1.2.3 -> 1.2.4 does not change API under any
+      # convention, including pre-1.0. Safe to merge on green CI.
+      patch:
         applies-to: version-updates
         patterns: ["*"]
-        update-types: ["minor", "patch"]
+        update-types: ["patch"]
+      # Minor gets its own group and a real review. npm reads 0.5 -> 0.12
+      # as "minor" because the major digit stays 0, but for a 0.x package
+      # that IS a breaking change by convention. On 2026-08-27 exactly
+      # that shipped @supabase/ssr 0.5 -> 0.12 inside a combined
+      # minor+patch group and broke the ev-accounts backend typecheck
+      # (postgrest-js tightened RejectExcessProperties). Splitting minor
+      # out keeps patches mergeable without dragging 0.x jumps along.
+      minor:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor"]
       # Majors are grouped, NOT ignored. Ignoring semver-major risks
       # suppressing a security fix that needs one - the vitest 2 -> 3
       # bump on 2026-08-26 closed two critical alerts and was a major.
