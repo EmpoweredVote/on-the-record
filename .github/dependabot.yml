@@ -46,3 +46,17 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: ["major"]
+    # TEMPORARY, added 2026-08-27. TypeScript 7.0.2 shipped 2026-08-26
+    # and typescript-eslint does not support it: 8.68.0, the newest
+    # release, peers `typescript: ">=4.8.4 <6.1.0"`. Every repo that
+    # lints with typescript-eslint fails `npm install` on ERESOLVE, and
+    # the rest only pass because that check is absent. Dependabot put
+    # TS 7 in 12 of 17 open major PRs, blocking all of them.
+    #
+    # REMOVE THIS when typescript-eslint peers TypeScript 7. Check with:
+    #   npm view typescript-eslint@latest peerDependencies.typescript
+    # Scoped to typescript alone, deliberately — not a blanket major
+    # ignore, which would risk suppressing a security fix.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
