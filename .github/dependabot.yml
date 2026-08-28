@@ -60,3 +60,21 @@ updates:
     ignore:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # TEMPORARY, added 2026-08-28. ESLint 10 cannot run in this repo.
+      # eslint-config-next vendors eslint-plugin-react, which still calls
+      # context.getFilename() - removed in ESLint 10. The result is not a
+      # lint failure but a hard crash on the first React file:
+      #   TypeError: Error while loading rule 'react/display-name':
+      #   contextOrFilename.getFilename is not a function
+      # so NOTHING gets linted, which is worse than a red check.
+      #
+      # There is no fix to wait for yet: eslint-plugin-react 7.37.5 is the
+      # newest release and peers eslint up to ^9.7 only; eslint-config-next
+      # 16.3.3, also newest, still depends on ^7.37.0.
+      #
+      # REMOVE THIS when eslint-plugin-react ships eslint 10 support:
+      #   npm view eslint-plugin-react@latest peerDependencies.eslint
+      # Every other EV repo took ESLint 10 on 2026-08-28; this is the sole
+      # holdout, and only because of the Next lint preset.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
