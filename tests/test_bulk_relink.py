@@ -80,6 +80,18 @@ def test_enumerate_excludes_linked_unidentified_nonspeaker_and_local():
     assert [r.normalized_name for r in rows] == ["real candidate"]
 
 
+def test_enumerate_excludes_generic_role_labels():
+    # Generic role labels (a forum "Host", a debate "Moderator") are not people
+    # to link; they must never be enumerated as unlinked speakers.
+    meetings = [_meeting("m1", {
+        "S0": _unlinked("S0", "Host"),
+        "S1": _unlinked("S1", "Moderator"),
+        "S2": _unlinked("S2", "Real Candidate"),
+    })]
+    rows = enumerate_unlinked(meetings, ProfileDB(profiles={}))
+    assert [r.normalized_name for r in rows] == ["real candidate"]
+
+
 def test_enumerate_sets_has_voice_profile_from_name_slug():
     from src.enroll import _name_to_slug
     meetings = [_meeting("m1", {"S0": _unlinked("S0", "Steve Hilton")})]
@@ -143,6 +155,24 @@ def test_suggest_single_match_links():
         _speaker("Steve Hilton"), search=lambda q, **kw: [_cand("uuid-1", "Steve Hilton")])
     assert decision == DECISION_LINK
     assert candidates == [_cand("uuid-1", "Steve Hilton")]
+
+
+def test_suggest_single_fuzzy_substring_match_reviews_not_links():
+    # Regression: a generic short label "Host" fuzzy-matches exactly one
+    # politician "Matthew Hostettler" because the API treats "Host" as a
+    # substring of "Hostettler". A weak (non-whole-word) single match must NOT
+    # auto-approve a link; downgrade to review but still surface the candidate.
+    cand = _cand("b4852f72-adf9-404e-a33e-c8773ef521ea", "Matthew Hostettler")
+    decision, candidates = suggest_link(_speaker("Host"), search=lambda q, **kw: [cand])
+    assert decision == DECISION_REVIEW
+    assert candidates == [cand]
+
+
+def test_suggest_single_surname_match_links():
+    # A single match that shares a whole-word surname token is a strong match.
+    decision, candidates = suggest_link(
+        _speaker("Hilton"), search=lambda q, **kw: [_cand("uuid-1", "Steve Hilton")])
+    assert decision == DECISION_LINK
 
 
 def test_suggest_zero_matches_reviews():
