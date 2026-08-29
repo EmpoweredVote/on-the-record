@@ -79,7 +79,7 @@
 </details>
 {% endif %}
 
-{% if not groups %}<p>No pending discoveries.</p>{% endif %}
+{% if not groups %}<p>{% if show == 'deferred' %}No deferred discoveries.{% else %}No pending discoveries.{% endif %}</p>{% endif %}
 
 {% if groups %}
 <form id="bulkform" method="post" action="/discovery/bulk" class="bulk-bar">
@@ -100,7 +100,7 @@
 {% endif %}
 
 {% for label, rows in groups %}
-<h2>{{ label }} <span class="pill">{{ rows|length }} pending</span></h2>
+<h2>{{ label }} <span class="pill">{{ rows|length }} {% if show == 'deferred' %}deferred{% else %}pending{% endif %}</span></h2>
 <table class="library">
   <tbody>
   {% for r in rows %}

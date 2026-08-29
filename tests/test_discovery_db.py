@@ -173,3 +173,5 @@ def test_apply_tier3_defer_targets_low_value_search_found_and_returns_count():
     assert "source_tier_guess >= 3" in sql.lower()      # tier-3 tail
     assert "outlet_id is null" in sql.lower()            # search-found only; watchlisted kept
     assert "not exists" in sql.lower()                   # every-candidate-has-a-better-source guard
+    assert "cardinality(d.matched_politician_ids) > 0" in sql.lower()  # skip items naming nobody
+    assert "b.source_tier_guess in (1, 2)" in sql.lower()  # "better source" means tier 1-2 only

@@ -795,6 +795,24 @@ def test_discovery_page_deferred_view_lists_deferred(monkeypatch):
     assert seen["status"] == "deferred"
 
 
+def test_discovery_page_deferred_view_uses_deferred_copy_not_pending(monkeypatch):
+    """The deferred view's group heading pill and empty state must say
+    'deferred', not 'pending' — pin the copy so a future edit can't silently
+    regress it. (The header's overall pending_total pill is unrelated and
+    legitimately still says 'pending'.)"""
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(status=status)])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    resp = client.get("/discovery?show=deferred")
+    assert resp.status_code == 200
+    body = resp.text.replace("\n", "")
+    assert "1 deferred</span></h2>" in body
+    assert "No pending discoveries" not in body
+    assert "1 pending</span></h2>" not in body
+
+
 # --- Task 5: bulk status change touches only pending/deferred rows ---
 
 def test_set_status_bulk_updates_only_pending_or_deferred(monkeypatch):
