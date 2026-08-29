@@ -83,6 +83,19 @@ def main() -> int:
     args = ap.parse_args()
 
     conn = db.connect()
+
+    def reconnect():
+        """Hand the engine a fresh connection after a mid-run drop, and keep
+        this scope's `conn` pointing at it so the finalize writes below (and
+        the finally-close) use the live connection, not the dead one."""
+        nonlocal conn
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001 — the old conn is already dead
+            pass
+        conn = db.connect()
+        return conn
+
     try:
         if args.print_alarms:
             rows = db.alarm_races(conn.cursor())
@@ -114,6 +127,7 @@ def main() -> int:
             classify_cap=args.classify_cap,
             skip_watchlist=args.skip_watchlist,
             skip_sweeps=args.skip_sweeps,
+            reconnect_fn=reconnect,
         )
         print(f"DONE examined={stats.examined} queued={stats.inserted_pending} "
               f"auto_filtered={stats.inserted_auto_filtered} "

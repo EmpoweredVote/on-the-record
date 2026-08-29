@@ -67,9 +67,38 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                   peek_fetcher, sleep_fn, meeting_keys: set, today: dt.date,
                   dry_run: bool = False, race_filter: "str | None" = None,
                   classify_cap: "int | None" = None,
-                  skip_watchlist: bool = False, skip_sweeps: bool = False) -> RunStats:
+                  skip_watchlist: bool = False, skip_sweeps: bool = False,
+                  reconnect_fn=None) -> RunStats:
     stats = RunStats()
     cur = conn.cursor()
+
+    def commit_unit(pre_commit, *, label):
+        """Run pre_commit() then commit this unit (one outlet, one swept race).
+        A dropped connection here must not kill the whole run: record it, and if
+        a reconnect_fn was injected, rebuild conn+cur so the next unit starts
+        clean. The current unit's uncommitted rows are lost -- consistent with
+        the one-commit-per-unit durability contract in this module's docstring.
+        Returns True only when the commit actually landed."""
+        nonlocal conn, cur
+        try:
+            pre_commit()
+            conn.commit()
+            return True
+        except psycopg2.Error as exc:
+            stats.failures.append(f"{label} commit: {exc}")
+            print(f"FAILED {label} commit: {exc}", file=sys.stderr)
+            if reconnect_fn is None:
+                return False
+            try:
+                conn = reconnect_fn()
+                cur = conn.cursor()
+                print(f"RECONNECTED after dropped connection ({label})",
+                      file=sys.stderr)
+            except Exception as re_exc:  # noqa: BLE001 — loud, still non-fatal
+                stats.failures.append(f"reconnect: {re_exc}")
+                print(f"FAILED reconnect: {re_exc}", file=sys.stderr)
+            return False
+
     tracked = db.fetch_tracked_candidates(cur)
     by_race: dict = {}
     by_norm_name: dict = {}
@@ -190,8 +219,8 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             for item in items:
                 process_safe(item, all_names, None)
             if not dry_run:
-                db.mark_outlet_polled(cur, outlet.id)
-                conn.commit()
+                commit_unit(lambda: db.mark_outlet_polled(cur, outlet.id),
+                            label=f"outlet {outlet.name}")
 
     if not skip_sweeps:
         state = db.fetch_sweep_state(cur)
@@ -246,10 +275,12 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                 # the cap/failure made us skip. But the rows already
                 # inserted this race are paid for -- commit them regardless,
                 # or they die at the caller's conn.close().
-                if (stats.spend_capped == capped_before
-                        and len(stats.failures) == failures_before):
-                    db.record_sweep(cur, race_id)
-                conn.commit()
+                record_ok = (stats.spend_capped == capped_before
+                             and len(stats.failures) == failures_before)
+                commit_unit(
+                    (lambda rid=race_id: db.record_sweep(cur, rid))
+                    if record_ok else (lambda: None),
+                    label=f"race {race_id}")
         if race_filter and race_filter not in by_race:
             stats.failures.append(f"race filter {race_filter}: not a tracked race")
             print(f"FAILED race filter {race_filter}: not a tracked race", file=sys.stderr)
