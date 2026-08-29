@@ -793,3 +793,31 @@ def test_discovery_page_deferred_view_lists_deferred(monkeypatch):
     resp = client.get("/discovery?show=deferred")
     assert resp.status_code == 200
     assert seen["status"] == "deferred"
+
+
+# --- Task 5: bulk status change touches only pending/deferred rows ---
+
+def test_set_status_bulk_updates_only_pending_or_deferred(monkeypatch):
+    captured = {}
+    class _Cur:
+        rowcount = 2
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    class _Conn:
+        def cursor(self): return _Cur()
+        def commit(self): captured["committed"] = True
+        def close(self): pass
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+
+    n = discovery.set_status_bulk(["a", "b"], "rejected", reason="tier-3")
+    assert n == 2
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.discovered_sources" in sql
+    assert "id = any(%s::uuid[])" in sql
+    assert "status = any(array['pending','deferred'])" in sql
+    assert discovery.set_status_bulk([], "rejected", reason="x") == 0   # empty is a no-op
