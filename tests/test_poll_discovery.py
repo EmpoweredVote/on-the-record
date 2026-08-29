@@ -54,6 +54,10 @@ def _patch_common(monkeypatch, log):
     def _fake_alarm_races(cur, days=30):
         return [("race-1", "WI Gov", "2026-08-11")]
 
+    def _fake_apply_tier3_defer(cur):
+        log.append("defer")
+        return 0
+
     monkeypatch.setattr(poll_discovery.db, "connect", lambda: _FakeConn(log))
     monkeypatch.setattr(poll_discovery, "get_provider", lambda *a, **kw: object())
     monkeypatch.setattr(poll_discovery, "_meeting_source_keys", lambda: set())
@@ -61,6 +65,7 @@ def _patch_common(monkeypatch, log):
     monkeypatch.setattr(poll_discovery.db, "finish_run", _fake_finish_run)
     monkeypatch.setattr(poll_discovery.db, "record_alarms", _fake_record_alarms)
     monkeypatch.setattr(poll_discovery.db, "alarm_races", _fake_alarm_races)
+    monkeypatch.setattr(poll_discovery.db, "apply_tier3_defer", _fake_apply_tier3_defer)
 
 
 def _make_engine_stub(log, *, raise_error=False, stats=None):
@@ -204,3 +209,18 @@ def test_alarms_print_before_persistence_even_when_it_fails(monkeypatch, capsys)
         poll_discovery.main()
 
     assert "ALARM" in capsys.readouterr().out
+
+
+def test_defer_sweep_runs_after_finish_run(monkeypatch):
+    log = []
+    _patch_common(monkeypatch, log)
+    stats = poll_discovery.engine.RunStats()
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py"])
+
+    rc = poll_discovery.main()
+
+    assert rc == 0
+    assert "finish_run" in log and "defer" in log
+    assert log.index("defer") > log.index("finish_run")   # defer runs in finalize, after the record
