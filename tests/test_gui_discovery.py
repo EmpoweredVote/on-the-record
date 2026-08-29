@@ -821,3 +821,40 @@ def test_set_status_bulk_updates_only_pending_or_deferred(monkeypatch):
     assert "id = any(%s::uuid[])" in sql
     assert "status = any(array['pending','deferred'])" in sql
     assert discovery.set_status_bulk([], "rejected", reason="x") == 0   # empty is a no-op
+
+
+# --- Task 6: POST /discovery/bulk ---
+
+def test_bulk_reject_calls_set_status_bulk_with_reason(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda ids, status, reason=None: calls.append((ids, status, reason)) or len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk",
+                       data={"action": "reject", "row_ids": ["a", "b"], "reason": "tier-5"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls == [(["a", "b"], "rejected", "tier-5")]
+    assert "rejected 2" in _flash(resp)
+
+
+def test_bulk_restore_sets_pending(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda ids, status, reason=None: calls.append((ids, status, reason)) or len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk",
+                       data={"action": "restore", "row_ids": ["a"]},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls == [(["a"], "pending", None)]
+    assert "restored 1" in _flash(resp)
+
+
+def test_bulk_no_rows_is_a_noop(monkeypatch):
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not be called")))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk", data={"action": "reject"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert "no rows selected" in _flash(resp)

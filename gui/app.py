@@ -197,6 +197,21 @@ def create_app() -> FastAPI:
         ok, message = discovery.watch_channel(row)
         return _discovery_redirect(message if ok else f"error: {message}")
 
+    @app.post("/discovery/bulk")
+    def discovery_bulk(action: str = Form(...),
+                       row_ids: list[str] = Form(default=[]),
+                       reason: str = Form("other")):
+        from gui import discovery
+        if not row_ids:
+            return _discovery_redirect("no rows selected")
+        if action == "reject":
+            n = discovery.set_status_bulk(row_ids, "rejected", reason=reason)
+            return _discovery_redirect(f"rejected {n}")
+        if action == "restore":
+            n = discovery.set_status_bulk(row_ids, "pending", reason=None)
+            return _discovery_redirect(f"restored {n} to pending")
+        return _discovery_redirect(f"unknown action: {action}")
+
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
         if not is_safe_meeting_id(meeting_id):
