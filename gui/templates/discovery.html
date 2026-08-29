@@ -29,6 +29,14 @@
 
 {% if flash %}<p class="flash">{{ flash }}</p>{% endif %}
 
+<p class="view-toggle">
+  {% if show == 'deferred' %}
+    <a href="/discovery">← Back to pending</a> · showing <strong>deferred</strong> (low-value, auto-filed)
+  {% else %}
+    <a href="/discovery?show=deferred">View deferred items →</a>
+  {% endif %}
+</p>
+
 {% if health.alarms %}
 <section class="flash-pending">
   <strong>Zero-source alarms</strong> — races inside 30 days with no approved sources:

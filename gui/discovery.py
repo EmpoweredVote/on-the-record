@@ -36,8 +36,8 @@ _SELECT = """
     left join essentials.elections e on e.id = r.election_id
 """
 
-_PENDING_ORDER = """
-    where d.status = 'pending'
+_LIST_WHERE_ORDER = """
+    where d.status = %s
     order by e.election_date asc nulls last,
              d.source_tier_guess asc nulls last,
              d.confidence desc nulls last, d.created_at desc
@@ -97,7 +97,7 @@ def _to_row(r) -> DiscoveredRow:
     return DiscoveredRow(*r)
 
 
-def pending_rows() -> list:
+def pending_rows(status: str = "pending") -> list:
     url = _db_url()
     if not url:
         return []
@@ -105,7 +105,7 @@ def pending_rows() -> list:
         conn = psycopg2.connect(url)
         try:
             with conn.cursor() as cur:
-                cur.execute(_SELECT + _PENDING_ORDER)
+                cur.execute(_SELECT + _LIST_WHERE_ORDER, (status,))
                 return [_to_row(r) for r in cur.fetchall()]
         finally:
             conn.close()

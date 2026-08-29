@@ -76,9 +76,10 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/discovery", response_class=HTMLResponse)
-    def discovery_page(request: Request, flash: str = "") -> HTMLResponse:
+    def discovery_page(request: Request, flash: str = "", show: str = "pending") -> HTMLResponse:
         from gui import discovery, races
-        rows = discovery.pending_rows()
+        status = "deferred" if show == "deferred" else "pending"
+        rows = discovery.pending_rows(status)
         labels = races.race_labels({r.race_id for r in rows if r.race_id})
         groups: dict = {}
         for r in rows:
@@ -98,7 +99,7 @@ def create_app() -> FastAPI:
             {"groups": list(groups.items()), "health": h,
              "outlet_stats": ostats,
              "outletless_reviewed": h.get("outletless_reviewed", 0),
-             "flash": flash})
+             "flash": flash, "show": status})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
         from urllib.parse import quote
