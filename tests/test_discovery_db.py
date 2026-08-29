@@ -151,3 +151,25 @@ def test_finish_run_truncates_failures_text_but_not_count():
     _, params = cur.executed[0]
     assert params[8] == 2                 # count stays authoritative
     assert len(params[9]) == 4000         # text truncated
+
+
+class _RowcountCursor:
+    def __init__(self, rowcount=0):
+        self.rowcount = rowcount
+        self.executed = []
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+
+def test_apply_tier3_defer_targets_low_value_search_found_and_returns_count():
+    cur = _RowcountCursor(rowcount=970)
+    n = db.apply_tier3_defer(cur)
+    assert n == 970
+    sql = cur.executed[0][0]
+    assert "update essentials.discovered_sources" in sql.lower()
+    assert "'deferred'" in sql
+    assert "status = 'pending'" in sql.lower()          # only touches the queue
+    assert "source_tier_guess >= 3" in sql.lower()      # tier-3 tail
+    assert "outlet_id is null" in sql.lower()            # search-found only; watchlisted kept
+    assert "not exists" in sql.lower()                   # every-candidate-has-a-better-source guard
