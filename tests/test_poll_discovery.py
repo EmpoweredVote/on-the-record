@@ -126,6 +126,7 @@ def test_dry_run_writes_no_run_record(monkeypatch):
     assert "insert_run" not in log
     assert "finish_run" not in log
     assert "record_alarms" not in log
+    assert "defer" not in log   # dry-run must not invoke the tier-3 defer sweep
 
 
 def test_engine_crash_leaves_started_row_unfinished(monkeypatch):
@@ -222,5 +223,6 @@ def test_defer_sweep_runs_after_finish_run(monkeypatch):
     rc = poll_discovery.main()
 
     assert rc == 0
-    assert "finish_run" in log and "defer" in log
+    assert "finish_run" in log and "record_alarms" in log and "defer" in log
     assert log.index("defer") > log.index("finish_run")   # defer runs in finalize, after the record
+    assert log.index("defer") > log.index("record_alarms")   # ...and after alarms are committed
