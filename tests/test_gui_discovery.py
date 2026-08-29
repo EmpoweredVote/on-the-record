@@ -858,3 +858,17 @@ def test_bulk_no_rows_is_a_noop(monkeypatch):
     resp = client.post("/discovery/bulk", data={"action": "reject"}, follow_redirects=False)
     assert resp.status_code == 303
     assert "no rows selected" in _flash(resp)
+
+
+# --- Task 7: row checkboxes + bulk action bar in the triage template ---
+
+def test_triage_page_has_checkboxes_and_bulk_bar(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row(id="d1")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    assert 'action="/discovery/bulk"' in html
+    assert 'name="row_ids"' in html
+    assert 'value="d1"' in html
+    assert 'form="bulkform"' in html          # checkbox associated to the bulk form, not nested

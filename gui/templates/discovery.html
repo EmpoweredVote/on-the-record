@@ -81,6 +81,24 @@
 
 {% if not groups %}<p>No pending discoveries.</p>{% endif %}
 
+{% if groups %}
+<form id="bulkform" method="post" action="/discovery/bulk" class="bulk-bar">
+  {% if show == 'deferred' %}
+    <button type="submit" name="action" value="restore">Restore selected to pending</button>
+  {% else %}
+    <label>Reason
+      <select name="reason">
+        <option value="tier-5">tier-5 (low value)</option>
+        <option value="wrong-person">wrong-person</option>
+        <option value="clip-not-original">clip-not-original</option>
+        <option value="other" selected>other</option>
+      </select>
+    </label>
+    <button type="submit" name="action" value="reject">Reject selected</button>
+  {% endif %}
+</form>
+{% endif %}
+
 {% for label, rows in groups %}
 <h2>{{ label }} <span class="pill">{{ rows|length }} pending</span></h2>
 <table class="library">
@@ -88,6 +106,7 @@
   {% for r in rows %}
   <tr>
     <td class="name">
+      <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulkform">
       {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
       <div>
         {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
