@@ -76,9 +76,10 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/discovery", response_class=HTMLResponse)
-    def discovery_page(request: Request, flash: str = "") -> HTMLResponse:
+    def discovery_page(request: Request, flash: str = "", show: str = "pending") -> HTMLResponse:
         from gui import discovery, races
-        rows = discovery.pending_rows()
+        status = "deferred" if show == "deferred" else "pending"
+        rows = discovery.pending_rows(status)
         labels = races.race_labels({r.race_id for r in rows if r.race_id})
         groups: dict = {}
         for r in rows:
@@ -98,7 +99,7 @@ def create_app() -> FastAPI:
             {"groups": list(groups.items()), "health": h,
              "outlet_stats": ostats,
              "outletless_reviewed": h.get("outletless_reviewed", 0),
-             "flash": flash})
+             "flash": flash, "show": status})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
         from urllib.parse import quote
@@ -195,6 +196,21 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         ok, message = discovery.watch_channel(row)
         return _discovery_redirect(message if ok else f"error: {message}")
+
+    @app.post("/discovery/bulk")
+    def discovery_bulk(action: str = Form(...),
+                       row_ids: list[str] = Form(default=[]),
+                       reason: str = Form("other")):
+        from gui import discovery
+        if not row_ids:
+            return _discovery_redirect("no rows selected")
+        if action == "reject":
+            n = discovery.set_status_bulk(row_ids, "rejected", reason=reason)
+            return _discovery_redirect(f"rejected {n}")
+        if action == "restore":
+            n = discovery.set_status_bulk(row_ids, "pending", reason=None)
+            return _discovery_redirect(f"restored {n} to pending")
+        return _discovery_redirect(f"unknown action: {action}")
 
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
