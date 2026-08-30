@@ -38,7 +38,7 @@ def test_thumb_and_duration_properties():
 
 
 def test_discovery_page_renders_rows_and_health(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [_row()])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row()])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [("r9", "MI Governor (D primary)", "2026-08-04")],
         "stale_outlets": ["PBS Kansas"], "pending_total": 1})
@@ -54,7 +54,7 @@ def test_discovery_page_renders_rows_and_health(monkeypatch):
 
 
 def test_discovery_page_empty_state(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "health",
                         lambda: {"alarms": [], "stale_outlets": [], "pending_total": 0})
     client = TestClient(create_app())
@@ -275,7 +275,7 @@ def test_approve_ingest_coerces_community_meeting_to_forum_when_race_set(monkeyp
 
 def test_discovery_page_truncates_published_at_to_date(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows",
-                        lambda: [_row(published_at="2026-08-01 14:30:00+00")])
+                        lambda status="pending": [_row(published_at="2026-08-01 14:30:00+00")])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 1})
     client = TestClient(create_app())
@@ -289,7 +289,7 @@ def test_discovery_page_truncates_published_at_to_date(monkeypatch):
 
 def test_discovery_page_blocks_unsafe_url_scheme(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows",
-                        lambda: [_row(url="javascript:alert(1)")])
+                        lambda status="pending": [_row(url="javascript:alert(1)")])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 1})
     client = TestClient(create_app())
@@ -381,7 +381,7 @@ def test_health_defaults_include_last_run_keys_without_db(monkeypatch):
 
 
 def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
@@ -398,7 +398,7 @@ def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
 
 
 def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
@@ -414,7 +414,7 @@ def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
 
 
 def test_discovery_page_reddens_pill_on_failures(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
@@ -430,7 +430,7 @@ def test_discovery_page_reddens_pill_on_failures(monkeypatch):
 
 
 def test_discovery_page_shows_crashed_for_stale_unfinished_run(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
@@ -447,7 +447,7 @@ def test_discovery_page_shows_crashed_for_stale_unfinished_run(monkeypatch):
 
 
 def test_discovery_page_healthy_run_stays_grey(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
@@ -471,7 +471,7 @@ def test_outlet_stats_empty_without_db(monkeypatch):
 
 
 def test_discovery_page_renders_outlet_evidence_and_group_counts(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [_row(), _row(id="d2")])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row(), _row(id="d2")])
     # health() now carries outlet_stats itself (the perf fold) — the standalone
     # outlet_stats() must NOT be hit on this path.
     called = {"hit": False}
@@ -504,7 +504,7 @@ def test_discovery_page_renders_outlet_evidence_and_group_counts(monkeypatch):
 
 def test_discovery_page_floors_approval_percent(monkeypatch):
     """89.7% must not round up to 90% next to a >=90% qualification bar."""
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": None, "scheduled_run_overdue": False,
@@ -521,7 +521,7 @@ def test_discovery_page_floors_approval_percent(monkeypatch):
 
 
 def test_discovery_page_qualifies_marker_for_a_bar_clearing_outlet(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": None, "scheduled_run_overdue": False,
@@ -536,7 +536,7 @@ def test_discovery_page_qualifies_marker_for_a_bar_clearing_outlet(monkeypatch):
 
 
 def test_discovery_page_below_bar_when_approval_rate_too_low(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": None, "scheduled_run_overdue": False,
@@ -554,7 +554,7 @@ def test_discovery_page_uses_health_outlet_stats_when_key_present(monkeypatch):
     """The perf fold: outlet_stats() must not be called when health() already
     carries the key (the real DB path after this fold)."""
     called = {"hit": False}
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats",
                         lambda: called.update(hit=True) or [])
     monkeypatch.setattr(discovery, "health", lambda: {
@@ -572,7 +572,7 @@ def test_discovery_page_falls_back_to_outlet_stats_when_key_absent(monkeypatch):
     """Legacy/monkeypatched health() dicts without the key still work by
     falling back to the standalone outlet_stats() call."""
     called = {"hit": False}
-    monkeypatch.setattr(discovery, "pending_rows", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
     monkeypatch.setattr(discovery, "outlet_stats",
                         lambda: called.update(hit=True) or [])
     monkeypatch.setattr(discovery, "health", lambda: {
@@ -772,8 +772,121 @@ def test_probe_extractable_falls_through_to_ytdlp_when_resolver_errors(monkeypat
 # --- Task 4: pending queue orders by tier before confidence ---
 
 def test_pending_order_ranks_tier_before_confidence():
-    order = discovery._PENDING_ORDER
+    order = discovery._LIST_WHERE_ORDER
     assert "election_date asc" in order
     tier_pos = order.index("source_tier_guess asc")
     conf_pos = order.index("confidence desc")
     assert tier_pos < conf_pos
+
+
+# --- Task 4: deferred-view toggle ---
+
+def test_discovery_page_deferred_view_lists_deferred(monkeypatch):
+    seen = {}
+    def fake_rows(status="pending"):
+        seen["status"] = status
+        return [_row(status=status)]
+    monkeypatch.setattr(discovery, "pending_rows", fake_rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    resp = client.get("/discovery?show=deferred")
+    assert resp.status_code == 200
+    assert seen["status"] == "deferred"
+
+
+def test_discovery_page_deferred_view_uses_deferred_copy_not_pending(monkeypatch):
+    """The deferred view's group heading pill and empty state must say
+    'deferred', not 'pending' — pin the copy so a future edit can't silently
+    regress it. (The header's overall pending_total pill is unrelated and
+    legitimately still says 'pending'.)"""
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(status=status)])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    resp = client.get("/discovery?show=deferred")
+    assert resp.status_code == 200
+    body = resp.text.replace("\n", "")
+    assert "1 deferred</span></h2>" in body
+    assert "No pending discoveries" not in body
+    assert "1 pending</span></h2>" not in body
+
+
+# --- Task 5: bulk status change touches only pending/deferred rows ---
+
+def test_set_status_bulk_updates_only_pending_or_deferred(monkeypatch):
+    captured = {}
+    class _Cur:
+        rowcount = 2
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    class _Conn:
+        def cursor(self): return _Cur()
+        def commit(self): captured["committed"] = True
+        def close(self): pass
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+
+    n = discovery.set_status_bulk(["a", "b"], "rejected", reason="tier-3")
+    assert n == 2
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.discovered_sources" in sql
+    assert "id = any(%s::uuid[])" in sql
+    assert "status = any(array['pending','deferred'])" in sql
+    assert discovery.set_status_bulk([], "rejected", reason="x") == 0   # empty is a no-op
+
+
+# --- Task 6: POST /discovery/bulk ---
+
+def test_bulk_reject_calls_set_status_bulk_with_reason(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda ids, status, reason=None: calls.append((ids, status, reason)) or len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk",
+                       data={"action": "reject", "row_ids": ["a", "b"], "reason": "tier-5"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls == [(["a", "b"], "rejected", "tier-5")]
+    assert "rejected 2" in _flash(resp)
+
+
+def test_bulk_restore_sets_pending(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda ids, status, reason=None: calls.append((ids, status, reason)) or len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk",
+                       data={"action": "restore", "row_ids": ["a"]},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls == [(["a"], "pending", None)]
+    assert "restored 1" in _flash(resp)
+
+
+def test_bulk_no_rows_is_a_noop(monkeypatch):
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not be called")))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk", data={"action": "reject"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert "no rows selected" in _flash(resp)
+
+
+# --- Task 7: row checkboxes + bulk action bar in the triage template ---
+
+def test_triage_page_has_checkboxes_and_bulk_bar(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row(id="d1")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    assert 'action="/discovery/bulk"' in html
+    assert 'name="row_ids"' in html
+    assert 'value="d1"' in html
+    assert 'form="bulkform"' in html          # checkbox associated to the bulk form, not nested

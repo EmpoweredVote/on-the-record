@@ -36,8 +36,8 @@ _SELECT = """
     left join essentials.elections e on e.id = r.election_id
 """
 
-_PENDING_ORDER = """
-    where d.status = 'pending'
+_LIST_WHERE_ORDER = """
+    where d.status = %s
     order by e.election_date asc nulls last,
              d.source_tier_guess asc nulls last,
              d.confidence desc nulls last, d.created_at desc
@@ -97,7 +97,7 @@ def _to_row(r) -> DiscoveredRow:
     return DiscoveredRow(*r)
 
 
-def pending_rows() -> list:
+def pending_rows(status: str = "pending") -> list:
     url = _db_url()
     if not url:
         return []
@@ -105,7 +105,7 @@ def pending_rows() -> list:
         conn = psycopg2.connect(url)
         try:
             with conn.cursor() as cur:
-                cur.execute(_SELECT + _PENDING_ORDER)
+                cur.execute(_SELECT + _LIST_WHERE_ORDER, (status,))
                 return [_to_row(r) for r in cur.fetchall()]
         finally:
             conn.close()
@@ -149,6 +149,34 @@ def set_status(row_id: str, status: str, reason: "str | None" = None) -> bool:
             conn.close()
     except Exception:
         return False
+
+
+def set_status_bulk(row_ids: "list[str]", status: str, reason: "str | None" = None) -> int:
+    """Set status on many rows at once. Only rows currently pending or deferred
+    are touched, so a bulk action can never un-ingest or un-approve. Returns the
+    number of rows changed. Empty id list is a no-op."""
+    if not row_ids:
+        return 0
+    url = _db_url()
+    if not url:
+        return 0
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    update essentials.discovered_sources
+                    set status = %s, status_reason = %s, reviewed_at = now()
+                    where id = any(%s::uuid[])
+                      and status = any(array['pending','deferred'])
+                """, (status, reason, row_ids))
+                n = cur.rowcount
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    except Exception:
+        return 0
 
 
 def health() -> dict:

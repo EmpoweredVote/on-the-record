@@ -164,3 +164,32 @@ def record_alarms(cur, race_ids: "list[str]") -> None:
             values (%s::uuid, now())
             on conflict (race_id) do update set last_alarm_at = now()
         """, (race_id,))
+
+
+def apply_tier3_defer(cur) -> int:
+    """Move low-value tier-3+ items OUT of the human queue into 'deferred'.
+
+    An item defers only when ALL hold: it is still pending; its tier is 3 or
+    worse; it was search-found (outlet_id IS NULL — watchlisted/trusted shows
+    are always kept); and EVERY candidate it names already has a stronger,
+    non-deferred tier-1/2 source. A candidate whose only speech is this item is
+    never deferred. 'deferred' is not counted by the zero-source alarm, so a
+    starved race still surfaces and a person can restore the item. Returns the
+    number of rows moved. Caller commits."""
+    cur.execute("""
+        update essentials.discovered_sources d
+        set status = 'deferred',
+            status_reason = 'auto-deferred: every matched candidate has a stronger (tier 1-2) source'
+        where d.status = 'pending'
+          and d.source_tier_guess >= 3
+          and d.outlet_id is null
+          and cardinality(d.matched_politician_ids) > 0
+          and not exists (
+            select 1 from unnest(d.matched_politician_ids) as pid
+            where not exists (
+              select 1 from essentials.discovered_sources b
+              where b.source_tier_guess in (1, 2)
+                and b.status in ('pending', 'approved', 'ingested')
+                and pid = any(b.matched_politician_ids)))
+    """)
+    return cur.rowcount

@@ -172,3 +172,27 @@ def test_connect_enables_tcp_keepalives(monkeypatch):
     assert kw.get("keepalives") == 1
     assert kw.get("keepalives_idle", 10_000) <= 60      # well under the ~350s NLB reap
     assert "keepalives_interval" in kw and "keepalives_count" in kw
+
+
+class _RowcountCursor:
+    def __init__(self, rowcount=0):
+        self.rowcount = rowcount
+        self.executed = []
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+
+def test_apply_tier3_defer_targets_low_value_search_found_and_returns_count():
+    cur = _RowcountCursor(rowcount=970)
+    n = db.apply_tier3_defer(cur)
+    assert n == 970
+    sql = cur.executed[0][0]
+    assert "update essentials.discovered_sources" in sql.lower()
+    assert "'deferred'" in sql
+    assert "status = 'pending'" in sql.lower()          # only touches the queue
+    assert "source_tier_guess >= 3" in sql.lower()      # tier-3 tail
+    assert "outlet_id is null" in sql.lower()            # search-found only; watchlisted kept
+    assert "not exists" in sql.lower()                   # every-candidate-has-a-better-source guard
+    assert "cardinality(d.matched_politician_ids) > 0" in sql.lower()  # skip items naming nobody
+    assert "b.source_tier_guess in (1, 2)" in sql.lower()  # "better source" means tier 1-2 only

@@ -145,6 +145,13 @@ def main() -> int:
             conn.commit()
             db.record_alarms(cur, [a[0] for a in alarms])
             conn.commit()
+        # Defer low-value tier-3 items whose candidates already have a stronger
+        # source, so they leave the human queue (reversible; alarm-safe).
+        if not args.dry_run:
+            cur = conn.cursor()
+            deferred = db.apply_tier3_defer(cur)
+            conn.commit()
+            print(f"DEFERRED {deferred} low-value items")
         if stats.failures:
             print(f"{len(stats.failures)} failure(s)", file=sys.stderr)
             return 1
