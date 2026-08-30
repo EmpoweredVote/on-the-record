@@ -1,5 +1,7 @@
 import datetime as dt
 
+import psycopg2
+
 from src import config
 from src.discovery import db, engine
 from src.discovery.models import Outlet, RawItem, TrackedCandidate, Verdict
@@ -553,6 +555,85 @@ def test_web_items_are_not_hydrated(monkeypatch):
     assert hydrate_calls == []                    # no yt-dlp on article pages
     assert stats.classified == 1                  # still reached stage 2
     assert inserted and inserted[0]["duration_seconds"] is None
+
+
+# --- Dropped-connection resilience (mid-run pooler reap) --------------------
+
+_TWO_OUTLETS = [
+    Outlet(id="o1", name="KXAN", kind="youtube_channel", feed_url="https://f"),
+    Outlet(id="o2", name="KVUE", kind="youtube_channel", feed_url="https://g"),
+]
+_ONE_ITEM = RawItem(url="https://www.youtube.com/watch?v=drop1234567",
+                    title="Maria Delgado full town hall", description="d",
+                    channel_name="KXAN", duration_seconds=1800,
+                    published_at="2026-08-01", outlet_id="o1", via="watchlist")
+
+
+def _patch_db_two_outlets(monkeypatch, marked, mark_fn):
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: list(_TWO_OUTLETS))
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered", lambda cur, row: True)
+    monkeypatch.setattr(db, "mark_outlet_polled", mark_fn)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: None)
+
+
+def test_dropped_connection_reconnects_and_continues(monkeypatch):
+    """A connection reaped mid-run (the Supabase-pooler idle drop) must not
+    kill the whole run: the engine reconnects and the next outlet still lands."""
+    marked = []
+    reconnects = {"n": 0}
+
+    def mark(cur, oid):
+        if oid == "o1" and reconnects["n"] == 0:
+            raise psycopg2.OperationalError("server closed the connection unexpectedly")
+        marked.append(oid)
+
+    _patch_db_two_outlets(monkeypatch, marked, mark)
+
+    def reconnect():
+        reconnects["n"] += 1
+        return _FakeConn()
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider(
+            '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+            ' "event_kind":"town_hall","source_tier":1,"original_vs_clip":"original",'
+            ' "route":"ingest","why":"town hall"}'),
+        fetch_feed_items=lambda o: [_ONE_ITEM], ytsearch_fn=lambda q: [],
+        hydrate_fn=lambda it: it, peek_fetcher=None, sleep_fn=lambda s: None,
+        meeting_keys=set(), today=dt.date(2026, 8, 2), skip_sweeps=True,
+        reconnect_fn=reconnect)
+
+    assert reconnects["n"] == 1                       # reconnected exactly once
+    assert marked == ["o2"]                           # o1 dropped, o2 still polled
+    assert any("commit" in f for f in stats.failures) # the drop is recorded, not swallowed
+
+
+def test_dropped_connection_without_reconnect_is_still_nonfatal(monkeypatch):
+    """Even with no reconnect_fn, a dropped commit is a recorded failure, not a
+    crash that loses the run record."""
+    marked = []
+
+    def mark(cur, oid):
+        if oid == "o1":
+            raise psycopg2.OperationalError("server closed the connection unexpectedly")
+        marked.append(oid)
+
+    _patch_db_two_outlets(monkeypatch, marked, mark)
+
+    stats = engine.run_discovery(   # must not raise
+        _FakeConn(), provider=_FakeProvider(
+            '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+            ' "event_kind":"town_hall","source_tier":1,"original_vs_clip":"original",'
+            ' "route":"ingest","why":"town hall"}'),
+        fetch_feed_items=lambda o: [_ONE_ITEM], ytsearch_fn=lambda q: [],
+        hydrate_fn=lambda it: it, peek_fetcher=None, sleep_fn=lambda s: None,
+        meeting_keys=set(), today=dt.date(2026, 8, 2), skip_sweeps=True)
+
+    assert marked == ["o2"]                           # run continued past the drop
+    assert any("commit" in f for f in stats.failures)
 
 
 def test_hydrated_publish_date_also_recency_filtered(monkeypatch):

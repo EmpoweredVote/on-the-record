@@ -23,7 +23,19 @@ def _require_db_url() -> str:
 
 
 def connect():
-    return psycopg2.connect(_require_db_url(), sslmode="require")
+    # TCP keepalives: a discovery run holds one connection for 10+ minutes and
+    # goes idle for long stretches (yt-dlp caption pulls, LLM latency, feed
+    # HTTP). Against the Supabase session pooler an idle socket is silently
+    # reaped by an intermediary (AWS NLB idle timeout defaults to 350s), which
+    # libpq only notices on the next query -- surfacing as "server closed the
+    # connection unexpectedly" mid-run. keepalives_idle (30s) keeps the socket
+    # warm well under that window; the reconnect path in the engine covers any
+    # drop that still slips through.
+    return psycopg2.connect(
+        _require_db_url(), sslmode="require",
+        keepalives=1, keepalives_idle=30,
+        keepalives_interval=10, keepalives_count=5,
+    )
 
 
 def fetch_active_outlets(cur) -> list:

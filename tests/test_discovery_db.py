@@ -153,6 +153,27 @@ def test_finish_run_truncates_failures_text_but_not_count():
     assert len(params[9]) == 4000         # text truncated
 
 
+def test_connect_enables_tcp_keepalives(monkeypatch):
+    """The long-lived discovery connection must ship libpq keepalives, or the
+    Supabase pooler reaps it mid-run (see db.connect docstring)."""
+    captured = {}
+
+    def fake_connect(dsn, **kwargs):
+        captured["dsn"] = dsn
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@host:5432/db")
+    monkeypatch.setattr(db.psycopg2, "connect", fake_connect)
+
+    db.connect()
+
+    kw = captured["kwargs"]
+    assert kw.get("keepalives") == 1
+    assert kw.get("keepalives_idle", 10_000) <= 60      # well under the ~350s NLB reap
+    assert "keepalives_interval" in kw and "keepalives_count" in kw
+
+
 class _RowcountCursor:
     def __init__(self, rowcount=0):
         self.rowcount = rowcount
