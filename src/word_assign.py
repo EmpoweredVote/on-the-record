@@ -274,16 +274,26 @@ def _snap_straddling_intro(a: Segment, b: Segment) -> bool:
 
     Admitting on "A's last word spills" alone is not safe: 63 of the corpus's
     104 non-leading-cue pairs do that, and most are speakers correctly
-    introducing themselves at the start of their own turn. Four gates narrow it
+    introducing themselves at the start of their own turn. Five gates narrow it
     to one. Differing speaker_label cuts 63 to 47. Requiring the sentence to run
     ACROSS the boundary — A's last word not sentence-final, B opening lowercase
     — cuts 47 to 13; that is the gate that spares Steve Goldstein's own
     "My name is Steve Goldstein." on 2026-06-24-cd1-republican-primary-debate,
     which ends a sentence and is followed by a '>>' marker. Requiring a sentence
-    boundary within MAX_INTRO_PREAMBLE words before the cue cuts 13 to 6, and
-    means the rule never cuts mid-sentence. The tail cap then acts on an already
-    clean set: the one true positive moves 5 words and the nearest false
-    positive would move 180, so any cap from 5 to 100 gives the same answer.
+    boundary within MAX_INTRO_PREAMBLE words before the cue cuts 13 to 9, and
+    means the rule never cuts mid-sentence.
+
+    Nine is not clean enough for a length cap alone. Eight of the nine are
+    speakers reading a whole self-introduction of their own; the nearest one is
+    Tree Martin-Lucas's 21-word closing statement on
+    2026-03-30-lwv-candidate-forum---county-clerk-and-prosecutor seg 116
+    ("Again, my name is Tree - Martin Lucas, and I'm running for clerk. All
+    right. Thank you all so much for"), and "Again, my name is X" ending a
+    forum closing statement is a common enough shape that a shorter instance
+    would clear a 10-word cap. So the last gate is semantic, not metric: a tail
+    that closes a sentence of its own contradicts gate 6's premise that the
+    tail and B are one utterance. That alone separates 1 from 9 with no length
+    threshold. MAX_INTRO_TAIL_WORDS is kept as a second line of defence.
 
     Gate 3 cedes the wholly-outside shape to _snap_trailing_intro, so the two
     rules are mutually exclusive by construction and can neither double-fire on
@@ -317,6 +327,16 @@ def _snap_straddling_intro(a: Segment, b: Segment) -> bool:
             break
     if split is None or split < 1:
         return False   # A must keep words of its own
+    # Gate 6 asserted that the tail and B are ONE utterance running across the
+    # boundary. A tail that closes a sentence of its own contradicts that
+    # premise: it is the speaker's own finished speech, not a fragment bleeding
+    # into the next turn. Checked before the length cap because it tests the
+    # rule's structural premise rather than a tuned magnitude — the cap is then
+    # a pure second line of defence over an already-coherent tail. The slice
+    # excludes the LAST word, whose punctuation says nothing about internal
+    # structure (and which gate 6 has already required not to end a sentence).
+    if any(_ends_sentence(w.word) for w in a.words[split:-1]):
+        return False   # the tail finishes a sentence: A's own speech, not a bleed
     if len(a.words) - split > MAX_INTRO_TAIL_WORDS:
         return False   # a long turn spilling its timings, not a short bleed
     return _move(a.words[split:], a, b)

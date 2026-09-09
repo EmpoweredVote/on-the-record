@@ -818,6 +818,12 @@ def test_straddling_self_intro_declines_a_long_spilling_turn():
     # be used verbatim here (truncating it drops the spill that gate 4 reads),
     # so the shape is reproduced at test scale: every other gate passes and only
     # the tail cap rejects it. The corpus scan in Task 4 covers the real row.
+    #
+    # The real row reads "...Leanne Martin. I'm your East Tennessee field rep",
+    # but the period after the name is softened to a comma here on purpose. With
+    # it, the completed-sentence gate would reject the tail first and the cap
+    # would never be reached, leaving this test unable to pin the cap at all.
+    # The completed-sentence gate has its own fixture below.
     def build(tail_words):
         a = _seg(1, 99.0, 104.0, "SPEAKER_07")
         b = _seg(2, 112.0, 130.0, "SPEAKER_06")
@@ -830,13 +836,14 @@ def test_straddling_self_intro_declines_a_long_spilling_turn():
             start = 100.5 + 0.5 * i
             words.append(Word(w, start, start + 0.5))
         a.words = words
-        # B starts after a real pause so the marker-less _snap_leading path,
-        # which needs a near-zero gap, cannot pull its opening word back into A.
+        # B's opening word "for" is not sentence-final, which is what keeps the
+        # marker-less _snap_leading path (a completed sentence bled forward)
+        # from pulling it back into A.
         b.words = [Word("for", 112.0, 112.5), Word("the", 112.5, 113.0)]
         return a, b
 
     long_tail = [
-        "My", "name", "is", "Leanne", "Martin.", "I'm", "your", "East",
+        "My", "name", "is", "Leanne", "Martin,", "I'm", "your", "East",
         "Tennessee", "field", "rep",
     ]
     assert len(long_tail) == MAX_INTRO_TAIL_WORDS + 1
@@ -850,6 +857,65 @@ def test_straddling_self_intro_declines_a_long_spilling_turn():
     snap_segment_boundaries([a, b])
     assert _tokens(a) == ["Okay.", "Thank", "you."]
     assert _tokens(b)[0] == "My"
+
+
+def test_straddling_self_intro_declines_a_tail_that_finishes_a_sentence():
+    # 2026-03-30-lwv-candidate-forum---county-clerk-and-prosecutor seg 116/117.
+    # Tree Martin-Lucas closes her own statement with "Again, my name is Tree -
+    # Martin Lucas, and I'm running for clerk. All right. Thank you all so much
+    # for" and segment 117 (Tanner Dale Branham) opens "coming out tonight."
+    # Every earlier gate passes, so without the completed-sentence gate the rule
+    # would publish her self-identification under Branham's name. "Again, my
+    # name is X" closing a candidate-forum statement is a common shape, and a
+    # shorter instance of it would clear the 10-word tail cap.
+    #
+    # The real segment is 169 words, so the fixture elides the middle of both
+    # the run-up and the introduction. Tokens and timings are lifted verbatim
+    # from the corpus; only whole words are dropped, never punctuation moved.
+    # The elision leaves a 10-word tail, INSIDE MAX_INTRO_TAIL_WORDS, so the cap
+    # cannot be what rejects it. The second half of the test proves the rest:
+    # flip the one internal period ("clerk." -> "clerk,") and the identical
+    # fixture does move, so gates 1-7 all pass and only the new gate blocks it.
+    def build(clerk_token):
+        a = _seg(116, 3053.985, 3120.925, "SPEAKER_01")   # Tree Martin-Lucas
+        b = _seg(117, 3124.145, 3162.765, "SPEAKER_06")   # Tanner Dale Branham
+        a.words = [
+            Word("opportunity", 3115.267, 3115.614),
+            Word("to", 3115.614, 3115.961),
+            Word("serve.", 3115.961, 3116.308),   # the split lands after this
+            Word("Again,", 3116.308, 3116.655),
+            Word("my", 3116.655, 3117.003),       # cue, inside A's own span
+            Word("name", 3117.003, 3117.35),
+            Word("is", 3117.35, 3117.697),
+            Word("Tree", 3117.697, 3118.044),
+            Word("Lucas,", 3118.766, 3119.127),
+            Word("running", 3119.849, 3120.21),
+            Word("for", 3120.21, 3120.571),
+            Word(clerk_token, 3120.571, 3120.932),
+            Word("for", 3123.459, 3123.82),       # spills past end_time 3120.925
+        ]
+        b.words = [
+            Word("coming", 3123.82, 3124.181),    # lowercase: gate 6 passes
+            Word("out", 3124.181, 3124.542),
+            Word("tonight.", 3124.542, 3124.903),
+        ]
+        return a, b
+
+    a, b = build("clerk.")
+    assert len(a.words) - 3 == MAX_INTRO_TAIL_WORDS, "the cap must not be the blocker"
+    snap_segment_boundaries([a, b])
+    assert _tokens(a)[3:] == [
+        "Again,", "my", "name", "is", "Tree", "Lucas,", "running", "for",
+        "clerk.", "for",
+    ], "a tail that finishes a sentence is A's own speech and must not move"
+    assert _tokens(b)[0] == "coming"
+
+    # Control: the same fixture with no completed sentence inside the tail does
+    # move, so every other gate passes and the new gate is what rejects it.
+    a, b = build("clerk,")
+    snap_segment_boundaries([a, b])
+    assert _tokens(a) == ["opportunity", "to", "serve."]
+    assert _tokens(b)[0] == "Again,"
 
 
 def test_straddling_self_intro_snap_is_idempotent():
