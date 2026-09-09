@@ -48,8 +48,12 @@ speaker's opening with them.
 ## Measured negative result: the obvious loosening fails
 
 Replacing gate 3 with "the segment's *last* word starts past `end_time`" admits
-63 segments corpus-wide (the earlier hand count of 68 did not require a
-non-empty destination turn). The large majority are speakers correctly
+63 segments corpus-wide. The brief's earlier count of 68 was taken before the
+shipped rule's own repairs were written to disk: the six segments it moves also
+satisfy the relaxed gate, and none remain in the population now (the shipped
+gate matches 0 of the 104 pairs on the current corpus). The remaining
+difference is the non-empty-destination requirement, which excludes the
+segment-416 shape. The large majority of the 63 are speakers correctly
 introducing themselves at the start of their own turn, where the whole turn's
 word timings spill past the diarized end. Cases it would wreck include:
 
