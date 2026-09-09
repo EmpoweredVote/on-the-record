@@ -11,26 +11,43 @@ Gate tooling lives in `bench/` — `calibrate_gate.py`, `diagnose_merge.py`,
 `forum_gate.py`. **Commit a funnel instrument there.** A scratch workspace is
 the wrong home: `.superpowers/` is gitignored (`.gitignore:50`, zero tracked
 files) and the SDD workflow deletes it on completion, so an instrument left
-there cannot be re-run by the second party who has to re-derive your number —
-and a reviewer cannot check what you measured after the fact.
+there cannot be re-run by whoever has to re-derive your number, and a
+reviewer cannot check what you measured after the fact.
 
 ## The rule that matters
 
-**A second party has to make the measurement. Self-review does not catch this
-class of error.**
+**The catch has to come from an agent that did not build the mental model that
+produced the error.** Another session, or a fresh-context reviewer you dispatch
+yourself. Re-running your own script never works.
 
 Two sessions calibrated one rule on 2026-09-09 and produced four wrong figures
-between them. Every one was caught by the *other* session measuring
-independently. Neither caught its own, at any point, despite both re-running.
+between them. Not one was found by its author re-running the measurement. But
+the mechanism that did find each differed, and the difference is the useful
+part:
 
-The reason is that a re-run replays the mental model that produced the error, so
-it confirms rather than tests. "Instrument the shipped function" (below) is
-necessary but **not sufficient** — each session believed it had done exactly
-that.
+| What caught it | Instances |
+| --- | --- |
+| the other session measuring independently | 1, 4a, 4b |
+| a fresh-context review agent dispatched inside the same session | 2 |
+| the author, after an outside challenge sent them back to the raw data | 3 |
 
-So: before a calibrated threshold goes into code, have someone else re-derive
-the funnel from the shipped function. Not review the script. Re-derive the
-number.
+**Identity is not the property that matters; freshness of the model is.** That
+is why a re-run confirms rather than tests — it replays the model that produced
+the error. It is also why this is actionable alone: a reviewer dispatched on a
+clean context has not built your model, and in instance 2 that is exactly what
+found the error, with no second session involved.
+
+"Instrument the shipped function" (below) is necessary but **not sufficient** —
+each session believed it had done exactly that.
+
+So: before a calibrated threshold goes into code, have an agent that did not
+derive it re-derive it from the shipped function. Not review the script.
+Re-derive the number.
+
+This section is itself an instance. It first claimed a *second party* was
+required and that neither author ever caught their own — contradicted by
+instance 2 in the failures table below, and it would have sent solo work
+hunting for a second session it does not need. The other session caught it.
 
 ## Instrument the shipped function; never restate its gates
 
@@ -151,7 +168,8 @@ Two corollaries worth stating separately:
 3. Is every threshold **bisected** across its range, not inferred from two
    points?
 4. Is corpus data **loaded**, never retyped from earlier output?
-5. Has a **second party re-derived** the funnel — not read the script?
+5. Has an agent that **did not derive** the figure re-derived it — another
+   session, or a fresh-context reviewer — rather than read the script?
 6. For a rule that mutates a corpus artifact: is there an **isolation diff**
    attributing changes to this rule alone, and an **idempotence** assertion?
 7. Are figures produced by re-implementation labelled as such until step 5
