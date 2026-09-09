@@ -890,3 +890,35 @@ def test_triage_page_has_checkboxes_and_bulk_bar(monkeypatch):
     assert 'name="row_ids"' in html
     assert 'value="d1"' in html
     assert 'form="bulkform"' in html          # checkbox associated to the bulk form, not nested
+
+
+# --- Approve source family: matching key ---
+
+def test_family_key_prefers_outlet_id():
+    r = _row(outlet_id="00000000-0000-0000-0000-000000000001",
+             channel_id="UCk", channel_name="Wisconsin PBS")
+    assert discovery.family_key(r) == ("outlet", "00000000-0000-0000-0000-000000000001")
+
+
+def test_family_key_falls_back_to_channel_id():
+    r = _row(outlet_id=None, channel_id="UCk", channel_name="Wisconsin PBS")
+    assert discovery.family_key(r) == ("channel", "UCk")
+
+
+def test_family_key_falls_back_to_normalized_name():
+    r = _row(outlet_id=None, channel_id=None, channel_name="  Wisconsin PBS ")
+    assert discovery.family_key(r) == ("name", "wisconsin pbs")
+
+
+def test_family_key_none_when_no_identity():
+    r = _row(outlet_id=None, channel_id=None, channel_name=None)
+    assert discovery.family_key(r) is None
+
+
+def test_family_key_none_when_name_blank():
+    r = _row(outlet_id=None, channel_id=None, channel_name="   ")
+    assert discovery.family_key(r) is None
+
+
+def test_discovered_row_has_family_count_default_zero():
+    assert _row().family_count == 0

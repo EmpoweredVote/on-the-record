@@ -66,6 +66,7 @@ class DiscoveredRow:
     status: str
     election_date: Optional[str] = None
     race_label: Optional[str] = None  # filled by the route via races.race_labels
+    family_count: int = 0  # other pending rows sharing this row's source key (page render)
 
     @property
     def thumb_url(self) -> Optional[str]:
@@ -95,6 +96,21 @@ class DiscoveredRow:
 
 def _to_row(r) -> DiscoveredRow:
     return DiscoveredRow(*r)
+
+
+def family_key(row: "DiscoveredRow") -> "tuple[str, str] | None":
+    """A row's source identity, by precedence: registered outlet, else
+    YouTube channel, else the channel name (trimmed + lowercased). Two rows
+    are the same source when this returns the same pair. A row with none of
+    the three has no family."""
+    if row.outlet_id:
+        return ("outlet", row.outlet_id)
+    if row.channel_id:
+        return ("channel", row.channel_id)
+    name = (row.channel_name or "").strip().lower()
+    if name:
+        return ("name", name)
+    return None
 
 
 def pending_rows(status: str = "pending") -> list:
