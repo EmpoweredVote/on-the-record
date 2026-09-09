@@ -2100,3 +2100,26 @@ def test_renaming_through_the_route_keeps_a_roster_link(
     assert card.name == "Xavier Becerra"
     assert card.identity_kind == "roster"
     assert card.politician_id == "uuid-becerra"
+
+
+def test_a_route_rename_leaves_the_voice_keyed_to_the_linked_person(
+        tagged_meeting_dir, tmp_meetings_dir):
+    """The constraint the preserving rename has to answer for end to end: after
+    a typo fix through the real route, the speaker's embedding must still enroll
+    under the politician the curator linked — not a name-derived local slug, and
+    not somebody else."""
+    from src.enroll import resolve_mapping_enrollment
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_link("2026-02-04-council", "SPEAKER_01", "", "uuid-becerra",
+                      name="Xavier Becera") is True
+
+    client = TestClient(create_app())
+    client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/name",
+                data={"name": "Xavier Becerra"}, follow_redirects=False)
+
+    meeting, _meeting_dir, _roster = _load_meeting_ctx("2026-02-04-council")
+    key, slug, pid = resolve_mapping_enrollment(meeting.speakers["SPEAKER_01"])
+    assert key == "essentials:uuid-becerra"
+    assert pid == "uuid-becerra"
