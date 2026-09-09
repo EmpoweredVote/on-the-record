@@ -231,10 +231,10 @@ def test_reject_flash_surfaces_save_failure(monkeypatch):
 
 def test_quote_source_flash_surfaces_save_failure(monkeypatch):
     monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
-    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: False)
+    monkeypatch.setattr(discovery, "approve_source_family", lambda row: 0)
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
-    assert "SAVE FAILED" in _flash(resp)
+    assert "approved as quote source — SAVE FAILED, retry" in _flash(resp)
 
 
 def test_approve_ingest_flash_surfaces_save_failure(monkeypatch):
