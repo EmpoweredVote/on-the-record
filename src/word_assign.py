@@ -343,12 +343,16 @@ def _snap_straddling_intro(a: Segment, b: Segment) -> bool:
     # from the cue, so a wider window can only move the split EARLIER, which
     # lengthens the tail and makes this gate strictly more likely to reject.
     # It is not a guarantee: a longer tail carrying no terminal punctuation of
-    # its own still passes. Measured counter-example, at MAX_INTRO_PREAMBLE = 8
-    # (the shipped 4 rejects it at the scan-back gate above):
-    #   "Right. okay next speaker in chambers Hi, my name is Dana" splits at 1
-    #   and takes five of the chair's words with the introduction.
-    # No corpus meeting has that shape, and real seg 454 covers the same shape
-    # from cap 10 via test_trailing_self_intro_moves_off_the_chair_bloomington_june.
+    # its own still passes. Bisected counter-example:
+    #   "Right. okay next speaker in chambers Hi, my name is Dana"
+    # fires from MAX_INTRO_PREAMBLE = 6 — the only boundary is "Right." at index
+    # 0, reachable once cue - cap <= 1 — splitting at 1 and taking five of the
+    # chair's words with the introduction. At the shipped 4 it does not fire:
+    # the scan finds no boundary, and THIS rule requires one, unlike
+    # _snap_trailing_intro whose split falls back to the cue. Real seg 454 is the
+    # same shape and moves only at cap 10, where
+    # test_trailing_self_intro_moves_off_the_chair_bloomington_june catches it.
+    # So the unguarded band is caps 6-9, on a shape no corpus meeting exhibits.
     if any(_ends_sentence(w.word) for w in a.words[split:-1]):
         return False   # the tail finishes a sentence: A's own speech, not a bleed
     if len(a.words) - split > MAX_INTRO_TAIL_WORDS:
