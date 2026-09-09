@@ -49,9 +49,9 @@ a.mlink:hover { text-decoration: underline; }
 .actions .accept { background: #e6f5ea; border: 1px solid #2ea56a; color: #1b7a3d; border-radius: 0.4rem; padding: 0.2rem 0.6rem; cursor: pointer; font-size: 0.85rem; }
 .actions input[type=text] { padding: 0.2rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.85rem; }
 .actions .rename button { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
-/* The rename form now carries an .ident-cost line (Finding 2) alongside its
-   label and button; let that row wrap onto its own line instead of forcing
-   the card wider. */
+/* The rename form carries an .ident-note line (it used to be .ident-cost)
+   alongside its label and button; let that row wrap onto its own line instead
+   of forcing the card wider. */
 .actions .rename { flex-wrap: wrap; }
 /* No replacement rule for .pslug: it's a bare <code> element (roster panel's
    "Currently: ... <code class="pslug">"), monospace from the <code> tag
@@ -209,6 +209,10 @@ table.library .ctx { font-size: 0.8rem; color: #667; margin: 0.1rem 0; }
 .ident-now { margin: 0; font-size: 0.85rem; }
 .ident-cost { margin: 0; font-size: 0.8rem; color: #8a5a1a; background: #fdf3e6;
               border-radius: 0.3rem; padding: 0.2rem 0.4rem; }
+/* Neutral sibling of .ident-cost, for the rename box's "keeps the current
+   identity" line: it reports what a save leaves alone, so it must not wear
+   the amber warning colour that means "this will destroy something". */
+.ident-note { margin: 0; font-size: 0.8rem; color: #6b7480; }
 .ident-panel form { display: flex; gap: 0.4rem; align-items: flex-end; flex-wrap: wrap; margin: 0; }
 .ident-panel label, .also label { display: inline-flex; flex-direction: column; gap: 0.15rem;
                                   font-size: 0.72rem; color: #8a94a6; text-transform: uppercase;

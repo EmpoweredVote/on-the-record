@@ -1870,24 +1870,43 @@ def test_a_local_person_card_warns_what_the_roster_panel_would_drop(
     assert "drops the local person" in body
 
 
-def test_the_also_rename_box_warns_only_when_an_identity_would_be_dropped(
+def _rename_form(card_html):
+    """The Also block's rename form, sliced out of one card's HTML.
+
+    The local-person panel carries its own `name="name"` input with the same
+    prefill, so a `value="..."` assertion against the whole card would be
+    satisfied by that one instead — passing whether or not the rename box
+    prefills at all."""
+    parts = card_html.split('class="rename"', 1)
+    assert len(parts) == 2, "no rename form in this card"
+    return parts[1].split("</form>", 1)[0]
+
+
+def test_the_also_rename_box_says_the_identity_survives_and_prefills(
         tagged_meeting_dir, tmp_meetings_dir):
-    """The Also block's Display name box posts to /name -> apply_rename ->
-    rename_speaker, which on a CHANGED name nulls local_slug/local_role/
-    politician_slug/politician_id. Unlike every other destructive transition on
-    this card, it used to carry no warning at all. It also must not prefill the
-    current name — prefilling would put a real identity one typo-fix away from
-    silent deletion with a value= box that looks like a safe edit."""
+    """PR #203 gave this box an amber warning — "Saving a different name here
+    drops the current identity." — and stripped its value= prefill, because a
+    changed name really did null local_slug/local_role/politician_*. The route
+    now preserves the identity, so BOTH mitigations are wrong: a warning about
+    something that no longer happens is worse than no warning, and the blank box
+    made a one-letter fix mean retyping the whole name.
+
+    The line stays on the same `identity_kind != 'none'` condition, which is
+    accurate for all four kinds: rename never touched speaker_status either, so
+    a marked card keeps its mark too."""
     body = _linked_body(tagged_meeting_dir)
+    old = "Saving a different name here drops the current identity."
+    new = ("Saving a name here keeps the current identity — "
+           "use the chooser above to change who this is.")
 
-    linked = _card_html(body, "SPEAKER_00")  # roster-linked: has an identity
-    assert "Saving a different name here drops the current identity." in linked
-    # The rename box itself must not prefill the current name.
-    assert 'name="name" value=""' in linked
+    linked = _card_html(body, "SPEAKER_00")   # roster-linked, named "Mayor Johnson"
+    assert old not in linked
+    assert new in linked
+    assert 'value="Mayor Johnson"' in _rename_form(linked)   # edit one letter
 
-    plain = _card_html(body, "SPEAKER_01")  # no identity at all
-    assert "Saving a different name here drops the current identity." not in plain
-    assert 'name="name" value=""' in plain
+    plain = _card_html(body, "SPEAKER_01")    # no identity, no name
+    assert new not in plain                   # nothing to reassure about
+    assert 'value=""' in _rename_form(plain)  # nameless card: still a blank box
 
 
 def test_a_marked_card_offers_an_undo(tagged_meeting_dir, tmp_meetings_dir):
