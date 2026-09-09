@@ -177,6 +177,28 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     If roster is given, the name is normalized via correct_speaker_name. Returns
     a RenameResult; alias_suggestion is the prior (wrong) name, to offer as an
     alias, or None when there was no prior name or it equals the new name.
+
+    Normalisation runs with allow_fuzzy=False — strategies 1-3 (exact canonical,
+    exact alias, alias-as-word) only. Each of those means "the typed name IS this
+    roster member", so a curator typing "Piedmont Smith" still gets
+    "Councilmember Piedmont-Smith" and its link. Strategy 4's fuzzy surname match
+    is excluded because it produces confident WRONG answers for genuinely
+    different people, and there is no threshold that separates the two: measured
+    against the real production rosters, different real people score 0.615-1.000
+    while genuine unseen ASR typos score 0.667-0.941. The 1.000 is an ordinary
+    member of the public named "Jane Smith" matching the councilmember alias
+    "Piedmont, Smith" (whose extract_surname is "Smith"). Fuzzy matching earns
+    its keep on the PIPELINE path, whose input is an ASR/LLM guess — see
+    correct_mappings, which already disables it for authoritative identities for
+    this same reason. A rename is authoritative by construction: it sets
+    id_method="human_review" below, and its input is a name a human typed while
+    looking at the review card, not a phoneme error.
+
+    This is a public-facing correctness guard, not a nicety.
+    publish._upsert_local_people writes speaker_name as a local person's PUBLIC
+    name, _upsert_speakers writes it as meetings.speakers.display_name, and
+    publish derives a meeting's races from politician_id — so a wrong match here
+    reaches readers on the live site.
     """
     from src.models import SpeakerMapping
 
@@ -186,7 +208,7 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     final_name = new_name
     if roster is not None:
         from src.roster import correct_speaker_name
-        final_name = correct_speaker_name(new_name, roster)
+        final_name = correct_speaker_name(new_name, roster, allow_fuzzy=False)
 
     mapping.speaker_name = final_name
     mapping.confidence = 1.0
@@ -205,7 +227,13 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
         mapping.local_role = None
         if roster is not None:
             from src.enroll import resolve_enrollment_key
-            _key, pol_slug, pol_id = resolve_enrollment_key(final_name, roster)
+            # allow_fuzzy=False for the same reason as the correction above, and
+            # it must be repeated here: this is a SECOND, independent fuzzy hop.
+            # final_name is already roster-normalised, so an exact/alias match is
+            # all that can legitimately resolve it to a member.
+            _key, pol_slug, pol_id = resolve_enrollment_key(
+                final_name, roster, allow_fuzzy=False,
+            )
             mapping.politician_slug = pol_slug
             mapping.politician_id = pol_id
         else:

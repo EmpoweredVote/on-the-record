@@ -3302,8 +3302,10 @@ def _interactive_speaker_review(
                     changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
                     print(f"  Confirmed: {label} -> {res.new_name}")
                     _prompt_link_politician(mappings, label, res.new_name)
-                    # Offer local person creation when essentials link was skipped or unavailable.
-                    _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
+                    # Offer local person creation when essentials link was skipped
+                    # or unavailable. The ORIGINAL hint name, not res.new_name — it
+                    # seeds default_local_slug; see the second call site below.
+                    _prompt_create_local_person(mappings, label, top_hint[0], event_kind=event_kind)
                     break
                 elif choice.lower() == "u":
                     lbl = input("    Optional label (Enter for 'Unidentified Speaker'): ").strip()
@@ -3329,9 +3331,22 @@ def _interactive_speaker_review(
                         if add_alias(None, res.new_name, res.alias_suggestion, body_slug=body_slug):
                             target_label = body_slug or "council_roster.json"
                             print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
+                    # res.new_name (the roster-CORRECTED name) is right for the
+                    # essentials search seed — it no-ops when already linked, and
+                    # the canonical spelling is the better query.
                     _prompt_link_politician(mappings, label, res.new_name)
-                    # Offer local person creation when essentials link was skipped or unavailable.
-                    _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
+                    # But the local-person prompt gets the name the curator TYPED.
+                    # This argument feeds default_local_slug only — the public NAME
+                    # comes from mapping.speaker_name, which rename_speaker above
+                    # now leaves verbatim. Still the typed name: local_slug is a
+                    # persistent public identifier that publish._upsert_local_people
+                    # writes, a local person is by definition NOT on the roster, and
+                    # a default of "councilmember-piedmont-smith" for a member of
+                    # the public is one Enter-press from being accepted. Reachable
+                    # when the curator declines the essentials link at the prompt
+                    # above (which clears the politician_* fields that would
+                    # otherwise no-op this call) after typing an exact roster alias.
+                    _prompt_create_local_person(mappings, label, choice, event_kind=event_kind)
                     break
         finally:
             _stop_player(current_player)
