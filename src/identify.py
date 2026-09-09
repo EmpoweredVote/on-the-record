@@ -538,7 +538,39 @@ def merge_adjacent_segments(
     for i, seg in enumerate(merged):
         seg.segment_id = i
 
+    _resnap_merged_boundaries(merged)
     return merged
+
+
+def _resnap_merged_boundaries(merged: list[Segment]) -> None:
+    """Re-run the turn-boundary snap, because merging moved the boundaries.
+
+    snap_segment_boundaries (word_assign) evaluates ADJACENT PAIRS, and it runs
+    once at word-assignment time. Merging collapses adjacent same-speaker turns
+    hard — 236 segments to 38 is typical — so the turns either side of every
+    boundary change, along with their spans and their first and last words.
+    Boundaries the transcription-time snap already settled become different,
+    never-evaluated boundaries; worse, a bleed into a one-word turn is invisible
+    before the merge (the snap needs two words in the destination) and only
+    becomes correctable once that turn is merged.
+
+    Without this call every identify run re-bleeds a transcript that
+    transcription had already corrected. Measured on the 172-meeting corpus:
+    of 54 meetings whose named transcript was bled, 50 had a CLEAN raw
+    transcript, and merging that clean raw re-created the bleed in 50 of 50.
+
+    .text is carried alongside .words through the merge, so it is rebuilt for
+    the turns whose words actually moved — and only those, so a source whose
+    transcript arrives without word timings keeps its text.
+    """
+    from .word_assign import snap_segment_boundaries
+
+    before = [[w.word for w in seg.words] for seg in merged]
+    snap_segment_boundaries(merged)
+    for seg, previous in zip(merged, before):
+        current = [w.word for w in seg.words]
+        if current != previous:
+            seg.text = " ".join(current)
 
 
 def flag_for_review(
