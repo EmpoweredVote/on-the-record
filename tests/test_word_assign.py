@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from src.models import Segment, Word
-from src.word_assign import assign_words_to_segments, snap_segment_boundaries
+from src.word_assign import (
+    MAX_INTRO_TAIL_WORDS,
+    assign_words_to_segments,
+    snap_segment_boundaries,
+)
 
 
 def _seg(seg_id, start, end, label):
@@ -606,3 +610,351 @@ def test_trailing_self_intro_snap_is_idempotent():
     twice = [_tokens(s) for s in segs]
 
     assert once == twice
+
+
+# --- Straddling self-introduction bleed --------------------------------------
+#
+# A weaker shape than the one _snap_trailing_intro covers. There the whole
+# introduction is dumped past the turn's diarized end by _segment_for_gap_word.
+# Here it straddles the end: the cue starts INSIDE the turn's own span, so that
+# rule's third gate rejects it, and only the turn's final word spills past.
+# Word lists and timings below are lifted verbatim from the corpus.
+
+
+def test_straddling_self_intro_moves_off_the_chair_bloomington_may():
+    # bloomington-city-council-2026-05-06 seg 793. The cue "My" starts at
+    # 13109.952, inside the segment's own span ending 13111.282, so
+    # _snap_trailing_intro cannot see it; only "Hackard," (13111.306) spills
+    # past. The published page showed councilmember Sydney Zulich saying
+    # "My name is Jeremy Hackard," — segment 794 is Jeremy Hackerd and
+    # continues the sentence with "and I'm instantly regretting...".
+    a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")   # District 6 Zulich
+    b = _seg(794, 13111.754, 13246.585, "SPEAKER_19")   # Jeremy Hackerd
+    a.words = [
+        Word("three", 13108.944, 13109.275),
+        Word("-", 13109.275, 13109.613),
+        Word("minutes.", 13109.613, 13109.952),
+        Word("My", 13109.952, 13110.29),
+        Word("name", 13110.29, 13110.629),
+        Word("is", 13110.629, 13110.967),
+        Word("Jeremy", 13110.967, 13111.306),
+        Word("Hackard,", 13111.306, 13111.644),
+    ]
+    b.words = [
+        Word("and", 13111.644, 13111.983),
+        Word("I'm", 13111.983, 13112.321),
+        Word("instantly", 13112.321, 13112.66),
+        Word("regretting", 13112.66, 13112.998),
+        Word("that", 13112.998, 13113.337),
+        Word("I", 13113.337, 13113.675),
+    ]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == ["three", "-", "minutes."]
+    assert _tokens(b)[:6] == ["My", "name", "is", "Jeremy", "Hackard,", "and"]
+
+
+def test_straddling_rule_cedes_the_wholly_outside_shape():
+    # bloomington-city-council-2026-06-10 seg 454, which _snap_trailing_intro
+    # owns: the cue "my" starts at 9280.216, past A's end_time of 9273.029. The
+    # straddling rule must decline outright so the two rules can never both fire
+    # on one segment or pick different split points.
+    #
+    # The real row reads "Thank you," before the cue; it is punctuated "you."
+    # here on purpose. With the comma no sentence ends within MAX_INTRO_PREAMBLE
+    # words of the cue, so the fixture died at gate 7 and still passed with gate
+    # 3 deleted — verified by mutation. The period gives gate 7 a split to find,
+    # so gate 3 is now the only thing that can reject this shape.
+    from src.word_assign import _snap_straddling_intro
+
+    a = _seg(454, 9270.869, 9273.029, "SPEAKER_22")
+    b = _seg(455, 9285.297, 9338.69, "SPEAKER_01")
+    a.words = [
+        Word("Thank", 9270.655, 9271.452), Word("you.", 9271.452, 9272.248),
+        Word("Thank", 9272.248, 9273.045), Word("you", 9273.045, 9273.842),
+        Word("so", 9273.842, 9274.639), Word("much", 9274.639, 9275.435),
+        Word("next", 9275.435, 9276.232), Word("person", 9276.232, 9277.029),
+        Word("in", 9277.029, 9277.826), Word("chambers", 9277.826, 9278.622),
+        Word("Thank", 9278.622, 9279.419), Word("you.", 9279.419, 9280.216),
+        Word("my", 9280.216, 9281.013), Word("name", 9281.013, 9281.809),
+        Word("is", 9281.809, 9282.606), Word("Paul", 9282.606, 9283.403),
+        Word("Gillard", 9283.403, 9284.2), Word("I'm", 9284.2, 9284.996),
+    ]
+    b.words = [Word("a", 9284.996, 9285.793), Word("former", 9285.793, 9286.59)]
+
+    assert _snap_straddling_intro(a, b) is False
+    assert _tokens(a)[-1] == "I'm"
+
+
+def test_straddling_self_intro_needs_the_turn_to_spill_past_its_span():
+    # The seg-793 shape with a diarized end_time that actually covers the words.
+    # Nothing spilled, so the introduction is real speech inside this speaker's
+    # own turn and stays. This is what keeps the rule off ASR spelling variants
+    # of the same person ("Bob Costello" transcribed "Bob Gasillo"), the same
+    # protection _snap_trailing_intro gets from its own span test.
+    a = _seg(793, 13109.223, 13112.000, "SPEAKER_36")   # span covers every word
+    b = _seg(794, 13112.100, 13246.585, "SPEAKER_19")
+    a.words = [
+        Word("three", 13108.944, 13109.275),
+        Word("-", 13109.275, 13109.613),
+        Word("minutes.", 13109.613, 13109.952),
+        Word("My", 13109.952, 13110.29),
+        Word("name", 13110.29, 13110.629),
+        Word("is", 13110.629, 13110.967),
+        Word("Jeremy", 13110.967, 13111.306),
+        Word("Hackard,", 13111.306, 13111.644),
+    ]
+    b.words = [Word("and", 13111.644, 13111.983)]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a)[-1] == "Hackard,"
+
+
+def test_straddling_self_intro_needs_a_different_speaker_label():
+    # The seg-793 shape with one turn split across two segments of the same
+    # diarized speaker. Nothing bled between speakers, so nothing moves.
+    a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")
+    b = _seg(794, 13111.754, 13246.585, "SPEAKER_36")   # same label as A
+    a.words = [
+        Word("three", 13108.944, 13109.275),
+        Word("-", 13109.275, 13109.613),
+        Word("minutes.", 13109.613, 13109.952),
+        Word("My", 13109.952, 13110.29),
+        Word("name", 13110.29, 13110.629),
+        Word("is", 13110.629, 13110.967),
+        Word("Jeremy", 13110.967, 13111.306),
+        Word("Hackard,", 13111.306, 13111.644),
+    ]
+    b.words = [Word("and", 13111.644, 13111.983)]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == [
+        "three", "-", "minutes.", "My", "name", "is", "Jeremy", "Hackard,",
+    ]
+
+
+def test_straddling_self_intro_leaves_a_closed_sentence_alone():
+    # 2026-06-24-cd1-republican-primary-debate seg 0. Steve Goldstein really is
+    # introducing himself, and his 49 words spill past a 29.849 end_time, so the
+    # spill gate alone would move them onto Danielle Lerner. His sentence closes
+    # ("Goldstein.") and hers opens with a '>>' marker, so nothing runs across
+    # the boundary. This is the collision the continuation gate exists for: the
+    # moved tail would be 5 words, exactly as long as segment 793's.
+    a = _seg(0, 13.649, 29.849, "SPEAKER_04")    # Steve Goldstein
+    b = _seg(1, 30.035, 48.8, "SPEAKER_00")      # Danielle Lerner
+    a.words = [
+        Word("state's", 26.5, 26.63),
+        Word("non-partisan", 27.775, 28.002),
+        Word("voter", 28.002, 28.229),
+        Word("education", 28.229, 28.456),
+        Word("agency.", 28.456, 28.683),
+        Word("My", 28.683, 28.91),
+        Word("name", 29.559, 29.687),
+        Word("is", 29.687, 29.814),
+        Word("Steve", 29.814, 29.942),
+        Word("Goldstein.", 29.942, 30.07),
+    ]
+    b.words = [
+        Word(">>", 30.483, 30.584),
+        Word("And", 30.584, 30.685),
+        Word("I'm", 30.685, 30.785),
+        Word("Danielle", 30.785, 30.886),
+        Word("Lerner,", 30.886, 30.987),
+    ]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a)[-5:] == ["My", "name", "is", "Steve", "Goldstein."]
+    assert _tokens(b)[0] == ">>"
+
+
+def test_straddling_self_intro_needs_a_sentence_end_before_the_cue():
+    # The seg-793 shape with "minutes." unpunctuated. No sentence boundary
+    # within MAX_INTRO_PREAMBLE words before the cue, so there is no split point
+    # the rule trusts and it declines rather than cutting mid-sentence.
+    a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")
+    b = _seg(794, 13111.754, 13246.585, "SPEAKER_19")
+    a.words = [
+        Word("three", 13108.944, 13109.275),
+        Word("-", 13109.275, 13109.613),
+        Word("minutes", 13109.613, 13109.952),   # no terminal punctuation
+        Word("My", 13109.952, 13110.29),
+        Word("name", 13110.29, 13110.629),
+        Word("is", 13110.629, 13110.967),
+        Word("Jeremy", 13110.967, 13111.306),
+        Word("Hackard,", 13111.306, 13111.644),
+    ]
+    b.words = [Word("and", 13111.644, 13111.983)]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a)[-1] == "Hackard,"
+
+
+def test_straddling_self_intro_stays_put_when_the_next_turn_has_no_words():
+    # A destination turn with no words is dropped at publish, so moving words
+    # into it would turn a dropped turn into a live attribution.
+    a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")
+    b = _seg(794, 13111.754, 13246.585, "SPEAKER_19")
+    a.words = [
+        Word("three", 13108.944, 13109.275),
+        Word("-", 13109.275, 13109.613),
+        Word("minutes.", 13109.613, 13109.952),
+        Word("My", 13109.952, 13110.29),
+        Word("name", 13110.29, 13110.629),
+        Word("is", 13110.629, 13110.967),
+        Word("Jeremy", 13110.967, 13111.306),
+        Word("Hackard,", 13111.306, 13111.644),
+    ]
+    b.words = []
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a)[-1] == "Hackard,"
+    assert _tokens(b) == []
+
+
+def test_straddling_self_intro_declines_a_long_spilling_turn():
+    # Synthetic, modelled on 2026-06-26-tn-governor seg 235, where Leanne Martin
+    # introduces herself at the start of her own 190-word turn and the whole
+    # turn's timings spill past a missed diarized end. That real segment cannot
+    # be used verbatim here (truncating it drops the spill that gate 4 reads),
+    # so the shape is reproduced at test scale: every other gate passes and only
+    # the tail cap rejects it. The corpus scan in Task 4 covers the real row.
+    #
+    # The real row reads "...Leanne Martin. I'm your East Tennessee field rep",
+    # but the period after the name is softened to a comma here on purpose. With
+    # it, the completed-sentence gate would reject the tail first and the cap
+    # would never be reached, leaving this test unable to pin the cap at all.
+    # The completed-sentence gate has its own fixture below.
+    def build(tail_words):
+        a = _seg(1, 99.0, 104.0, "SPEAKER_07")
+        b = _seg(2, 112.0, 130.0, "SPEAKER_06")
+        words = [
+            Word("Okay.", 99.0, 99.5),
+            Word("Thank", 99.5, 100.0),
+            Word("you.", 100.0, 100.5),
+        ]
+        for i, w in enumerate(tail_words):
+            start = 100.5 + 0.5 * i
+            words.append(Word(w, start, start + 0.5))
+        a.words = words
+        # B's opening word "for" is not sentence-final, which is what keeps the
+        # marker-less _snap_leading path (a completed sentence bled forward)
+        # from pulling it back into A.
+        b.words = [Word("for", 112.0, 112.5), Word("the", 112.5, 113.0)]
+        return a, b
+
+    long_tail = [
+        "My", "name", "is", "Leanne", "Martin,", "I'm", "your", "East",
+        "Tennessee", "field", "rep",
+    ]
+    assert len(long_tail) == MAX_INTRO_TAIL_WORDS + 1
+    a, b = build(long_tail)
+    snap_segment_boundaries([a, b])
+    assert _tokens(a)[-1] == "rep", "the tail cap must reject an 11-word tail"
+
+    # The same shape one word shorter clears the cap and does move, proving the
+    # fixture fails on the tail cap alone and not on some other gate.
+    a, b = build(long_tail[:-1])
+    snap_segment_boundaries([a, b])
+    assert _tokens(a) == ["Okay.", "Thank", "you."]
+    assert _tokens(b)[0] == "My"
+
+
+def test_straddling_self_intro_declines_a_tail_that_finishes_a_sentence():
+    # 2026-03-30-lwv-candidate-forum---county-clerk-and-prosecutor seg 116/117.
+    # Tree Martin-Lucas closes her own statement with "Again, my name is Tree -
+    # Martin Lucas, and I'm running for clerk. All right. Thank you all so much
+    # for" and segment 117 (Tanner Dale Branham) opens "coming out tonight."
+    # Every earlier gate passes, so without the completed-sentence gate the rule
+    # would publish her self-identification under Branham's name. "Again, my
+    # name is X" closing a candidate-forum statement is a common shape, and a
+    # shorter instance of it would clear the 10-word tail cap.
+    #
+    # The real segment is 169 words, so the fixture elides the middle of both
+    # the run-up and the introduction. Tokens and timings are lifted verbatim
+    # from the corpus; only whole words are dropped, never punctuation moved.
+    # The elision leaves a 10-word tail, INSIDE MAX_INTRO_TAIL_WORDS, so the cap
+    # cannot be what rejects it. The second half of the test proves the rest:
+    # flip the one internal period ("clerk." -> "clerk,") and the identical
+    # fixture does move, so gates 1-7 all pass and only the new gate blocks it.
+    def build(clerk_token):
+        a = _seg(116, 3053.985, 3120.925, "SPEAKER_01")   # Tree Martin-Lucas
+        b = _seg(117, 3124.145, 3162.765, "SPEAKER_06")   # Tanner Dale Branham
+        a.words = [
+            Word("opportunity", 3115.267, 3115.614),
+            Word("to", 3115.614, 3115.961),
+            Word("serve.", 3115.961, 3116.308),   # the split lands after this
+            Word("Again,", 3116.308, 3116.655),
+            Word("my", 3116.655, 3117.003),       # cue, inside A's own span
+            Word("name", 3117.003, 3117.35),
+            Word("is", 3117.35, 3117.697),
+            Word("Tree", 3117.697, 3118.044),
+            Word("Lucas,", 3118.766, 3119.127),
+            Word("running", 3119.849, 3120.21),
+            Word("for", 3120.21, 3120.571),
+            Word(clerk_token, 3120.571, 3120.932),
+            Word("for", 3123.459, 3123.82),       # spills past end_time 3120.925
+        ]
+        b.words = [
+            Word("coming", 3123.82, 3124.181),    # lowercase: gate 6 passes
+            Word("out", 3124.181, 3124.542),
+            Word("tonight.", 3124.542, 3124.903),
+        ]
+        return a, b
+
+    a, b = build("clerk.")
+    assert len(a.words) - 3 == MAX_INTRO_TAIL_WORDS, "the cap must not be the blocker"
+    snap_segment_boundaries([a, b])
+    assert _tokens(a)[3:] == [
+        "Again,", "my", "name", "is", "Tree", "Lucas,", "running", "for",
+        "clerk.", "for",
+    ], "a tail that finishes a sentence is A's own speech and must not move"
+    assert _tokens(b)[0] == "coming"
+
+    # Control: the same fixture with no completed sentence inside the tail does
+    # move, so every other gate passes and the new gate is what rejects it.
+    a, b = build("clerk,")
+    snap_segment_boundaries([a, b])
+    assert _tokens(a) == ["opportunity", "to", "serve."]
+    assert _tokens(b)[0] == "Again,"
+
+
+def test_straddling_self_intro_snap_is_idempotent():
+    # backfill_boundary_snap.py re-snaps in place, so a second pass must move
+    # nothing. Three gates independently prevent a re-fire: after the move the
+    # cue sits at index 0 in B, A's remaining last word ("minutes." at
+    # 13109.613) no longer starts past A's end_time of 13111.282, and B now
+    # opens with an uppercase "My".
+    def build():
+        a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")
+        b = _seg(794, 13111.754, 13246.585, "SPEAKER_19")
+        a.words = [
+            Word("three", 13108.944, 13109.275),
+            Word("-", 13109.275, 13109.613),
+            Word("minutes.", 13109.613, 13109.952),
+            Word("My", 13109.952, 13110.29),
+            Word("name", 13110.29, 13110.629),
+            Word("is", 13110.629, 13110.967),
+            Word("Jeremy", 13110.967, 13111.306),
+            Word("Hackard,", 13111.306, 13111.644),
+        ]
+        b.words = [
+            Word("and", 13111.644, 13111.983),
+            Word("I'm", 13111.983, 13112.321),
+            Word("instantly", 13112.321, 13112.66),
+        ]
+        return [a, b]
+
+    segs = build()
+    snap_segment_boundaries(segs)
+    once = [_tokens(s) for s in segs]
+    snap_segment_boundaries(segs)
+    twice = [_tokens(s) for s in segs]
+
+    assert once == twice
+    assert once[0] == ["three", "-", "minutes."]
