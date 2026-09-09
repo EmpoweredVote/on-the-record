@@ -31,6 +31,7 @@ MAX_SNAP_PASSES = 8        # fixpoint cap: a fragment can only relay one turn pe
 # tokens reduced to lowercase letters and apostrophes.
 INTRO_CUES = (("my", "name", "is"), ("my", "name's"), ("my", "names"))
 MAX_INTRO_PREAMBLE = 4     # words scanned back from the cue for a sentence end
+MAX_INTRO_TAIL_WORDS = 10  # a straddling intro bleed is at most this many words
 
 
 def _duration(seg: Segment) -> float:
@@ -260,6 +261,67 @@ def _snap_trailing_intro(a: Segment, b: Segment) -> bool:
     return _move(a.words[split:], a, b)
 
 
+def _snap_straddling_intro(a: Segment, b: Segment) -> bool:
+    """Move a self-introduction that straddles A's diarized end onto B.
+
+    _snap_trailing_intro covers an introduction dumped WHOLLY past A's span by
+    the gap-snap fallback. This covers the weaker shape: the introduction begins
+    inside A's own diarized turn, but A's word timings run past the turn's end
+    and carry the next speaker's opening with them. On
+    bloomington-city-council-2026-05-06 seg 793 the cue "My" starts 1.33s inside
+    the span and only the final word spills, so that rule's gate 3 rejects it
+    while a councilmember stays published saying "My name is Jeremy Hackard,".
+
+    Admitting on "A's last word spills" alone is not safe: 63 of the corpus's
+    104 non-leading-cue pairs do that, and most are speakers correctly
+    introducing themselves at the start of their own turn. Four gates narrow it
+    to one. Differing speaker_label cuts 63 to 47. Requiring the sentence to run
+    ACROSS the boundary — A's last word not sentence-final, B opening lowercase
+    — cuts 47 to 13; that is the gate that spares Steve Goldstein's own
+    "My name is Steve Goldstein." on 2026-06-24-cd1-republican-primary-debate,
+    which ends a sentence and is followed by a '>>' marker. Requiring a sentence
+    boundary within MAX_INTRO_PREAMBLE words before the cue cuts 13 to 6, and
+    means the rule never cuts mid-sentence. The tail cap then acts on an already
+    clean set: the one true positive moves 5 words and the nearest false
+    positive would move 180, so any cap from 5 to 100 gives the same answer.
+
+    Gate 3 cedes the wholly-outside shape to _snap_trailing_intro, so the two
+    rules are mutually exclusive by construction and can neither double-fire on
+    a segment nor disagree about a split point. Returns True if a word moved.
+    """
+    if not a.words or not b.words:
+        # Publish drops empty segments, so moving words into one would turn a
+        # dropped turn into a live attribution.
+        return False
+    cue = _intro_cue_index(a.words)
+    if cue is None:
+        return False
+    if a.words[cue].start > a.end_time:
+        return False   # wholly outside A's span: _snap_trailing_intro owns it
+    if a.words[-1].start <= a.end_time:
+        return False   # A's words do not spill past its own diarized end
+    if a.speaker_label == b.speaker_label:
+        return False   # same turn split in two, not a bleed between speakers
+    if _ends_sentence(a.words[-1].word):
+        return False   # A's sentence closes; nothing runs into B
+    if not b.words[0].word.strip()[:1].islower():
+        return False   # B opens its own sentence; nothing ran into it
+    # Unlike _snap_trailing_intro, where the scan-back only refines a split that
+    # defaults to the cue, here its absence rejects the segment: the rule cuts
+    # only where the previous speaker's own sentence has ended. It still takes a
+    # greeting along when one is present ("...minutes. Hi, my name is X").
+    split = None
+    for k in range(cue, max(0, cue - MAX_INTRO_PREAMBLE) - 1, -1):
+        if k > 0 and _ends_sentence(a.words[k - 1].word):
+            split = k
+            break
+    if split is None or split < 1:
+        return False   # A must keep words of its own
+    if len(a.words) - split > MAX_INTRO_TAIL_WORDS:
+        return False   # a long turn spilling its timings, not a short bleed
+    return _move(a.words[split:], a, b)
+
+
 def snap_segment_boundaries(segments: list[Segment]) -> list[Segment]:
     """Correct word-level speaker bleed at diarization turn boundaries.
 
@@ -270,10 +332,13 @@ def snap_segment_boundaries(segments: list[Segment]) -> list[Segment]:
     speaker-change marker, and word-gap pauses plus terminal punctuation — with
     no acoustic re-analysis and no model call.
 
-    A separately-gated rule (_snap_trailing_intro) additionally handles the case
-    where diarization missed a stretch of speech entirely and the gap-snap
-    fallback dumped the next speaker's opening self-introduction onto the end of
-    the previous turn.
+    Two separately-gated rules additionally handle self-introduction bleed.
+    _snap_trailing_intro takes the case where diarization missed a stretch of
+    speech entirely and the gap-snap fallback dumped the next speaker's opening
+    self-introduction onto the end of the previous turn.
+    _snap_straddling_intro takes the weaker case where that introduction begins
+    inside the previous turn's own diarized span and only the turn's trailing
+    words spill past it.
 
     Runs to a fixpoint (bounded by MAX_SNAP_PASSES): most work is done in the
     first sweep, but where diarization is degenerate — zero-duration turns, or
@@ -289,6 +354,7 @@ def snap_segment_boundaries(segments: list[Segment]) -> list[Segment]:
             moved |= _snap_leading(a, b)   # tail of A bled into front of B → to A
             moved |= _snap_trailing(a, b)  # opening of B at tail of A → into B
             moved |= _snap_trailing_intro(a, b)  # B's self-intro at tail of A → into B
+            moved |= _snap_straddling_intro(a, b)  # B's self-intro straddling A's end → into B
         if not moved:
             break
     return segments

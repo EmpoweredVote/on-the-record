@@ -606,3 +606,46 @@ def test_trailing_self_intro_snap_is_idempotent():
     twice = [_tokens(s) for s in segs]
 
     assert once == twice
+
+
+# --- Straddling self-introduction bleed --------------------------------------
+#
+# A weaker shape than the one _snap_trailing_intro covers. There the whole
+# introduction is dumped past the turn's diarized end by _segment_for_gap_word.
+# Here it straddles the end: the cue starts INSIDE the turn's own span, so that
+# rule's third gate rejects it, and only the turn's final word spills past.
+# Word lists and timings below are lifted verbatim from the corpus.
+
+
+def test_straddling_self_intro_moves_off_the_chair_bloomington_may():
+    # bloomington-city-council-2026-05-06 seg 793. The cue "My" starts at
+    # 13109.952, inside the segment's own span ending 13111.282, so
+    # _snap_trailing_intro cannot see it; only "Hackard," (13111.306) spills
+    # past. The published page showed councilmember Sydney Zulich saying
+    # "My name is Jeremy Hackard," — segment 794 is Jeremy Hackerd and
+    # continues the sentence with "and I'm instantly regretting...".
+    a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")   # District 6 Zulich
+    b = _seg(794, 13111.754, 13246.585, "SPEAKER_19")   # Jeremy Hackerd
+    a.words = [
+        Word("three", 13108.944, 13109.275),
+        Word("-", 13109.275, 13109.613),
+        Word("minutes.", 13109.613, 13109.952),
+        Word("My", 13109.952, 13110.29),
+        Word("name", 13110.29, 13110.629),
+        Word("is", 13110.629, 13110.967),
+        Word("Jeremy", 13110.967, 13111.306),
+        Word("Hackard,", 13111.306, 13111.644),
+    ]
+    b.words = [
+        Word("and", 13111.644, 13111.983),
+        Word("I'm", 13111.983, 13112.321),
+        Word("instantly", 13112.321, 13112.66),
+        Word("regretting", 13112.66, 13112.998),
+        Word("that", 13112.998, 13113.337),
+        Word("I", 13113.337, 13113.675),
+    ]
+
+    snap_segment_boundaries([a, b])
+
+    assert _tokens(a) == ["three", "-", "minutes."]
+    assert _tokens(b)[:6] == ["My", "name", "is", "Jeremy", "Hackard,", "and"]
