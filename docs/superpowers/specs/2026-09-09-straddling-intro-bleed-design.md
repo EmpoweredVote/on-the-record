@@ -228,10 +228,22 @@ pipeline and the backfill continue to apply identical corrections:
 - `src/identify.py:541`, via `_resnap_merged_boundaries` — added by PR #207 after
   this spec was first written. `merge_adjacent_segments` collapses adjacent
   same-speaker turns, which moves every boundary the transcription-time snap had
-  already settled, so the snap must run again afterwards. This caller is the
-  strongest argument against the name-matching alternative: it runs before names
-  are assigned, so a backfill-only rule would not fire there and every identify
-  run would re-create the bleed this change removes.
+  already settled, so the snap must run again afterwards.
+
+The first three of those run before names exist. `backfill_boundary_snap.py` and
+`_resnap_merged_boundaries` both run after: `apply_mappings_to_segments`
+immediately precedes `merge_adjacent_segments` at every call site
+(`run_local.py:1684`->`1696`, `run_local.py:1970`, `src/repair.py:211`->`212`),
+and `merge_adjacent_segments`' own docstring specifies "Segments with
+speaker_name populated".
+
+So the case against the name-matching alternative is **not** that names are
+unavailable everywhere — at two of the five callers they are. It is that a
+name-dependent gate would make `snap_segment_boundaries` do different things
+depending on who called it. That is the same hazard class as the merge defect
+PR #207 fixed, where one caller silently discarded the pass's work. A pass with
+five callers must have one behaviour. Caller-independence is the argument, not
+availability.
 - `backfill_boundary_snap.py:47`
 
 ## Fixpoint safety
