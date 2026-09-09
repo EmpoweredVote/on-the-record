@@ -90,6 +90,17 @@ def create_app() -> FastAPI:
             if r.race_id and labels.get(r.race_id):
                 r.race_label = labels[r.race_id]
             groups.setdefault(r.race_label or "Unmatched", []).append(r)
+        if status == "pending":
+            from collections import defaultdict
+            from gui.discovery import family_key
+            fam: dict = defaultdict(list)
+            for r in rows:
+                k = family_key(r)
+                if k is not None:
+                    fam[k].append(r)
+            for members in fam.values():
+                for r in members:
+                    r.family_count = len(members) - 1
         h = discovery.health()
         # health() folds the outlet-stats aggregate onto its own connection
         # (avoids a 4th DB round-trip per page load). Fall back to the

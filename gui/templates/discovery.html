@@ -122,7 +122,7 @@
         <button type="submit" class="enroll">Approve &rarr; ingest</button>
       </form>
       <form method="post" action="/discovery/{{ r.id }}/quote-source">
-        <button type="submit">Approve &rarr; quote source</button>
+        <button type="submit">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
       </form>
       <form method="post" action="/discovery/{{ r.id }}/reject">
         <select name="reason">

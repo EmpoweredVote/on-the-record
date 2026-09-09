@@ -990,3 +990,41 @@ def test_approve_family_keyless_updates_only_self(monkeypatch):
 def test_approve_family_returns_zero_without_db(monkeypatch):
     monkeypatch.setattr(discovery, "_db_url", lambda: None)
     assert discovery.approve_source_family(_row()) == 0
+
+
+# --- Approve source family: button count on the page ---
+
+def test_quote_source_button_shows_sibling_count(monkeypatch):
+    rows = [_row(id="a", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r1"),
+            _row(id="b", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r2"),
+            _row(id="c", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r3")]
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 3})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    # three rows share a channel → each button offers "+2 more" (siblings across races)
+    assert "(+2 more)" in html
+
+
+def test_quote_source_button_plain_for_loner(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(id="a", channel_id="UCsolo")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    assert "Approve &rarr; quote source</button>" in html or \
+           "Approve → quote source</button>" in html
+    assert "more)" not in html
+
+
+def test_quote_source_button_no_count_on_deferred_view(monkeypatch):
+    rows = [_row(id="a", channel_id="UCw", status="deferred"),
+            _row(id="b", channel_id="UCw", status="deferred")]
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0})
+    client = TestClient(create_app())
+    html = client.get("/discovery?show=deferred").text
+    assert "more)" not in html
