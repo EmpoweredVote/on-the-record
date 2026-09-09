@@ -99,7 +99,7 @@ introduction cue and a non-empty destination turn:
 | --- | --- |
 | last word starts past `end_time` | 63 |
 | `a.speaker_label != b.speaker_label` | 47 |
-| continuation across the boundary | 13 |
+| continuation across the boundary | 11 |
 | a sentence ends within 4 words before the cue | 9 |
 | no completed sentence inside the moved tail | 1 |
 | moved tail ≤ 10 words | **1** |
@@ -219,12 +219,19 @@ on its own.
 ## No divergence
 
 Every gate reads `speaker_label`, word timings, or punctuation. All of these
-exist at word-assignment time, so all four callers get the rule and the
+exist at word-assignment time, so all five callers get the rule and the
 pipeline and the backfill continue to apply identical corrections:
 
 - `src/transcribe.py:144` and `src/vtt_align.py:176`, via
   `assign_words_to_segments`
 - `bench/modal_app.py:1912`
+- `src/identify.py:541`, via `_resnap_merged_boundaries` — added by PR #207 after
+  this spec was first written. `merge_adjacent_segments` collapses adjacent
+  same-speaker turns, which moves every boundary the transcription-time snap had
+  already settled, so the snap must run again afterwards. This caller is the
+  strongest argument against the name-matching alternative: it runs before names
+  are assigned, so a backfill-only rule would not fire there and every identify
+  run would re-create the bleed this change removes.
 - `backfill_boundary_snap.py:47`
 
 ## Fixpoint safety

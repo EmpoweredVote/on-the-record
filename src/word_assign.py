@@ -280,10 +280,10 @@ def _snap_straddling_intro(a: Segment, b: Segment) -> bool:
     introducing themselves at the start of their own turn. Five gates narrow it
     to one. Differing speaker_label cuts 63 to 47. Requiring the sentence to run
     ACROSS the boundary — A's last word not sentence-final, B opening lowercase
-    — cuts 47 to 13; that is the gate that spares Steve Goldstein's own
+    — cuts 47 to 11; that is the gate that spares Steve Goldstein's own
     "My name is Steve Goldstein." on 2026-06-24-cd1-republican-primary-debate,
     which ends a sentence and is followed by a '>>' marker. Requiring a sentence
-    boundary within MAX_INTRO_PREAMBLE words before the cue cuts 13 to 9, and
+    boundary within MAX_INTRO_PREAMBLE words before the cue cuts 11 to 9, and
     means the rule never cuts mid-sentence.
 
     Nine is not clean enough for a length cap alone. Eight of the nine are
