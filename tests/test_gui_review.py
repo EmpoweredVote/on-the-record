@@ -1722,6 +1722,75 @@ def test_apply_make_local_person_name_survives_a_roster_fuzzy_match_verbatim(
     assert card.local_slug == "frank-piedmont-smithy"
 
 
+def test_apply_rename_keeps_a_different_persons_name_and_link_clear(
+        fake_roster_cache, tagged_meeting_dir, tmp_meetings_dir):
+    """apply_rename DOES pass the roster (normalising to the canonical roster
+    spelling is a plain rename's legitimate purpose), so the fuzzy hazard has to
+    be closed inside rename_speaker rather than by withholding the roster the way
+    _reset_and_rename does.
+
+    The review card's "Also -> Display name" box is free text. A curator typing an
+    ordinary member of the public whose surname resembles a councilmember's must
+    get that name stored verbatim and NO politician link — both the name and the
+    link reach the live site (publish._upsert_speakers writes the name as
+    meetings.speakers.display_name; publish derives a meeting's races from
+    politician_id)."""
+    from src.roster import correct_speaker_name
+    from gui.review_api import _load_roster_for
+
+    slug = "west-lafayette-council"
+    cache_path = fake_roster_cache(slug)
+    # The fixture payload has no "aliases" key, so the alias-based strategies
+    # never fire. Add the real production alias "Piedmont, Smith", whose
+    # extract_surname is "Smith" — that is what makes an ordinary "Smith" score a
+    # PERFECT 1.000 against a sitting councilmember.
+    payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    payload["politicians"][0]["aliases"] = ["Piedmont, Smith", "Piedmont Smith"]
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    mdir = tagged_meeting_dir(slug, meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+
+    # The roster must actually load, or this test proves nothing (this file's
+    # usual body_slug="x" makes load_roster fail and _load_roster_for return None).
+    roster = _load_roster_for(mdir)
+    assert roster is not None
+
+    curator_name = "Jane Smith"
+    # Prove the hazard is real before proving the fix.
+    assert correct_speaker_name(curator_name, roster) == "Councilmember Piedmont-Smith"
+
+    assert apply_rename("2026-02-04-council", "SPEAKER_01", curator_name) is True
+    card = _card_for("2026-02-04-council", "SPEAKER_01")
+    assert card.name == curator_name            # verbatim, not the councilmember
+    assert card.politician_slug in (None, "")   # and no fuzzy-derived link
+    assert card.politician_id in (None, "")
+
+
+def test_apply_rename_still_normalises_a_typed_alias_onto_the_roster(
+        fake_roster_cache, tagged_meeting_dir, tmp_meetings_dir):
+    """The behaviour the fix must NOT lose, and the reason apply_rename keeps its
+    roster: "Piedmont Smith" is an exact alias (strategy 2), so it still resolves
+    to the canonical name AND picks up the matching politician link."""
+    from gui.review_api import _load_roster_for
+
+    slug = "west-lafayette-council"
+    cache_path = fake_roster_cache(slug)
+    payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    payload["politicians"][0]["aliases"] = ["Piedmont, Smith", "Piedmont Smith"]
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    mdir = tagged_meeting_dir(slug, meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert _load_roster_for(mdir) is not None
+
+    assert apply_rename("2026-02-04-council", "SPEAKER_01", "Piedmont Smith") is True
+    card = _card_for("2026-02-04-council", "SPEAKER_01")
+    assert card.name == "Councilmember Piedmont-Smith"
+    assert card.politician_slug == "isabel-piedmont-smith"
+    assert card.politician_id == "uuid-ips"
+
+
 def test_apply_clear_speaker_status_and_its_guards(tagged_meeting_dir, tmp_meetings_dir):
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
     _write_meeting(mdir)

@@ -41,3 +41,54 @@ def test_prompt_create_local_person_skips_when_politician_id_set_slug_null(monke
     run_local._prompt_create_local_person(mappings, "S0", "Steve Hilton")
     # No AssertionError raised by input => it returned via the id-guard.
     assert mappings["S0"].local_slug is None
+
+
+def test_prompt_create_local_person_seeds_the_slug_from_the_name_it_is_given(monkeypatch):
+    """Pins WHY the terminal review call sites must hand this the name the curator
+    TYPED, not rename_speaker's roster-corrected `res.new_name`.
+
+    The `name` argument feeds default_local_slug only — the public display name
+    comes from mapping.speaker_name, which rename_speaker leaves verbatim now that
+    it normalises with allow_fuzzy=False. But local_slug is itself a persistent
+    public identifier (publish._upsert_local_people writes it), and a local person
+    is by definition NOT on the roster, so a default slug naming a councilmember
+    must never be the one offered for a member of the public.
+    """
+    monkeypatch.setattr("sys.stdin", _FakeTTY())
+    prompts: list[str] = []
+
+    def _fake_input(prompt=""):
+        prompts.append(prompt)
+        if "ocal person" in prompt:
+            return "l"          # accept the offer
+        if "Slug" in prompt:
+            return ""           # accept the OFFERED default, the risky keypress
+        return ""               # role -> first default
+
+    monkeypatch.setattr(builtins, "input", _fake_input)
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="Jane Smith")}
+    run_local._prompt_create_local_person(mappings, "S0", "Jane Smith",
+                                          event_kind="council")
+    assert mappings["S0"].local_slug == "jane-smith"
+    # And the default really did come from the name argument, not the label.
+    assert any("jane-smith" in p for p in prompts)
+
+
+def test_prompt_create_local_person_would_offer_a_roster_slug_if_given_one(monkeypatch):
+    """The negative half: hand it a roster canonical name and the offered default
+    slug names the councilmember. This is the outcome the call-site change avoids."""
+    monkeypatch.setattr("sys.stdin", _FakeTTY())
+
+    def _fake_input(prompt=""):
+        if "ocal person" in prompt:
+            return "l"
+        if "Slug" in prompt:
+            return ""
+        return ""
+
+    monkeypatch.setattr(builtins, "input", _fake_input)
+    mappings = {"S0": SpeakerMapping(speaker_label="S0", speaker_name="Jane Smith")}
+    run_local._prompt_create_local_person(mappings, "S0",
+                                          "Councilmember Piedmont-Smith",
+                                          event_kind="council")
+    assert mappings["S0"].local_slug == "councilmember-piedmont-smith"

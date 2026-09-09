@@ -239,19 +239,22 @@ def _reset_and_rename(meeting, label: str, name: str) -> None:
     nothing to do, so a plain link with no name behaves exactly as before.
 
     Deliberately calls rename_speaker with roster=None, never the meeting's
-    roster. rename_speaker's correct_speaker_name normalisation (allow_fuzzy=
-    True by default) can reassign a name to a DIFFERENT roster member whose
-    surname merely resembles it — its own docstring's example is "Smithey" ->
-    "...-Smith" at a 0.83 fuzzy ratio. Both callers below overwrite
-    politician_* right after this returns (link_speaker sets it, assign_local_
-    person clears it), so a roster-derived link here is immediately discarded
-    anyway — the ONLY live effect of passing a roster would be silently
-    rewriting the curator's typed name onto a roster member. That is
-    especially dangerous for the local-person path, where this name is
-    precisely the curator's declaration "this person is NOT on any roster",
-    and where publish._upsert_local_people writes it as that person's PUBLIC
-    name. So the name stored here must be exactly what the curator picked or
-    typed, never a roster-normalised substitute.
+    roster. Both callers below overwrite politician_* right after this returns
+    (link_speaker sets it, assign_local_person clears it), so a roster-derived
+    link here is immediately discarded anyway — the ONLY live effect of passing
+    a roster would be rewriting the curator's typed name onto a roster member.
+    That is wrong in kind for the local-person path, where this name is
+    precisely the curator's declaration "this person is NOT on any roster", and
+    where publish._upsert_local_people writes it as that person's PUBLIC name.
+    So the name stored here must be exactly what the curator picked or typed,
+    never a roster-normalised substitute.
+
+    rename_speaker no longer fuzzy-matches (it normalises with allow_fuzzy=False,
+    so only an exact canonical/alias match can rewrite a name), which removes the
+    silent wrong-person rewrite that first motivated withholding the roster here.
+    Withholding it is still right for the reason above: even a CORRECT
+    normalisation onto a roster member contradicts what these two callers are
+    recording.
     """
     from src import review
 
