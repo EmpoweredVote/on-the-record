@@ -222,6 +222,60 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     return RenameResult(label=label, old_name=old_name, new_name=final_name, alias_suggestion=alias)
 
 
+def rename_preserving_identity(mappings, segments, label: str, new_name: str, *,
+                               roster=None) -> RenameResult:
+    """Rename a speaker WITHOUT disturbing an identity it already holds.
+
+    rename_speaker treats a changed name as authoritative over any prior
+    identity and drops it (see its own comment). That is right for the TERMINAL
+    review, where rename IS the identity flow: run_local renames, then offers
+    _prompt_link_politician / _prompt_create_local_person — and the link offer is
+    only reachable because the link was cleared, since it returns immediately
+    when politician_slug or politician_id is set (run_local.py:2979).
+
+    It is wrong for the GUI review card, which carries a separate, explicit
+    control for every identity outcome. There the Display name box was the only
+    control whose name did not say what it would do: fixing one letter deleted
+    the local person or roster link shown one line above it.
+
+    So the identity is snapshotted and restored verbatim — but only when the
+    speaker HAD one. Two things follow from restoring verbatim rather than
+    re-deriving:
+
+    - The one-identity-per-speaker invariant (ev-accounts migration 623) cannot
+      break. The snapshot was exactly one identity when it was taken, so it is
+      exactly one identity when it is put back; no new code has to re-enforce
+      what link_speaker and assign_local_person enforce.
+    - A rename cannot fail. Re-applying through assign_local_person would
+      re-validate the slug against LOCAL_SLUG_RE and could raise on a slug that
+      is already stored but no longer passes, turning a name edit into a 500.
+
+    When the speaker had NO identity, rename_speaker's result stands untouched,
+    so a roster-derived link for a freshly typed name still attaches.
+
+    For an `unidentified` speaker this also fixes an enrollment bug rather than
+    only preserving one: local_slug there is the synthetic
+    unidentified-<meeting>-<label> handle whose whole purpose is keeping two
+    distinct unknown speakers off one enrollment key. Nulling it dropped
+    resolve_mapping_enrollment back to the name, silently merging unrelated
+    strangers — the collision clear_local_person refuses to cause.
+    """
+    mapping = mappings.get(label)
+    snapshot = None
+    if mapping is not None and (mapping.politician_slug or mapping.politician_id
+                                or mapping.local_slug or mapping.local_role):
+        snapshot = (mapping.politician_slug, mapping.politician_id,
+                    mapping.local_slug, mapping.local_role)
+
+    result = rename_speaker(mappings, segments, label, new_name, roster=roster)
+
+    if snapshot is not None:
+        renamed = mappings[label]
+        (renamed.politician_slug, renamed.politician_id,
+         renamed.local_slug, renamed.local_role) = snapshot
+    return result
+
+
 @dataclass
 class MergeResult:
     source_label: str
