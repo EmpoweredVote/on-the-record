@@ -49,6 +49,14 @@ required and that neither author ever caught their own — contradicted by
 instance 2 in the failures table below, and it would have sent solo work
 hunting for a second session it does not need. The other session caught it.
 
+**Take the dismantling correction first.** When several corrections arrive
+together, the ones that *add* to your document are easy to act on and the one
+that unpicks its central claim is not — so the additions land first and the
+thesis correction waits. That happened here: three additive findings were
+folded in a commit before the correction above, which was the one that
+mattered. It is the same asymmetry the rest of this runbook is about, one level
+up: a check that confirms is more comfortable than a check that dismantles.
+
 ## Instrument the shipped function; never restate its gates
 
 The failure is always the same shape: a scan that *re-implements* the rule in
