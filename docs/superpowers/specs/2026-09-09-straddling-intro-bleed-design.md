@@ -91,16 +91,17 @@ It is nevertheless the wrong instrument, for two reasons.
 
 ### The name-free gate set (adopted)
 
-Three signals available at word-assignment time isolate the case just as
-sharply. Measured over all 104 segment pairs in the corpus that carry a
-non-leading introduction cue and a non-empty destination turn:
+Signals available at word-assignment time isolate the case just as sharply.
+Measured over all 104 segment pairs in the corpus that carry a non-leading
+introduction cue and a non-empty destination turn:
 
 | Gate added | Population |
 | --- | --- |
 | last word starts past `end_time` | 63 |
 | `a.speaker_label != b.speaker_label` | 47 |
 | continuation across the boundary | 13 |
-| a sentence ends within 4 words before the cue | 6 |
+| a sentence ends within 4 words before the cue | 9 |
+| no completed sentence inside the moved tail | 1 |
 | moved tail ≤ 10 words | **1** |
 
 The continuation gate is what removes the Goldstein collision: A ends
@@ -108,16 +109,60 @@ The continuation gate is what removes the Goldstein collision: A ends
 boundary. Length only failed to separate the two cases *at the relaxed gate
 alone*.
 
-The tail cap then acts on an already-clean set of 6. Its margin is wide, not
-knife-edge:
+> **Correction, 2026-09-09 (post-review).** The rows below the continuation
+> gate originally read 6, with a 5-to-100 cap window. Those figures were
+> produced by a hand-written ablation script that **re-implemented** the rule,
+> and its clean-split gate drifted from the shipped one: it tested only the
+> word *immediately* before the cue, where the shipped gate scans back up to
+> `MAX_INTRO_PREAMBLE` (4) words. The wider scan admits three more pairs, so
+> the real pre-cap population is 9, not 6. The figures now shown were measured
+> by instrumenting the shipped `_snap_straddling_intro` itself rather than a
+> copy of it — see `.superpowers/sdd/2026-09-09-straddling-intro-bleed/`
+> (`verify-funnel.py` and its output `funnel-measured.txt`) for the script and
+> the full census. The method changed because the old method was wrong; treat
+> any figure in this document that was not re-measured that way with the same
+> suspicion.
 
-| tail cap | 3 | 4 | **5–100** | unbounded |
-| --- | --- | --- | --- | --- |
-| hits | 0 | 0 | **1** | 6 |
+The corrected census makes the tail cap's margin much narrower than claimed.
+The one true positive still has a 5-word tail, but the nearest false positive
+has **21**, not 180 —
+`2026-03-30-lwv-candidate-forum---county-clerk-and-prosecutor` seg 116, Tree
+Martin-Lucas's closing statement, whose tail reads `"Again, my name is Tree -
+Martin Lucas, and I'm running for clerk. All right. Thank you all so much
+for"`. With a cap of 21 or more the rule would move her own self-identification
+onto Tanner Dale Branham. The remaining seven are 147, 180, 192, 256, 409, 428
+and 516 words.
 
-The one true positive has a 5-word tail; the nearest false positive has 180
-(the others are 256, 285, 409, 516). Any cap in a 20-fold range gives the same
-answer. `MAX_INTRO_TAIL_WORDS = 10` sits comfortably inside it.
+| tail cap | 3 | 4 | **5–20** | 21–146 | unbounded |
+| --- | --- | --- | --- | --- | --- |
+| hits | 0 | 0 | **1** | 2 | 9 |
+
+So "any cap from 5 to 100 gives the same answer" is **false**; the safe window
+is 5 to 20. A four-fold margin around a shape as common as "Again, my name is
+X" ending a candidate-forum closing statement is not a margin worth relying on
+— a shorter instance of the same sentence would fire at
+`MAX_INTRO_TAIL_WORDS = 10`.
+
+### The completed-sentence gate
+
+The fix is a semantic gate, not a wider cap. Gate 6 has already asserted that
+the tail and B are **one utterance running across the boundary**. A tail that
+contains a completed sentence contradicts that premise: it is the speaker's own
+finished speech, not a fragment bleeding into the next turn.
+
+    if any(_ends_sentence(w.word) for w in a.words[split:-1]):
+        return False
+
+The slice excludes the last word, whose punctuation says nothing about the
+tail's internal structure (and which gate 6 has already required not to end a
+sentence). Measured on the current corpus this gate alone separates 1 from 9
+with no length threshold at all: every one of the eight false positives closes
+at least one sentence inside its tail, and the seg-793 true positive
+(`"My name is Jeremy Hackard,"`) closes none.
+
+`MAX_INTRO_TAIL_WORDS = 10` is kept as a second line of defence, not removed.
+The two gates fail independently — one on coherence, one on magnitude — so a
+shape that defeats either still has to defeat the other.
 
 ## The rule
 
@@ -148,8 +193,15 @@ All gates must hold:
    defaults to the cue, here its absence rejects the segment outright — the
    rule never cuts mid-sentence. It still takes a greeting along when one is
    present (`"...minutes. Hi, my name is X"` splits before `"Hi,"`).
-8. `len(a.words) - k <= MAX_INTRO_TAIL_WORDS` (new constant, 10).
-9. Move `a.words[k:]` into `b` via the existing `_move` helper.
+8. No completed sentence inside the moved tail:
+   `not any(_ends_sentence(w.word) for w in a.words[k:-1])`. Gate 6 asserted
+   the tail and B are one utterance; a tail that closes a sentence of its own
+   contradicts that. The slice excludes the last word, whose punctuation says
+   nothing about internal structure. Checked before the cap because it tests
+   the rule's structural premise rather than a tuned magnitude.
+9. `len(a.words) - k <= MAX_INTRO_TAIL_WORDS` (new constant, 10). Retained as a
+   second, independent line of defence.
+10. Move `a.words[k:]` into `b` via the existing `_move` helper.
 
 Cue matching, `_norm`, `_ends_sentence`, `_intro_cue_index` and `_move` are all
 reused unchanged. `MAX_FRAGMENT_WORDS` is untouched, as in the shipped rule.
@@ -226,9 +278,17 @@ that changes beyond segments 793/794 must be investigated before applying.
 - Negative, gate 6: the real Goldstein shape (A ends `"Goldstein."`, B opens
   `">>"`) → no move. This is the collision that motivates the gate.
 - Negative, gate 7: no sentence boundary within 4 words before the cue → no
-  move.
-- Negative, gate 8: a long self-introduction shape (tail well over 10 words) →
-  no move.
+  move. The fixture must punctuate the word before the run-up (`"Thank you."`,
+  not `"Thank you,"`) or it dies at gate 7 for the wrong reason and passes with
+  gate 3 deleted.
+- Negative, gate 8: the real seg-116 shape from
+  `2026-03-30-lwv-candidate-forum---county-clerk-and-prosecutor` (Tree
+  Martin-Lucas) → no move. Shortened so the tail is inside the cap, so the cap
+  cannot be the blocker; paired with a control that flips the one internal
+  period to a comma and does move, proving gates 1–7 all pass.
+- Negative, gate 9: a long self-introduction shape (tail well over 10 words) →
+  no move. Its tail must carry no internal period, or gate 8 rejects it first
+  and the cap is never reached.
 - Negative, gate 1: destination turn has no words → no move.
 - Idempotence: a second `snap_segment_boundaries` call moves nothing.
 - Corpus proof: run the pass over all 172 meetings with and without the rule
