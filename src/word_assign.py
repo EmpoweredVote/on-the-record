@@ -338,6 +338,17 @@ def _snap_straddling_intro(a: Segment, b: Segment) -> bool:
     # a pure second line of defence over an already-coherent tail. The slice
     # excludes the LAST word, whose punctuation says nothing about internal
     # structure (and which gate 6 has already required not to end a sentence).
+    # Widening MAX_INTRO_PREAMBLE is comparatively safe against this gate but not
+    # provably safe. The scan above breaks on the FIRST boundary walking back
+    # from the cue, so a wider window can only move the split EARLIER, which
+    # lengthens the tail and makes this gate strictly more likely to reject.
+    # It is not a guarantee: a longer tail carrying no terminal punctuation of
+    # its own still passes. Measured counter-example, at MAX_INTRO_PREAMBLE = 8
+    # (the shipped 4 rejects it at the scan-back gate above):
+    #   "Right. okay next speaker in chambers Hi, my name is Dana" splits at 1
+    #   and takes five of the chair's words with the introduction.
+    # No corpus meeting has that shape, and real seg 454 covers the same shape
+    # from cap 10 via test_trailing_self_intro_moves_off_the_chair_bloomington_june.
     if any(_ends_sentence(w.word) for w in a.words[split:-1]):
         return False   # the tail finishes a sentence: A's own speech, not a bleed
     if len(a.words) - split > MAX_INTRO_TAIL_WORDS:
