@@ -210,20 +210,24 @@
       {% endif %}
       <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/name" class="rename">
         <label>Display name
-          {# No value= prefill, deliberately. This posts to /name -> apply_rename
-             -> rename_speaker, which on a CHANGED name nulls local_slug/
-             local_role/politician_slug/politician_id (see rename_speaker's
-             "a human-assigned name is authoritative" comment in src/review.py).
-             Prefilling the current name here would put a local person's or a
-             roster link's identity one typo-fix away from silent deletion, with
-             no warning below it — every other destructive transition on this
-             card carries an ident_cost line; this box didn't. A blank box
-             keeps "type a name here" a conscious act, as it was before this
-             card was rewritten. #}
-          <input type="text" name="name" value=""
+          {# Prefilled, and safe to prefill. This posts to /name -> apply_rename
+             -> rename_preserving_identity, which keeps local_slug/local_role/
+             politician_slug/politician_id across the rename. PR #203 stripped
+             the prefill and added an amber warning because rename_speaker used
+             to null all four, putting a real identity one typo-fix away from
+             silent deletion; the route no longer does that, so a blank box
+             would only mean retyping a whole name to change one letter.
+             `c.name or ''` because name is None on an unnamed speaker and the
+             placeholder must not be submitted as a real name. #}
+          <input type="text" name="name" value="{{ c.name or '' }}"
                  placeholder="Type a name…" autocomplete="off"></label>
         {% if c.identity_kind != 'none' %}
-        <p class="ident-cost">Saving a different name here drops the current identity.</p>
+        {# Not a cost: a statement of what the save will and won't touch, so a
+           curator who wants to change WHO this is goes to the chooser instead
+           of expecting the name box to do it. True for all four kinds — the
+           rename leaves speaker_status alone too, so a marked card keeps its
+           mark. #}
+        <p class="ident-note">Saving a name here keeps the current identity — use the chooser above to change who this is.</p>
         {% endif %}
         <button type="submit">Save</button>
       </form>

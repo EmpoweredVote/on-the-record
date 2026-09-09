@@ -1939,24 +1939,43 @@ def test_a_local_person_card_warns_what_the_roster_panel_would_drop(
     assert "drops the local person" in body
 
 
-def test_the_also_rename_box_warns_only_when_an_identity_would_be_dropped(
+def _rename_form(card_html):
+    """The Also block's rename form, sliced out of one card's HTML.
+
+    The local-person panel carries its own `name="name"` input with the same
+    prefill, so a `value="..."` assertion against the whole card would be
+    satisfied by that one instead — passing whether or not the rename box
+    prefills at all."""
+    parts = card_html.split('class="rename"', 1)
+    assert len(parts) == 2, "no rename form in this card"
+    return parts[1].split("</form>", 1)[0]
+
+
+def test_the_also_rename_box_says_the_identity_survives_and_prefills(
         tagged_meeting_dir, tmp_meetings_dir):
-    """The Also block's Display name box posts to /name -> apply_rename ->
-    rename_speaker, which on a CHANGED name nulls local_slug/local_role/
-    politician_slug/politician_id. Unlike every other destructive transition on
-    this card, it used to carry no warning at all. It also must not prefill the
-    current name — prefilling would put a real identity one typo-fix away from
-    silent deletion with a value= box that looks like a safe edit."""
+    """PR #203 gave this box an amber warning — "Saving a different name here
+    drops the current identity." — and stripped its value= prefill, because a
+    changed name really did null local_slug/local_role/politician_*. The route
+    now preserves the identity, so BOTH mitigations are wrong: a warning about
+    something that no longer happens is worse than no warning, and the blank box
+    made a one-letter fix mean retyping the whole name.
+
+    The line stays on the same `identity_kind != 'none'` condition, which is
+    accurate for all four kinds: rename never touched speaker_status either, so
+    a marked card keeps its mark too."""
     body = _linked_body(tagged_meeting_dir)
+    old = "Saving a different name here drops the current identity."
+    new = ("Saving a name here keeps the current identity — "
+           "use the chooser above to change who this is.")
 
-    linked = _card_html(body, "SPEAKER_00")  # roster-linked: has an identity
-    assert "Saving a different name here drops the current identity." in linked
-    # The rename box itself must not prefill the current name.
-    assert 'name="name" value=""' in linked
+    linked = _card_html(body, "SPEAKER_00")   # roster-linked, named "Mayor Johnson"
+    assert old not in linked
+    assert new in linked
+    assert 'value="Mayor Johnson"' in _rename_form(linked)   # edit one letter
 
-    plain = _card_html(body, "SPEAKER_01")  # no identity at all
-    assert "Saving a different name here drops the current identity." not in plain
-    assert 'name="name" value=""' in plain
+    plain = _card_html(body, "SPEAKER_01")    # no identity, no name
+    assert new not in plain                   # nothing to reassure about
+    assert 'value=""' in _rename_form(plain)  # nameless card: still a blank box
 
 
 def test_a_marked_card_offers_an_undo(tagged_meeting_dir, tmp_meetings_dir):
@@ -2121,3 +2140,74 @@ def test_the_common_case_checked_and_current_on_the_same_chip_is_not_doubled():
     # garish when both land on the same chip.
     for loud in ("border-color", "background", "font-weight: 600"):
         assert loud not in current_after
+
+
+def test_renaming_through_the_route_keeps_a_local_person(
+        tagged_meeting_dir, tmp_meetings_dir):
+    """THE BUG. The card has two name fields. The local-person panel's Name
+    renames then assigns, so the identity survives. The Also block's Display
+    name box posted to /name -> apply_rename -> rename_speaker, which nulls
+    local_slug/local_role on any changed name — so fixing one letter DELETED
+    the local person shown one line above it on the same card.
+
+    PR #203 only warned about this. Renaming is a name operation; the card
+    already has a separate, explicit control for every identity outcome."""
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_make_local_person("2026-02-04-council", "SPEAKER_01",
+                                   "frank-oconnor", "public_comment",
+                                   name="Frank OConner") is True
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/name",
+                       data={"name": "Frank O'Connor"}, follow_redirects=False)
+    assert resp.status_code == 303
+
+    card = _card_for("2026-02-04-council", "SPEAKER_01")
+    assert card.name == "Frank O'Connor"      # the typo IS fixed
+    assert card.identity_kind == "local"      # and the person is still there
+    assert card.local_slug == "frank-oconnor"
+    assert card.local_role == "public_comment"
+
+
+def test_renaming_through_the_route_keeps_a_roster_link(
+        tagged_meeting_dir, tmp_meetings_dir):
+    """The same deletion, on the other identity kind: a changed name nulled
+    politician_slug/politician_id whenever no roster was loadable."""
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_link("2026-02-04-council", "SPEAKER_01", "", "uuid-becerra",
+                      name="Xavier Becera") is True
+
+    client = TestClient(create_app())
+    resp = client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/name",
+                       data={"name": "Xavier Becerra"}, follow_redirects=False)
+    assert resp.status_code == 303
+
+    card = _card_for("2026-02-04-council", "SPEAKER_01")
+    assert card.name == "Xavier Becerra"
+    assert card.identity_kind == "roster"
+    assert card.politician_id == "uuid-becerra"
+
+
+def test_a_route_rename_leaves_the_voice_keyed_to_the_linked_person(
+        tagged_meeting_dir, tmp_meetings_dir):
+    """The constraint the preserving rename has to answer for end to end: after
+    a typo fix through the real route, the speaker's embedding must still enroll
+    under the politician the curator linked — not a name-derived local slug, and
+    not somebody else."""
+    from src.enroll import resolve_mapping_enrollment
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    assert apply_link("2026-02-04-council", "SPEAKER_01", "", "uuid-becerra",
+                      name="Xavier Becera") is True
+
+    client = TestClient(create_app())
+    client.post("/meetings/2026-02-04-council/speakers/SPEAKER_01/name",
+                data={"name": "Xavier Becerra"}, follow_redirects=False)
+
+    meeting, _meeting_dir, _roster = _load_meeting_ctx("2026-02-04-council")
+    key, slug, pid = resolve_mapping_enrollment(meeting.speakers["SPEAKER_01"])
+    assert key == "essentials:uuid-becerra"
+    assert pid == "uuid-becerra"

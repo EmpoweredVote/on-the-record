@@ -155,7 +155,19 @@ def persist_review(meeting, meeting_dir: Path, embeddings: dict | None = None) -
 
 def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
     """Rename a speaker (human-authoritative) and persist. Returns False on
-    unsafe/unknown meeting, unknown label, or empty name (caller maps to 404/no-op)."""
+    unsafe/unknown meeting, unknown label, or empty name (caller maps to 404/no-op).
+
+    Uses rename_preserving_identity, NOT rename_speaker: this is the GUI's
+    name-only path. The review card has a separate, explicit control for every
+    identity outcome, so nothing here needs the rename to change one — and
+    dropping the identity meant a curator fixing a typo silently deleted the
+    local person or roster link shown one line above the box. The terminal
+    review, which has no such controls and relies on the clearing to reach its
+    re-link prompt, still calls rename_speaker directly.
+
+    The roster is still passed: it normalises the typed name, and on a speaker
+    with no identity at all it still derives a link from the new name.
+    """
     name = (new_name or "").strip()
     if not name:
         return False
@@ -169,7 +181,8 @@ def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
         return False
 
     from src import review
-    review.rename_speaker(meeting.speakers, meeting.segments, label, name, roster=roster)
+    review.rename_preserving_identity(meeting.speakers, meeting.segments, label, name,
+                                      roster=roster)
     persist_review(meeting, meeting_dir)
     return True
 
