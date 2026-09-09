@@ -121,14 +121,17 @@ def test_reject_requires_and_records_reason(monkeypatch):
     assert calls == {"status": "rejected", "reason": "clip-not-original"}
 
 
-def test_quote_source_route_marks_approved(monkeypatch):
+def test_quote_source_route_approves_family_and_reports_count(monkeypatch):
     calls = {}
-    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
-    monkeypatch.setattr(discovery, "set_status",
-                        lambda rid, status, reason=None: calls.update(status=status) or True)
+    monkeypatch.setattr(discovery, "get_row",
+                        lambda rid: _row(channel_name="Wisconsin PBS"))
+    monkeypatch.setattr(discovery, "approve_source_family",
+                        lambda row: calls.update(row=row) or 6)
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
-    assert resp.status_code == 303 and calls["status"] == "approved"
+    assert resp.status_code == 303
+    assert calls["row"].id == "d1"
+    assert "approved 6 (Wisconsin PBS)" in _flash(resp)
 
 
 def test_watch_channel_calls_flywheel(monkeypatch):
@@ -193,14 +196,14 @@ def test_approve_ingest_blocks_non_pending_status(monkeypatch):
 
 def test_quote_source_blocks_non_pending_status(monkeypatch):
     monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="rejected"))
-    calls = {"set_status": False}
-    monkeypatch.setattr(discovery, "set_status",
-                        lambda rid, status, reason=None: calls.update(set_status=True) or True)
+    called = {"fanned": False}
+    monkeypatch.setattr(discovery, "approve_source_family",
+                        lambda row: called.update(fanned=True) or 1)
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
     assert resp.status_code == 303
-    assert "already" in _flash(resp)
-    assert calls["set_status"] is False
+    assert "already rejected" in _flash(resp)
+    assert called["fanned"] is False
 
 
 def test_reject_blocks_non_pending_status(monkeypatch):

@@ -183,10 +183,11 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         if row.status != "pending":
             return _discovery_redirect(f"already {row.status}")
-        ok = discovery.set_status(row_id, "approved")
-        flash = "approved as quote source"
-        if not ok:
-            flash += " — SAVE FAILED, retry"
+        n = discovery.approve_source_family(row)
+        if n:
+            flash = f"approved {n} ({row.channel_name or 'source'})"
+        else:
+            flash = "approved as quote source — SAVE FAILED, retry"
         return _discovery_redirect(flash)
 
     @app.post("/discovery/{row_id}/reject")
