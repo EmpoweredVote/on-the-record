@@ -146,27 +146,34 @@ routes behave exactly as they do today, so existing callers and tests are
 unaffected.
 
 The **Display name** box in the *Also* block stays. It is the general escape
-hatch — the only way to name a roster-linked or marked speaker. But it is
-**not** the same field reached from a second place: it posts to `/name` ->
-`apply_rename` -> `rename_speaker`, which on a CHANGED name nulls
-`local_slug`/`local_role`/`politician_slug`/`politician_id` — a human-assigned
-name is treated as authoritative over any prior link. The local-person panel's
-Name field posts to `/local-person` -> `apply_make_local_person`, which
-*assigns* the local identity together with the name in the same write, via
-`_reset_and_rename` (clear status -> rename -> assign) — so that path cannot
-lose the identity it is in the middle of setting. Fixing a typo through the
-Also box, by contrast, can silently delete a local person or a roster link with
-no chance to reconsider, because the box carries no warning of what the save
-will drop.
+hatch — the only way to name a roster-linked or marked speaker.
 
-The fix: the box's input no longer prefills the current name (it is
-placeholder-only, as it was before the four-outcome picker), so using it stays
-a conscious act of typing a fresh name rather than editing what looks like the
-current one. It also carries an `.ident-cost`-styled line, shown whenever
-`identity_kind != 'none'`: "Saving a different name here drops the current
-identity." The local-person panel labels its input `Name` and says it is the
-name readers will see, because for a local person that name is the published
-one.
+At the time this spec was written the box was a hazard: it posts to `/name` ->
+`apply_rename` -> `rename_speaker`, which on a CHANGED name nulls
+`local_slug`/`local_role`/`politician_slug`/`politician_id`. Fixing a typo
+through it silently deleted the local person or roster link shown one line
+above. This spec's mitigation — dropping the `value=` prefill and adding an
+amber "Saving a different name here drops the current identity." line — narrowed
+the blast radius without closing the hole.
+
+**Superseded 2026-09-09** by
+`2026-09-09-rename-preserves-identity-design.md`. `apply_rename` now calls
+`review.rename_preserving_identity`, which snapshots the four identity fields,
+renames, and restores them verbatim when the speaker had an identity. Renaming
+through the GUI is a name-only operation; changing WHO a speaker is goes through
+the chooser above. `rename_speaker` itself is unchanged, because the terminal
+review has no chooser — there, rename is the identity flow, and clearing the
+link is what makes `_prompt_link_politician` reachable at all. Both mitigations
+are therefore reverted: the box prefills again, and the amber line is replaced
+by a neutral `.ident-note` reading "Saving a name here keeps the current
+identity — use the chooser above to change who this is."
+
+The local-person panel's Name field is unchanged: it posts to `/local-person` ->
+`apply_make_local_person`, which assigns the local identity together with the
+name in one write via `_reset_and_rename` (clear status -> rename -> assign),
+and that path still calls `rename_speaker` directly — so the ordering rules
+above still govern it. The panel labels its input `Name` and says it is the name
+readers will see, because for a local person that name is the published one.
 
 ### Current state, in one place
 
