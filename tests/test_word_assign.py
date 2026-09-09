@@ -660,6 +660,12 @@ def test_straddling_rule_cedes_the_wholly_outside_shape():
     # owns: the cue "my" starts at 9280.216, past A's end_time of 9273.029. The
     # straddling rule must decline outright so the two rules can never both fire
     # on one segment or pick different split points.
+    #
+    # The real row reads "Thank you," before the cue; it is punctuated "you."
+    # here on purpose. With the comma no sentence ends within MAX_INTRO_PREAMBLE
+    # words of the cue, so the fixture died at gate 7 and still passed with gate
+    # 3 deleted — verified by mutation. The period gives gate 7 a split to find,
+    # so gate 3 is now the only thing that can reject this shape.
     from src.word_assign import _snap_straddling_intro
 
     a = _seg(454, 9270.869, 9273.029, "SPEAKER_22")
@@ -670,7 +676,7 @@ def test_straddling_rule_cedes_the_wholly_outside_shape():
         Word("so", 9273.842, 9274.639), Word("much", 9274.639, 9275.435),
         Word("next", 9275.435, 9276.232), Word("person", 9276.232, 9277.029),
         Word("in", 9277.029, 9277.826), Word("chambers", 9277.826, 9278.622),
-        Word("Thank", 9278.622, 9279.419), Word("you,", 9279.419, 9280.216),
+        Word("Thank", 9278.622, 9279.419), Word("you.", 9279.419, 9280.216),
         Word("my", 9280.216, 9281.013), Word("name", 9281.013, 9281.809),
         Word("is", 9281.809, 9282.606), Word("Paul", 9282.606, 9283.403),
         Word("Gillard", 9283.403, 9284.2), Word("I'm", 9284.2, 9284.996),
