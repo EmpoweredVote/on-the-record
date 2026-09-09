@@ -30,8 +30,8 @@ export default function PersonPhoto({
 
   if (url && !failed) {
     // Static export has no image optimizer; an intentional <img> is correct here.
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         className={cls}
         src={url}
