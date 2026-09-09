@@ -122,6 +122,8 @@ web/                Next.js site
 docs/pipeline.md    Pipeline operator guide
 docs/web-roadmap.md Where this is going: people pages, cross-meeting
                     search, appearances on politician profiles
+docs/runbooks/      Operator runbooks: meeting day, source discovery,
+                    calibrating a heuristic gate
 bench/              Diarization model benchmark harness (Modal)
 tests/              pytest suite
 ```
