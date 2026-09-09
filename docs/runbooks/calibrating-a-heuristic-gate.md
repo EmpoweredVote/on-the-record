@@ -82,6 +82,40 @@ figure produced this way survived scrutiny; every wrong figure in the table
 below came from a re-implemented scan. Assert idempotence per meeting in the
 same loop — the boundary backfill re-snaps in place and must stay re-runnable.
 
+### Trace the exits; do not count the ones you predicted
+
+A hand-written funnel reports the stages you thought to print. A tracer reports
+every exit, including the ones you did not predict — which is the difference
+between a funnel that confirms your model of the rule and one that tests it.
+
+`bench/intro_gate_funnel.py` is the worked example. It runs the real
+`snap_segment_boundaries`, hooks the rule with `sys.settrace`, records the
+source line of the `return` that fired for each pair, and reads the gate labels
+back out of `src/word_assign.py`. It restates nothing, so it cannot drift.
+
+Two things that approach surfaced on the trailing-intro rule which a
+hand-written funnel could not:
+
+- **A gate that was really two gates.** What looked like one continuation check
+  is two separate returns — pairs rejected because A's sentence closes, then a
+  few more because B does not open lowercase. An independent hand-written
+  funnel collapsed both into a single drop of 36 and could not see the split.
+- **A gate doing no work at all.** One gate rejected **zero** pairs, because an
+  earlier gate already caught every candidate. You cannot discover a dead gate
+  by printing the counts you expected; the tracer reports it whether you asked
+  or not. That, rather than any argument, is the strongest reason the
+  `MAX_INTRO_PREAMBLE` test was dropped (see the last section).
+
+Dedupe to unique pairs. The fixpoint loop evaluates the same pair several times,
+so raw call counts overstate the population.
+
+Note what the committed instrument replaced: its scratch predecessor mirrored
+the shipped gates by hand, and its own header admitted the gate order had been
+"copied by READING the shipped source". It happened to produce correct numbers
+because it was copied carefully that time. **Correct-by-carefulness is not a
+property you can rely on**, and citing it as the worked example would have been
+recommending the anti-pattern. It was rewritten to trace instead.
+
 ### Bisect a threshold; never infer it from two points
 
 A two-point probe cannot locate a step. Sweep the whole range.
@@ -142,6 +176,15 @@ at cap ≥ 10 the split on `bloomington-city-council-2026-06-10` segment 454 jum
 from 12 to 2 and `test_trailing_self_intro_moves_off_the_chair_bloomington_june`
 breaks. Caps 5–9 leave it unchanged.
 
-An `assert MAX_INTRO_PREAMBLE == 4` would have caught neither, because there is
-no failure mode behind it. Record the measurement in the docstring instead, and
-prefer a **behavioural test on real corpus shapes** over pinning a constant.
+Third, and decisively, the tracer showed the cap-dependent gate rejecting
+**zero** pairs corpus-wide — an earlier gate caught every candidate first. A
+constant that never determines an outcome cannot regress, and no test over the
+current corpus could fail because of it.
+
+An `assert MAX_INTRO_PREAMBLE == 4` would have caught none of this, because
+there is no failure mode behind it. Record the measurement in the docstring
+instead, and prefer a **behavioural test on real corpus shapes** over pinning a
+constant.
+
+Note the ordering that made this knowable: the first two points are arguments,
+the third is a measurement, and only the tracer could produce it.
