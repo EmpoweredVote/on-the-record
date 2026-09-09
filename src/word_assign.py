@@ -10,7 +10,8 @@ A final post-pass (snap_segment_boundaries) then corrects word-level speaker
 bleed at turn boundaries, where diarization boundaries and ASR word timings
 disagree by a word or two — see that function for the cheap, non-LLM signals it
 uses (the '>>' broadcast speaker-change marker, plus word-gap pauses and
-terminal punctuation).
+terminal punctuation), and where diarization has missed a stretch of speech
+outright it also moves a trailing self-introduction onto the turn that follows.
 """
 
 from __future__ import annotations
@@ -25,6 +26,11 @@ MAX_FRAGMENT_WORDS = 3     # a boundary bleed is at most this many content words
 MIN_BLEED_PAUSE = 0.25     # seconds of silence that marks the true (no-marker) split
 MAX_CONTINUATION_GAP = 0.2  # a bled word butts against the previous turn (near-zero gap)
 MAX_SNAP_PASSES = 8        # fixpoint cap: a fragment can only relay one turn per pass
+
+# Trailing self-introduction tuning (see _snap_trailing_intro). Matched against
+# tokens reduced to lowercase letters and apostrophes.
+INTRO_CUES = (("my", "name", "is"), ("my", "name's"), ("my", "names"))
+MAX_INTRO_PREAMBLE = 4     # words scanned back from the cue for a sentence end
 
 
 def _duration(seg: Segment) -> float:
@@ -188,6 +194,72 @@ def _snap_trailing(a: Segment, b: Segment) -> bool:
     return _move(a.words[k:], a, b)
 
 
+def _norm(word: str) -> str:
+    """`word` reduced to lowercase letters and apostrophes, for cue matching."""
+    return "".join(c for c in word.lower() if c.isalpha() or c == "'")
+
+
+def _intro_cue_index(words: list[Word]) -> int | None:
+    """Index of the first self-introduction cue that does NOT open the turn.
+
+    A cue at index 0 is the speaker introducing themselves at the start of
+    their own turn, which is the overwhelmingly common case and never a bleed.
+    """
+    tokens = [_norm(w.word) for w in words]
+    for i in range(1, len(tokens)):
+        if any(tokens[i:i + len(cue)] == list(cue) for cue in INTRO_CUES):
+            return i
+    return None
+
+
+def _snap_trailing_intro(a: Segment, b: Segment) -> bool:
+    """Move a trailing self-introduction off A and onto the front of B.
+
+    Where diarization misses a stretch of speech outright, _segment_for_gap_word
+    snaps the whole un-diarized gap onto the preceding turn, so a chair's turn
+    ends with the next speaker's opening — "...next person in chambers Thank
+    you, my name is Paul Gillard I'm" published as the councilmember's own
+    words. Neither existing path sees these: they carry no '>>' marker, and in
+    livestream sources whose word timings are interpolated there is no pause and
+    no terminal punctuation at the true split.
+
+    The signal that does locate them is the introduction itself, admitted only
+    when the cue lies OUTSIDE A's own diarized span — the gap-snap fallback put
+    it there, no overlap with the turn did. Both halves of that test are needed:
+    across the 172-meeting corpus 7,367 segments carry a word past their own
+    end_time and 141 carry a non-leading introduction, but only 7 carry both.
+    An introduction inside the turn's own span is real speech and stays, which
+    is what keeps this rule off ASR spelling variants of the same person
+    ("Bob Costello" transcribed "Bob Gasillo").
+
+    Deliberately unbounded in length (these fragments run to 7 words, past
+    MAX_FRAGMENT_WORDS) because the length cap is replaced by the semantic gate
+    rather than relaxed — raising MAX_FRAGMENT_WORDS would loosen the marker
+    paths for every segment in the corpus. Returns True if a word moved.
+    """
+    if not b.words:
+        # No real destination turn. Publish drops empty segments, so moving
+        # words here would turn a dropped turn into a live attribution.
+        return False
+    cue = _intro_cue_index(a.words)
+    if cue is None:
+        return False
+    if a.words[cue].start <= a.end_time:
+        return False
+    # Take the greeting with the introduction when a sentence ends just before
+    # it ("...two more people. | Hi, my name is"), else split at the cue. Only
+    # terminal punctuation is trusted here: an opener word list would have to
+    # be tuned on seven examples, and could take real speech off the chair.
+    split = cue
+    for k in range(cue, max(0, cue - MAX_INTRO_PREAMBLE) - 1, -1):
+        if k > 0 and _ends_sentence(a.words[k - 1].word):
+            split = k
+            break
+    if split < 1:
+        return False   # A must keep words of its own
+    return _move(a.words[split:], a, b)
+
+
 def snap_segment_boundaries(segments: list[Segment]) -> list[Segment]:
     """Correct word-level speaker bleed at diarization turn boundaries.
 
@@ -197,6 +269,11 @@ def snap_segment_boundaries(segments: list[Segment]) -> list[Segment]:
     straddling boundary words using cheap, non-LLM signals — the '>>' broadcast
     speaker-change marker, and word-gap pauses plus terminal punctuation — with
     no acoustic re-analysis and no model call.
+
+    A separately-gated rule (_snap_trailing_intro) additionally handles the case
+    where diarization missed a stretch of speech entirely and the gap-snap
+    fallback dumped the next speaker's opening self-introduction onto the end of
+    the previous turn.
 
     Runs to a fixpoint (bounded by MAX_SNAP_PASSES): most work is done in the
     first sweep, but where diarization is degenerate — zero-duration turns, or
@@ -211,6 +288,7 @@ def snap_segment_boundaries(segments: list[Segment]) -> list[Segment]:
         for a, b in zip(ordered, ordered[1:]):
             moved |= _snap_leading(a, b)   # tail of A bled into front of B → to A
             moved |= _snap_trailing(a, b)  # opening of B at tail of A → into B
+            moved |= _snap_trailing_intro(a, b)  # B's self-intro at tail of A → into B
         if not moved:
             break
     return segments
