@@ -836,3 +836,79 @@ def test_dedupe_keeps_all_crec_and_drops_llm_in_three_way_group():
     kept = sorted(l for l, m in mappings.items() if m.speaker_name == "Jane Doe")
     assert kept == ["A", "B"]                 # both CREC labels kept
     assert mappings["C"].id_method == "collision"   # LLM demoted even at 0.99 conf
+
+
+# --- merging re-exposes turn-boundary bleed ---------------------------------
+#
+# snap_segment_boundaries (PR #112) evaluates ADJACENT PAIRS, and it runs at
+# word-assignment time. Merging collapses adjacent same-speaker turns hard
+# (236 segments -> 38 is typical on the corpus), so the turns either side of
+# every boundary change, along with their spans and their first/last words.
+# Boundaries the transcription-time snap already settled become different,
+# never-evaluated boundaries. Measured across the corpus: of 54 meetings whose
+# named transcript was bled, 50 had a CLEAN raw transcript, and merging that
+# clean raw re-created the bleed in 50 of 50.
+
+
+def _fragmented_bleed():
+    """A's sentence tail ('be.') sits at the front of B's first turn, which is
+    a single word — so the pre-merge snap skips it (_snap_leading needs two
+    words in the destination). Merging B's two turns makes it visible."""
+    a = Segment(segment_id=0, start_time=0.0, end_time=1.0, speaker_label="SPEAKER_A")
+    b1 = Segment(segment_id=1, start_time=1.0, end_time=1.3, speaker_label="SPEAKER_B")
+    b2 = Segment(segment_id=2, start_time=1.3, end_time=3.0, speaker_label="SPEAKER_B")
+    a.words = [Word("Will", 0.4, 0.7), Word("this", 0.7, 1.0)]
+    b1.words = [Word("be.", 1.0, 1.2)]
+    b2.words = [Word("We", 1.6, 1.8), Word("can.", 1.8, 2.1)]
+    for s in (a, b1, b2):
+        s.text = " ".join(w.word for w in s.words)
+    return [a, b1, b2]
+
+
+def test_pre_merge_snap_cannot_see_a_bleed_into_a_one_word_turn():
+    # Establishes why the merge matters: with B fragmented, the snap declines.
+    from src.word_assign import snap_segment_boundaries
+
+    segs = _fragmented_bleed()
+    snap_segment_boundaries(segs)
+
+    assert [w.word for w in segs[0].words] == ["Will", "this"]
+    assert [w.word for w in segs[1].words] == ["be."]
+
+
+def test_merge_adjacent_segments_resnaps_the_boundaries_it_changes():
+    merged = merge_adjacent_segments(_fragmented_bleed())
+
+    assert len(merged) == 2
+    assert [w.word for w in merged[0].words] == ["Will", "this", "be."]
+    assert [w.word for w in merged[1].words] == ["We", "can."]
+
+
+def test_merge_adjacent_segments_rebuilds_text_for_moved_words():
+    # .text is carried alongside .words through the merge, so a snap that moves
+    # words must refresh it or publish ships text that contradicts the words.
+    merged = merge_adjacent_segments(_fragmented_bleed())
+
+    assert merged[0].text == "Will this be."
+    assert merged[1].text == "We can."
+
+
+def test_merge_adjacent_segments_leaves_text_without_word_timings_alone():
+    # Sources whose transcript arrives without word timings carry .text and no
+    # .words. The snap cannot touch them, and their text must not be blanked.
+    a = Segment(segment_id=0, start_time=0.0, end_time=1.0, speaker_label="SPEAKER_A",
+                text="Will this be.")
+    b = Segment(segment_id=1, start_time=1.0, end_time=3.0, speaker_label="SPEAKER_B",
+                text="We can.")
+
+    merged = merge_adjacent_segments([a, b])
+
+    assert [s.text for s in merged] == ["Will this be.", "We can."]
+
+
+def test_merge_adjacent_segments_does_not_change_the_segment_count_by_snapping():
+    # backfill_segment_merge.py and relabel_meeting.py probe this function by
+    # comparing len() against the input. Snapping moves words between turns and
+    # must never add or drop a turn, or those probes start lying.
+    segs = _fragmented_bleed()
+    assert len(merge_adjacent_segments(segs)) == 2

@@ -20,6 +20,7 @@ you can re-publish them (the publish path pushes the corrected transcript):
 
 Usage:
     .venv/bin/python backfill_boundary_snap.py [--dry-run]
+    .venv/bin/python backfill_boundary_snap.py --meeting <id> [--meeting <id> ...]
 """
 from __future__ import annotations
 
@@ -64,16 +65,30 @@ def _load(meeting_dir: Path):
         return None
 
 
-def backfill(*, dry_run: bool = False) -> int:
+def backfill(*, dry_run: bool = False, only: list[str] | None = None) -> int:
     """Re-snap every meeting whose transcript_named.json has boundary bleed.
+
+    `only` restricts the walk to those meeting ids. Use it to apply one snap
+    change on its own: meetings processed since the last backfill also carry
+    pending corrections from the earlier pass, and a blanket run would land
+    both at once and widen the re-publish set. An id that is not present is an
+    error, so a typo cannot pass as "nothing needed re-snapping".
+
     Returns the number of meetings changed."""
     meetings_dir = config.MEETINGS_DIR
     if not meetings_dir.exists():
         print("No meetings directory — nothing to do.")
         return 0
 
+    dirs = sorted(p for p in meetings_dir.iterdir() if p.is_dir())
+    if only is not None:
+        missing = sorted(set(only) - {p.name for p in dirs})
+        if missing:
+            raise ValueError(f"no such meeting(s) under {meetings_dir}: {', '.join(missing)}")
+        dirs = [p for p in dirs if p.name in set(only)]
+
     changed = 0
-    for mdir in sorted(p for p in meetings_dir.iterdir() if p.is_dir()):
+    for mdir in dirs:
         meeting = _load(mdir)
         if meeting is None or not meeting.segments:
             continue
@@ -120,8 +135,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true",
                     help="Show what would change without writing.")
+    ap.add_argument("--meeting", action="append", metavar="ID", dest="meetings",
+                    help="Re-snap only this meeting id. Repeatable. Without it, "
+                         "every meeting is walked.")
     args = ap.parse_args()
-    backfill(dry_run=args.dry_run)
+    backfill(dry_run=args.dry_run, only=args.meetings)
 
 
 if __name__ == "__main__":
