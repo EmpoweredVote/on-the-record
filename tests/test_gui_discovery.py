@@ -922,3 +922,71 @@ def test_family_key_none_when_name_blank():
 
 def test_discovered_row_has_family_count_default_zero():
     assert _row().family_count == 0
+
+
+# --- Approve source family: DB action ---
+
+def _capture_conn(monkeypatch, rowcount=1):
+    captured = {}
+    class _Cur:
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+        @property
+        def rowcount(self):
+            return rowcount
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    class _Conn:
+        def cursor(self): return _Cur()
+        def commit(self): captured["committed"] = True
+        def close(self): pass
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+    return captured
+
+
+def test_approve_family_by_outlet_id(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=6)
+    r = _row(outlet_id="00000000-0000-0000-0000-000000000001")
+    n = discovery.approve_source_family(r)
+    assert n == 6
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.discovered_sources" in sql
+    assert "status = 'approved'" in sql
+    assert "status = 'pending'" in sql
+    assert "outlet_id = %s::uuid" in sql
+    assert captured["params"] == ("00000000-0000-0000-0000-000000000001",)
+
+
+def test_approve_family_by_channel_id(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=3)
+    r = _row(outlet_id=None, channel_id="UCk")
+    assert discovery.approve_source_family(r) == 3
+    sql = captured["sql"].lower()
+    assert "channel_id = %s" in sql
+    assert captured["params"] == ("UCk",)
+
+
+def test_approve_family_by_name(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=2)
+    r = _row(outlet_id=None, channel_id=None, channel_name="Wisconsin PBS")
+    assert discovery.approve_source_family(r) == 2
+    sql = captured["sql"].lower()
+    assert "lower(btrim(channel_name)) = %s" in sql
+    assert captured["params"] == ("wisconsin pbs",)
+
+
+def test_approve_family_keyless_updates_only_self(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=1)
+    r = _row(id="d9", outlet_id=None, channel_id=None, channel_name=None)
+    assert discovery.approve_source_family(r) == 1
+    sql = captured["sql"].lower()
+    assert "id = %s::uuid" in sql
+    assert captured["params"] == ("d9",)
+
+
+def test_approve_family_returns_zero_without_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.approve_source_family(_row()) == 0

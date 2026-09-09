@@ -195,6 +195,42 @@ def set_status_bulk(row_ids: "list[str]", status: str, reason: "str | None" = No
         return 0
 
 
+def approve_source_family(row: "DiscoveredRow") -> int:
+    """Approve, as a quote source, every pending row that shares this row's
+    source key (see family_key). Whole-queue scope, all races. Only 'pending'
+    rows are touched, so this can never un-ingest or re-approve. A keyless row
+    approves only itself. Returns the number of rows changed, 0 on failure."""
+    key = family_key(row)
+    match = {
+        "outlet": "outlet_id = %s::uuid",
+        "channel": "channel_id = %s",
+        "name": "lower(btrim(channel_name)) = %s",
+    }
+    if key is None:
+        where, val = "id = %s::uuid", row.id
+    else:
+        where, val = match[key[0]], key[1]
+    url = _db_url()
+    if not url:
+        return 0
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    update essentials.discovered_sources
+                    set status = 'approved', status_reason = null, reviewed_at = now()
+                    where status = 'pending' and {where}
+                """, (val,))
+                n = cur.rowcount
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
 def health() -> dict:
     empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
              "last_run": None, "scheduled_run_overdue": False,
