@@ -198,3 +198,69 @@ get it:
    meetings backfilled on 2026-07-23, but the corpus is now 172, so some
    changes will be catch-up and must not be confused with the new rule's effect.
 4. Re-publish the two live meetings only after the user confirms.
+
+---
+
+# Addendum — the snap was not persisting at all
+
+Found while checking why a backfill still reported 54 pending meetings after
+this change. It is a separate defect from the one above, and a larger one.
+
+## The defect
+
+`merge_adjacent_segments` (`src/identify.py`) discarded the output of
+`snap_segment_boundaries` on every identify run. Two mechanisms:
+
+1. `snap_segment_boundaries` evaluates **adjacent pairs**, and runs once, at
+   word assignment. The identify-stage merge then collapses adjacent
+   same-speaker turns hard — 236 segments to 38 is typical, 624 to 109 on a
+   long forum. The turns either side of every boundary change, along with their
+   spans and their first and last words, so each boundary the snap settled
+   becomes a different, never-evaluated boundary.
+2. A bleed into a **one-word turn is invisible before the merge**, because
+   `_snap_leading` requires two words in the destination. It only becomes
+   correctable once that turn is merged.
+
+So every identify run silently re-bled a transcript that transcription had
+already corrected. This was not historical debt predating PR #112.
+
+## Evidence
+
+| Measurement | Before | After |
+| --- | --- | --- |
+| Named transcripts bled | 54 | — |
+| …whose raw transcript was CLEAN | 50 | — |
+| …whose raw was also bled (predate #112) | 4 | — |
+| Merging a clean raw re-creates the bleed | **50 of 50** | **0 of 93** |
+
+Provenance note: `pipeline_state.json` carries no timestamps. Use
+`transcript_raw.json` mtime as "when transcribed" — repair tools rewrite
+`transcript_named.json` but not the raw file. That is what separated the 50
+post-merge cases from the 4 genuinely old ones.
+
+## The fix
+
+`_resnap_merged_boundaries(merged)` is called inside `merge_adjacent_segments`
+before it returns, rather than at its four production call sites
+(`run_local.py` twice, `src/repair.py`, `backfill_segment_merge.py`), so no
+future caller can bypass it. Same reasoning that closed the earlier in-memory
+segment-merge hole.
+
+Two constraints the fix respects:
+
+- **Two callers use the function as a length probe**
+  (`backfill_segment_merge.py`, `relabel_meeting.py`). Snapping moves words
+  between turns and never changes the segment count. A test pins that.
+- **`.text` rides alongside `.words` through the merge**, so it is rebuilt for
+  the turns whose words actually moved, and only those — a source whose
+  transcript arrives without word timings keeps its text. Verified neutral on
+  the pre-existing text-versus-words mismatch: 265 segments corpus-wide both
+  before and after (the raw input already carries 320).
+
+## Applied
+
+All 54 affected meetings backfilled (0 still bled), and the 43 live ones
+republished and verified as an exact segment-text match against production.
+Pre-backfill copies of all 172 transcripts are kept at
+`~/CouncilScribe/backups/2026-09-09-pre-boundary-resnap/<meeting_id>.json`,
+outside `meetings/` so no directory walker picks them up.
