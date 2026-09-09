@@ -121,14 +121,17 @@ def test_reject_requires_and_records_reason(monkeypatch):
     assert calls == {"status": "rejected", "reason": "clip-not-original"}
 
 
-def test_quote_source_route_marks_approved(monkeypatch):
+def test_quote_source_route_approves_family_and_reports_count(monkeypatch):
     calls = {}
-    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
-    monkeypatch.setattr(discovery, "set_status",
-                        lambda rid, status, reason=None: calls.update(status=status) or True)
+    monkeypatch.setattr(discovery, "get_row",
+                        lambda rid: _row(channel_name="Wisconsin PBS"))
+    monkeypatch.setattr(discovery, "approve_source_family",
+                        lambda row: calls.update(row=row) or 6)
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
-    assert resp.status_code == 303 and calls["status"] == "approved"
+    assert resp.status_code == 303
+    assert calls["row"].id == "d1"
+    assert "approved 6 (Wisconsin PBS)" in _flash(resp)
 
 
 def test_watch_channel_calls_flywheel(monkeypatch):
@@ -193,14 +196,14 @@ def test_approve_ingest_blocks_non_pending_status(monkeypatch):
 
 def test_quote_source_blocks_non_pending_status(monkeypatch):
     monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="rejected"))
-    calls = {"set_status": False}
-    monkeypatch.setattr(discovery, "set_status",
-                        lambda rid, status, reason=None: calls.update(set_status=True) or True)
+    called = {"fanned": False}
+    monkeypatch.setattr(discovery, "approve_source_family",
+                        lambda row: called.update(fanned=True) or 1)
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
     assert resp.status_code == 303
-    assert "already" in _flash(resp)
-    assert calls["set_status"] is False
+    assert "already rejected" in _flash(resp)
+    assert called["fanned"] is False
 
 
 def test_reject_blocks_non_pending_status(monkeypatch):
@@ -228,10 +231,10 @@ def test_reject_flash_surfaces_save_failure(monkeypatch):
 
 def test_quote_source_flash_surfaces_save_failure(monkeypatch):
     monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
-    monkeypatch.setattr(discovery, "set_status", lambda rid, status, reason=None: False)
+    monkeypatch.setattr(discovery, "approve_source_family", lambda row: 0)
     client = TestClient(create_app())
     resp = client.post("/discovery/d1/quote-source", follow_redirects=False)
-    assert "SAVE FAILED" in _flash(resp)
+    assert "approved as quote source — SAVE FAILED, retry" in _flash(resp)
 
 
 def test_approve_ingest_flash_surfaces_save_failure(monkeypatch):
@@ -890,3 +893,141 @@ def test_triage_page_has_checkboxes_and_bulk_bar(monkeypatch):
     assert 'name="row_ids"' in html
     assert 'value="d1"' in html
     assert 'form="bulkform"' in html          # checkbox associated to the bulk form, not nested
+
+
+# --- Approve source family: matching key ---
+
+def test_family_key_prefers_outlet_id():
+    r = _row(outlet_id="00000000-0000-0000-0000-000000000001",
+             channel_id="UCk", channel_name="Wisconsin PBS")
+    assert discovery.family_key(r) == ("outlet", "00000000-0000-0000-0000-000000000001")
+
+
+def test_family_key_falls_back_to_channel_id():
+    r = _row(outlet_id=None, channel_id="UCk", channel_name="Wisconsin PBS")
+    assert discovery.family_key(r) == ("channel", "UCk")
+
+
+def test_family_key_falls_back_to_normalized_name():
+    r = _row(outlet_id=None, channel_id=None, channel_name="  Wisconsin PBS ")
+    assert discovery.family_key(r) == ("name", "wisconsin pbs")
+
+
+def test_family_key_none_when_no_identity():
+    r = _row(outlet_id=None, channel_id=None, channel_name=None)
+    assert discovery.family_key(r) is None
+
+
+def test_family_key_none_when_name_blank():
+    r = _row(outlet_id=None, channel_id=None, channel_name="   ")
+    assert discovery.family_key(r) is None
+
+
+def test_discovered_row_has_family_count_default_zero():
+    assert _row().family_count == 0
+
+
+# --- Approve source family: DB action ---
+
+def _capture_conn(monkeypatch, rowcount=1):
+    captured = {}
+    class _Cur:
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+        @property
+        def rowcount(self):
+            return rowcount
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    class _Conn:
+        def cursor(self): return _Cur()
+        def commit(self): captured["committed"] = True
+        def close(self): pass
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+    return captured
+
+
+def test_approve_family_by_outlet_id(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=6)
+    r = _row(outlet_id="00000000-0000-0000-0000-000000000001")
+    n = discovery.approve_source_family(r)
+    assert n == 6
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.discovered_sources" in sql
+    assert "status = 'approved'" in sql
+    assert "status = 'pending'" in sql
+    assert "outlet_id = %s::uuid" in sql
+    assert captured["params"] == ("00000000-0000-0000-0000-000000000001",)
+
+
+def test_approve_family_by_channel_id(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=3)
+    r = _row(outlet_id=None, channel_id="UCk")
+    assert discovery.approve_source_family(r) == 3
+    sql = captured["sql"].lower()
+    assert "channel_id = %s" in sql
+    assert captured["params"] == ("UCk",)
+
+
+def test_approve_family_by_name(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=2)
+    r = _row(outlet_id=None, channel_id=None, channel_name="Wisconsin PBS")
+    assert discovery.approve_source_family(r) == 2
+    sql = captured["sql"].lower()
+    assert "lower(btrim(channel_name)) = %s" in sql
+    assert captured["params"] == ("wisconsin pbs",)
+
+
+def test_approve_family_keyless_updates_only_self(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=1)
+    r = _row(id="d9", outlet_id=None, channel_id=None, channel_name=None)
+    assert discovery.approve_source_family(r) == 1
+    sql = captured["sql"].lower()
+    assert "id = %s::uuid" in sql
+    assert captured["params"] == ("d9",)
+
+
+def test_approve_family_returns_zero_without_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.approve_source_family(_row()) == 0
+
+
+# --- Approve source family: button count on the page ---
+
+def test_quote_source_button_shows_sibling_count(monkeypatch):
+    rows = [_row(id="a", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r1"),
+            _row(id="b", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r2"),
+            _row(id="c", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r3")]
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 3})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    # three rows share a channel → each button offers "+2 more" (siblings across races)
+    assert "(+2 more)" in html
+
+
+def test_quote_source_button_plain_for_loner(monkeypatch):
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(id="a", channel_id="UCsolo")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    assert "Approve &rarr; quote source</button>" in html or \
+           "Approve → quote source</button>" in html
+    assert "more)" not in html
+
+
+def test_quote_source_button_no_count_on_deferred_view(monkeypatch):
+    rows = [_row(id="a", channel_id="UCw", status="deferred"),
+            _row(id="b", channel_id="UCw", status="deferred")]
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0})
+    client = TestClient(create_app())
+    html = client.get("/discovery?show=deferred").text
+    assert "more)" not in html
