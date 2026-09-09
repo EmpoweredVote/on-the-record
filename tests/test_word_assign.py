@@ -850,3 +850,39 @@ def test_straddling_self_intro_declines_a_long_spilling_turn():
     snap_segment_boundaries([a, b])
     assert _tokens(a) == ["Okay.", "Thank", "you."]
     assert _tokens(b)[0] == "My"
+
+
+def test_straddling_self_intro_snap_is_idempotent():
+    # backfill_boundary_snap.py re-snaps in place, so a second pass must move
+    # nothing. Three gates independently prevent a re-fire: after the move the
+    # cue sits at index 0 in B, A's remaining last word ("minutes." at
+    # 13109.613) no longer starts past A's end_time of 13111.282, and B now
+    # opens with an uppercase "My".
+    def build():
+        a = _seg(793, 13109.223, 13111.282, "SPEAKER_36")
+        b = _seg(794, 13111.754, 13246.585, "SPEAKER_19")
+        a.words = [
+            Word("three", 13108.944, 13109.275),
+            Word("-", 13109.275, 13109.613),
+            Word("minutes.", 13109.613, 13109.952),
+            Word("My", 13109.952, 13110.29),
+            Word("name", 13110.29, 13110.629),
+            Word("is", 13110.629, 13110.967),
+            Word("Jeremy", 13110.967, 13111.306),
+            Word("Hackard,", 13111.306, 13111.644),
+        ]
+        b.words = [
+            Word("and", 13111.644, 13111.983),
+            Word("I'm", 13111.983, 13112.321),
+            Word("instantly", 13112.321, 13112.66),
+        ]
+        return [a, b]
+
+    segs = build()
+    snap_segment_boundaries(segs)
+    once = [_tokens(s) for s in segs]
+    snap_segment_boundaries(segs)
+    twice = [_tokens(s) for s in segs]
+
+    assert once == twice
+    assert once[0] == ["three", "-", "minutes."]
