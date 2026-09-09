@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import pathlib
 import sys
@@ -76,15 +77,24 @@ def main() -> None:
 
     changed: list[tuple[str, int, list[str], list[str]]] = []
     non_idempotent: list[str] = []
+    processed = 0
+    # A fingerprint over the bytes actually read, so a later reader can tell
+    # whether a reported figure was measured on the same corpus. Unreadable and
+    # empty transcripts are skipped above and contribute nothing, exactly as
+    # they contribute nothing to the counts.
+    corpus_digest = hashlib.md5()
     for path in meetings:
         name = path.parent.name
         try:
+            raw_bytes = path.read_bytes()
             base = load(path)
         except (OSError, json.JSONDecodeError) as exc:
             print(f"  !! {name}: unreadable ({exc})")
             continue
         if not base:
             continue
+        processed += 1
+        corpus_digest.update(hashlib.md5(raw_bytes).hexdigest().encode())
         without = fingerprint(run(copy.deepcopy(base), with_rule=False))
         after = run(copy.deepcopy(base), with_rule=True)
         with_ = fingerprint(after)
@@ -94,7 +104,10 @@ def main() -> None:
         if with_ != fingerprint(run(copy.deepcopy(after), with_rule=True)):
             non_idempotent.append(name)
 
-    print(f"scanned {len(meetings)} meetings\n")
+    skipped = len(meetings) - processed
+    print(f"scanned {processed} meetings"
+          + (f" ({skipped} of {len(meetings)} skipped: unreadable or empty)" if skipped else ""))
+    print(f"corpus fingerprint: {corpus_digest.hexdigest()}\n")
     print(f"segments changed by the straddling rule: {len(changed)}")
     for name, sid, before, after_words in changed:
         print(f"  {name} seg {sid}")

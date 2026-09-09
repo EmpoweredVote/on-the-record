@@ -12,6 +12,9 @@ disagree by a word or two — see that function for the cheap, non-LLM signals i
 uses (the '>>' broadcast speaker-change marker, plus word-gap pauses and
 terminal punctuation), and where diarization has missed a stretch of speech
 outright it also moves a trailing self-introduction onto the turn that follows.
+A second, more heavily gated introduction rule covers the straddling shape,
+where the introduction begins inside the turn's own diarized span and only the
+turn's trailing words spill past it.
 """
 
 from __future__ import annotations
