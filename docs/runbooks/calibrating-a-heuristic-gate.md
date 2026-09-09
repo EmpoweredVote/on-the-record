@@ -7,6 +7,13 @@ Worked example throughout: the trailing self-introduction rule,
 `src/word_assign.py::_snap_trailing_intro`, spec at
 `docs/superpowers/specs/2026-09-09-trailing-intro-bleed-design.md`.
 
+Gate tooling lives in `bench/` — `calibrate_gate.py`, `diagnose_merge.py`,
+`forum_gate.py`. **Commit a funnel instrument there.** A scratch workspace is
+the wrong home: `.superpowers/` is gitignored (`.gitignore:50`, zero tracked
+files) and the SDD workflow deletes it on completion, so an instrument left
+there cannot be re-run by the second party who has to re-derive your number —
+and a reviewer cannot check what you measured after the fact.
+
 ## The rule that matters
 
 **A second party has to make the measurement. Self-review does not catch this
@@ -86,14 +93,20 @@ A two-point probe cannot locate a step. Sweep the whole range.
 | 1 | 68 relaxed-gate hits; 141 non-leading cues | Re-implemented cue detection as `" ".join(toks[k:k+3]).startswith("my name is")`, which also matches `"my name island"` and `"my name isn't"`. The shipped `_intro_cue_index` compares tuples exactly and rejects both. | **63** and **131** |
 | 2 | Nearest false positive 180 words away | Ablation checked only the word immediately before the cue; the shipped gate scans back `MAX_INTRO_PREAMBLE` = 4. Understated the margin in the unsafe direction. | **21** words, by that session's own re-measurement |
 | 3 | "The cap hazard is live" | Reconstructed a segment's tail by retyping it from a funnel print, truncated at the cue. The real tail ran on to `"...running for clerk. All right. Thank you all so much for"`, which reversed the conclusion. | Hazard not live |
-| 4 | Threshold `cap >= 8` | Both sessions probed only caps 4 and 8, then each stated a threshold. One had reproduced the other's instance and inferred its threshold. | **cap >= 6** |
+| 4a | Exposure band "caps 5–9" | Probed caps 4, 5, 8, 9, 10, 20 — a gap straddling the step — and stated a band without bisecting. Also conflated the synthetic shape's firing threshold with a different rule's real-data coverage gap. | step is at **cap 6** |
+| 4b | Threshold `cap >= 8` | Reproduced the other session's instance at cap 8, watched it fire, and restated its threshold as established — having made no probe at all. | **cap >= 6** |
+
+4a and 4b are deliberately separate. They look like one shared mistake and are
+not: 4a is a gap probe, 4b is accepting a threshold that arrived with a working
+demonstration attached. The second is the easier one to make, because a
+reproduced instance feels like a measurement.
 
 Two corollaries worth stating separately:
 
 - **Retyping data from a print is re-implementing it.** Load the words.
 - **A number that arrives with a measurement attached still needs the
-  measurement that locates it.** Reproducing someone's instance is not
-  establishing their threshold.
+  measurement that locates it.** Reproducing someone's instance confirms the
+  instance, not the threshold.
 
 ## Checklist before a calibrated figure goes into code
 
