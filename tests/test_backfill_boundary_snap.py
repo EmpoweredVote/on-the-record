@@ -74,3 +74,41 @@ def test_backfill_skips_clean_meeting(tagged_meeting_dir):
                               completed_stage=7)
     (mdir / "transcript_named.json").write_text(json.dumps(m.to_dict()))
     assert backfill(dry_run=False) == 0                    # nothing to do
+
+
+def test_backfill_only_touches_the_named_meetings(tagged_meeting_dir, monkeypatch):
+    # A targeted re-snap: this change's fix affects 2 meetings, while 54 others
+    # carry pending corrections from the earlier pass. Applying the fix must not
+    # drag those unrelated meetings along.
+    wanted = tagged_meeting_dir("a", meeting_id="2026-06-23-cd1-democratic-primary-debate",
+                                completed_stage=7)
+    other = tagged_meeting_dir("b", meeting_id="2026-06-24-cd1-republican-primary-debate",
+                               completed_stage=7)
+    for mdir, mid in ((wanted, "2026-06-23-cd1-democratic-primary-debate"),
+                      (other, "2026-06-24-cd1-republican-primary-debate")):
+        (mdir / "transcript_named.json").write_text(json.dumps(_bled_meeting(mid).to_dict()))
+    untouched = (other / "transcript_named.json").read_text()
+    import backfill_boundary_snap as bf
+    monkeypatch.setattr(bf, "live_published_slugs", lambda: None, raising=False)
+
+    assert backfill(dry_run=False, only=["2026-06-23-cd1-democratic-primary-debate"]) == 1
+
+    fixed = json.loads((wanted / "transcript_named.json").read_text())
+    assert [w["word"] for w in fixed["segments"][0]["words"]] == ["this", "district."]
+    assert (other / "transcript_named.json").read_text() == untouched
+
+
+def test_backfill_rejects_a_meeting_id_that_is_not_present(tagged_meeting_dir, monkeypatch):
+    # A typo in a meeting id would otherwise report "nothing needed re-snapping"
+    # and look like success, so it has to fail loudly.
+    tagged_meeting_dir("a", meeting_id="2026-06-23-cd1-democratic-primary-debate",
+                       completed_stage=7)
+    import backfill_boundary_snap as bf
+    monkeypatch.setattr(bf, "live_published_slugs", lambda: None, raising=False)
+
+    try:
+        backfill(dry_run=True, only=["no-such-meeting"])
+    except ValueError as exc:
+        assert "no-such-meeting" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for an unknown meeting id")
