@@ -191,13 +191,21 @@ def create_app() -> FastAPI:
         return _discovery_redirect(flash)
 
     @app.post("/discovery/{row_id}/reject")
-    def discovery_reject(row_id: str, reason: str = Form("other")):
+    def discovery_reject(row_id: str, reason: str = Form("other"),
+                         whole_source: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
             return _discovery_redirect(f"already {row.status}")
+        if whole_source:
+            n = discovery.reject_source_family(row, reason)
+            if n:
+                flash = f"rejected {n} ({row.channel_name or 'source'})"
+            else:
+                flash = "rejected — SAVE FAILED, retry"
+            return _discovery_redirect(flash)
         ok = discovery.set_status(row_id, "rejected", reason=reason)
         flash = "rejected"
         if not ok:

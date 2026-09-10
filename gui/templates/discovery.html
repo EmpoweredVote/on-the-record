@@ -133,6 +133,7 @@
           <option value="duplicate">duplicate</option>
           <option value="other" selected>other</option>
         </select>
+        {% if r.family_count %}<label><input type="checkbox" name="whole_source" value="1"> apply to all {{ r.family_count + 1 }} from this source</label>{% endif %}
         <button type="submit" class="delete-btn">Reject</button>
       </form>
       {% if r.safe_url %}

@@ -195,11 +195,11 @@ def set_status_bulk(row_ids: "list[str]", status: str, reason: "str | None" = No
         return 0
 
 
-def approve_source_family(row: "DiscoveredRow") -> int:
-    """Approve, as a quote source, every pending row that shares this row's
-    source key (see family_key). Whole-queue scope, all races. Only 'pending'
-    rows are touched, so this can never un-ingest or re-approve. A keyless row
-    approves only itself. Returns the number of rows changed, 0 on failure."""
+def _family_where(row: "DiscoveredRow") -> "tuple[str, str]":
+    """The (where_clause, value) selecting a row's source family, by the same
+    precedence as family_key. The clause is drawn only from the hardcoded match
+    map or the literal id fallback — never from row data — so it carries no
+    injection surface; the value is always bound as a parameter by callers."""
     key = family_key(row)
     match = {
         "outlet": "outlet_id = %s::uuid",
@@ -207,9 +207,16 @@ def approve_source_family(row: "DiscoveredRow") -> int:
         "name": "lower(btrim(channel_name)) = %s",
     }
     if key is None:
-        where, val = "id = %s::uuid", row.id
-    else:
-        where, val = match[key[0]], key[1]
+        return "id = %s::uuid", row.id
+    return match[key[0]], key[1]
+
+
+def approve_source_family(row: "DiscoveredRow") -> int:
+    """Approve, as a quote source, every pending row that shares this row's
+    source key (see family_key). Whole-queue scope, all races. Only 'pending'
+    rows are touched, so this can never un-ingest or re-approve. A keyless row
+    approves only itself. Returns the number of rows changed, 0 on failure."""
+    where, val = _family_where(row)
     url = _db_url()
     if not url:
         return 0
@@ -222,6 +229,33 @@ def approve_source_family(row: "DiscoveredRow") -> int:
                     set status = 'approved', status_reason = null, reviewed_at = now()
                     where status = 'pending' and {where}
                 """, (val,))
+                n = cur.rowcount
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
+def reject_source_family(row: "DiscoveredRow", reason: "str | None") -> int:
+    """Reject every pending row that shares this row's source key (family_key),
+    all with one reason. Whole-queue scope, all races. Only 'pending' rows are
+    touched. A keyless row rejects only itself. Returns rows changed, 0 on
+    failure."""
+    where, val = _family_where(row)
+    url = _db_url()
+    if not url:
+        return 0
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    update essentials.discovered_sources
+                    set status = 'rejected', status_reason = %s, reviewed_at = now()
+                    where status = 'pending' and {where}
+                """, (reason, val))
                 n = cur.rowcount
             conn.commit()
             return n
