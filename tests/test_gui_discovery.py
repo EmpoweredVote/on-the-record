@@ -1031,3 +1031,28 @@ def test_quote_source_button_no_count_on_deferred_view(monkeypatch):
     client = TestClient(create_app())
     html = client.get("/discovery?show=deferred").text
     assert "more)" not in html
+
+
+# --- Reject source family: shared WHERE helper ---
+
+def test_family_where_outlet():
+    r = _row(outlet_id="00000000-0000-0000-0000-000000000001",
+             channel_id="UCk", channel_name="Wisconsin PBS")
+    assert discovery._family_where(r) == (
+        "outlet_id = %s::uuid", "00000000-0000-0000-0000-000000000001")
+
+
+def test_family_where_channel():
+    r = _row(outlet_id=None, channel_id="UCk", channel_name="Wisconsin PBS")
+    assert discovery._family_where(r) == ("channel_id = %s", "UCk")
+
+
+def test_family_where_name():
+    r = _row(outlet_id=None, channel_id=None, channel_name="  Wisconsin PBS ")
+    assert discovery._family_where(r) == (
+        "lower(btrim(channel_name)) = %s", "wisconsin pbs")
+
+
+def test_family_where_keyless_uses_id():
+    r = _row(id="d9", outlet_id=None, channel_id=None, channel_name=None)
+    assert discovery._family_where(r) == ("id = %s::uuid", "d9")
