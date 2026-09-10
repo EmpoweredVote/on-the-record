@@ -238,6 +238,33 @@ def approve_source_family(row: "DiscoveredRow") -> int:
         return 0
 
 
+def reject_source_family(row: "DiscoveredRow", reason: "str | None") -> int:
+    """Reject every pending row that shares this row's source key (family_key),
+    all with one reason. Whole-queue scope, all races. Only 'pending' rows are
+    touched. A keyless row rejects only itself. Returns rows changed, 0 on
+    failure."""
+    where, val = _family_where(row)
+    url = _db_url()
+    if not url:
+        return 0
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    update essentials.discovered_sources
+                    set status = 'rejected', status_reason = %s, reviewed_at = now()
+                    where status = 'pending' and {where}
+                """, (reason, val))
+                n = cur.rowcount
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
 def health() -> dict:
     empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
              "last_run": None, "scheduled_run_overdue": False,

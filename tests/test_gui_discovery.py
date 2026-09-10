@@ -995,6 +995,46 @@ def test_approve_family_returns_zero_without_db(monkeypatch):
     assert discovery.approve_source_family(_row()) == 0
 
 
+# --- Reject source family: DB action ---
+
+def test_reject_family_by_outlet_sets_reason(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=4)
+    r = _row(outlet_id="00000000-0000-0000-0000-000000000001")
+    n = discovery.reject_source_family(r, "tier-5")
+    assert n == 4
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.discovered_sources" in sql
+    assert "status = 'rejected'" in sql
+    assert "status_reason = %s" in sql
+    assert "status = 'pending'" in sql
+    assert "outlet_id = %s::uuid" in sql
+    assert captured["params"] == ("tier-5", "00000000-0000-0000-0000-000000000001")
+
+
+def test_reject_family_by_name(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=2)
+    r = _row(outlet_id=None, channel_id=None, channel_name="Wisconsin PBS")
+    assert discovery.reject_source_family(r, "stale") == 2
+    sql = captured["sql"].lower()
+    assert "lower(btrim(channel_name)) = %s" in sql
+    assert captured["params"] == ("stale", "wisconsin pbs")
+
+
+def test_reject_family_keyless_updates_only_self(monkeypatch):
+    captured = _capture_conn(monkeypatch, rowcount=1)
+    r = _row(id="d9", outlet_id=None, channel_id=None, channel_name=None)
+    assert discovery.reject_source_family(r, "other") == 1
+    sql = captured["sql"].lower()
+    assert "id = %s::uuid" in sql
+    assert captured["params"] == ("other", "d9")
+
+
+def test_reject_family_returns_zero_without_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.reject_source_family(_row(), "tier-5") == 0
+
+
 # --- Approve source family: button count on the page ---
 
 def test_quote_source_button_shows_sibling_count(monkeypatch):
