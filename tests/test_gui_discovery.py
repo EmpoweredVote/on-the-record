@@ -1096,3 +1096,74 @@ def test_family_where_name():
 def test_family_where_keyless_uses_id():
     r = _row(id="d9", outlet_id=None, channel_id=None, channel_name=None)
     assert discovery._family_where(r) == ("id = %s::uuid", "d9")
+
+
+# --- Reject source family: route + checkbox ---
+
+def test_reject_whole_source_fans_out_and_reports_count(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(discovery, "get_row",
+                        lambda rid: _row(channel_name="Wisconsin PBS"))
+    monkeypatch.setattr(discovery, "reject_source_family",
+                        lambda row, reason: calls.update(row=row, reason=reason) or 4)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject",
+                       data={"reason": "tier-5", "whole_source": "1"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls["row"].id == "d1" and calls["reason"] == "tier-5"
+    assert "rejected 4 (Wisconsin PBS)" in _flash(resp)
+
+
+def test_reject_single_row_when_checkbox_absent(monkeypatch):
+    calls = {"family": False}
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: calls.update(
+                            status=status, reason=reason) or True)
+    monkeypatch.setattr(discovery, "reject_source_family",
+                        lambda row, reason: calls.update(family=True) or 9)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject",
+                       data={"reason": "clip-not-original"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls["family"] is False
+    assert calls["status"] == "rejected" and calls["reason"] == "clip-not-original"
+    assert "rejected" in _flash(resp)
+
+
+def test_reject_whole_source_blocks_non_pending(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="approved"))
+    called = {"family": False}
+    monkeypatch.setattr(discovery, "reject_source_family",
+                        lambda row, reason: called.update(family=True) or 1)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject",
+                       data={"reason": "tier-5", "whole_source": "1"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "already approved" in _flash(resp)
+    assert called["family"] is False
+
+
+def test_reject_checkbox_shows_only_with_siblings(monkeypatch):
+    rows = [_row(id="a", channel_id="UCw"), _row(id="b", channel_id="UCw"),
+            _row(id="c", channel_id="UConly")]
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 3})
+    client = TestClient(create_app())
+    html = client.get("/discovery").text
+    assert 'name="whole_source"' in html          # the two UCw rows have a sibling
+    assert "apply to all 2 from this source" in html
+
+
+def test_reject_checkbox_absent_on_deferred_view(monkeypatch):
+    rows = [_row(id="a", channel_id="UCw", status="deferred"),
+            _row(id="b", channel_id="UCw", status="deferred")]
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0})
+    client = TestClient(create_app())
+    html = client.get("/discovery?show=deferred").text
+    assert 'name="whole_source"' not in html
