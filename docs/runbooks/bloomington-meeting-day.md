@@ -91,6 +91,7 @@ CATS usually posts within a day or two of the meeting.
 
 ```bash
 .venv/bin/python -m gui        # http://127.0.0.1:8000
+# or double-click start-gui.command (macOS) / start-gui.bat (Windows)
 ```
 
 Open the meeting → Review tab. With `--body` supplied, roster-matched council

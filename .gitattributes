@@ -1,0 +1,8 @@
+# cmd.exe mis-parses a .bat whose lines end in LF, so the Windows launcher must
+# keep CRLF on every checkout regardless of the developer's core.autocrlf.
+*.bat text eol=crlf
+
+# The macOS/Linux launchers must keep LF even when checked out on Windows: a
+# CRLF shebang line makes the kernel look for an interpreter named "bash\r".
+*.command text eol=lf
+*.sh text eol=lf
