@@ -134,6 +134,17 @@ def _require_db_url() -> str:
     return url
 
 
+def existing_meeting_slugs(db_url: Optional[str] = None) -> set[str]:
+    """Every slug present in meetings.meetings, any status (dedupe source of truth)."""
+    conn = psycopg2.connect(db_url or _require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT slug FROM meetings.meetings WHERE slug IS NOT NULL")
+            return {r[0] for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
 def _validate_date(date_str: str) -> str:
     try:
         return datetime.strptime(date_str.strip(), "%Y-%m-%d").date().isoformat()

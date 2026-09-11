@@ -241,6 +241,24 @@ def fetch_congressional_record_turns(
     return turns
 
 
+def has_chamber_data(
+    date: str,
+    chamber: str,
+    *,
+    fetch: Callable[[str], str] = _default_fetch,
+    api_key: Optional[str] = None,
+) -> bool:
+    """True when the Congressional Record for `date` has granules for `chamber`.
+
+    A recess day / missing package yields False (never an exception). Lighter
+    than fetch_congressional_record_turns: it lists granule ids only, never
+    fetching granule text.
+    """
+    key = _resolve_api_key(api_key)
+    ids = _list_matching_granule_ids(_package_id(date), chamber, key, fetch)
+    return bool(ids)
+
+
 def format_turns_text(turns: list[CrecTurn]) -> str:
     """Render turns as 'Speaker: text' blocks, blank-line separated."""
     return "\n\n".join(f"{t.speaker_raw}: {t.text}" for t in turns)
