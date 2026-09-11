@@ -2008,6 +2008,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
                       f"coverage={report['effective_coverage']:.0%})")
             except Exception as e:
                 print(f"  WARNING: draft publish failed: {e}")
+                # Unlike the interactive publish branch below, this path is meant
+                # for unattended cron dispatch (floor_dispatch): the subprocess
+                # exit code is the only signal a failed publish ever surfaces, so
+                # swallowing the exception here would report success on a failed
+                # DB write. Propagate so run_pipeline raises, the subprocess exits
+                # non-zero, and floor_dispatch counts the session as failed.
+                raise
         elif not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
             print(f"  Not publishing — gate verdict is "
                   f"'{state.review_status}'. Review and re-run, or pass "

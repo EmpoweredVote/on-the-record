@@ -123,7 +123,7 @@ def dispatch(
     if cookies_file:
         argv += ["--cookies", cookies_file]
     result = runner(argv, check=False)
-    return int(getattr(result, "returncode", 1) or 0)
+    return int(getattr(result, "returncode", 1))
 
 
 def _default_since(lookback_days: int) -> str:

@@ -1,4 +1,7 @@
 import argparse
+import json
+import sys
+
 import pytest
 import run_local
 from src.house_cdn import HouseFloorSource
@@ -99,3 +102,101 @@ def test_publish_as_draft_alone_enables_publish(monkeypatch):
                          "--publish-as-draft"])
     run_local.main()
     assert reached["publish"] is True
+
+
+def _make_resumable_meeting(meeting_dir, mid):
+    """Fixture a fully-checkpointed meeting (all 7 stages complete) so
+    --resume drives run_pipeline straight to the publish block without
+    doing any real ingestion/diarization/transcription/identification work.
+    """
+    meeting_dir.mkdir(parents=True)
+    (meeting_dir / "pipeline_state.json").write_text(
+        json.dumps({"completed_stage": 7}), encoding="utf-8")
+    (meeting_dir / "diarization.json").write_text("[]", encoding="utf-8")
+    (meeting_dir / "transcript_raw.json").write_text("[]", encoding="utf-8")
+    (meeting_dir / "transcript_named.json").write_text(
+        json.dumps({
+            "meeting_id": mid,
+            "audio_source": "https://example.invalid/floor.mp4",
+            "city": None,
+            "date": "2026-07-16",
+            "meeting_type": "House Floor",
+            "event_kind": "other",
+            "segments": [],
+            "speakers": {},
+        }),
+        encoding="utf-8",
+    )
+
+
+def _stub_pipeline_internals(monkeypatch, tmp_path):
+    """Common stubs so a --resume run reaches the publish block cheaply:
+    no real HF token lookup, no real audio-duration probe on a nonexistent
+    audio.wav, and a forced-pass confidence gate (both call sites — Stage 4's
+    gate and the draft-publish block's own re-evaluation — read the same
+    monkeypatched src.quality.evaluate_meeting).
+    """
+    monkeypatch.setattr("src.config.MEETINGS_DIR", tmp_path)
+    monkeypatch.setattr(run_local, "get_hf_token", lambda: "hf_dummy_token")
+    monkeypatch.setattr("src.audio_utils.get_audio_duration", lambda p: 0.0)
+    monkeypatch.setattr(
+        "src.quality.evaluate_meeting",
+        lambda meeting, **kw: {
+            "verdict": "pass",
+            "reason": "stub",
+            "trusted_coverage": 1.0,
+            "effective_coverage": 1.0,
+        },
+    )
+    monkeypatch.setattr(run_local, "_attach_thumbnail", lambda meeting, meeting_dir: None)
+
+
+def test_publish_as_draft_failure_propagates(monkeypatch, tmp_path):
+    """Regression for the draft-publish swallow bug: a --publish-as-draft run
+    whose publish_meeting call raises must propagate the failure (so an
+    unattended cron subprocess exits non-zero and floor_dispatch counts the
+    session as failed), not just print a warning and return normally.
+    """
+    mid = "2026-07-16-house-floor"
+    meeting_dir = tmp_path / mid
+    _make_resumable_meeting(meeting_dir, mid)
+    _stub_pipeline_internals(monkeypatch, tmp_path)
+
+    def _raise_publish(meeting, body_slug=None, trigger_deploy=True, status="published"):
+        raise RuntimeError("simulated DB failure")
+
+    monkeypatch.setattr("src.publish.publish_meeting", _raise_publish)
+
+    monkeypatch.setattr(
+        sys, "argv",
+        ["run_local.py", "--resume", mid, "--publish-as-draft", "--no-review",
+         "--compute", "modal", "--diarizer", "oss"],
+    )
+
+    with pytest.raises(RuntimeError, match="simulated DB failure"):
+        run_local.main()
+
+
+def test_publish_as_draft_success_still_prints_and_completes(monkeypatch, tmp_path):
+    """Sanity check alongside the failure regression: a successful draft
+    publish must NOT raise and must still reach pipeline completion."""
+    from src.publish import PublishResult
+
+    mid = "2026-07-16-house-floor-ok"
+    meeting_dir = tmp_path / mid
+    _make_resumable_meeting(meeting_dir, mid)
+    _stub_pipeline_internals(monkeypatch, tmp_path)
+
+    monkeypatch.setattr(
+        "src.publish.publish_meeting",
+        lambda meeting, body_slug=None, trigger_deploy=True, status="published":
+            PublishResult(meeting_id=meeting.meeting_id, segments=0, speakers=0),
+    )
+
+    monkeypatch.setattr(
+        sys, "argv",
+        ["run_local.py", "--resume", mid, "--publish-as-draft", "--no-review",
+         "--compute", "modal", "--diarizer", "oss"],
+    )
+
+    run_local.main()  # must not raise

@@ -49,10 +49,15 @@ jobs:
 
       - name: Write YouTube cookies (optional fallback)
         if: ${{ secrets.YT_DLP_COOKIES != '' }}
-        run: printf '%s' "${{ secrets.YT_DLP_COOKIES }}" > cookies.txt
+        env:
+          YT_DLP_COOKIES: ${{ secrets.YT_DLP_COOKIES }}
+        run: printf '%s' "$YT_DLP_COOKIES" > cookies.txt
 
       - name: Discover + dispatch House-floor sessions
+        env:
+          LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '10' }}
+          MAX_SESSIONS: ${{ github.event.inputs.max_sessions || '6' }}
         run: |
           python -m src.floor_dispatch \
-            --lookback-days "${{ github.event.inputs.lookback_days || '10' }}" \
-            --max-sessions "${{ github.event.inputs.max_sessions || '6' }}"
+            --lookback-days "$LOOKBACK_DAYS" \
+            --max-sessions "$MAX_SESSIONS"
