@@ -1,0 +1,58 @@
+name: House floor — weekly
+
+on:
+  schedule:
+    - cron: "0 13 * * 6"   # Saturday 13:00 UTC (08:00 EST / 09:00 EDT)
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "How many days back to scan"
+        default: "10"
+      max_sessions:
+        description: "Max sessions to process this run"
+        default: "6"
+
+concurrency:
+  group: house-floor-weekly
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GOVINFO_API_KEY: ${{ secrets.GOVINFO_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PYANNOTE_AI_KEY: ${{ secrets.PYANNOTE_AI_KEY }}
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      YT_DLP_COOKIES: ${{ secrets.YT_DLP_COOKIES && 'cookies.txt' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Write YouTube cookies (optional fallback)
+        if: ${{ secrets.YT_DLP_COOKIES != '' }}
+        run: printf '%s' "${{ secrets.YT_DLP_COOKIES }}" > cookies.txt
+
+      - name: Discover + dispatch House-floor sessions
+        run: |
+          python -m src.floor_dispatch \
+            --lookback-days "${{ github.event.inputs.lookback_days || '10' }}" \
+            --max-sessions "${{ github.event.inputs.max_sessions || '6' }}"
