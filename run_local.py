@@ -4079,8 +4079,9 @@ def main():
     # that block is gated behind `args.publish`, which --publish-as-draft does
     # not itself set (argparse only sets it via --publish, or automatically on
     # --resume). Without this, a bare `--publish-as-draft` run would silently
-    # skip publishing entirely.
-    if getattr(args, "publish_as_draft", False):
+    # skip publishing entirely. An explicit --no-publish always wins, even
+    # alongside --publish-as-draft.
+    if getattr(args, "publish_as_draft", False) and not getattr(args, "no_publish", False):
         args.publish = True
 
     if args.repair_transcript:

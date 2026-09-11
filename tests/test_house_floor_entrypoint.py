@@ -64,3 +64,38 @@ def test_main_house_floor_passes_source_required_validation(monkeypatch):
     run_local.main()  # must NOT sys.exit on the source-required check
     assert reached["input"] == SRC.manifest_url
     assert reached["kind"] == "floor"
+
+
+def test_publish_as_draft_with_no_publish_does_not_enable_publish(monkeypatch):
+    """--no-publish must always win, even alongside --publish-as-draft. Regression
+    for the auto-enable in main() (`if publish_as_draft: args.publish = True`)
+    firing unconditionally and defeating --no-publish's documented
+    'skip publishing even when resuming' purpose."""
+    monkeypatch.setattr(run_local, "resolve_session", lambda d: SRC)
+    monkeypatch.setattr(run_local, "_resolve_metadata", lambda *a, **k: None)
+    reached = {}
+    monkeypatch.setattr(run_local, "run_pipeline",
+                        lambda args: reached.update(publish=args.publish))
+    monkeypatch.setattr(run_local.sys, "argv",
+                        ["run_local.py", "--house-floor", "2026-07-16",
+                         "--diarizer", "oss", "--compute", "modal",
+                         "--publish-as-draft", "--no-publish"])
+    run_local.main()
+    assert reached["publish"] is False
+
+
+def test_publish_as_draft_alone_enables_publish(monkeypatch):
+    """Positive case: --publish-as-draft with no --no-publish still auto-enables
+    args.publish, so a bare --publish-as-draft run doesn't silently skip
+    publishing."""
+    monkeypatch.setattr(run_local, "resolve_session", lambda d: SRC)
+    monkeypatch.setattr(run_local, "_resolve_metadata", lambda *a, **k: None)
+    reached = {}
+    monkeypatch.setattr(run_local, "run_pipeline",
+                        lambda args: reached.update(publish=args.publish))
+    monkeypatch.setattr(run_local.sys, "argv",
+                        ["run_local.py", "--house-floor", "2026-07-16",
+                         "--diarizer", "oss", "--compute", "modal",
+                         "--publish-as-draft"])
+    run_local.main()
+    assert reached["publish"] is True
