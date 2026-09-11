@@ -164,19 +164,40 @@ describe("queries data layer", () => {
   });
 
   it("mapMeeting carries status/starts_at/timezone and defaults status to published", async () => {
+    // Uses fetchUpcomingMeetings (unfiltered by status) as the vehicle to exercise
+    // mapMeeting's defaulting, since fetchMeetings now drops non-published statuses.
     vi.stubGlobal("fetch", mockFetch(200, [
       { id: "m1", date: "2026-01-01", meetingType: "X" },
       { id: "m2", date: "2026-08-05", meetingType: "Y",
         status: "upcoming", startsAt: "2026-08-06T00:30:00Z", timezone: "America/Chicago" },
     ]));
-    const { fetchMeetings } = await load();
-    const out = await fetchMeetings();
+    const { fetchUpcomingMeetings } = await load();
+    const out = await fetchUpcomingMeetings();
     expect(out[0].status).toBe("published");
     expect(out[0].starts_at).toBeNull();
     expect(out[0].timezone).toBeNull();
     expect(out[1].status).toBe("upcoming");
     expect(out[1].starts_at).toBe("2026-08-06T00:30:00Z");
     expect(out[1].timezone).toBe("America/Chicago");
+  });
+
+  it("fetchMeetings drops non-published (draft) meetings", async () => {
+    vi.stubGlobal("fetch", mockFetch(200, [
+      { id: "m1", slug: "2026-09-04-house-floor", status: "draft" },
+      { id: "m2", slug: "2026-08-01-city-council", status: "published" },
+    ]));
+    const { fetchMeetings } = await load();
+    const out = await fetchMeetings();
+    expect(out.map((m) => m.meeting_id)).toEqual(["m2"]);
+  });
+
+  it("fetchMeeting returns null for a draft meeting", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch(200, { id: "m1", slug: "2026-09-04-house-floor", status: "draft" })
+    );
+    const { fetchMeeting } = await load();
+    expect(await fetchMeeting("2026-09-04-house-floor")).toBeNull();
   });
 
   it("fetchAgendaItems hits the meeting items API and maps results", async () => {

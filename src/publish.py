@@ -134,6 +134,17 @@ def _require_db_url() -> str:
     return url
 
 
+def existing_meeting_slugs(db_url: Optional[str] = None) -> set[str]:
+    """Every slug present in meetings.meetings, any status (dedupe source of truth)."""
+    conn = psycopg2.connect(db_url or _require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT slug FROM meetings.meetings WHERE slug IS NOT NULL")
+            return {r[0] for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
 def _validate_date(date_str: str) -> str:
     try:
         return datetime.strptime(date_str.strip(), "%Y-%m-%d").date().isoformat()
@@ -219,7 +230,7 @@ def _reconcile_event_races(cur, meeting: Meeting, meeting_uuid: str) -> list[str
     return races
 
 
-def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
+def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str], status: str = "published") -> str:
     """Insert or update the meeting row. Returns the meetings.meetings UUID."""
     # Backstop: never let a guessed/missing classification reach the DB.
     validate_event_kind(meeting.event_kind or "")  # raises ValueError if None/empty/invalid
@@ -289,7 +300,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 meeting.duration_seconds or None,
                 source or None,
                 playback_url,
-                "published",
+                status,
                 chamber_id,
                 source if is_url else None,
                 kind,
@@ -327,7 +338,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str]) -> str:
                 meeting.duration_seconds or None,
                 source or None,
                 playback_url,
-                "published",
+                status,
                 chamber_id,
                 source if is_url else None,
                 kind,
@@ -1241,7 +1252,8 @@ def _trigger_deploy_hook() -> None:
 
 
 def publish_meeting(
-    meeting: Meeting, body_slug: Optional[str] = None, trigger_deploy: bool = True
+    meeting: Meeting, body_slug: Optional[str] = None, trigger_deploy: bool = True,
+    status: str = "published",
 ) -> PublishResult:
     """Push one meeting into the meetings.* schema. Idempotent by slug.
 
@@ -1274,7 +1286,7 @@ def publish_meeting(
     try:
         with conn:
             with conn.cursor() as cur:
-                meeting_uuid = _upsert_meeting(cur, meeting, body_slug)
+                meeting_uuid = _upsert_meeting(cur, meeting, body_slug, status=status)
                 _upsert_event_orgs(cur, meeting.meeting_id, meeting.event_orgs)
                 _upsert_local_people(cur, meeting)
                 label_to_uuid = _upsert_speakers(cur, meeting, meeting_uuid)

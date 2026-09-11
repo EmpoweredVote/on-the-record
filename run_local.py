@@ -1993,7 +1993,29 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print(f"    {fmt}: {path}")
 
     if getattr(args, "publish", False):
-        if not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
+        if getattr(args, "publish_as_draft", False):
+            from src import quality
+            from src.publish import publish_meeting
+            report = quality.evaluate_meeting(meeting)
+            meeting.processing_metadata.gate_verdict = report["verdict"]
+            meeting.processing_metadata.gate_coverage = report["effective_coverage"]
+            _attach_thumbnail(meeting, meeting_dir)
+            try:
+                result = publish_meeting(meeting, state.body_slug, status="draft")
+                print(f"  Published as DRAFT: {result.segments} segments, "
+                      f"{result.speakers} speakers "
+                      f"(gate={report['verdict']}, "
+                      f"coverage={report['effective_coverage']:.0%})")
+            except Exception as e:
+                print(f"  WARNING: draft publish failed: {e}")
+                # Unlike the interactive publish branch below, this path is meant
+                # for unattended cron dispatch (floor_dispatch): the subprocess
+                # exit code is the only signal a failed publish ever surfaces, so
+                # swallowing the exception here would report success on a failed
+                # DB write. Propagate so run_pipeline raises, the subprocess exits
+                # non-zero, and floor_dispatch counts the session as failed.
+                raise
+        elif not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
             print(f"  Not publishing — gate verdict is "
                   f"'{state.review_status}'. Review and re-run, or pass "
                   f"--publish-anyway to override.")
@@ -2315,6 +2337,58 @@ def _published_meeting_slugs() -> set[str]:
             return {r[0] for r in cur.fetchall()}
     finally:
         conn.close()
+
+
+def _list_draft_meetings(*, connect=None) -> list[dict]:
+    """Draft meetings with their stored gate verdict, newest first."""
+    import psycopg2
+    from src.publish import _require_db_url
+    connect = connect or psycopg2.connect
+    conn = connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT slug, date, meeting_type, segment_count, speaker_count,
+                       processing_metadata
+                  FROM meetings.meetings
+                 WHERE status = 'draft'
+                 ORDER BY date DESC
+                """
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    out = []
+    for slug, date, mtype, segs, spks, pmeta in rows:
+        pmeta = pmeta or {}
+        out.append({
+            "slug": slug, "date": str(date), "meeting_type": mtype,
+            "segment_count": segs, "speaker_count": spks,
+            "gate_verdict": pmeta.get("gate_verdict"),
+            "gate_coverage": pmeta.get("gate_coverage"),
+        })
+    return out
+
+
+def _promote_meeting(slug: str, *, connect=None) -> bool:
+    """Flip one draft meeting to published (goes live via the API). Returns True if flipped."""
+    import psycopg2
+    from src.publish import _require_db_url
+    connect = connect or psycopg2.connect
+    conn = connect(_require_db_url())
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE meetings.meetings SET status = 'published', updated_at = NOW() "
+                    "WHERE slug = %s AND status = 'draft'",
+                    (slug,),
+                )
+                flipped = (getattr(cur, "rowcount", 0) or 0) > 0
+    finally:
+        conn.close()
+    return flipped
 
 
 def _republish_all(args) -> None:
@@ -3939,6 +4013,11 @@ Environment Variables:
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--no-publish", action="store_true",
                         help="Skip publishing even when resuming (overrides the auto-publish default on --resume)")
+    parser.add_argument("--publish-as-draft", action="store_true",
+                        help="Publish the meeting as a not-live draft "
+                             "(status='draft'); bypasses the confidence gate and "
+                             "captures the gate verdict for later review. Used by "
+                             "the weekly floor automation.")
     parser.add_argument("--publish-anyway", action="store_true",
                         help="Force publishing even when the confidence gate "
                              "verdict is 'review' or 'failed' (human override)")
@@ -4019,6 +4098,10 @@ Environment Variables:
                         help="Resume an interrupted batch run (skip already-completed meetings)")
     parser.add_argument("--review-queue", action="store_true",
                         help="List meetings awaiting review (grouped by gate verdict) and exit")
+    parser.add_argument("--list-drafts", action="store_true",
+                        help="List meetings queued as drafts (from the floor automation).")
+    parser.add_argument("--promote", metavar="SLUG", default=None,
+                        help="Flip one draft meeting to published (go live).")
     parser.add_argument(
         "--body",
         type=str,
@@ -4055,6 +4138,15 @@ def main():
 
     args = parser.parse_args()
 
+    # --publish-as-draft drives its own branch inside the publish block, but
+    # that block is gated behind `args.publish`, which --publish-as-draft does
+    # not itself set (argparse only sets it via --publish, or automatically on
+    # --resume). Without this, a bare `--publish-as-draft` run would silently
+    # skip publishing entirely. An explicit --no-publish always wins, even
+    # alongside --publish-as-draft.
+    if getattr(args, "publish_as_draft", False) and not getattr(args, "no_publish", False):
+        args.publish = True
+
     if args.repair_transcript:
         cli_argv = sys.argv[1:]
         repair_conflict_map = {
@@ -4080,6 +4172,7 @@ def main():
             "--fix-profiles": _option_supplied(cli_argv, "--fix-profiles"),
             "--fix-transcripts": _option_supplied(cli_argv, "--fix-transcripts"),
             "--publish": _option_supplied(cli_argv, "--publish"),
+            "--publish-as-draft": _option_supplied(cli_argv, "--publish-as-draft"),
             "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
             "--align-agenda": _option_supplied(cli_argv, "--align-agenda"),
             "--reconcile-memo": _option_supplied(cli_argv, "--reconcile-memo"),
@@ -4099,6 +4192,8 @@ def main():
             "--redo": _option_supplied(cli_argv, "--redo"),
             "--title": _option_supplied(cli_argv, "--title"),
             "--event-kind": _option_supplied(cli_argv, "--event-kind"),
+            "--list-drafts": _option_supplied(cli_argv, "--list-drafts"),
+            "--promote": _option_supplied(cli_argv, "--promote"),
         }
         repair_conflicts = [
             flag
@@ -4144,6 +4239,25 @@ def main():
 
     if args.review_queue:
         _review_queue()
+        return
+
+    if getattr(args, "list_drafts", False):
+        drafts = _list_draft_meetings()
+        if not drafts:
+            print("No draft meetings.")
+            return
+        for d in drafts:
+            cov = f"{d['gate_coverage']:.0%}" if d["gate_coverage"] is not None else "—"
+            print(f"  {d['slug']:<34} {d['meeting_type']:<14} "
+                  f"gate={d['gate_verdict'] or '—':<7} coverage={cov:<5} "
+                  f"speakers={d['speaker_count']} segments={d['segment_count']}")
+        return
+
+    if getattr(args, "promote", None):
+        if _promote_meeting(args.promote):
+            print(f"Promoted {args.promote} → published (live via the API).")
+        else:
+            print(f"No draft meeting with slug {args.promote!r} (already live or missing).")
         return
 
     if args.list_profiles:

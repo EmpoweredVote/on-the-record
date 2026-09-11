@@ -155,6 +155,31 @@ def test_upsert_meeting_writes_title_and_event_kind(existing_row):
     assert "debate" in write_params
 
 
+def test_upsert_meeting_defaults_to_published():
+    cur = RecordingCursor(None)  # None → INSERT path
+    meeting = Meeting(
+        meeting_id="2026-09-04-house-floor",
+        city=None, date="2026-09-04", meeting_type="House Floor",
+        title="House Floor Proceedings", event_kind="other",
+    )
+    _upsert_meeting(cur, meeting, None)
+    _write_sql, write_params = cur.calls[1]
+    assert "published" in write_params
+    assert "draft" not in write_params
+
+
+def test_upsert_meeting_writes_draft_status_when_requested():
+    cur = RecordingCursor(None)
+    meeting = Meeting(
+        meeting_id="2026-09-04-house-floor",
+        city=None, date="2026-09-04", meeting_type="House Floor",
+        title="House Floor Proceedings", event_kind="other",
+    )
+    _upsert_meeting(cur, meeting, None, status="draft")
+    _write_sql, write_params = cur.calls[1]
+    assert "draft" in write_params
+
+
 def test_upsert_rejects_missing_event_kind():
     cur = RecordingCursor()
     meeting = Meeting(
