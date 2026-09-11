@@ -1993,7 +1993,22 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print(f"    {fmt}: {path}")
 
     if getattr(args, "publish", False):
-        if not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
+        if getattr(args, "publish_as_draft", False):
+            from src import quality
+            from src.publish import publish_meeting
+            report = quality.evaluate_meeting(meeting)
+            meeting.processing_metadata.gate_verdict = report["verdict"]
+            meeting.processing_metadata.gate_coverage = report["effective_coverage"]
+            _attach_thumbnail(meeting, meeting_dir)
+            try:
+                result = publish_meeting(meeting, state.body_slug, status="draft")
+                print(f"  Published as DRAFT: {result.segments} segments, "
+                      f"{result.speakers} speakers "
+                      f"(gate={report['verdict']}, "
+                      f"coverage={report['effective_coverage']:.0%})")
+            except Exception as e:
+                print(f"  WARNING: draft publish failed: {e}")
+        elif not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
             print(f"  Not publishing — gate verdict is "
                   f"'{state.review_status}'. Review and re-run, or pass "
                   f"--publish-anyway to override.")
@@ -3939,6 +3954,11 @@ Environment Variables:
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--no-publish", action="store_true",
                         help="Skip publishing even when resuming (overrides the auto-publish default on --resume)")
+    parser.add_argument("--publish-as-draft", action="store_true",
+                        help="Publish the meeting as a not-live draft "
+                             "(status='draft'); bypasses the confidence gate and "
+                             "captures the gate verdict for later review. Used by "
+                             "the weekly floor automation.")
     parser.add_argument("--publish-anyway", action="store_true",
                         help="Force publishing even when the confidence gate "
                              "verdict is 'review' or 'failed' (human override)")
@@ -4055,6 +4075,14 @@ def main():
 
     args = parser.parse_args()
 
+    # --publish-as-draft drives its own branch inside the publish block, but
+    # that block is gated behind `args.publish`, which --publish-as-draft does
+    # not itself set (argparse only sets it via --publish, or automatically on
+    # --resume). Without this, a bare `--publish-as-draft` run would silently
+    # skip publishing entirely.
+    if getattr(args, "publish_as_draft", False):
+        args.publish = True
+
     if args.repair_transcript:
         cli_argv = sys.argv[1:]
         repair_conflict_map = {
@@ -4080,6 +4108,7 @@ def main():
             "--fix-profiles": _option_supplied(cli_argv, "--fix-profiles"),
             "--fix-transcripts": _option_supplied(cli_argv, "--fix-transcripts"),
             "--publish": _option_supplied(cli_argv, "--publish"),
+            "--publish-as-draft": _option_supplied(cli_argv, "--publish-as-draft"),
             "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
             "--align-agenda": _option_supplied(cli_argv, "--align-agenda"),
             "--reconcile-memo": _option_supplied(cli_argv, "--reconcile-memo"),
