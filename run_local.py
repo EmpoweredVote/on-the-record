@@ -2332,6 +2332,58 @@ def _published_meeting_slugs() -> set[str]:
         conn.close()
 
 
+def _list_draft_meetings(*, connect=None) -> list[dict]:
+    """Draft meetings with their stored gate verdict, newest first."""
+    import psycopg2
+    from src.publish import _require_db_url
+    connect = connect or psycopg2.connect
+    conn = connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT slug, date, meeting_type, segment_count, speaker_count,
+                       processing_metadata
+                  FROM meetings.meetings
+                 WHERE status = 'draft'
+                 ORDER BY date DESC
+                """
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    out = []
+    for slug, date, mtype, segs, spks, pmeta in rows:
+        pmeta = pmeta or {}
+        out.append({
+            "slug": slug, "date": str(date), "meeting_type": mtype,
+            "segment_count": segs, "speaker_count": spks,
+            "gate_verdict": pmeta.get("gate_verdict"),
+            "gate_coverage": pmeta.get("gate_coverage"),
+        })
+    return out
+
+
+def _promote_meeting(slug: str, *, connect=None) -> bool:
+    """Flip one draft meeting to published (goes live via the API). Returns True if flipped."""
+    import psycopg2
+    from src.publish import _require_db_url
+    connect = connect or psycopg2.connect
+    conn = connect(_require_db_url())
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE meetings.meetings SET status = 'published', updated_at = NOW() "
+                    "WHERE slug = %s AND status = 'draft'",
+                    (slug,),
+                )
+                flipped = (getattr(cur, "rowcount", 0) or 0) > 0
+    finally:
+        conn.close()
+    return flipped
+
+
 def _republish_all(args) -> None:
     """Re-publish every already-published meeting (resync), optionally reenroll,
     one deploy at the end. Continue-on-error; non-zero exit if any failed."""
@@ -4039,6 +4091,10 @@ Environment Variables:
                         help="Resume an interrupted batch run (skip already-completed meetings)")
     parser.add_argument("--review-queue", action="store_true",
                         help="List meetings awaiting review (grouped by gate verdict) and exit")
+    parser.add_argument("--list-drafts", action="store_true",
+                        help="List meetings queued as drafts (from the floor automation).")
+    parser.add_argument("--promote", metavar="SLUG", default=None,
+                        help="Flip one draft meeting to published (go live).")
     parser.add_argument(
         "--body",
         type=str,
@@ -4129,6 +4185,8 @@ def main():
             "--redo": _option_supplied(cli_argv, "--redo"),
             "--title": _option_supplied(cli_argv, "--title"),
             "--event-kind": _option_supplied(cli_argv, "--event-kind"),
+            "--list-drafts": _option_supplied(cli_argv, "--list-drafts"),
+            "--promote": _option_supplied(cli_argv, "--promote"),
         }
         repair_conflicts = [
             flag
@@ -4174,6 +4232,25 @@ def main():
 
     if args.review_queue:
         _review_queue()
+        return
+
+    if getattr(args, "list_drafts", False):
+        drafts = _list_draft_meetings()
+        if not drafts:
+            print("No draft meetings.")
+            return
+        for d in drafts:
+            cov = f"{d['gate_coverage']:.0%}" if d["gate_coverage"] is not None else "—"
+            print(f"  {d['slug']:<34} {d['meeting_type']:<14} "
+                  f"gate={d['gate_verdict'] or '—':<7} coverage={cov:<5} "
+                  f"speakers={d['speaker_count']} segments={d['segment_count']}")
+        return
+
+    if getattr(args, "promote", None):
+        if _promote_meeting(args.promote):
+            print(f"Promoted {args.promote} → published (live via the API).")
+        else:
+            print(f"No draft meeting with slug {args.promote!r} (already live or missing).")
         return
 
     if args.list_profiles:
