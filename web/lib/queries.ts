@@ -287,7 +287,7 @@ export async function fetchMeetings(): Promise<Meeting[]> {
   const res = await fetch(`${base()}/api/meetings`, FETCH_INIT);
   if (!res.ok) throw new Error(`meetings fetch failed: ${res.status}`);
   const data = await res.json();
-  return (data as unknown[]).map(mapMeeting);
+  return (data as unknown[]).map(mapMeeting).filter((m) => m.status === "published");
 }
 
 export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
@@ -295,7 +295,8 @@ export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
   const res = await fetch(`${base()}/api/meetings/${meetingId}`, FETCH_INIT);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`meeting fetch failed: ${res.status}`);
-  return mapMeeting(await res.json());
+  const meeting = mapMeeting(await res.json());
+  return meeting.status === "published" ? meeting : null;
 }
 
 // ev-accounts paginates the transcript at 200 segments/page
