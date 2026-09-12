@@ -32,6 +32,15 @@ QUIZ_SOURCE = re.compile(r"isidewith\.com", re.I)
 # "scorecard" in a headline slug.
 SCORECARD_SOURCE = re.compile(r"/(?:[a-z]+-)?scorecards?/", re.I)
 
+# VOTE411 / thevoterguide.org — the League of Women Voters' candidate-questionnaire platform.
+# The answers are the candidate's own words (a real primary source), but LWV's terms bar
+# reproduction and automated access without written permission (vote411.org/legal). Until a
+# license exists, these are POINTER-ONLY: use them to find where a candidate stated a position,
+# then cite the candidate's own materials. Unlike an aggregator there is often no other page to
+# re-attribute to (the answer is original to VOTE411), so the remedy is not "re-attribute".
+# See docs/superpowers/specs/2026-09-12-vote411-pointer-lane-design.md.
+POINTER_ONLY_SOURCE = re.compile(r"vote411\.org|thevoterguide\.org", re.I)
+
 # A quote this short states a topic, not a position on it. Read & Rank compares candidates on a
 # question, and "Universal Healthcare" / "Abolish ICE" / "Medicare For All" / "Protect the unborn"
 # give a reader nothing to weigh against the other candidate's answer — no mechanism, no
@@ -156,6 +165,17 @@ def check_scorecard_source(r) -> Optional[Finding]:
                    what=f"Source is a legislative scorecard: {url}. These pages carry an advocacy group's rating and vote record for the member — never the member's own words — so the quoted text is not on the page it cites.",
                    suggested_fix="Find where the candidate actually said this (floor statement, press release, interview) and re-source to it; deselect from live until then. If no such statement exists, the row is not a quote — remove it.")
 
+def check_pointer_only_source(r) -> Optional[Finding]:
+    url = r.get("source_url") or ""
+    if not POINTER_ONLY_SOURCE.search(url):
+        return None
+    return Finding(check_id="pointer-only-source", level="quote", quote_id=r["id"], topic_key=r["topic_key"],
+                   race_id=r["race_id"], candidate=r["candidate"],
+                   principle="VOTE411 answers are permission-gated: a pointer, never a cited source",
+                   severity="high", fix_class="decision-required",
+                   what=f"Source is VOTE411 / thevoterguide.org: {url}. LWV terms bar reproducing this without written permission, so it cannot be a cited source.",
+                   suggested_fix="Pointer only: source the position from the candidate's OWN materials (campaign site, press release, their own post/video) and re-source to it; deselect from live until then. If the position appears only on VOTE411, the candidate is absent on this topic — do not paraphrase the VOTE411 answer.")
+
 def check_stance_label(r) -> Optional[Finding]:
     text = (r.get("quote_text") or "").strip()
     n = len(_WORD.findall(text))
@@ -189,7 +209,8 @@ def topic_min_candidates(group) -> Optional[Finding]:
 
 QUOTE_CHECKS = [check_note_quality, check_deid_present, check_trailing_ellipsis,
                 check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
-                check_unquotable_source, check_scorecard_source, check_stance_label]
+                check_unquotable_source, check_scorecard_source, check_pointer_only_source,
+                check_stance_label]
 TOPIC_CHECKS = [topic_live_count, topic_min_candidates]
 
 def run_mechanical(rows) -> list:
