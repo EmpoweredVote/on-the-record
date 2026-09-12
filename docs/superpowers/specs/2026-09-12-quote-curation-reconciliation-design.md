@@ -171,14 +171,15 @@ Reconcile the principles doc's coupling section and the compass references with 
 model (#196/#222). Confirm `research-stances` and `compass-topic-builder` reads still resolve after
 the reference sweep, given #196 already re-pointed those reads.
 
-## Open decisions (proposed defaults — confirm at review)
+## Decisions (resolved 2026-09-12)
 
-1. **Corpus scope.** *Proposed:* (a) minimal — only `PRINCIPLES.md` gets the neutral home;
-   `EDITORIAL.md`/`CHECKS.md` stay in skill dirs. *Alternative:* (b) move all three into
-   `docs/quote-curation/` for one physical corpus (cleaner, more churn, touches more skills).
-2. **`build-and-check` dedupe.** *Proposed:* (c) keep the Node checks, pin with fixtures. *Alternative:*
-   (a) delete the Node checks and rely only on post-insert `audit.py` — simpler, but breaks fix-in-CSV
-   and reintroduces CSV↔DB drift.
+1. **Corpus scope — MINIMAL.** Only `PRINCIPLES.md` gets the neutral `docs/quote-curation/` home;
+   `EDITORIAL.md`/`CHECKS.md` stay in their skill dirs. *(Rejected: moving all three into one physical
+   corpus — cleaner but more churn.)*
+2. **`build-and-check` dedupe — KEEP + PIN.** Keep the Node pre-insert checks; pin them to the shared
+   fixtures contract so they cannot drift from `checks.py`. Preserves fix-in-CSV before any DB write.
+   *(Rejected: deleting the Node checks and relying only on post-insert `audit.py` — reintroduces
+   CSV↔DB drift.)*
 
 ## Implementation sequence
 
