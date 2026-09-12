@@ -852,6 +852,27 @@ def _expand_house_floor(args) -> None:
     args._house_source = source
 
 
+def _route_after_gate(args, gate_report, *, interactive: bool, publish_anyway: bool) -> str:
+    """Decide what run_pipeline does after the confidence gate.
+
+    Returns one of:
+    - 'draft': --publish-as-draft is set (and --no-publish is not) → publish as a
+      not-live draft regardless of the gate verdict. This is ranked ABOVE
+      'review_queue' on purpose: a non-'pass' verdict must still become a draft
+      for low-coverage floor sessions, not be dropped. Reordering these two checks
+      reintroduces the bug the live de-risk run caught, so the precedence is
+      asserted in the tests. An explicit --no-publish suppresses the draft.
+    - 'review_queue': a non-'pass' verdict on a non-interactive, non-forced run →
+      skip summary/enrollment/publish and queue for human review.
+    - 'continue': proceed with summary/enrollment/publish.
+    """
+    if getattr(args, "publish_as_draft", False) and not getattr(args, "no_publish", False):
+        return "draft"
+    if gate_report["verdict"] != "pass" and not interactive and not publish_anyway:
+        return "review_queue"
+    return "continue"
+
+
 def _publish_meeting_as_draft(meeting, meeting_dir, state, gate_report) -> None:
     """Publish a meeting as a not-live draft (status='draft'), storing the gate
     verdict + coverage on it for later review.
@@ -1753,18 +1774,20 @@ def run_pipeline(args: argparse.Namespace) -> None:
     gate_report = _apply_gate(meeting, meeting_dir, state)
     _interactive = sys.stdin.isatty()
     _publish_anyway = getattr(args, "publish_anyway", False)
+    _route = _route_after_gate(
+        args, gate_report, interactive=_interactive, publish_anyway=_publish_anyway
+    )
 
-    # Unattended draft path (floor automation): publish as a not-live draft
+    # 'draft' (floor automation, --publish-as-draft): publish as a not-live draft
     # regardless of the gate verdict, storing the verdict for later review, then
-    # stop. Summary and voice enrollment are intentionally skipped. This MUST run
-    # before the review-queue early-return below — that return skips publish for
-    # any non-'pass' verdict, which is exactly the low-coverage floor sessions we
-    # still want queued as drafts.
-    if getattr(args, "publish_as_draft", False):
+    # stop (summary + voice enrollment are skipped). _route_after_gate ranks
+    # 'draft' ABOVE 'review_queue' on purpose — that precedence is what keeps
+    # low-coverage floor sessions queued as drafts instead of silently dropped.
+    if _route == "draft":
         _publish_meeting_as_draft(meeting, meeting_dir, state, gate_report)
         return
 
-    if gate_report["verdict"] != "pass" and not _interactive and not _publish_anyway:
+    if _route == "review_queue":
         print()
         print("=" * 60)
         print(f"QUEUED FOR REVIEW — verdict: {gate_report['verdict']}")
@@ -4153,12 +4176,11 @@ def main():
 
     args = parser.parse_args()
 
-    # --publish-as-draft drives its own branch inside the publish block, but
-    # that block is gated behind `args.publish`, which --publish-as-draft does
-    # not itself set (argparse only sets it via --publish, or automatically on
-    # --resume). Without this, a bare `--publish-as-draft` run would silently
-    # skip publishing entirely. An explicit --no-publish always wins, even
-    # alongside --publish-as-draft.
+    # A --publish-as-draft run publishes via the terminal draft path in
+    # run_pipeline (see _route_after_gate), which does not depend on args.publish.
+    # This line is kept only so the normal publish gate is consistent for such a
+    # run; both it and the router honor --no-publish, which always suppresses
+    # publishing.
     if getattr(args, "publish_as_draft", False) and not getattr(args, "no_publish", False):
         args.publish = True
 
