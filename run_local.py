@@ -852,6 +852,30 @@ def _expand_house_floor(args) -> None:
     args._house_source = source
 
 
+def _publish_meeting_as_draft(meeting, meeting_dir, state, gate_report) -> None:
+    """Publish a meeting as a not-live draft (status='draft'), storing the gate
+    verdict + coverage on it for later review.
+
+    For unattended floor automation (--publish-as-draft): the draft is published
+    regardless of the gate verdict, and summary + voice enrollment are skipped.
+    Raises on publish failure so the caller (the run_local subprocess) exits
+    non-zero and floor_dispatch counts the session as failed.
+    """
+    from src.publish import publish_meeting
+    meeting.processing_metadata.gate_verdict = gate_report["verdict"]
+    meeting.processing_metadata.gate_coverage = gate_report["effective_coverage"]
+    _attach_thumbnail(meeting, meeting_dir)
+    try:
+        result = publish_meeting(meeting, state.body_slug, status="draft")
+        print(f"  Published as DRAFT: {result.segments} segments, "
+              f"{result.speakers} speakers "
+              f"(gate={gate_report['verdict']}, "
+              f"coverage={gate_report['effective_coverage']:.0%})")
+    except Exception as e:
+        print(f"  ERROR: draft publish failed: {e}")
+        raise
+
+
 def run_pipeline(args: argparse.Namespace) -> None:
     """Execute the full 6-stage pipeline."""
     _expand_house_floor(args)
@@ -1729,6 +1753,17 @@ def run_pipeline(args: argparse.Namespace) -> None:
     gate_report = _apply_gate(meeting, meeting_dir, state)
     _interactive = sys.stdin.isatty()
     _publish_anyway = getattr(args, "publish_anyway", False)
+
+    # Unattended draft path (floor automation): publish as a not-live draft
+    # regardless of the gate verdict, storing the verdict for later review, then
+    # stop. Summary and voice enrollment are intentionally skipped. This MUST run
+    # before the review-queue early-return below — that return skips publish for
+    # any non-'pass' verdict, which is exactly the low-coverage floor sessions we
+    # still want queued as drafts.
+    if getattr(args, "publish_as_draft", False):
+        _publish_meeting_as_draft(meeting, meeting_dir, state, gate_report)
+        return
+
     if gate_report["verdict"] != "pass" and not _interactive and not _publish_anyway:
         print()
         print("=" * 60)
@@ -1993,29 +2028,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print(f"    {fmt}: {path}")
 
     if getattr(args, "publish", False):
-        if getattr(args, "publish_as_draft", False):
-            from src import quality
-            from src.publish import publish_meeting
-            report = quality.evaluate_meeting(meeting)
-            meeting.processing_metadata.gate_verdict = report["verdict"]
-            meeting.processing_metadata.gate_coverage = report["effective_coverage"]
-            _attach_thumbnail(meeting, meeting_dir)
-            try:
-                result = publish_meeting(meeting, state.body_slug, status="draft")
-                print(f"  Published as DRAFT: {result.segments} segments, "
-                      f"{result.speakers} speakers "
-                      f"(gate={report['verdict']}, "
-                      f"coverage={report['effective_coverage']:.0%})")
-            except Exception as e:
-                print(f"  WARNING: draft publish failed: {e}")
-                # Unlike the interactive publish branch below, this path is meant
-                # for unattended cron dispatch (floor_dispatch): the subprocess
-                # exit code is the only signal a failed publish ever surfaces, so
-                # swallowing the exception here would report success on a failed
-                # DB write. Propagate so run_pipeline raises, the subprocess exits
-                # non-zero, and floor_dispatch counts the session as failed.
-                raise
-        elif not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
+        # NB: --publish-as-draft is handled earlier as a terminal path right after
+        # the gate (see _publish_meeting_as_draft), so it never reaches here.
+        if not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
             print(f"  Not publishing — gate verdict is "
                   f"'{state.review_status}'. Review and re-run, or pass "
                   f"--publish-anyway to override.")
