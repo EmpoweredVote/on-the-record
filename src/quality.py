@@ -27,6 +27,10 @@ _TRUSTED_METHODS = {
 }
 _UNVERIFIED_METHODS = {"llm", "name_addressing", "title_context"}
 
+# Confidence threshold above which a congressional_record alignment is trusted
+# outright (below it, the alignment is credited as probable).
+_CREC_TRUSTED_CONFIDENCE = 0.9
+
 # Titles stripped when normalizing names for the identity-key fallback.
 _TITLES = {
     "councilmember", "councilwoman", "councilman", "alderman", "alderwoman",
@@ -93,6 +97,13 @@ def _tier_for_label(meeting: Meeting, label: str) -> str:
     m = meeting.speakers.get(label)
     if not m or not m.speaker_name:
         return TIER_UNKNOWN
+    if m.id_method == "congressional_record":
+        # CREC is an authoritative record of who spoke; a mapping's confidence
+        # reflects how sure the diarized-label to CREC-turn alignment is. Credit a
+        # confident alignment as trusted, a lower-confidence one as probable —
+        # classify_method has no CREC entry, so without this they score UNKNOWN.
+        conf = m.confidence or 0.0
+        return TIER_TRUSTED if conf >= _CREC_TRUSTED_CONFIDENCE else TIER_PROBABLE
     return classify_method(m.id_method)
 
 
