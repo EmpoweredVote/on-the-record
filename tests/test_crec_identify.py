@@ -6,6 +6,7 @@ import pytest
 from src.congress_roster import CongressMember
 from src.crec_align import LabelResolution
 from src.crec_identify import label_resolution_to_mapping, parse_crec_arg
+from src.review import duplicate_named_speakers
 
 
 def _member():
@@ -26,21 +27,39 @@ def test_convert_confident_member():
     assert m.needs_review is False
 
 
-def test_convert_role():
+def test_convert_bare_role_is_unidentified():
     res = LabelResolution(speaker_label="S9", role="presiding_officer", confidence=1.0,
                           method="congressional_record", needs_review=False,
                           matched_turns=1, total_turns=1)
     m = label_resolution_to_mapping(res)
-    assert m.speaker_name == "The Presiding Officer"
-    assert m.id_method == "congressional_record"
-    assert m.local_slug is None
-    assert m.needs_review is False
+    assert m.speaker_name is None
+    assert m.needs_review is True
+    assert m.speaker_status == "unidentified"
 
 
-def test_convert_role_unknown_slug_titlecases():
+def test_convert_bare_role_unknown_slug_is_unidentified():
     res = LabelResolution(speaker_label="S9", role="some_new_role", method="congressional_record")
     m = label_resolution_to_mapping(res)
-    assert m.speaker_name == "Some New Role"
+    assert m.speaker_name is None
+    assert m.needs_review is True
+    assert m.speaker_status == "unidentified"
+
+
+def test_convert_bare_role_duplicate_labels_no_publish_collision():
+    # Regression: two DIFFERENT diarized labels both resolving to the SAME bare role
+    # (e.g. "The Speaker") must NOT trip publish's duplicate-named-speaker guard --
+    # a bare role is not a real identified person, so both come back unidentified.
+    res_a = LabelResolution(speaker_label="S1", role="speaker", confidence=1.0,
+                            method="congressional_record", needs_review=False,
+                            matched_turns=1, total_turns=1)
+    res_b = LabelResolution(speaker_label="S2", role="speaker", confidence=1.0,
+                            method="congressional_record", needs_review=False,
+                            matched_turns=1, total_turns=1)
+    mappings = {
+        "S1": label_resolution_to_mapping(res_a),
+        "S2": label_resolution_to_mapping(res_b),
+    }
+    assert duplicate_named_speakers(mappings) == {}
 
 
 def test_convert_ambiguous():

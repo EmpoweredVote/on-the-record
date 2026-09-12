@@ -20,23 +20,16 @@ from .congress_roster import load_current_roster
 from .crec_normalize import annotate_turns
 from .crec_essentials import resolve_politician_id
 
-_ROLE_DISPLAY = {
-    "presiding_officer": "The Presiding Officer",
-    "speaker": "The Speaker",
-    "president_pro_tempore": "The President pro tempore",
-    "vice_president": "The Vice President",
-    "chief_justice": "The Chief Justice",
-    "chair": "The Chair",
-    "clerk": "The Clerk",
-}
-
 
 def label_resolution_to_mapping(res: LabelResolution) -> Optional[SpeakerMapping]:
     """Convert a LabelResolution to a SpeakerMapping (or None if unresolved).
 
     Confident member -> name + `congress-<bioguide>` in local_slug (no politician_id;
     the caller drops the stash if it later attaches an essentials identity).
-    Role -> a human role display name. Ambiguous -> needs_review/unidentified.
+    A bare role (presiding officer etc. with NO specific member named) is not a real
+    identified person -- it resolves unidentified/needs_review, same as ambiguous, so
+    it never collides with another bare-role label under publish's duplicate-named-
+    speaker guard (two "The Speaker" labels are not the same person).
     """
     if res.member is not None:
         return SpeakerMapping(
@@ -47,16 +40,7 @@ def label_resolution_to_mapping(res: LabelResolution) -> Optional[SpeakerMapping
             needs_review=False,
             local_slug=f"congress-{res.member.bioguide}",
         )
-    if res.role is not None:
-        display = _ROLE_DISPLAY.get(res.role, res.role.replace("_", " ").title())
-        return SpeakerMapping(
-            speaker_label=res.speaker_label,
-            speaker_name=display,
-            confidence=res.confidence,
-            id_method="congressional_record",
-            needs_review=False,
-        )
-    if res.method == "ambiguous":
+    if res.role is not None or res.method == "ambiguous":
         return SpeakerMapping(
             speaker_label=res.speaker_label,
             needs_review=True,
