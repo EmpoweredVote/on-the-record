@@ -48,10 +48,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Write YouTube cookies (optional fallback)
-        if: ${{ secrets.YT_DLP_COOKIES != '' }}
+        # `secrets` is not a valid context in `if:`; gate on the job-level env
+        # sentinel instead (it is 'cookies.txt' when the secret is set, else '').
+        if: ${{ env.YT_DLP_COOKIES != '' }}
         env:
-          YT_DLP_COOKIES: ${{ secrets.YT_DLP_COOKIES }}
-        run: printf '%s' "$YT_DLP_COOKIES" > cookies.txt
+          COOKIE_CONTENT: ${{ secrets.YT_DLP_COOKIES }}
+        run: printf '%s' "$COOKIE_CONTENT" > cookies.txt
 
       - name: Discover + dispatch House-floor sessions
         env:
