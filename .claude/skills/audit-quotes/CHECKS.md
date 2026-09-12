@@ -62,10 +62,10 @@ human to resolve even though the *detection* is mechanical.
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
-### 2.1 The three bad-source classes
+### 2.1 The four bad-source classes
 
-`invalid-source`, `unquotable-source` and `scorecard-source` are deliberately separate checks
-because their remedies differ.
+`invalid-source`, `unquotable-source`, `scorecard-source` and `pointer-only-source` are
+deliberately separate checks because their remedies differ.
 
 - **`invalid-source` — aggregator; an original exists, so re-attribute.** ontheissues.org and
   wikipedia.org restate or paraphrase something the candidate actually said elsewhere. The quote is

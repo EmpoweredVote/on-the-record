@@ -125,11 +125,13 @@ Three concrete edits, all documentation/guard — no services:
    rule (§5). It explicitly says the VOTE411 read is a human browser step, not an agent
    fetch.
 2. **`audit-quotes` guard (`.claude/skills/audit-quotes/CHECKS.md` + the check's source
-   list).** Add `vote411.org` and `thevoterguide.org` to the `invalid-source` check, but
-   document the remedy as *pointer-only / candidate's own materials* (distinct from the
-   ontheissues/wikipedia "re-attribute" remedy). Severity high, decision-required, same
-   as the existing aggregator case. Confirm the exact list/pattern location in the check
-   script during implementation and update it there too, not only in the doc.
+   list).** Add a sibling check, `pointer-only-source`, that flags `vote411.org` and
+   `thevoterguide.org` — separate from the `invalid-source` check, whose remedy is
+   "re-attribute" to an original (the VOTE411 answer is often original to VOTE411, with
+   no other page to re-attribute to). Document the remedy as *pointer-only / candidate's
+   own materials*. Severity high, decision-required, same as the existing aggregator
+   case. Confirm the exact list/pattern location in the check script during
+   implementation and update it there too, not only in the doc.
 3. **Original-sources doctrine (`essentials/docs/QUOTE-CURATION-PRINCIPLES.md`, where the
    aggregator/original-source rule is stated for curators).** One line: VOTE411 is a
    pointer, never a cited source, until a written League license says otherwise.
@@ -139,7 +141,7 @@ Three concrete edits, all documentation/guard — no services:
 - A race-pipeline session can work a local race using VOTE411 as a pointer, and every
   resulting quote cites the candidate's own original and passes `--verify-sources`.
 - `audit-quotes` flags any quote whose `source_url` is `vote411.org` or
-  `thevoterguide.org` as `invalid-source`, with the pointer-only remedy text.
+  `thevoterguide.org` as `pointer-only-source`, with the pointer-only remedy text.
 - No VOTE411 answer text appears in the DB, notes, batch files, or the repo.
 - No code path fetches `vote411.org` or `*.thevoterguide.org`.
 
