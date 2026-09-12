@@ -48,47 +48,52 @@ def test_has_chamber_data_false_when_no_record():
 from src import floor_dispatch as fd
 
 
-def test_parse_floor_date_extracts_iso_date():
-    title = "US House Floor Proceedings (Thursday, September 4, 2026)"
-    assert fd._parse_floor_date(title) == "2026-09-04"
-
-
-def test_parse_floor_date_returns_none_for_unrelated_title():
-    assert fd._parse_floor_date("Weekly leadership press conference") is None
-
-
-def test_list_floor_videos_maps_titles_to_dated_videos():
-    fake_info = {"entries": [
-        {"title": "US House Floor Proceedings (Thursday, September 4, 2026)",
-         "url": "https://youtu.be/aaa"},
-        {"title": "Some hearing clip", "url": "https://youtu.be/bbb"},
-    ]}
-    def fake_extractor(url, *, cookies_file=None):
-        return fake_info
-    vids = fd.list_floor_videos("https://youtube.com/@USHouseClerk/streams",
-                                extractor=fake_extractor)
-    assert [(v.date, v.url) for v in vids] == [("2026-09-04", "https://youtu.be/aaa")]
-
-
-def test_discover_sessions_filters_since_dedupe_and_house():
-    videos = [
-        fd.FloorVideo(date="2026-09-04", url="u4", title="t4"),
-        fd.FloorVideo(date="2026-09-03", url="u3", title="t3"),  # already processed
-        fd.FloorVideo(date="2026-08-01", url="u1", title="t1"),  # before since
-        fd.FloorVideo(date="2026-09-02", url="u2", title="t2"),  # recess: no house data
+def test_date_range_is_inclusive_and_newest_first():
+    assert fd._date_range("2026-09-01", "2026-09-04") == [
+        "2026-09-04", "2026-09-03", "2026-09-02", "2026-09-01",
     ]
-    existing = {"2026-09-03-house-floor"}
-    def has_house(date):
-        return date != "2026-09-02"
-    got = fd.discover_sessions(
-        since="2026-09-01", existing_slugs=existing, has_house=has_house, videos=videos)
-    assert [v.date for v in got] == ["2026-09-04"]
+
+
+def test_date_range_single_day():
+    assert fd._date_range("2026-09-04", "2026-09-04") == ["2026-09-04"]
 
 
 def test_already_processed_matches_any_floor_slug_on_that_date():
     assert fd._already_processed("2026-09-03", {"2026-09-03-house-floor"}) is True
     assert fd._already_processed("2026-09-03", {"2026-09-03-city-council"}) is False
     assert fd._already_processed("2026-09-04", {"2026-09-03-house-floor"}) is False
+
+
+def test_discover_sessions_filters_since_dedupe_cdn_and_house():
+    existing = {"2026-09-03-house-floor"}
+
+    def has_cdn(date):
+        return date != "2026-09-01"  # no CDN stream that day
+
+    def has_house(date):
+        return date != "2026-09-02"  # recess: no CREC data that day
+
+    got = fd.discover_sessions(
+        since="2026-09-01",
+        until="2026-09-04",
+        existing_slugs=existing,
+        has_cdn=has_cdn,
+        has_house=has_house,
+    )
+    # 09-04: survives. 09-03: already processed. 09-02: no house data.
+    # 09-01: no cdn. Only 09-04 survives, newest-first order preserved.
+    assert got == ["2026-09-04"]
+
+
+def test_discover_sessions_returns_empty_when_all_filtered():
+    got = fd.discover_sessions(
+        since="2026-09-01",
+        until="2026-09-01",
+        existing_slugs=set(),
+        has_cdn=lambda d: False,
+        has_house=lambda d: True,
+    )
+    assert got == []
 
 
 def test_dispatch_builds_expected_command_and_returns_code():
@@ -98,14 +103,26 @@ def test_dispatch_builds_expected_command_and_returns_code():
     def fake_runner(argv, **kwargs):
         captured["argv"] = argv
         return Result()
-    code = fd.dispatch(fd.FloorVideo(date="2026-09-04", url="https://youtu.be/aaa", title="t"),
-                       runner=fake_runner)
+    code = fd.dispatch("2026-09-04", runner=fake_runner)
     assert code == 0
     argv = captured["argv"]
     assert "run_local.py" in argv[1]
-    assert "--publish-as-draft" in argv
-    assert "--congressional-record" in argv
-    i = argv.index("--congressional-record")
-    assert argv[i + 1] == "2026-09-04" and argv[i + 2] == "house"
-    assert "--compute" in argv and argv[argv.index("--compute") + 1] == "modal"
-    assert "--no-review" in argv
+    assert argv[2:] == [
+        "--house-floor", "2026-09-04",
+        "--compute", "modal",
+        "--no-review",
+        "--publish-as-draft",
+    ]
+    assert "--input" not in argv
+    assert "--event-kind" not in argv
+    assert "--meeting-type" not in argv
+    assert "--congressional-record" not in argv
+    assert "--cookies" not in argv
+
+
+def test_dispatch_returns_nonzero_runner_code():
+    class Result:
+        returncode = 3
+    def fake_runner(argv, **kwargs):
+        return Result()
+    assert fd.dispatch("2026-09-04", runner=fake_runner) == 3

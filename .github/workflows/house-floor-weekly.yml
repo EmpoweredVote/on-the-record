@@ -27,7 +27,6 @@ jobs:
       PYANNOTE_AI_KEY: ${{ secrets.PYANNOTE_AI_KEY }}
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-      YT_DLP_COOKIES: ${{ secrets.YT_DLP_COOKIES && 'cookies.txt' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,14 +45,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Write YouTube cookies (optional fallback)
-        # `secrets` is not a valid context in `if:`; gate on the job-level env
-        # sentinel instead (it is 'cookies.txt' when the secret is set, else '').
-        if: ${{ env.YT_DLP_COOKIES != '' }}
-        env:
-          COOKIE_CONTENT: ${{ secrets.YT_DLP_COOKIES }}
-        run: printf '%s' "$COOKIE_CONTENT" > cookies.txt
 
       - name: Discover + dispatch House-floor sessions
         env:
