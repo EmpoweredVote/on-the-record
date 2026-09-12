@@ -260,3 +260,9 @@ def test_pointer_only_source_youtube_not_flagged():
 def test_pointer_only_source_registered():
     from scripts.checks import QUOTE_CHECKS
     assert check_pointer_only_source in QUOTE_CHECKS
+
+def test_source_tier_defers_to_pointer_only_for_thevoterguide():
+    # thevoterguide.org also matches CAMPAIGN_SITE; pointer-only-source owns it, so no tier-4 noise.
+    r = row(source_url="https://api.thevoterguide.org/v1/race")
+    assert check_source_tier(r) is None
+    assert check_pointer_only_source(r) is not None

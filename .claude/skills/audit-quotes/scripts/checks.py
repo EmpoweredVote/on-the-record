@@ -122,6 +122,8 @@ def check_partisan_tell_in_blind(r) -> Optional[Finding]:
 
 def check_source_tier(r) -> Optional[Finding]:
     url = r.get("source_url") or ""
+    if POINTER_ONLY_SOURCE.search(url):
+        return None
     if "youtube.com" in url or "youtu.be" in url:
         return None
     if CAMPAIGN_SITE.search(url):
