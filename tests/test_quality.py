@@ -1,7 +1,7 @@
 """Unit tests for the meeting confidence gate scoring (src/quality.py)."""
 from __future__ import annotations
 
-from src import quality
+from src import config, quality
 from src.models import Meeting, Segment, SpeakerMapping
 
 
@@ -118,6 +118,43 @@ def test_event_kind_threshold_applied():
     report = quality.evaluate_meeting(_meeting(segs, speakers, event_kind="debate"))
     assert abs(report["trusted_coverage"] - 0.9) < 1e-6
     assert report["verdict"] == quality.VERDICT_REVIEW
+
+
+# --- congressional_record tier credit ---
+
+def test_tier_for_label_crec_high_confidence_is_trusted():
+    speakers = {"S0": SpeakerMapping("S0", "Marcy Kaptur", 1.0, "congressional_record")}
+    meeting = _meeting([], speakers)
+    assert quality._tier_for_label(meeting, "S0") == quality.TIER_TRUSTED
+
+
+def test_tier_for_label_crec_low_confidence_is_probable():
+    speakers = {"S0": SpeakerMapping("S0", "Marcy Kaptur", 0.5, "congressional_record")}
+    meeting = _meeting([], speakers)
+    assert quality._tier_for_label(meeting, "S0") == quality.TIER_PROBABLE
+
+
+def test_crec_speaker_credited_in_evaluate_meeting():
+    # Regression: a live 4-hour House-floor run linked 32 real members via CREC
+    # yet the gate reported effective_coverage 0.00, because classify_method has
+    # no entry for "congressional_record" and every CREC mapping fell to UNKNOWN.
+    segs = [_seg(0, "S0", 0, 1200, "Marcy Kaptur")]
+    speakers = {"S0": SpeakerMapping("S0", "Marcy Kaptur", 1.0, "congressional_record")}
+    report = quality.evaluate_meeting(_meeting(segs, speakers))
+    assert report["trusted_coverage"] == 1.0
+    assert report["effective_coverage"] > 0.0
+
+
+def test_crec_low_confidence_lands_in_probable_coverage():
+    # A less-confident CREC alignment should count as probable (discounted),
+    # not unknown -- so it still contributes to effective_coverage.
+    segs = [_seg(0, "S0", 0, 1200, "Marcy Kaptur")]
+    speakers = {"S0": SpeakerMapping("S0", "Marcy Kaptur", 0.5, "congressional_record")}
+    report = quality.evaluate_meeting(_meeting(segs, speakers))
+    assert report["probable_coverage"] == 1.0
+    assert report["trusted_coverage"] == 0.0
+    assert report["effective_coverage"] > 0.0
+    assert abs(report["effective_coverage"] - config.GATE_PROBABLE_DISCOUNT) < 1e-6
 
 
 # --- identity key (link-first) ---
