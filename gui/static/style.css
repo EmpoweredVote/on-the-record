@@ -1,4 +1,18 @@
-:root { color-scheme: light; font-family: -apple-system, system-ui, sans-serif; }
+:root {
+  color-scheme: light;
+  --font-ui: -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --c-ink: #1a1a1a; --c-ink-soft: #666; --c-muted-fg: #999;
+  --c-bg: #fff; --c-surface: #fafafc; --c-line: #e2e2e2; --c-link: #2a5db0;
+  --c-pass-fg: #1b7a3d; --c-pass-bg: #e6f5ea; --c-pass-border: #2ea56a;
+  --c-review-fg: #9a6a00; --c-review-bg: #fdf3e0; --c-review-border: #e6d59a;
+  --c-fail-fg: #b32020; --c-fail-bg: #fdeaea; --c-fail-border: #e0a0a0;
+  --c-info-fg: #24507f; --c-info-bg: #eef4fc; --c-info-border: #7aa0d0;
+  --sp-1: 0.25rem; --sp-2: 0.4rem; --sp-3: 0.6rem; --sp-4: 0.75rem; --sp-5: 1rem; --sp-6: 1.5rem;
+  --r-sm: 0.4rem; --r-md: 0.5rem;
+  --fs-xs: 0.78rem; --fs-sm: 0.85rem; --fs-md: 0.95rem; --fs-lg: 1.25rem;
+  font-family: var(--font-ui);
+}
 body { margin: 0; background: #fff; color: #1a1a1a; }
 header { padding: 1rem 1.5rem; border-bottom: 1px solid #e2e2e2; }
 h1 { margin: 0; font-size: 1.25rem; }
@@ -11,12 +25,12 @@ table.library th, table.library td { text-align: left; padding: 0.5rem 0.75rem; 
 td.name { display: flex; gap: 0.6rem; align-items: center; }
 img.thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 0.25rem; flex: none; }
 .gate { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; }
-.gate-pass { background: #e6f5ea; color: #1b7a3d; }
-.gate-review { background: #fdf3e0; color: #9a6a00; }
-.gate-failed { background: #fdeaea; color: #b32020; }
+.gate-pass { background: var(--c-pass-bg); color: var(--c-pass-fg); }
+.gate-review { background: var(--c-review-bg); color: var(--c-review-fg); }
+.gate-failed { background: var(--c-fail-bg); color: var(--c-fail-fg); }
 .gate-none { color: #999; }
 .live-badge { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; }
-.live-live { background: #e6f5ea; color: #1b7a3d; }
+.live-live { background: var(--c-pass-bg); color: var(--c-pass-fg); }
 .live-notlive { background: #f1f1f4; color: #777; }
 .live-unknown { color: #bbb; }
 .back { display: inline-block; margin-bottom: 0.5rem; color: #2a5db0; text-decoration: none; font-size: 0.9rem; }
@@ -46,7 +60,7 @@ a.mlink { color: #2a5db0; text-decoration: none; }
 a.mlink:hover { text-decoration: underline; }
 .actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; }
 .actions form { display: inline-flex; gap: 0.3rem; margin: 0; }
-.actions .accept { background: #e6f5ea; border: 1px solid #2ea56a; color: #1b7a3d; border-radius: 0.4rem; padding: 0.2rem 0.6rem; cursor: pointer; font-size: 0.85rem; }
+.actions .accept { background: var(--c-pass-bg); border: 1px solid var(--c-pass-border); color: var(--c-pass-fg); border-radius: 0.4rem; padding: 0.2rem 0.6rem; cursor: pointer; font-size: 0.85rem; }
 .actions input[type=text] { padding: 0.2rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.85rem; }
 .actions .rename button { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
 /* The rename form carries an .ident-note line (it used to be .ident-cost)
@@ -77,17 +91,17 @@ button.link-result:hover { background: #e6edfa; }
 .link-results .pr-cand { display: block; font-size: 0.78rem; color: #5c6b82; }
 .link-results .pr-warn { color: #9a6a00; }
 .link-results .pr-dupe { display: block; font-size: 0.78rem; font-weight: 600; }
-button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius: 0.4rem; background: #fdeaea; color: #b32020; cursor: pointer; font-size: 0.85rem; }
+button.unlink { padding: 0.2rem 0.6rem; border: 1px solid var(--c-fail-border); border-radius: 0.4rem; background: var(--c-fail-bg); color: var(--c-fail-fg); cursor: pointer; font-size: 0.85rem; }
 .link-msg { font-size: 0.8rem; color: #999; }
 .actions select { font-size: 0.85rem; padding: 0.2rem; border: 1px solid #ccc; border-radius: 0.4rem; }
 .actions .mark { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
-button.enroll { padding: 0.2rem 0.6rem; border: 1px solid #7aa0d0; border-radius: 0.4rem; background: #eef4fc; color: #24507f; cursor: pointer; font-size: 0.85rem; }
+button.enroll { padding: 0.2rem 0.6rem; border: 1px solid var(--c-info-border); border-radius: 0.4rem; background: var(--c-info-bg); color: var(--c-info-fg); cursor: pointer; font-size: 0.85rem; }
 .voice-saved { font-size: 0.85rem; color: #1b7a3d; }
 .thin { font-size: 0.78rem; color: #9a6a00; margin-left: 0.3rem; }
 .profile-strength { display: inline-block; font-size: 0.75rem; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 0.6rem; border: 1px solid transparent; cursor: help; }
-.profile-strength.strong { color: #1b7a3d; background: #e7f4ec; border-color: #b7dcc3; }
-.profile-strength.building { color: #7a5b00; background: #fbf3dd; border-color: #e6d59a; }
-.profile-strength.new { color: #24507f; background: #eaf1fb; border-color: #bcd2ee; }
+.profile-strength.strong { color: var(--c-pass-fg); background: #e7f4ec; border-color: #b7dcc3; }
+.profile-strength.building { color: #7a5b00; background: #fbf3dd; border-color: var(--c-review-border); }
+.profile-strength.new { color: var(--c-info-fg); background: #eaf1fb; border-color: #bcd2ee; }
 .newform { display: flex; flex-direction: column; gap: 0.6rem; max-width: 32rem; }
 .newform label { display: flex; flex-direction: column; font-size: 0.85rem; color: #444; gap: 0.2rem; }
 .newform input, .newform select { padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 0.4rem; font-size: 0.95rem; }
@@ -96,7 +110,7 @@ ol.stepper li { font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 0.5rem
 ol.stepper li.done { background: #e6f5ea; color: #1b7a3d; }
 ol.stepper li.current { background: #fdf3e0; color: #9a6a00; font-weight: 600; }
 pre.runlog { background: #0e0e12; color: #d8d8e0; padding: 0.75rem; border-radius: 0.5rem; max-height: 45vh; overflow: auto; font-size: 0.8rem; white-space: pre-wrap; }
-.error-banner { background: #fdeaea; color: #b32020; border: 1px solid #e0a0a0; border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.6rem; }
+.error-banner { background: var(--c-fail-bg); color: var(--c-fail-fg); border: 1px solid var(--c-fail-border); border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.6rem; }
 a.newlink { display: inline-block; margin-top: 0.4rem; color: #24507f; text-decoration: none; font-size: 0.9rem; }
 main.newpage { display: grid; grid-template-columns: minmax(0, 32rem) 1fr; gap: 1.5rem; align-items: start; }
 .newform .help { color: #777; font-size: 0.78rem; }
