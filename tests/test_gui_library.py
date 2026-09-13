@@ -79,6 +79,20 @@ def test_meeting_summary_status_key():
     assert s(completed_stage=7, review_status="review").status_key == "needs-review"
 
 
+def test_status_key_failed_bucket():
+    from gui.models import MeetingSummary
+    def s(**kw):
+        base = dict(meeting_id="m", title=None, city=None, meeting_type=None, date=None,
+                    event_kind=None, completed_stage=4)
+        base.update(kw); return MeetingSummary(**base)
+    assert s(review_status="failed").status_key == "failed"
+    # live still wins over a stale failed verdict
+    assert s(review_status="failed", is_live=True).status_key == "live"
+    # unchanged buckets
+    assert s(review_status="pass").status_key == "ready"
+    assert s(completed_stage=2).status_key == "processing"
+
+
 import json
 
 from gui.library import scan_meetings

@@ -162,9 +162,11 @@ class MeetingSummary:
     @property
     def status_key(self) -> str:
         """Coarse lifecycle bucket for the library Status filter:
-        'live' | 'ready' | 'needs-review' | 'processing'."""
+        'live' | 'failed' | 'ready' | 'needs-review' | 'processing'."""
         if self.is_live:
             return "live"
+        if self.review_status == "failed":
+            return "failed"
         if self.review_status == "pass":
             return "ready"
         if self.completed_stage >= 4:
