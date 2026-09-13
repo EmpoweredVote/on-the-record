@@ -549,6 +549,15 @@ def test_library_js_filters_by_search_kind_status(tmp_meetings_dir):
     assert "data-search" in js
 
 
+def test_library_js_has_sort_daterange_chips_rowclick():
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "data-sort" in js                       # column sorting
+    assert "lib-date-from" in js and "lib-date-to" in js   # date range
+    assert "data-chip" in js                        # quick chips
+    assert "data-meeting-id" in js and ("location" in js or "href" in js)  # row click nav
+
+
 def test_processed_label_relative():
     import time
     from gui.models import MeetingSummary
