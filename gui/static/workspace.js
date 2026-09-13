@@ -44,19 +44,15 @@
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     if (!(form instanceof HTMLFormElement)) return;
-    if (form.hasAttribute("data-navigate")) return;         // let it navigate
-    if (!panel.contains(form)) return;                       // only in-panel forms
+    if (form.hasAttribute("data-navigate")) return;          // let it navigate
+    if (!panel.contains(form)) return;                        // only in-panel forms
     e.preventDefault();
-    // The publish form returns a result fragment (✓ Published … / error); every
-    // other action 303-redirects and we just re-fetch. Keep the publish result so
-    // it can be shown in the panel's #publish-result slot after the re-render.
+
     const isPublish = form.matches(".publish-form");
     const body = new FormData(form);
-    // A merge cannot be undone — it relabels every segment and drops one voice
-    // profile — and a mis-merge leaves ONE label holding two people, which every
-    // name-based detector then reads as clean. The server refuses an unconfirmed
-    // mismatch anyway; this turns that refusal into a decision instead of a
-    // silent no-op.
+
+    // Destructive merge confirm (unchanged): the server refuses an unconfirmed
+    // voice mismatch; turn that into a decision instead of a silent no-op.
     const mismatches = (form.getAttribute("data-merge-mismatch") || "")
       .split(",").filter(Boolean);
     if (mismatches.length) {
@@ -69,11 +65,27 @@
         body.append("confirm", "1");
       }
     }
+
+    // A merge relabels/removes OTHER cards, so it needs the whole panel; a
+    // card-scoped action (any other form inside a .card) only changes that card,
+    // so swap just it and keep the reviewer's scroll position.
+    const card = form.closest(".card");
+    const label = card && card.getAttribute("data-label");
+    const isMerge = /\/merge$/.test(form.action);
+    const cardScoped = !!(card && label && !isMerge && !isPublish);
+
     let publishResult = "";
     try {
       const r = await fetch(form.action, { method: "POST", body, redirect: "manual" });
       if (isPublish) publishResult = await r.text();
-    } catch (_) { /* best-effort; re-fetch shows current state */ }
+    } catch (_) { /* best-effort; refresh shows current state */ }
+
+    if (cardScoped) {
+      try {
+        const resp = await fetch(`/meetings/${enc(id)}/panel/review/card/${enc(label)}`);
+        if (resp.ok) { card.outerHTML = await resp.text(); return; }
+      } catch (_) { /* fall through to a full reload */ }
+    }
     await loadPanel(activeTab, false);
     if (isPublish) {
       const slot = document.getElementById("publish-result");

@@ -2264,3 +2264,12 @@ def test_card_fragment_route_404_not_reviewable(tagged_meeting_dir, tmp_meetings
     tagged_meeting_dir("x", meeting_id="2026-03-01-council", completed_stage=2)  # pre-identify
     client = TestClient(create_app())
     assert client.get("/meetings/2026-03-01-council/panel/review/card/SPEAKER_00").status_code == 404
+
+
+def test_workspace_js_does_per_card_swap():
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "/panel/review/card/" in js          # fetches the single-card fragment
+    assert "data-label" in js                    # locates the card to replace
+    assert "outerHTML" in js                     # swaps the node in place (keeps scroll)
+    assert "/merge" in js                         # merge is special-cased to full reload
