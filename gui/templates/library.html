@@ -1,12 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CouncilScribe — Meeting Library</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Meeting Library — CouncilScribe{% endblock %}
+{% block content %}
   <header><h1>Meeting Library</h1></header>
   <main>
     <div class="batch-header" id="batch-header">
@@ -96,6 +90,5 @@
     <p class="empty">No meetings processed yet.</p>
     {% endif %}
   </main>
-  <script src="/static/library.js"></script>
-</body>
-</html>
+{% endblock %}
+{% block scripts %}<script src="/static/library.js"></script>{% endblock %}

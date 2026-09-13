@@ -1,12 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Discovery — Council Scribe</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Discovery — Council Scribe{% endblock %}
+{% block content %}
 <header class="batch-header">
   <a href="/">&larr; Library</a>
   <strong>Discovery</strong>
@@ -156,5 +150,4 @@
 </table>
 {% endfor %}
 </main>
-</body>
-</html>
+{% endblock %}

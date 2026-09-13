@@ -1,12 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ header.display_name }} — CouncilScribe</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}{{ header.display_name }} — CouncilScribe{% endblock %}
+{% block content %}
   <header class="ws-header" data-meeting-id="{{ header.meeting_id }}" data-active-tab="{{ active_tab }}">
     <a class="back" href="/">← Library</a>
     <div class="ws-titlebar">
@@ -45,6 +39,5 @@
   <main class="review ws-main" id="panel">
     {% include "panels/" ~ active_tab ~ ".html" %}
   </main>
-  <script src="/static/workspace.js"></script>
-</body>
-</html>
+{% endblock %}
+{% block scripts %}<script src="/static/workspace.js"></script>{% endblock %}

@@ -1,8 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>New meeting</title><link rel="stylesheet" href="/static/style.css"></head>
-<body>
+{% extends "base.html" %}
+{% block title %}New meeting{% endblock %}
+{% block content %}
   <header><a class="back" href="/">← Library</a><h1>Process a new meeting</h1></header>
   {% if flash %}
   <div class="flash flash-{{ flash }}">
@@ -116,7 +114,8 @@
       </div>
     </aside>
   </main>
-
+{% endblock %}
+{% block scripts %}
   <script>
     window.__EVENT_KIND_HELP = {{ event_kind_help|tojson }};
     window.__COMPUTE_HELP = {{ compute_help|tojson }};
@@ -125,4 +124,4 @@
     window.__FIELDS_BY_KIND = {{ fields_by_kind|tojson }};
   </script>
   <script src="/static/new_meeting.js"></script>
-</body></html>
+{% endblock %}
