@@ -43,13 +43,16 @@ def test_semantic_color_rules_reference_tokens():
 
 
 def test_style_has_no_stray_semantic_hex_after_refresh():
+    import re
     from pathlib import Path
     css = Path("gui/static/style.css").read_text()
-    # After the refresh, the old repeated gate/live hexes must live only in :root.
-    root = css.split("}")[0]  # the :root block
-    body = css[len(root):]
-    for hexval in ("#e6f5ea", "#fdf3e0", "#fdeaea", "#eef4fc"):
-        assert hexval not in body, f"{hexval} should be tokenized, not repeated in rules"
+    root = css.split("}", 1)[0]          # the :root block (first block in the file)
+    body = css[len(root):]               # everything after it = rule bodies
+    for name in ("--c-pass-bg", "--c-review-bg", "--c-fail-bg", "--c-info-bg"):
+        m = re.search(re.escape(name) + r"\s*:\s*(#[0-9a-fA-F]{3,8})", root)
+        assert m, f"{name} not defined in :root"
+        hexval = m.group(1)
+        assert hexval not in body, f"{hexval} ({name}) should be tokenized, not repeated in a rule body"
 
 
 def test_ui_macro_file_defines_badge():
