@@ -24,6 +24,7 @@ table.library th, table.library td { text-align: left; padding: 0.5rem 0.75rem; 
 .empty { color: #888; }
 td.name { display: flex; gap: 0.6rem; align-items: center; }
 img.thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 0.25rem; flex: none; }
+.badge { display: inline-block; }
 .gate { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 0.5rem; }
 .gate-pass { background: var(--c-pass-bg); color: var(--c-pass-fg); }
 .gate-review { background: var(--c-review-bg); color: var(--c-review-fg); }

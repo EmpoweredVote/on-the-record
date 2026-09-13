@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ header.display_name }} — CouncilScribe{% endblock %}
 {% block content %}
+  {% from "_ui.html" import badge %}
   <header class="ws-header" data-meeting-id="{{ header.meeting_id }}" data-active-tab="{{ active_tab }}">
     <a class="back" href="/">← Library</a>
     <div class="ws-titlebar">
@@ -9,9 +10,9 @@
         {% if header.date %}<span class="pill">{{ header.date }}</span>{% endif %}
         {% if header.event_kind %}<span class="pill">{{ header.event_kind | humanize_kind }}</span>{% endif %}
         {% set level, text = header.gate_badge %}
-        <span id="gate-pill" class="gate gate-{{ level }}">{{ text }}</span>
+        {{ badge("gate gate-" ~ level, text, id="gate-pill") }}
         {% if header.is_live is not none %}
-          <span id="live-pill" class="live-badge live-{{ 'live' if header.is_live else 'notlive' }}">{{ 'Live' if header.is_live else 'Not live' }}</span>
+          {{ badge("live-badge live-" ~ ('live' if header.is_live else 'notlive'), 'Live' if header.is_live else 'Not live', id="live-pill") }}
         {% else %}<span id="live-pill" class="live-unknown">—</span>{% endif %}
       </span>
       <details class="kebab">

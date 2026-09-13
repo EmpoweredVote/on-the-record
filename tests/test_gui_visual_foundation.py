@@ -40,3 +40,16 @@ def test_semantic_color_rules_reference_tokens():
     assert ".gate-pass" in css
     gate_pass = css.split(".gate-pass")[1].split("}")[0]
     assert "var(--c-pass-bg)" in gate_pass and "var(--c-pass-fg)" in gate_pass
+
+
+def test_ui_macro_file_defines_badge():
+    from pathlib import Path
+    text = Path("gui/templates/_ui.html").read_text()
+    assert "macro badge" in text
+
+
+def test_library_and_workspace_import_the_badge_macro():
+    from pathlib import Path
+    lib = Path("gui/templates/library.html").read_text()
+    ws = Path("gui/templates/workspace.html").read_text()
+    assert 'import badge' in lib and 'import badge' in ws
