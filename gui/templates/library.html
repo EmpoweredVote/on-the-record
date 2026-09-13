@@ -38,6 +38,7 @@
         <option value="">Status: all</option>
         <option value="processing">Processing</option>
         <option value="needs-review">Needs review</option>
+        <option value="failed">Failed</option>
         <option value="ready">Ready to publish</option>
         <option value="live">Published/Live</option>
       </select>
@@ -49,14 +50,25 @@
         <button type="submit" class="cleanup-btn">🧹 Clean up all finalized media</button>
       </form>
     </div>
+    <div class="lib-chips">
+      <button type="button" class="chip" data-chip="all">All</button>
+      <button type="button" class="chip" data-chip="needs-review">Needs review</button>
+      <button type="button" class="chip" data-chip="live">Live</button>
+      <button type="button" class="chip" data-chip="failed">Failed</button>
+      <label class="lib-daterange">From <input type="date" id="lib-date-from"></label>
+      <label class="lib-daterange">To <input type="date" id="lib-date-to"></label>
+    </div>
     {% if meetings %}
     <table class="library" id="lib-table">
       <thead>
-        <tr><th>Meeting</th><th>Date</th><th>Processed</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th><th>Live</th></tr>
+        <tr><th>Meeting</th><th data-sort="date">Date</th><th>Processed</th><th data-sort="kind">Kind</th><th data-sort="speakers">Speakers</th><th data-sort="length">Length</th><th>Review</th><th data-sort="status">Status</th><th>Live</th></tr>
       </thead>
       <tbody>
         {% for m in meetings %}
         <tr data-meeting-id="{{ m.meeting_id }}" data-kind="{{ m.event_kind or '' }}" data-status="{{ m.status_key }}"
+            data-date="{{ m.date or '' }}" data-speakers="{{ m.speaker_count if m.speaker_count is not none else '' }}"
+            data-length="{{ m.duration_seconds if m.duration_seconds is not none else '' }}"
+            data-name="{{ m.display_name|lower }}"
             data-search="{{ [m.display_name, m.meeting_id, m.context_line, m.event_kind]|select|join(' ')|lower }}">
           <td class="name">
             {% if m.has_thumbnail %}

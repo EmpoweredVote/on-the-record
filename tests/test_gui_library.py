@@ -741,3 +741,28 @@ def test_speaker_count_none_when_neither_source_exists(tmp_path):
 
     assert _speaker_count(mdir, None) is None
     assert _speaker_count(mdir, {"speakers": {}}) is None
+
+
+def test_library_toolbar_and_row_data_enriched(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    import json
+    (mdir / "transcript_named.json").write_text(json.dumps(
+        {"title": "Council", "duration_seconds": 3600, "speakers": {"A": {}, "B": {}}}))
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"date": "2026-02-04", "event_kind": "council"})
+    st.write_text(json.dumps(data))
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/").text
+    # richer status option
+    assert 'value="failed"' in body
+    # date-range + chips controls
+    assert 'id="lib-date-from"' in body and 'id="lib-date-to"' in body
+    assert 'data-chip="needs-review"' in body and 'data-chip="all"' in body
+    # sortable headers
+    assert 'data-sort="date"' in body and 'data-sort="speakers"' in body
+    # enriched row data
+    assert 'data-date="2026-02-04"' in body
+    assert 'data-speakers="2"' in body
+    assert 'data-length="3600' in body     # duration_seconds (may be float-formatted)
+    assert 'data-name="council"' in body   # display_name lowercased
