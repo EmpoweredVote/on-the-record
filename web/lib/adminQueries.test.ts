@@ -19,6 +19,20 @@ describe("fetchDraftMeetings", () => {
     expect(authedFetchMock).toHaveBeenCalledWith("/api/admin/meetings?status=draft");
     expect(rows[0]).toMatchObject({ id: "m1", named: 33, linked: 32 });
   });
+
+  it("preserves gate verdict + coverage from processingMetadata", async () => {
+    authedFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{
+        id: "m1", status: "draft", named: 33, linked: 32,
+        processingMetadata: { gate_verdict: "review", gate_coverage: 0.63 },
+      }],
+    });
+    const rows = await fetchDraftMeetings();
+    expect(rows[0].id).toBe("m1");
+    expect(rows[0].processingMetadata?.gate_verdict).toBe("review");
+    expect(rows[0].processingMetadata?.gate_coverage).toBe(0.63);
+  });
 });
 
 describe("fetchAdminMeeting", () => {

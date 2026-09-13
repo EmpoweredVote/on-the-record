@@ -4,7 +4,12 @@ import { authedFetch } from "./adminAuth";
 import { mapMeeting, mapSummary, mapSegment } from "./queries";
 import type { Meeting, Segment, MeetingSummary, Vote } from "./types";
 
-export type DraftListItem = Meeting & { named: number; linked: number };
+export type DraftListItem = Meeting & {
+  id: string;
+  named: number;
+  linked: number;
+  processingMetadata: { gate_verdict?: string; gate_coverage?: number } | null;
+};
 
 export async function fetchDraftMeetings(status = "draft"): Promise<DraftListItem[]> {
   const res = await authedFetch(`/api/admin/meetings?status=${encodeURIComponent(status)}`);
@@ -12,11 +17,14 @@ export async function fetchDraftMeetings(status = "draft"): Promise<DraftListIte
   const raw = (await res.json()) as any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   // Admin list rows carry the raw `id` alongside the mapped `meeting_id`, since
   // the draft queue keys/links by the ev-accounts id the API returns.
+  // `processingMetadata` (gate_verdict/gate_coverage) is not part of the public
+  // Meeting shape, so mapMeeting drops it — carry it through separately here.
   return raw.map((r) => ({
     ...mapMeeting(r),
     id: r.id,
     named: Number(r.named ?? 0),
     linked: Number(r.linked ?? 0),
+    processingMetadata: r.processingMetadata ?? null,
   }));
 }
 
