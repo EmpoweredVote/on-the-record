@@ -33,6 +33,11 @@ describe("fetchDraftMeetings", () => {
     expect(rows[0].processingMetadata?.gate_verdict).toBe("review");
     expect(rows[0].processingMetadata?.gate_coverage).toBe(0.63);
   });
+
+  it("throws when the response is not ok (instead of returning [])", async () => {
+    authedFetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
+    await expect(fetchDraftMeetings()).rejects.toThrow();
+  });
 });
 
 describe("fetchAdminMeeting", () => {

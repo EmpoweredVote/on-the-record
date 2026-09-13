@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AdminGate from "@/components/AdminGate";
+import { AuthError } from "@/lib/adminAuth";
 import { fetchDraftMeetings, promoteMeeting, archiveMeeting, type DraftListItem } from "@/lib/adminQueries";
 import { draftRowView } from "@/lib/adminRow";
 
@@ -14,8 +15,12 @@ function Queue() {
     setError(null);
     try {
       setRows(await fetchDraftMeetings("draft"));
-    } catch {
-      setError("Could not load drafts.");
+    } catch (err) {
+      if (err instanceof AuthError && err.code === "FORBIDDEN") {
+        setError("This account is not an admin.");
+      } else {
+        setError("Could not load drafts.");
+      }
     }
   }, []);
 

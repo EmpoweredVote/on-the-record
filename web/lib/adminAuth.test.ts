@@ -55,4 +55,12 @@ describe("authedFetch", () => {
     await expect(authedFetch("/api/admin/meetings")).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(getToken()).toBeNull();
   });
+
+  it("throws FORBIDDEN on a 403 response without clearing the token", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: "tok-9" }) });
+    await login("a", "b");
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 403 });
+    await expect(authedFetch("/api/admin/meetings")).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(getToken()).toBe("tok-9");
+  });
 });

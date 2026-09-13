@@ -13,7 +13,7 @@ export type DraftListItem = Meeting & {
 
 export async function fetchDraftMeetings(status = "draft"): Promise<DraftListItem[]> {
   const res = await authedFetch(`/api/admin/meetings?status=${encodeURIComponent(status)}`);
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`draft meetings fetch failed: ${res.status}`);
   const raw = (await res.json()) as any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   // Admin list rows carry the raw `id` alongside the mapped `meeting_id`, since
   // the draft queue keys/links by the ev-accounts id the API returns.

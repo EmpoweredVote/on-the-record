@@ -8,8 +8,8 @@ function apiBase(): string {
 }
 
 export class AuthError extends Error {
-  code: "INVALID_CREDENTIALS" | "UNAUTHORIZED" | "NETWORK";
-  constructor(code: "INVALID_CREDENTIALS" | "UNAUTHORIZED" | "NETWORK") {
+  code: "INVALID_CREDENTIALS" | "UNAUTHORIZED" | "FORBIDDEN" | "NETWORK";
+  constructor(code: "INVALID_CREDENTIALS" | "UNAUTHORIZED" | "FORBIDDEN" | "NETWORK") {
     super(code);
     this.name = "AuthError";
     this.code = code;
@@ -73,6 +73,11 @@ export async function authedFetch(path: string, init: RequestInit = {}): Promise
   if (res.status === 401) {
     logout();
     throw new AuthError("UNAUTHORIZED");
+  }
+  if (res.status === 403) {
+    // A valid token, but the account isn't an admin — keep the session,
+    // just surface a distinct error for the caller.
+    throw new AuthError("FORBIDDEN");
   }
   return res;
 }
