@@ -39,6 +39,10 @@ def stage(meetings_dir: Path, out_dir: Path) -> list[dict]:
         has_hls = bool(_hls_url(state))
         if not has_hls:
             print(f"WARNING: {d.name} has no CDN HLS url; review playback will be unavailable")
+        # gate_verdict/gate_coverage here are informational/operator-facing only:
+        # the GUI reads session status from the DB via list_floor_sessions, and
+        # import_session never reads this manifest.json, so these key names are
+        # free to differ from the DB's processing_metadata keys — not a bug.
         manifest.append({
             "slug": d.name,
             "date": state.get("date"),

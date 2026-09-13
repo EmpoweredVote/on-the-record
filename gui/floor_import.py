@@ -84,23 +84,35 @@ def import_session(slug: str, meetings_dir: Path, *, runner=subprocess.run,
     if dest.exists() and not force:
         raise FloorAlreadyLocalError(f"{slug} already exists locally; delete it or pass force")
 
-    listed = runner(["gh", "run", "list", "--workflow", _WORKFLOW,
-                     "--json", "databaseId", "-L", str(max_runs)],
-                    capture_output=True, text=True)
+    try:
+        listed = runner(["gh", "run", "list", "--workflow", _WORKFLOW,
+                         "--json", "databaseId", "-L", str(max_runs)],
+                        capture_output=True, text=True)
+    except OSError as e:
+        raise FloorImportError(f"gh CLI not available or failed: {e}") from e
     if listed.returncode != 0:
         raise FloorImportError(f"gh run list failed: {getattr(listed, 'stderr', '')}")
-    run_ids = [r["databaseId"] for r in json.loads(listed.stdout or "[]")]
+    try:
+        run_ids = [r["databaseId"] for r in json.loads(listed.stdout or "[]")]
+    except json.JSONDecodeError as e:
+        raise FloorImportError(f"gh CLI not available or failed: {e}") from e
 
     root = _download_root()
-    for rid in run_ids:
-        sub = root / str(rid)
-        got = runner(["gh", "run", "download", str(rid), "-n", _ARTIFACT, "-D", str(rid)],
-                     capture_output=True, text=True, cwd=str(root))
-        candidate = sub / slug
-        if got.returncode == 0 and (candidate / "pipeline_state.json").exists():
-            meetings_dir.mkdir(parents=True, exist_ok=True)
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(candidate, dest)
-            return dest
-    raise FloorImportError(f"{slug} not found in the last {max_runs} {_WORKFLOW} runs")
+    try:
+        for rid in run_ids:
+            sub = root / str(rid)
+            try:
+                got = runner(["gh", "run", "download", str(rid), "-n", _ARTIFACT, "-D", str(rid)],
+                             capture_output=True, text=True, cwd=str(root))
+            except OSError as e:
+                raise FloorImportError(f"gh CLI not available or failed: {e}") from e
+            candidate = sub / slug
+            if got.returncode == 0 and (candidate / "pipeline_state.json").exists():
+                meetings_dir.mkdir(parents=True, exist_ok=True)
+                if dest.exists():
+                    shutil.rmtree(dest)
+                shutil.copytree(candidate, dest)
+                return dest
+        raise FloorImportError(f"{slug} not found in the last {max_runs} {_WORKFLOW} runs")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)

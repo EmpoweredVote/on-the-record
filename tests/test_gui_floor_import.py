@@ -60,6 +60,18 @@ def test_import_session_not_found_raises(tmp_path, monkeypatch):
         fi.import_session("2099-01-01-house-floor", meetings, runner=_fake_gh(tmp_path / "dl"))
 
 
+def test_import_session_missing_gh_binary_raises_floor_import_error(tmp_path, monkeypatch):
+    meetings = tmp_path / "meetings"; meetings.mkdir()
+    monkeypatch.setattr(fi, "_download_root", lambda: tmp_path / "dl")
+
+    def _missing_gh(cmd, *a, **k):
+        raise FileNotFoundError("gh not found")
+
+    import pytest
+    with pytest.raises(fi.FloorImportError):
+        fi.import_session("2026-09-03-house-floor", meetings, runner=_missing_gh)
+
+
 def test_list_floor_sessions_marks_local(monkeypatch, tmp_path):
     rows = [
         {"slug": "2026-09-03-house-floor", "date": "2026-09-03",
@@ -115,3 +127,19 @@ def test_floor_import_surfaces_error(monkeypatch, tmp_meetings_dir):
     # Re-renders the list with an error rather than 500ing.
     assert resp.status_code == 200
     assert "nope" in resp.text or "could not" in resp.text.lower()
+
+
+def test_floor_import_rejects_unsafe_slug(monkeypatch, tmp_meetings_dir):
+    calls = {}
+
+    def _boom(slug, md, **k):
+        calls["called"] = True
+        raise fi.FloorImportError("should not be called")
+
+    monkeypatch.setattr(fi, "import_session", _boom)
+    monkeypatch.setattr(fi, "list_floor_sessions", lambda md: [])
+    client = TestClient(create_app())
+    resp = client.post("/floor/import", data={"slug": "../evil"}, follow_redirects=False)
+    # Re-renders the list with an error rather than 500ing, and never imports.
+    assert resp.status_code == 200
+    assert "called" not in calls

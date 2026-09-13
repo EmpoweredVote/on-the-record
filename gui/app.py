@@ -88,6 +88,11 @@ def create_app() -> FastAPI:
 
     @app.post("/floor/import")
     def floor_import_action(request: Request, slug: str = Form(...)):
+        if not is_safe_meeting_id(slug):
+            sessions = _floor.list_floor_sessions(config.MEETINGS_DIR)
+            return _templates.TemplateResponse(
+                request, "floor_import.html",
+                {"sessions": sessions, "error": f"invalid slug: {slug}"}, status_code=200)
         try:
             _floor.import_session(slug, config.MEETINGS_DIR)
         except _floor.FloorAlreadyLocalError:
