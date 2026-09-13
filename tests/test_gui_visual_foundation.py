@@ -42,6 +42,16 @@ def test_semantic_color_rules_reference_tokens():
     assert "var(--c-pass-bg)" in gate_pass and "var(--c-pass-fg)" in gate_pass
 
 
+def test_style_has_no_stray_semantic_hex_after_refresh():
+    from pathlib import Path
+    css = Path("gui/static/style.css").read_text()
+    # After the refresh, the old repeated gate/live hexes must live only in :root.
+    root = css.split("}")[0]  # the :root block
+    body = css[len(root):]
+    for hexval in ("#e6f5ea", "#fdf3e0", "#fdeaea", "#eef4fc"):
+        assert hexval not in body, f"{hexval} should be tokenized, not repeated in rules"
+
+
 def test_ui_macro_file_defines_badge():
     from pathlib import Path
     text = Path("gui/templates/_ui.html").read_text()
