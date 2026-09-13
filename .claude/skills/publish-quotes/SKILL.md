@@ -48,9 +48,9 @@ Two distinct jobs, do them in order:
       race-specific question the Compass one misses, set a per-race override in
       `essentials.readrank_race_topic_questions` (`(race_id, topic_key)` → `question_text`): derive
       it from the real question, tighten for clarity, keep it **on the same Compass axis** and
-      **blind** (§7.3). If the Compass question is systemically wrong (not just race-specific),
-      escalate to `compass-topic-builder` instead — don't override. Leave it unset to fall back to
-      the Compass question.
+      **blind** (`docs/quote-curation/PRINCIPLES.md#ranking-question`). If the Compass question is
+      systemically wrong (not just race-specific), escalate to `compass-topic-builder` instead —
+      don't override. Leave it unset to fall back to the Compass question.
 - [ ] **Reconcile curation labels → topic keys.** A curation-page publish export uses free-text
       `topic_label`s. Map each to a canonical `inform.compass_topics` key and set it as the quote's
       `topic_key`. Confirm the mapping with the user.
