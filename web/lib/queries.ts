@@ -25,7 +25,7 @@ function base(): string {
 const FETCH_INIT: RequestInit = { cache: "no-store" };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapMeeting(m: any): Meeting {
+export function mapMeeting(m: any): Meeting {
   return {
     meeting_id: m.id,
     slug: m.slug ?? null,
@@ -66,7 +66,7 @@ function mapMeeting(m: any): Meeting {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSummary(s: any): MeetingSummary {
+export function mapSummary(s: any): MeetingSummary {
   return {
     executive_summary: s.executiveSummary ?? "",
     highlights: s.highlights ?? s.keyDecisions ?? [],
@@ -96,7 +96,7 @@ function mapTopicEntry(t: any): TopicListEntry {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSegment(s: any): Segment {
+export function mapSegment(s: any): Segment {
   return {
     meeting_id: s.meetingId,
     segment_id: s.segmentIndex,

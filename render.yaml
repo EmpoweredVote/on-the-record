@@ -16,6 +16,9 @@ services:
         source: /meetings/*
         destination: /meetings/view/index.html
       - type: rewrite
+        source: /admin/meetings/*
+        destination: /admin/meetings/view/index.html
+      - type: rewrite
         source: /people/*
         destination: /people/view/index.html
       - type: rewrite

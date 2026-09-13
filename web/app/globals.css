@@ -481,6 +481,15 @@ a {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
   }
+
+  /* The actionBar (B5) adds a THIRD grid child (action bar, media pane,
+     transcript pane). The base rule above hard-codes rows for only two
+     children, which would starve the transcript pane of its scroll row.
+     Scoped to the admin review page only — the public page has no
+     actionBar and keeps the base .meetingLayout rows untouched. */
+  .meetingLayout--withActionBar {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
 }
 
 .mediaPane {
@@ -2298,4 +2307,20 @@ a.skimTs:hover {
   float: right;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* ===== Admin action bar (optional slot injected via MeetingView actionBar prop) ===== */
+.adminActionBar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--background);
+  /* .meetingLayout is a 2-column grid (7fr/5fr) with only implicit rows; this
+     slot must span both columns or it collapses the transcript pane onto the
+     media pane's column instead of sitting as a full-width header row. */
+  grid-column: 1 / -1;
 }
