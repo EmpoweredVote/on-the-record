@@ -81,9 +81,17 @@
     } catch (_) { /* best-effort; refresh shows current state */ }
 
     if (cardScoped) {
+      const hadDup = !!card.querySelector(".dup-name");
       try {
         const resp = await fetch(`/meetings/${enc(id)}/panel/review/card/${enc(label)}`);
-        if (resp.ok) { card.outerHTML = await resp.text(); return; }
+        if (resp.ok) {
+          const html = await resp.text();
+          const hasDup = /class="dup-name"/.test(html);
+          // A collision was created or resolved by this action: the swap only
+          // heals THIS card, but peer cards' duplicate-name warnings are now
+          // stale too, so fall through to a full reload that heals them all.
+          if (!(hadDup || hasDup)) { card.outerHTML = html; return; }
+        }
       } catch (_) { /* fall through to a full reload */ }
     }
     await loadPanel(activeTab, false);

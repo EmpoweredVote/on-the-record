@@ -2294,3 +2294,21 @@ def test_workspace_js_does_per_card_swap():
     assert "data-label" in js                    # locates the card to replace
     assert "outerHTML" in js                     # swaps the node in place (keeps scroll)
     assert "/merge" in js                         # merge is special-cased to full reload
+
+
+def test_workspace_js_heals_peer_duplicate_name_warning_on_collision():
+    """A card-scoped rename/link can create or resolve a same-name collision,
+    which leaves a PEER card's .dup-name warning stale after a single-card
+    swap. The card-scoped branch must detect a collision (before OR after
+    the action) and fall through to a full loadPanel instead of swapping
+    just the acted card, so peer cards heal too."""
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "dup-name" in js                       # collision markup is recognized in JS
+    # Find the card-scoped branch and confirm it can still fall back to a
+    # full reload (i.e. it doesn't unconditionally return after the swap).
+    start = js.index("if (cardScoped) {")
+    end = js.index("await loadPanel(activeTab, false);", start)
+    branch = js[start:end]
+    assert "dup-name" in branch                  # collision check happens inside the branch
+    assert "hadDup" in branch and "hasDup" in branch
