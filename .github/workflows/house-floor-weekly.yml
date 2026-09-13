@@ -62,3 +62,16 @@ jobs:
           python -m src.floor_dispatch \
             --lookback-days "$LOOKBACK_DAYS" \
             --max-sessions "$MAX_SESSIONS"
+
+      - name: Stage floor session artifacts (JSON only)
+        if: always()
+        run: python bench/stage_floor_artifacts.py
+
+      - name: Upload floor sessions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: house-floor-sessions
+          path: artifact_staging
+          retention-days: 30
+          if-no-files-found: warn
