@@ -2231,3 +2231,36 @@ def test_a_route_rename_leaves_the_voice_keyed_to_the_linked_person(
     key, slug, pid = resolve_mapping_enrollment(meeting.speakers["SPEAKER_01"])
     assert key == "essentials:uuid-becerra"
     assert pid == "uuid-becerra"
+
+
+def test_card_fragment_route_renders_one_card(tagged_meeting_dir, tmp_meetings_dir):
+    # Mirror the setup the existing review-panel tests use to get a reviewable
+    # meeting (see test_load_review_page_groups_and_orders in this file).
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    # Discover a real label from the full review panel, then fetch just its card.
+    panel = client.get("/meetings/2026-02-04-council/panel/review").text
+    import re
+    m = re.search(r'data-label="([^"]+)"', panel)
+    assert m, "review panel should render cards carrying data-label"
+    label = m.group(1)
+    frag = client.get(f"/meetings/2026-02-04-council/panel/review/card/{label}")
+    assert frag.status_code == 200
+    assert f'data-label="{label}"' in frag.text
+    assert f"/speakers/{label}/name" in frag.text   # the card's forms are present
+    # It is ONE card, not the whole panel.
+    assert "Needs attention" not in frag.text and "Confirmed" not in frag.text
+
+
+def test_card_fragment_route_404_unknown_label(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    assert client.get("/meetings/2026-02-04-council/panel/review/card/NOPE").status_code == 404
+
+
+def test_card_fragment_route_404_not_reviewable(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-03-01-council", completed_stage=2)  # pre-identify
+    client = TestClient(create_app())
+    assert client.get("/meetings/2026-03-01-council/panel/review/card/SPEAKER_00").status_code == 404

@@ -274,6 +274,18 @@ def create_app() -> FastAPI:
             request, "workspace.html", {**ctx, "header": header, "active_tab": active},
         )
 
+    @app.get("/meetings/{meeting_id}/panel/review/card/{label}", response_class=HTMLResponse)
+    def review_card_fragment(request: Request, meeting_id: str, label: str) -> HTMLResponse:
+        ctx = workspace.panel_context("review", meeting_id)
+        page = ctx.get("page") if ctx else None
+        if page is None:
+            raise HTTPException(status_code=404)
+        card = next((c for c in page.all_cards if c.label == label), None)
+        if card is None:
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(
+            request, "panels/_card_fragment.html", {"page": page, "c": card})
+
     @app.get("/meetings/{meeting_id}/panel/{name}", response_class=HTMLResponse)
     def workspace_panel(request: Request, meeting_id: str, name: str) -> HTMLResponse:
         ctx = workspace.panel_context(name, meeting_id)
