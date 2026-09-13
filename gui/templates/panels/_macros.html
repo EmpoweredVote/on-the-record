@@ -1,10 +1,18 @@
-{# One speaker in the review page, as three blocks:
+{# One speaker in the review page, as three visually separated regions:
 
-   1. head + evidence (name, confidence, voice hints, sample, clips)
-   2. "Who is this?" — the four identity outcomes, all four always present
-   3. "Also" — rename, merge, enroll: real operations, but not identity outcomes
+   1. identity head (`.card-head`) — label, name, identity pill, confidence,
+      minutes: the one-line summary of who this card is about.
+   2. evidence (`.card-evidence`) — voice hints, the sample quote, clip
+      buttons: what a reviewer reads to decide who this is.
+   3. actions (`.card-actions`) — "Who is this?" (the four identity outcomes)
+      and "Also" (rename, merge, enroll): what a reviewer can DO about it.
 
-   Block 2 replaces a single flat flex row that mixed all of the above. In that
+   This is a grouping/spacing change only: the "Who is this?" and "Also"
+   blocks below keep their own `.ident` / `.also` classes, headings, and every
+   form/input/id the JS and tests key on — `.card-actions` is just a shared
+   wrapper for the region, not a new hook anything depends on.
+
+   "Who is this?" replaces a single flat flex row that mixed all of the above. In that
    row the make-local-person form was gated on `not c.is_linked` and on
    `speaker_status is none`, so a roster-linked or already-marked speaker
    rendered no local-person control at all and the reviewer had to clear the
@@ -67,18 +75,23 @@
   </div>
   {% endif %}
 
-  {% for hname, hscore in c.hints %}
-    <div class="hint">▸ voice match: {{ hname }} ({{ '%.2f'|format(hscore) }})</div>
-  {% endfor %}
-  {% if c.sample_text %}<p class="sample">“{{ c.sample_text[:200] }}”</p>{% endif %}
-  {% if c.clip_seeks %}
-  <div class="clips">
-    {% for s in c.clip_seeks %}
-    <button type="button" class="clip" data-seek="{{ '%.2f'|format(s) }}">▶ clip {{ loop.index }}</button>
+  {% if c.hints or c.sample_text or c.clip_seeks %}
+  <div class="card-evidence">
+    {% for hname, hscore in c.hints %}
+      <div class="hint">▸ voice match: {{ hname }} ({{ '%.2f'|format(hscore) }})</div>
     {% endfor %}
+    {% if c.sample_text %}<p class="sample">“{{ c.sample_text[:200] }}”</p>{% endif %}
+    {% if c.clip_seeks %}
+    <div class="clips">
+      {% for s in c.clip_seeks %}
+      <button type="button" class="clip" data-seek="{{ '%.2f'|format(s) }}">▶ clip {{ loop.index }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 
+  <div class="card-actions">
   <div class="ident">
     <h3>Who is this?</h3>
     <div class="ident-chips">
@@ -256,6 +269,7 @@
         <span class="profile-strength {{ c.profile_strength }}" title="{% if c.profile_strength == 'strong' %}Already well-established — enroll only if this captures a new mic/setting.{% elif c.profile_strength == 'new' %}No profile yet — enrolling a clean sample here really helps future auto-ID.{% else %}Still building — a clean sample here strengthens future auto-ID.{% endif %}">{{ c.profile_hint }}</span>
       {% endif %}
     </div>
+  </div>
   </div>
 </div>
 {% endmacro %}

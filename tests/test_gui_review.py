@@ -199,6 +199,26 @@ def test_review_route_renders_groups(tagged_meeting_dir, tmp_meetings_dir):
     assert "Needs attention" in body and "Confirmed" in body
 
 
+def test_confirmed_section_is_collapsible_by_default(tagged_meeting_dir, tmp_meetings_dir):
+    """A long roster of already-confirmed speakers shouldn't bury the small
+    number who need attention. The Confirmed group renders inside a
+    <details class="confirmed-group"> with no `open` attribute, so it starts
+    collapsed, with a <summary> giving the reviewer a count without opening
+    it."""
+    import re
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)  # SPEAKER_00 confirmed, SPEAKER_01 needs attention.
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+
+    m = re.search(r'<details class="confirmed-group"[^>]*>', body)
+    assert m is not None, "expected a <details class=\"confirmed-group\"> wrapper"
+    assert "open" not in m.group(0)  # collapsed by default
+    assert "<summary" in body
+    # The confirmed speaker still renders, just inside the collapsed wrapper.
+    assert "Mayor Johnson" in body
+
+
 def test_review_route_404_for_unknown_meeting(tmp_meetings_dir):
     client = TestClient(create_app())
     assert client.get("/meetings/ghost/review").status_code == 404
