@@ -43,5 +43,10 @@
     "expect": ["scorecard-source"]},
   {"name": "stance-label", "row": {"id": "c12", "topic_key": "housing", "race_id": "r1", "candidate": "A",
     "editor_note": "Clear.", "deidentified_text": "Universal Healthcare",
-    "quote_text": "Universal Healthcare", "source_url": "https://youtu.be/x"}, "expect": ["stance-label"]}
+    "quote_text": "Universal Healthcare", "source_url": "https://youtu.be/x"}, "expect": ["stance-label"]},
+  {"name": "note-section-ref-wins-over-too-long", "row": {"id": "c13", "topic_key": "housing", "race_id": "r1", "candidate": "A",
+    "editor_note": "Per §4 this is the clearest line. One. Two. Three. Four.",
+    "deidentified_text": "We should legalize triplexes on every residential lot in the city.",
+    "quote_text": "We should legalize triplexes on every residential lot in the city.",
+    "source_url": "https://youtu.be/x"}, "expect": ["note-section-ref"]}
 ]
