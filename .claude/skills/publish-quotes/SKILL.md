@@ -9,7 +9,7 @@ Convert messy spoken transcript text into faithful, on-the-record quotes stored 
 `essentials.quotes` (in the **ev-accounts** DB) as **not-live drafts**. A human then picks
 the single live quote per topic in `/admin/readrank-quotes`.
 
-Principles (the *why*): `essentials/docs/QUOTE-CURATION-PRINCIPLES.md`. This skill is the
+Principles (the *why*): `docs/quote-curation/PRINCIPLES.md`. This skill is the
 operational procedure that implements them.
 
 Two distinct jobs, do them in order:
@@ -38,11 +38,11 @@ Two distinct jobs, do them in order:
       under a "criminalization of homelessness" topic) is off-question: re-home it to the topic it
       answers, or leave the candidate absent. Don't rank an off-question quote for distinctiveness.
       A candidate who only spoke in record/attacks (no forward position) is **absent** — don't
-      launder record into a pseudo-position. See `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.1.
+      launder record into a pseudo-position. See `docs/quote-curation/PRINCIPLES.md#responsiveness-and-absence`.
       Among on-question candidates, prefer the quote that shows *how* the candidate would act, not
-      just an agreeable goal no one would contest (`QUOTE-CURATION-PRINCIPLES.md` §4.6).
+      just an agreeable goal no one would contest (`docs/quote-curation/PRINCIPLES.md#differentiation`).
       Responsiveness is judged against the topic's **ranking question** — the per-race override if
-      one exists, else the Compass question (`QUOTE-CURATION-PRINCIPLES.md` §7.1 "the two questions").
+      one exists, else the Compass question (`docs/quote-curation/PRINCIPLES.md#ranking-question` "the two questions").
 - [ ] **Confirm the ranking question for this race-topic.** Check whether the Compass
       `question_text` actually fits how *this* race framed the topic. If the debate/interview asked a
       race-specific question the Compass one misses, set a per-race override in

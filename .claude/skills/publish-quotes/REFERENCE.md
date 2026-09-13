@@ -36,7 +36,7 @@ The override lives here (one row per `(race_id, topic_key)`); leave it unset to 
 | `question_text` | text, NOT NULL, non-empty — the race-local ranking question |
 | `updated_at` / `updated_by` | timestamptz / text provenance |
 
-Axis-invariant by policy (`QUOTE-CURATION-PRINCIPLES.md` §7.3): the override reframes wording only,
+Axis-invariant by policy (`docs/quote-curation/PRINCIPLES.md#ranking-question`): the override reframes wording only,
 never the topic/axis. It's a Read & Rank concern — Compass/Essentials still show the Compass question.
 
 ## The two flags that matter
@@ -49,7 +49,7 @@ clears the others and sets one true in a transaction. Choosing it is a human cur
 `COALESCE(deidentified_text, quote_text)`, so whatever is here is what's shown; the migration says
 `NULL` means "original is safe to serve verbatim." **But** `selectReadrankQuote` refuses any row
 with `NULL` deidentified_text — so to be admin-selectable a row **must** have it populated. Current
-policy (see EDITORIAL.md "Two layers" + `essentials/docs/QUOTE-CURATION-PRINCIPLES.md`): produce it
+policy (see EDITORIAL.md "Two layers" + `docs/quote-curation/PRINCIPLES.md`): produce it
 as a **standard step** = canonical quote **+ extra de-identification** (strip speaker self-ID;
 depersonalize named people, e.g. "…to Louisiana" → "…to another state that has banned abortion"). A
 verbatim copy is correct only when the canonical quote already carries nothing speaker-identifying.

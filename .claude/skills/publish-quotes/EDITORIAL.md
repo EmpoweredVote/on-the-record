@@ -1,6 +1,6 @@
 # Editorial discipline for quotes
 
-> **Principles live in** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` — the canonical *why*
+> **Principles live in** `docs/quote-curation/PRINCIPLES.md` — the canonical *why*
 > behind selection, editing, sources, anonymity, the Compass coupling model, and accountability.
 > This file is the editing *mechanics*. If the two disagree, the principles doc wins and this
 > file should be updated.

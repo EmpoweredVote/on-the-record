@@ -1,6 +1,6 @@
 # Check catalog for audit-quotes
 
-> **Principles live in** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` — the canonical *why*
+> **Principles live in** `docs/quote-curation/PRINCIPLES.md` — the canonical *why*
 > behind selection, editing, sources, anonymity, the Compass coupling model, and accountability.
 > This file is the audit's *mechanics*: what each check looks for, how severe it is, and how it
 > gets fixed. If the two disagree, the principles doc wins and this file should be updated.
@@ -324,7 +324,7 @@ not pattern-matching. A Claude agent applies them per race (or race×topic) usin
 | `not-forward` | The quote's operative clause is record ("I did X") or an attack, not a forward-looking position ("here's how I'd approach X"). Scaffolding by a little record or a glancing opponent mention is fine — judge the *main assertion*. | high | decision-required |
 | `is-attack` | The operative clause targets a *person* (character, family, fitness) rather than a policy, law, or institution. Policy/institution critique is allowed even when combative (the carve-out). | high | guided (if it can be trimmed down to the surviving position) or decision-required (if the attack is the whole quote) |
 | `off-question` | The quote doesn't genuinely answer the topic's **ranking question** (`stance.question_text` — the per-race override if one exists, else the Compass question) — it touches the subject but engages a different axis, or answers an adjacent question entirely. Comparability is the precondition for a valid ranking; this is a gate, not a preference. | high | decision-required |
-| `question-override` | A per-race ranking-question override (`stance.override_active` is true) has drifted from its Compass topic: it shifts the **axis/dimension** away from `stance.compass_question_text` (should be a Compass fix or re-home, not an override), or it names/leaks a candidate (not blind), or it is not derived from the race's actual question. Axis-invariance is what keeps responsiveness and coupling valid (QUOTE-CURATION-PRINCIPLES §7.3). | high | decision-required |
+| `question-override` | A per-race ranking-question override (`stance.override_active` is true) has drifted from its Compass topic: it shifts the **axis/dimension** away from `stance.compass_question_text` (should be a Compass fix or re-home, not an override), or it names/leaks a candidate (not blind), or it is not derived from the race's actual question. Axis-invariance is what keeps responsiveness and coupling valid (`docs/quote-curation/PRINCIPLES.md#ranking-question`). | high | decision-required |
 | `deid-dishonest` | `deidentified_text` was produced by paraphrasing/summarizing instead of marking (`…`, `[brackets]`), or it still leaks a self-identifying clause ("as governor," "in my district") or a named third person that should have been depersonalized. | high | guided |
 | `note-not-self-contained` | `editor_note` doesn't state how the quote aligns with the candidate's current Compass stance on the topic, or a skeptical reader who hasn't read the principles doc couldn't follow it without outside context. | medium | guided |
 | `source-summary` | A written source at ANY tier (op-ed, platform page, questionnaire answer) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
@@ -362,7 +362,7 @@ each topic has a `quotes` array. Each quote has:
     (roughly 1-5, from one pole to the other)
 
 <!-- inject:gates:start -->
-## The rules (summarized — the full principles live in QUOTE-CURATION-PRINCIPLES.md)
+## The rules (summarized — the full principles live in docs/quote-curation/PRINCIPLES.md)
 
 - **Forward, not record.** A Read & Rank quote is the candidate reasoning about what
   should be done and why — not a recitation of what they've already done. Judge by the
