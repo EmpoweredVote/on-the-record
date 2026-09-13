@@ -23,8 +23,6 @@ quotes that hold up under that scrutiny.
 
 ## Coupling model
 
-**Anchor:** `#coupling-model`
-
 A quote does not stand alone — it is curated evidence for a candidate's position on a topic, and
 that position is a numeric *stance value* on the Compass's five-chair spectrum for that topic
 (see [Five chairs](#five-chairs)). The coupling is to the **value under the topic's current
@@ -48,8 +46,6 @@ sub-dimension, still valid) without being in tension; only a quote that pulls th
 a decision.
 
 ## Ranking question
-
-**Anchor:** `#ranking-question`
 
 Every topic's quotes are ranked against a specific question — the **ranking question** — and it
 is the ranking question, not the topic label, that a quote must answer to be usable. In most
@@ -110,8 +106,6 @@ speaker accountable for what they actually said, not to launder or to overstate 
 
 ## Sourcing
 
-**Anchor:** `#sourcing`
-
 A quote is only as trustworthy as its source, and sourcing discipline runs on two axes:
 independence from the candidate's own framing, and verifiability against what was actually
 published. On the first axis, sources form a tier ladder by how independent they are of a
@@ -139,8 +133,6 @@ original; a quiz site or scorecard means the quote has no real source to find an
 dropped or re-sourced entirely.
 
 ## Differentiation
-
-**Anchor:** `#differentiation`
 
 Among quotes that already pass the responsiveness gate, the strongest one is not simply the one
 that states the most agreeable goal — it is the one that shows **how** the candidate would
@@ -178,6 +170,22 @@ state, no matter how confidently their record predicts what they would say — t
 `not-forward` defect, and it fabricates a position under the candidate's name on a page voters
 are trusting to reflect what was actually said. An honest "no rankable quote here" is better
 curation than a synthesized one.
+
+## Process neutrality
+
+The curation process itself must stay blind to outcome — it must never put a thumb on the scale
+by way of **which** topics a candidate happens to appear on. A candidate who is more on-record, or
+more articulate, will legitimately end up live on more topics than a quieter opponent, and that
+asymmetry is a true reflection of the record, not a defect. What must not happen is an uneven
+curation *effort*: one candidate combed for quotes on every topic while another is skipped or
+under-searched, so that the resulting coverage reflects the curator's attention rather than the
+candidates' actual records.
+
+This is why coverage is checked across a race rather than left to accumulate quote by quote: the
+audit's coverage-skew portfolio pass exists to catch a candidate who is over- or under-represented
+on topics relative to their peers, and to prompt a second look at whether curation effort was
+applied evenly — never to prompt sourcing a quote *in order to* even out the count. Neutrality is
+in the process (equal effort across candidates and topics), not in the outcome (equal counts).
 
 ## Five chairs
 

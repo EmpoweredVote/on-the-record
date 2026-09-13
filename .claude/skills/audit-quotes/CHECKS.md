@@ -459,8 +459,8 @@ Context bundle:
 ## 5. Portfolio check
 
 Run once per race, after the mechanical and judgment passes for every topic in that race are in
-hand. This is a **skew audit**, not a balancing instruction (principles §8: "process neutrality
-with a skew audit" — never engineer outcome balance).
+hand. This is a **skew audit**, not a balancing instruction
+(`docs/quote-curation/PRINCIPLES.md#process-neutrality` — never engineer outcome balance).
 
 - **Compute per-candidate topic coverage**: for each candidate in the race, the count (and list)
   of topics where they have a live (`readrank_selected`) quote that passed responsiveness, versus
@@ -477,9 +477,10 @@ with a skew audit" — never engineer outcome balance).
     Candidate B is live on 2/9, absent from housing, climate-change, immigration, ..."
   - `suggested_fix`: frame it as **a signal to investigate, not a defect to correct** — the
     skew may be a true reflection of one candidate being more on-record or more articulate
-    (which voters should see, per §8), or it may be an effort gap in the curation pass that
-    should get a second look. Never suggest sourcing a quote *in order to* balance the
-    count; only ever suggest checking effort/coverage was applied evenly.
+    (which voters should see, per `docs/quote-curation/PRINCIPLES.md#process-neutrality`), or
+    it may be an effort gap in the curation pass that should get a second look. Never suggest
+    sourcing a quote *in order to* balance the count; only ever suggest checking
+    effort/coverage was applied evenly.
   - `race_id`: the race id. `topic_key` and `quote_id`/`candidate` are left null — this
     finding is about the race's topic portfolio as a whole, not a single quote or topic.
 - If coverage is roughly comparable across candidates, emit no `coverage-skew` finding for

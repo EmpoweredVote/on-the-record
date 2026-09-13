@@ -68,7 +68,8 @@ def check_note_quality(r) -> Optional[Finding]:
     # Two sentences is the house preference, but a quote that was actually edited usually needs a
     # third to say what was cut and why — the old hard stop at 2 made honest edit notes a defect
     # and pushed curators to cram the source caveat into a parenthetical. Preference lives in the
-    # guidance (principles §6.1, EDITORIAL.md); only a fourth sentence is a finding.
+    # guidance (EDITORIAL.md's "Editor note (required)" section: two sentences, three at the
+    # outside); only a fourth sentence is a finding.
     if len(_SENTENCE_END.findall(note)) > 3:
         return Finding(check_id="note-too-long", principle="editor_note <= 3 sentences (2 preferred)",
                        severity="low", fix_class="guided",
