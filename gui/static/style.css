@@ -91,7 +91,7 @@ button.link-result:hover { background: #e6edfa; }
 .link-results .pr-cand { display: block; font-size: 0.78rem; color: #5c6b82; }
 .link-results .pr-warn { color: #9a6a00; }
 .link-results .pr-dupe { display: block; font-size: 0.78rem; font-weight: 600; }
-button.unlink { padding: 0.2rem 0.6rem; border: 1px solid var(--c-fail-border); border-radius: 0.4rem; background: var(--c-fail-bg); color: var(--c-fail-fg); cursor: pointer; font-size: 0.85rem; }
+button.unlink { padding: 0.2rem 0.6rem; border: 1px solid #d0a0a0; border-radius: 0.4rem; background: var(--c-fail-bg); color: var(--c-fail-fg); cursor: pointer; font-size: 0.85rem; }
 .link-msg { font-size: 0.8rem; color: #999; }
 .actions select { font-size: 0.85rem; padding: 0.2rem; border: 1px solid #ccc; border-radius: 0.4rem; }
 .actions .mark { padding: 0.2rem 0.6rem; border: 1px solid #bbb; border-radius: 0.4rem; background: #f6f6f8; cursor: pointer; font-size: 0.85rem; }
