@@ -2299,3 +2299,19 @@ a.skimTs:hover {
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* ===== Admin action bar (optional slot injected via MeetingView actionBar prop) ===== */
+.adminActionBar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--background);
+  /* .meetingLayout is a 2-column grid (7fr/5fr) with only implicit rows; this
+     slot must span both columns or it collapses the transcript pane onto the
+     media pane's column instead of sitting as a full-width header row. */
+  grid-column: 1 / -1;
+}
