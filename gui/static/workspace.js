@@ -210,6 +210,16 @@
     }, DEBOUNCE);
   });
 
+  // Enter in the link-search box submits the top result (standard typeahead).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const input = e.target;
+    if (!(input instanceof HTMLElement) || !input.matches(".link-search input")) return;
+    const widget = input.closest(".link-search");
+    const firstForm = widget && widget.querySelector(".link-results form");
+    if (firstForm) { e.preventDefault(); firstForm.requestSubmit(); }
+  });
+
   // Identity chooser: reveal the panel for the chosen outcome. Delegated on
   // document, so it survives a panel re-fetch with no re-init — the server
   // already rendered the current outcome checked and its panel un-hidden, so

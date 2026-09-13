@@ -590,6 +590,25 @@ def test_review_js_references_search_and_link(tmp_meetings_dir):
     assert "/link" in js
 
 
+def test_unidentified_speaker_shows_roster_search_without_reveal(tagged_meeting_dir, tmp_meetings_dir):
+    """SPEAKER_01 in _write_meeting is unnamed and unlinked -> identity_kind == 'none'.
+    Its roster search should render open (no hidden attr) so the search box is
+    usable immediately, without a reveal-click on a chip first."""
+    import re
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    panel = TestClient(create_app()).get("/meetings/2026-02-04-council/panel/review").text
+    assert re.search(r'data-ident="roster"(?![^>]*hidden)', panel), \
+        "an unidentified speaker's roster search should be open by default"
+
+
+def test_workspace_js_enter_picks_top_result():
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "keydown" in js and "requestSubmit" in js
+
+
 import numpy as np
 
 
@@ -1320,9 +1339,10 @@ def test_review_page_render_local_person_branch_selection(tagged_meeting_dir, tm
         panels = re.findall(r'<div class="ident-panel" data-ident="(\w+)"([^>]*)>', card)
         return [kind for kind, attrs in panels if "hidden" not in attrs]
 
-    # 1. plain unlinked speaker, no identity at all -> no panel is pre-revealed;
-    #    the four chips are the prompt, not a default local-person form.
-    assert revealed_panels("SPEAKER_00") == []
+    # 1. plain unlinked speaker, no identity at all -> the roster panel is
+    #    pre-revealed (fewer clicks: the search box is the common first
+    #    action), not a default local-person form.
+    assert revealed_panels("SPEAKER_00") == ["roster"]
 
     # 2. speaker with a local person -> the local panel is revealed, showing
     #    the current slug and a Clear button.
@@ -1940,10 +1960,11 @@ def test_only_the_current_panel_is_revealed(tagged_meeting_dir, tmp_meetings_dir
     revealed = [kind for kind, attrs in panels if "hidden" not in attrs]
     assert revealed == ["roster"]
 
-    # A speaker with no identity reveals nothing: the four chips are the prompt.
+    # A speaker with no identity has its roster panel pre-revealed (fewer
+    # clicks: the search box is the common first action for an unnamed speaker).
     plain = re.findall(r'<div class="ident-panel" data-ident="(\w+)"([^>]*)>',
                        _card_html(body, "SPEAKER_01"))
-    assert [k for k, a in plain if "hidden" not in a] == []
+    assert [k for k, a in plain if "hidden" not in a] == ["roster"]
 
 
 def test_a_local_person_card_warns_what_the_roster_panel_would_drop(

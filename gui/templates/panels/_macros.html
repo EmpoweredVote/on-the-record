@@ -101,7 +101,7 @@
       {{ ident_chip(c, 'non_speaker', 'Not a speaker') }}
     </div>
 
-    <div class="ident-panel" data-ident="roster" {{ 'hidden' if c.identity_kind != 'roster' }}>
+    <div class="ident-panel" data-ident="roster" {{ 'hidden' if c.identity_kind not in ('roster', 'none') }}>
       <p class="ident-help">Someone on an essentials roster — an officeholder or a candidate.</p>
       {% if c.identity_kind == 'roster' %}
       <p class="ident-now">Currently: <strong>{{ c.display_name }}</strong>
