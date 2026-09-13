@@ -361,6 +361,7 @@ each topic has a `quotes` array. Each quote has:
     topic's spectrum (may be null), and `chairs` are the spectrum's labeled anchor points
     (roughly 1-5, from one pole to the other)
 
+<!-- inject:gates:start -->
 ## The rules (summarized — the full principles live in QUOTE-CURATION-PRINCIPLES.md)
 
 - **Forward, not record.** A Read & Rank quote is the candidate reasoning about what
@@ -411,6 +412,7 @@ each topic has a `quotes` array. Each quote has:
   rankable contrast). This is a preference, never a gate; do not use it to reject positions you
   find thin.
 
+<!-- inject:gates:end -->
 ## Your task
 
 For every quote in the bundle, apply these judgment checks:
