@@ -18,6 +18,7 @@ from src import ingest
 from src import resolve
 from src.download import is_ytdlp_url
 
+from gui import floor_import as _floor
 from gui import publish_api
 from gui import review_api
 from gui import runner
@@ -78,6 +79,25 @@ def create_app() -> FastAPI:
             {"meetings": meetings, "event_kinds": list(EVENT_KINDS),
              "batch_counts": bs["counts"], "batch_pending": bs["pending"]},
         )
+
+    @app.get("/floor", response_class=HTMLResponse)
+    def floor_sessions(request: Request, error: str | None = None) -> HTMLResponse:
+        sessions = _floor.list_floor_sessions(config.MEETINGS_DIR)
+        return _templates.TemplateResponse(
+            request, "floor_import.html", {"sessions": sessions, "error": error})
+
+    @app.post("/floor/import")
+    def floor_import_action(request: Request, slug: str = Form(...)):
+        try:
+            _floor.import_session(slug, config.MEETINGS_DIR)
+        except _floor.FloorAlreadyLocalError:
+            return RedirectResponse(f"/meetings/{slug}", status_code=303)
+        except _floor.FloorImportError as e:
+            sessions = _floor.list_floor_sessions(config.MEETINGS_DIR)
+            return _templates.TemplateResponse(
+                request, "floor_import.html",
+                {"sessions": sessions, "error": str(e)}, status_code=200)
+        return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
     @app.get("/discovery", response_class=HTMLResponse)
     def discovery_page(request: Request, flash: str = "", show: str = "pending") -> HTMLResponse:

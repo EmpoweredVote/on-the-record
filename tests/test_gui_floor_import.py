@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 import gui.floor_import as fi
+from gui.app import create_app
 
 
 def _fake_gh(tmp_download_root):
@@ -77,3 +80,38 @@ def test_list_floor_sessions_marks_local(monkeypatch, tmp_path):
 def test_list_floor_sessions_empty_without_db(monkeypatch, tmp_path):
     monkeypatch.setattr(fi, "_query_draft_floor_rows", lambda: [])
     assert fi.list_floor_sessions(tmp_path) == []
+
+
+def test_floor_route_lists_sessions(monkeypatch, tmp_meetings_dir):
+    monkeypatch.setattr(fi, "list_floor_sessions", lambda md: [
+        fi.FloorSession("2026-09-03-house-floor", "2026-09-03", "review", 0.63, False),
+        fi.FloorSession("2026-09-02-house-floor", "2026-09-02", "review", 0.63, True),
+    ])
+    body = TestClient(create_app()).get("/floor").text
+    assert "2026-09-03-house-floor" in body
+    assert "Pull to local" in body            # pullable (not local)
+    assert "Open" in body                      # already-local one links to the workspace
+
+
+def test_floor_import_redirects_to_workspace(monkeypatch, tmp_meetings_dir):
+    calls = {}
+    monkeypatch.setattr(fi, "import_session",
+                        lambda slug, md, **k: calls.setdefault("slug", slug))
+    client = TestClient(create_app())
+    resp = client.post("/floor/import", data={"slug": "2026-09-03-house-floor"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/meetings/2026-09-03-house-floor"
+    assert calls["slug"] == "2026-09-03-house-floor"
+
+
+def test_floor_import_surfaces_error(monkeypatch, tmp_meetings_dir):
+    def _boom(slug, md, **k):
+        raise fi.FloorImportError("nope")
+    monkeypatch.setattr(fi, "import_session", _boom)
+    monkeypatch.setattr(fi, "list_floor_sessions", lambda md: [])
+    client = TestClient(create_app())
+    resp = client.post("/floor/import", data={"slug": "x-house-floor"}, follow_redirects=False)
+    # Re-renders the list with an error rather than 500ing.
+    assert resp.status_code == 200
+    assert "nope" in resp.text or "could not" in resp.text.lower()
