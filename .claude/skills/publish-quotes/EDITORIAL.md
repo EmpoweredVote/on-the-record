@@ -1,6 +1,6 @@
 # Editorial discipline for quotes
 
-> **Principles live in** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` — the canonical *why*
+> **Principles live in** `docs/quote-curation/PRINCIPLES.md` — the canonical *why*
 > behind selection, editing, sources, anonymity, the Compass coupling model, and accountability.
 > This file is the editing *mechanics*. If the two disagree, the principles doc wins and this
 > file should be updated.
@@ -67,6 +67,7 @@ to reflect the speaker's actual delivery, not to add polish.
   quotes (`'abortion tourism'`) and/or "what some have called …", and note the interjection rather
   than silently merging it into the speaker's mouth.
 
+<!-- inject:deid:start -->
 ## Two layers: canonical vs. blind (`deidentified_text`)
 
 Read & Rank shows quotes **blind** — the citizen ranks them without knowing who spoke. So every
@@ -87,11 +88,13 @@ override:**
     marked (`…`, `[brackets]`). They relax back to the canonical quote at reveal.
 - If de-identifying would change the *position itself*, the quote isn't usable blind — pick another.
 
+<!-- inject:deid:end -->
 ## Before storing
 
 Read the finalized quotes back to the user verbatim and get explicit sign-off on each. The wording
 that goes in the DB is the wording the public will see.
 
+<!-- inject:note:start -->
 ## Editor note (required)
 
 Every quote needs an `editor_note` — **two sentences, three at the outside** (take the third only
@@ -102,3 +105,4 @@ Compass stance**, and **if you edited it**, what changed (or "verbatim, no edits
 source weakness plainly ("campaign website, not verifiable to video"); don't cite section numbers
 or internal jargon ("§4.3", "tier-1"). It's the public-facing defense of the wording — write it for
 a skeptical reader, not as a note-to-self.
+<!-- inject:note:end -->

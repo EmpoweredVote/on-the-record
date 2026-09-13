@@ -144,7 +144,7 @@ one row, the race edge on another. Resolve it before moving on — reuse the row
 quotes, or confirm in writing that they are two different people.
 
 ### needs_quotes → quotes_staged
-Per candidate, work DOWN the source hierarchy (QUOTE-CURATION-PRINCIPLES §5, ranked by
+Per candidate, work DOWN the source hierarchy (`docs/quote-curation/PRINCIPLES.md#sourcing`, ranked by
 questioner independence): 1 debates, forums & town halls; 2 independent-press interviews &
 candidate questionnaires; 3 partisan-host interviews & prepared remarks; 4 candidate-bylined
 written. Tiers 3–4 need a justification note; any WRITTEN source at any tier yields verbatim
@@ -181,7 +181,7 @@ a human still selects the live quote per (candidate, topic) in `/admin/readrank-
 - Never mark `blocked`/`skipped` without `status_reason`.
 - Production DB: additive writes only (inserts, status updates). Never delete/overwrite
   quotes, races, or candidates in a pipeline session.
-- All quote sourcing rules live in `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` +
+- All quote sourcing rules live in `docs/quote-curation/PRINCIPLES.md` +
   `.claude/skills/audit-quotes/CHECKS.md` — read both before sourcing.
 - MI Aug 4 / WI+MN Aug 11 primaries outrank everything until they pass.
 
