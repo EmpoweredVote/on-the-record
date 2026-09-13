@@ -218,7 +218,7 @@ export default function MeetingView({
   );
 
   return (
-    <div className="meetingLayout">
+    <div className={actionBar ? "meetingLayout meetingLayout--withActionBar" : "meetingLayout"}>
       {actionBar ? <div className="adminActionBar">{actionBar}</div> : null}
       <div className="mediaPane">
         {player ?? (
