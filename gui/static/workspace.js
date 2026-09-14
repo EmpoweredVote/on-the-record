@@ -228,6 +228,23 @@
     if (firstForm) { e.preventDefault(); firstForm.requestSubmit(); }
   });
 
+  // New-local-person: the slug follows the typed name until the operator edits
+  // the slug by hand. Only the new-person form's slug carries data-autoslug.
+  function slugify(s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "").slice(0, 100);
+  }
+  document.addEventListener("input", (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement)) return;
+    const form = el.closest(".local-person");
+    if (!form) return;
+    const slug = form.querySelector('input[name="slug"][data-autoslug]');
+    if (!slug) return;                                  // existing person, or already dirty
+    if (el.name === "slug") { slug.removeAttribute("data-autoslug"); return; }  // manual edit → stop
+    if (el.name === "name") slug.value = slugify(el.value);
+  });
+
   // Identity chooser: reveal the panel for the chosen outcome. Delegated on
   // document, so it survives a panel re-fetch with no re-init — the server
   // already rendered the current outcome checked and its panel un-hidden, so

@@ -167,6 +167,7 @@
                  autocomplete="off" placeholder="Brian Sterling"></label>
         <label>Slug
           <input type="text" name="slug" value="{{ '' if is_marked else (c.local_slug if c.identity_kind == 'local' else c.default_slug) }}" required
+                 {{ 'data-autoslug' if c.identity_kind != 'local' }}
                  pattern="[a-z0-9][a-z0-9_-]{0,99}"
                  title="lowercase letters, digits, hyphen or underscore"></label>
         <label>Role

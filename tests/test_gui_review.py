@@ -609,6 +609,21 @@ def test_workspace_js_enter_picks_top_result():
     assert "keydown" in js and "requestSubmit" in js
 
 
+def test_new_local_person_slug_marked_for_autofill(tagged_meeting_dir, tmp_meetings_dir):
+    # SPEAKER_01 in _write_meeting is unnamed and unlinked -> identity_kind == 'none'.
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/panel/review").text
+    # The new-local-person slug input opts into auto-fill; the JS keys off this.
+    assert "data-autoslug" in body
+
+
+def test_workspace_js_autoslugs_name():
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "data-autoslug" in js and 'name="slug"' in js
+
+
 import numpy as np
 
 
