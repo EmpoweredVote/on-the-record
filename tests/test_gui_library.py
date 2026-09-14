@@ -775,3 +775,11 @@ def test_library_toolbar_and_row_data_enriched(tagged_meeting_dir, tmp_meetings_
     assert 'data-speakers="2"' in body
     assert 'data-length="3600' in body     # duration_seconds (may be float-formatted)
     assert 'data-name="council"' in body   # display_name lowercased
+
+
+def test_library_js_sets_aria_sort_indicator():
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "aria-sort" in js            # active column shows its direction
+    css = Path("gui/static/style.css").read_text()
+    assert 'aria-sort' in css           # a caret rule keys off it

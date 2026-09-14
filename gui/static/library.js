@@ -68,6 +68,9 @@
         return String(av).localeCompare(String(bv)) * sortDir;
       });
       sorted.forEach((tr) => tbody.appendChild(tr));   // reorder in place
+      // Update aria-sort indicator: clear all, set on clicked header
+      table.querySelectorAll("th[data-sort]").forEach((h) => h.removeAttribute("aria-sort"));
+      th.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
     });
   });
 
