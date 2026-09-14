@@ -13,16 +13,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@empoweredvote/ev-ui": "^0.10.2",
+    "@empoweredvote/ev-ui": "^0.11.0",
     "@floating-ui/react": "^0.27.20",
     "@react-spring/web": "^10.1.2",
     "hls.js": "^1.7.1",
     "next": "16.3.3",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.5.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
