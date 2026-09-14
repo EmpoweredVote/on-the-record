@@ -28,7 +28,8 @@ def test_forum_and_debate_keep_campaign_roles():
 
 def test_unknown_or_none_kind_falls_back_to_all_roles():
     assert local_roles_for(None) == DEFAULT_LOCAL_ROLES
-    assert local_roles_for("news_clip") == DEFAULT_LOCAL_ROLES
+    # An unmapped/unknown kind still falls back to the full default set.
+    assert local_roles_for("some_unmapped_kind") == DEFAULT_LOCAL_ROLES
     # the campaign vocab is never silently lost in the fallback
     assert "candidate" in DEFAULT_LOCAL_ROLES and "staff" in DEFAULT_LOCAL_ROLES
 
