@@ -38,6 +38,14 @@
 
   <section>
     <h2>Confirmed</h2>
-    {% for c in page.confirmed %}{{ m.card(c, page.meeting_id, page.all_cards, page.local_role_options) }}{% endfor %}
+    {# Collapsed by default: a fully-reviewed meeting can have dozens of
+       confirmed speakers, and that wall of already-settled cards is exactly
+       what buries the few that still need attention above. No `open`
+       attribute here means collapsed on first paint, no JS required; the
+       reviewer expands it on demand. #}
+    <details class="confirmed-group">
+      <summary>{{ page.confirmed|length }} confirmed speaker{{ '' if page.confirmed|length == 1 else 's' }}</summary>
+      {% for c in page.confirmed %}{{ m.card(c, page.meeting_id, page.all_cards, page.local_role_options) }}{% endfor %}
+    </details>
   </section>
 {% endif %}

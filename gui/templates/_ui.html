@@ -1,0 +1,3 @@
+{% macro badge(css_class, text, id=none) -%}
+<span{% if id %} id="{{ id }}"{% endif %} class="badge {{ css_class }}">{{ text }}</span>
+{%- endmacro %}

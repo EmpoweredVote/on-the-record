@@ -1,12 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CouncilScribe — Meeting Library</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Meeting Library — CouncilScribe{% endblock %}
+{% block content %}
+  {% from "_ui.html" import badge %}
   <header><h1>Meeting Library</h1></header>
   <main>
     <div class="batch-header" id="batch-header">
@@ -43,25 +38,38 @@
         <option value="">Status: all</option>
         <option value="processing">Processing</option>
         <option value="needs-review">Needs review</option>
+        <option value="failed">Failed</option>
         <option value="ready">Ready to publish</option>
         <option value="live">Published/Live</option>
       </select>
       <span class="lib-spacer"></span>
       <a class="newlink" href="/new">+ New meeting</a>
       <a class="newlink" href="/discovery">Discovery</a>
+      <a class="newlink" href="/floor">House floor</a>
       <form method="post" action="/cleanup-all" class="cleanup-all"
             onsubmit="return confirm('Compress audio and delete source video + WAV for ALL finalized meetings? This frees disk space and cannot be undone without reprocessing.');">
         <button type="submit" class="cleanup-btn">🧹 Clean up all finalized media</button>
       </form>
     </div>
+    <div class="lib-chips">
+      <button type="button" class="chip" data-chip="all">All</button>
+      <button type="button" class="chip" data-chip="needs-review">Needs review</button>
+      <button type="button" class="chip" data-chip="live">Live</button>
+      <button type="button" class="chip" data-chip="failed">Failed</button>
+      <label class="lib-daterange">From <input type="date" id="lib-date-from"></label>
+      <label class="lib-daterange">To <input type="date" id="lib-date-to"></label>
+    </div>
     {% if meetings %}
     <table class="library" id="lib-table">
       <thead>
-        <tr><th>Meeting</th><th>Date</th><th>Processed</th><th>Kind</th><th>Speakers</th><th>Length</th><th>Review</th><th>Status</th><th>Live</th></tr>
+        <tr><th>Meeting</th><th data-sort="date">Date</th><th>Processed</th><th data-sort="kind">Kind</th><th data-sort="speakers">Speakers</th><th data-sort="length">Length</th><th>Review</th><th data-sort="status">Status</th><th>Live</th></tr>
       </thead>
       <tbody>
         {% for m in meetings %}
         <tr data-meeting-id="{{ m.meeting_id }}" data-kind="{{ m.event_kind or '' }}" data-status="{{ m.status_key }}"
+            data-date="{{ m.date or '' }}" data-speakers="{{ m.speaker_count if m.speaker_count is not none else '' }}"
+            data-length="{{ m.duration_seconds if m.duration_seconds is not none else '' }}"
+            data-name="{{ m.display_name|lower }}"
             data-search="{{ [m.display_name, m.meeting_id, m.context_line, m.event_kind]|select|join(' ')|lower }}">
           <td class="name">
             {% if m.has_thumbnail %}
@@ -80,12 +88,12 @@
           <td>{{ m.duration_label }}</td>
           <td>
             {% set level, text = m.gate_badge %}
-            <span class="gate gate-{{ level }}">{{ text }}</span>
+            {{ badge("gate gate-" ~ level, text) }}
           </td>
           <td class="status-cell"><span class="stage stage-{{ m.completed_stage }}">{{ m.stage_label }}</span></td>
           <td>
             {% set live = m.live_badge %}
-            {% if live %}<span class="live-badge live-{{ live[0] }}">{{ live[1] }}</span>{% else %}<span class="live-unknown">—</span>{% endif %}
+            {% if live %}{{ badge("live-badge live-" ~ live[0], live[1]) }}{% else %}<span class="live-unknown">—</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -96,6 +104,5 @@
     <p class="empty">No meetings processed yet.</p>
     {% endif %}
   </main>
-  <script src="/static/library.js"></script>
-</body>
-</html>
+{% endblock %}
+{% block scripts %}<script src="/static/library.js"></script>{% endblock %}

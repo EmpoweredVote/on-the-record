@@ -18,6 +18,7 @@ from src import ingest
 from src import resolve
 from src.download import is_ytdlp_url
 
+from gui import floor_import as _floor
 from gui import publish_api
 from gui import review_api
 from gui import runner
@@ -78,6 +79,30 @@ def create_app() -> FastAPI:
             {"meetings": meetings, "event_kinds": list(EVENT_KINDS),
              "batch_counts": bs["counts"], "batch_pending": bs["pending"]},
         )
+
+    @app.get("/floor", response_class=HTMLResponse)
+    def floor_sessions(request: Request, error: str | None = None) -> HTMLResponse:
+        sessions = _floor.list_floor_sessions(config.MEETINGS_DIR)
+        return _templates.TemplateResponse(
+            request, "floor_import.html", {"sessions": sessions, "error": error})
+
+    @app.post("/floor/import")
+    def floor_import_action(request: Request, slug: str = Form(...)):
+        if not is_safe_meeting_id(slug):
+            sessions = _floor.list_floor_sessions(config.MEETINGS_DIR)
+            return _templates.TemplateResponse(
+                request, "floor_import.html",
+                {"sessions": sessions, "error": f"invalid slug: {slug}"}, status_code=200)
+        try:
+            _floor.import_session(slug, config.MEETINGS_DIR)
+        except _floor.FloorAlreadyLocalError:
+            return RedirectResponse(f"/meetings/{slug}", status_code=303)
+        except _floor.FloorImportError as e:
+            sessions = _floor.list_floor_sessions(config.MEETINGS_DIR)
+            return _templates.TemplateResponse(
+                request, "floor_import.html",
+                {"sessions": sessions, "error": str(e)}, status_code=200)
+        return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
     @app.get("/discovery", response_class=HTMLResponse)
     def discovery_page(request: Request, flash: str = "", show: str = "pending") -> HTMLResponse:
@@ -273,6 +298,18 @@ def create_app() -> FastAPI:
         return _templates.TemplateResponse(
             request, "workspace.html", {**ctx, "header": header, "active_tab": active},
         )
+
+    @app.get("/meetings/{meeting_id}/panel/review/card/{label}", response_class=HTMLResponse)
+    def review_card_fragment(request: Request, meeting_id: str, label: str) -> HTMLResponse:
+        ctx = workspace.panel_context("review", meeting_id)
+        page = ctx.get("page") if ctx else None
+        if page is None:
+            raise HTTPException(status_code=404)
+        card = next((c for c in page.all_cards if c.label == label), None)
+        if card is None:
+            raise HTTPException(status_code=404)
+        return _templates.TemplateResponse(
+            request, "panels/_card_fragment.html", {"page": page, "c": card})
 
     @app.get("/meetings/{meeting_id}/panel/{name}", response_class=HTMLResponse)
     def workspace_panel(request: Request, meeting_id: str, name: str) -> HTMLResponse:

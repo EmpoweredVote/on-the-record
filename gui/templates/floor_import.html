@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_ui.html" import badge %}
+{% block title %}House Floor Sessions — CouncilScribe{% endblock %}
+{% block content %}
+  <header><a class="back" href="/">← Library</a><h1>House Floor Sessions</h1></header>
+  <main>
+    {% if error %}<div class="error-banner">{{ error }}</div>{% endif %}
+    {% if sessions %}
+    <table class="library">
+      <thead><tr><th>Session</th><th>Date</th><th>Gate</th><th></th></tr></thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td class="mid">{{ s.slug }}</td>
+          <td>{{ s.date or "—" }}</td>
+          <td>{{ badge("gate gate-" ~ (s.gate_verdict or "none"), s.gate_verdict or "—") }}</td>
+          <td>
+            {% if s.is_local %}
+              <a class="mlink" href="/meetings/{{ s.slug }}">Open</a>
+            {% else %}
+              <form method="post" action="/floor/import">
+                <input type="hidden" name="slug" value="{{ s.slug }}">
+                <button type="submit" class="accept">Pull to local</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="empty">No draft floor sessions found.</p>{% endif %}
+  </main>
+{% endblock %}

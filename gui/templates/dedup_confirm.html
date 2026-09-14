@@ -1,8 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Already processed?</title><link rel="stylesheet" href="/static/style.css"></head>
-<body>
+{% extends "base.html" %}
+{% block title %}Already processed?{% endblock %}
+{% block content %}
   <header><a class="back" href="/new">← Back to form</a><h1>You've already grabbed this source</h1></header>
   <main class="review">
     <div class="error-banner" style="background:#fdf3e0;color:#9a6a00;border-color:#e0c07a;">
@@ -19,4 +17,4 @@
       <button type="submit" class="mark">Process anyway (re-run this source)</button>
     </form>
   </main>
-</body></html>
+{% endblock %}

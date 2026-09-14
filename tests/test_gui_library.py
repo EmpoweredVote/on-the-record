@@ -79,6 +79,20 @@ def test_meeting_summary_status_key():
     assert s(completed_stage=7, review_status="review").status_key == "needs-review"
 
 
+def test_status_key_failed_bucket():
+    from gui.models import MeetingSummary
+    def s(**kw):
+        base = dict(meeting_id="m", title=None, city=None, meeting_type=None, date=None,
+                    event_kind=None, completed_stage=4)
+        base.update(kw); return MeetingSummary(**base)
+    assert s(review_status="failed").status_key == "failed"
+    # live still wins over a stale failed verdict
+    assert s(review_status="failed", is_live=True).status_key == "live"
+    # unchanged buckets
+    assert s(review_status="pass").status_key == "ready"
+    assert s(completed_stage=2).status_key == "processing"
+
+
 import json
 
 from gui.library import scan_meetings
@@ -535,6 +549,15 @@ def test_library_js_filters_by_search_kind_status(tmp_meetings_dir):
     assert "data-search" in js
 
 
+def test_library_js_has_sort_daterange_chips_rowclick():
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "data-sort" in js                       # column sorting
+    assert "lib-date-from" in js and "lib-date-to" in js   # date range
+    assert "data-chip" in js                        # quick chips
+    assert "data-meeting-id" in js and ("location" in js or "href" in js)  # row click nav
+
+
 def test_processed_label_relative():
     import time
     from gui.models import MeetingSummary
@@ -727,3 +750,36 @@ def test_speaker_count_none_when_neither_source_exists(tmp_path):
 
     assert _speaker_count(mdir, None) is None
     assert _speaker_count(mdir, {"speakers": {}}) is None
+
+
+def test_library_toolbar_and_row_data_enriched(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    import json
+    (mdir / "transcript_named.json").write_text(json.dumps(
+        {"title": "Council", "duration_seconds": 3600, "speakers": {"A": {}, "B": {}}}))
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"date": "2026-02-04", "event_kind": "council"})
+    st.write_text(json.dumps(data))
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/").text
+    # richer status option
+    assert 'value="failed"' in body
+    # date-range + chips controls
+    assert 'id="lib-date-from"' in body and 'id="lib-date-to"' in body
+    assert 'data-chip="needs-review"' in body and 'data-chip="all"' in body
+    # sortable headers
+    assert 'data-sort="date"' in body and 'data-sort="speakers"' in body
+    # enriched row data
+    assert 'data-date="2026-02-04"' in body
+    assert 'data-speakers="2"' in body
+    assert 'data-length="3600' in body     # duration_seconds (may be float-formatted)
+    assert 'data-name="council"' in body   # display_name lowercased
+
+
+def test_library_js_sets_aria_sort_indicator():
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "aria-sort" in js            # active column shows its direction
+    css = Path("gui/static/style.css").read_text()
+    assert 'aria-sort' in css           # a caret rule keys off it

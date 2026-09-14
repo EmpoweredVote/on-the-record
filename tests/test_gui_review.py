@@ -199,6 +199,26 @@ def test_review_route_renders_groups(tagged_meeting_dir, tmp_meetings_dir):
     assert "Needs attention" in body and "Confirmed" in body
 
 
+def test_confirmed_section_is_collapsible_by_default(tagged_meeting_dir, tmp_meetings_dir):
+    """A long roster of already-confirmed speakers shouldn't bury the small
+    number who need attention. The Confirmed group renders inside a
+    <details class="confirmed-group"> with no `open` attribute, so it starts
+    collapsed, with a <summary> giving the reviewer a count without opening
+    it."""
+    import re
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)  # SPEAKER_00 confirmed, SPEAKER_01 needs attention.
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/review").text
+
+    m = re.search(r'<details class="confirmed-group"[^>]*>', body)
+    assert m is not None, "expected a <details class=\"confirmed-group\"> wrapper"
+    assert "open" not in m.group(0)  # collapsed by default
+    assert "<summary" in body
+    # The confirmed speaker still renders, just inside the collapsed wrapper.
+    assert "Mayor Johnson" in body
+
+
 def test_review_route_404_for_unknown_meeting(tmp_meetings_dir):
     client = TestClient(create_app())
     assert client.get("/meetings/ghost/review").status_code == 404
@@ -568,6 +588,40 @@ def test_review_js_references_search_and_link(tmp_meetings_dir):
     js = Path("gui/static/workspace.js").read_text()
     assert "/api/politicians/search" in js
     assert "/link" in js
+
+
+def test_unidentified_speaker_shows_roster_search_without_reveal(tagged_meeting_dir, tmp_meetings_dir):
+    """SPEAKER_01 in _write_meeting is unnamed and unlinked -> identity_kind == 'none'.
+    Its roster search should render open (no hidden attr) so the search box is
+    usable immediately, without a reveal-click on a chip first."""
+    import re
+
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    panel = TestClient(create_app()).get("/meetings/2026-02-04-council/panel/review").text
+    assert re.search(r'data-ident="roster"(?![^>]*hidden)', panel), \
+        "an unidentified speaker's roster search should be open by default"
+
+
+def test_workspace_js_enter_picks_top_result():
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "keydown" in js and "requestSubmit" in js
+
+
+def test_new_local_person_slug_marked_for_autofill(tagged_meeting_dir, tmp_meetings_dir):
+    # SPEAKER_01 in _write_meeting is unnamed and unlinked -> identity_kind == 'none'.
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    body = TestClient(create_app()).get("/meetings/2026-02-04-council/panel/review").text
+    # The new-local-person slug input opts into auto-fill; the JS keys off this.
+    assert "data-autoslug" in body
+
+
+def test_workspace_js_autoslugs_name():
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "data-autoslug" in js and 'name="slug"' in js
 
 
 import numpy as np
@@ -1300,9 +1354,10 @@ def test_review_page_render_local_person_branch_selection(tagged_meeting_dir, tm
         panels = re.findall(r'<div class="ident-panel" data-ident="(\w+)"([^>]*)>', card)
         return [kind for kind, attrs in panels if "hidden" not in attrs]
 
-    # 1. plain unlinked speaker, no identity at all -> no panel is pre-revealed;
-    #    the four chips are the prompt, not a default local-person form.
-    assert revealed_panels("SPEAKER_00") == []
+    # 1. plain unlinked speaker, no identity at all -> the roster panel is
+    #    pre-revealed (fewer clicks: the search box is the common first
+    #    action), not a default local-person form.
+    assert revealed_panels("SPEAKER_00") == ["roster"]
 
     # 2. speaker with a local person -> the local panel is revealed, showing
     #    the current slug and a Clear button.
@@ -1920,10 +1975,11 @@ def test_only_the_current_panel_is_revealed(tagged_meeting_dir, tmp_meetings_dir
     revealed = [kind for kind, attrs in panels if "hidden" not in attrs]
     assert revealed == ["roster"]
 
-    # A speaker with no identity reveals nothing: the four chips are the prompt.
+    # A speaker with no identity has its roster panel pre-revealed (fewer
+    # clicks: the search box is the common first action for an unnamed speaker).
     plain = re.findall(r'<div class="ident-panel" data-ident="(\w+)"([^>]*)>',
                        _card_html(body, "SPEAKER_01"))
-    assert [k for k, a in plain if "hidden" not in a] == []
+    assert [k for k, a in plain if "hidden" not in a] == ["roster"]
 
 
 def test_a_local_person_card_warns_what_the_roster_panel_would_drop(
@@ -2211,3 +2267,63 @@ def test_a_route_rename_leaves_the_voice_keyed_to_the_linked_person(
     key, slug, pid = resolve_mapping_enrollment(meeting.speakers["SPEAKER_01"])
     assert key == "essentials:uuid-becerra"
     assert pid == "uuid-becerra"
+
+
+def test_card_fragment_route_renders_one_card(tagged_meeting_dir, tmp_meetings_dir):
+    # Mirror the setup the existing review-panel tests use to get a reviewable
+    # meeting (see test_load_review_page_groups_and_orders in this file).
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    # Discover a real label from the full review panel, then fetch just its card.
+    panel = client.get("/meetings/2026-02-04-council/panel/review").text
+    import re
+    m = re.search(r'data-label="([^"]+)"', panel)
+    assert m, "review panel should render cards carrying data-label"
+    label = m.group(1)
+    frag = client.get(f"/meetings/2026-02-04-council/panel/review/card/{label}")
+    assert frag.status_code == 200
+    assert f'data-label="{label}"' in frag.text
+    assert f"/speakers/{label}/name" in frag.text   # the card's forms are present
+    # It is ONE card, not the whole panel.
+    assert "Needs attention" not in frag.text and "Confirmed" not in frag.text
+
+
+def test_card_fragment_route_404_unknown_label(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=4)
+    _write_meeting(mdir)
+    client = TestClient(create_app())
+    assert client.get("/meetings/2026-02-04-council/panel/review/card/NOPE").status_code == 404
+
+
+def test_card_fragment_route_404_not_reviewable(tagged_meeting_dir, tmp_meetings_dir):
+    tagged_meeting_dir("x", meeting_id="2026-03-01-council", completed_stage=2)  # pre-identify
+    client = TestClient(create_app())
+    assert client.get("/meetings/2026-03-01-council/panel/review/card/SPEAKER_00").status_code == 404
+
+
+def test_workspace_js_does_per_card_swap():
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "/panel/review/card/" in js          # fetches the single-card fragment
+    assert "data-label" in js                    # locates the card to replace
+    assert "outerHTML" in js                     # swaps the node in place (keeps scroll)
+    assert "/merge" in js                         # merge is special-cased to full reload
+
+
+def test_workspace_js_heals_peer_duplicate_name_warning_on_collision():
+    """A card-scoped rename/link can create or resolve a same-name collision,
+    which leaves a PEER card's .dup-name warning stale after a single-card
+    swap. The card-scoped branch must detect a collision (before OR after
+    the action) and fall through to a full loadPanel instead of swapping
+    just the acted card, so peer cards heal too."""
+    from pathlib import Path
+    js = Path("gui/static/workspace.js").read_text()
+    assert "dup-name" in js                       # collision markup is recognized in JS
+    # Find the card-scoped branch and confirm it can still fall back to a
+    # full reload (i.e. it doesn't unconditionally return after the swap).
+    start = js.index("if (cardScoped) {")
+    end = js.index("await loadPanel(activeTab, false);", start)
+    branch = js[start:end]
+    assert "dup-name" in branch                  # collision check happens inside the branch
+    assert "hadDup" in branch and "hasDup" in branch
