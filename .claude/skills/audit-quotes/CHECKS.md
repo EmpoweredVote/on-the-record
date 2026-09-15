@@ -55,16 +55,17 @@ human to resolve even though the *detection* is mechanical.
 | `partisan-tell` | quote | no partisan/side tell on blind card | high | guided |
 | `source-tier-4` | quote | prefer tier 1–2 sources (questioner-independent) | medium | decision-required |
 | `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
+| `pointer-only-source` | quote | VOTE411 / thevoterguide.org answers are permission-gated — a pointer, never a cited source; **source from the candidate's own materials** | high | decision-required |
 | `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
 | `scorecard-source` | quote | a scorecard publishes votes and ratings, not utterances — **re-source** | high | decision-required |
 | `stance-label` | quote | a quote must state a position, not name a topic (≤4 words) | medium | decision-required |
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
-### 2.1 The three bad-source classes
+### 2.1 The four bad-source classes
 
-`invalid-source`, `unquotable-source` and `scorecard-source` are deliberately separate checks
-because their remedies differ.
+`invalid-source`, `unquotable-source`, `scorecard-source` and `pointer-only-source` are
+deliberately separate checks because their remedies differ.
 
 - **`invalid-source` — aggregator; an original exists, so re-attribute.** ontheissues.org and
   wikipedia.org restate or paraphrase something the candidate actually said elsewhere. The quote is
@@ -104,6 +105,16 @@ because their remedies differ.
   a news article whose slug merely contains the word. An earlier draft keyed on `/roll-?call`
   and wrongly matched **rollcall.com — CQ Roll Call, a news outlet**, which is a perfectly good
   source; there is a regression test for that.
+
+- **`pointer-only-source` — VOTE411 / thevoterguide.org; permission-gated, source elsewhere.**
+  The answers are the candidate's own words, but the League of Women Voters' terms
+  (vote411.org/legal) bar reproducing them without written permission. So VOTE411 is a
+  *pointer*: read it (as a human, in a browser) to learn a candidate's position, then cite
+  the candidate's own material. Unlike `invalid-source`, the fix is NOT "re-attribute" — the
+  answer is usually original to VOTE411 with no other page to point to; if the position lives
+  only on VOTE411, leave the candidate absent, and never paraphrase the VOTE411 answer. This
+  guard lifts if/when a written League data license lands. See
+  `docs/superpowers/specs/2026-09-12-vote411-pointer-lane-design.md`.
 
 **ballotpedia.org is in none of these classes and is not flagged.** It reproduces campaign-site text
 verbatim under an attribution line with a footnote to the original (re-attributable case by case),

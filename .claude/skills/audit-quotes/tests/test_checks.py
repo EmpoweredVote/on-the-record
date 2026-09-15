@@ -1,8 +1,8 @@
 from scripts.checks import (
     check_note_quality, check_deid_present, check_trailing_ellipsis,
     check_partisan_tell_in_blind, check_source_tier, check_invalid_source,
-    check_unquotable_source, check_scorecard_source, check_stance_label,
-    topic_live_count, topic_min_candidates, STANCE_LABEL_MAX_WORDS,
+    check_unquotable_source, check_scorecard_source, check_pointer_only_source,
+    check_stance_label, topic_live_count, topic_min_candidates, STANCE_LABEL_MAX_WORDS,
 )
 
 def row(**kw):
@@ -225,3 +225,44 @@ def test_stance_label_empty_quote_not_flagged():
     # An empty quote_text is a different defect; don't double-report it here.
     assert check_stance_label(row(quote_text="")) is None
     assert check_stance_label(row(quote_text=None)) is None
+
+
+# --- pointer-only-source ---
+# VOTE411 / thevoterguide.org are the League of Women Voters' candidate-questionnaire platform.
+# The answers are the candidate's own words (a real primary source), but LWV's terms bar
+# reproduction and automated access without written permission. Until a license exists,
+# these are POINTER-ONLY: use them to find where a candidate stated a position, then cite
+# the candidate's own materials.
+
+def test_pointer_only_source_vote411_flagged():
+    f = check_pointer_only_source(row(source_url="https://www.vote411.org/ballot",
+                                      source_name="www.vote411.org"))
+    assert f is not None and f.check_id == "pointer-only-source"
+    assert f.severity == "high" and f.fix_class == "decision-required"
+
+def test_pointer_only_source_thevoterguide_flagged():
+    for u in ("https://api.thevoterguide.org/v1/race?districtId=15",
+              "https://onyourballot.vote411.org/x.do"):
+        f = check_pointer_only_source(row(source_url=u))
+        assert f is not None and f.check_id == "pointer-only-source", u
+
+def test_pointer_only_source_is_pointer_not_reattribute():
+    # Must NOT collapse into invalid-source (that remedy is "re-attribute"; this one is "pointer only").
+    r = row(source_url="https://www.vote411.org/ballot")
+    assert check_invalid_source(r) is None
+    fix = check_pointer_only_source(r).suggested_fix.lower()
+    assert "pointer" in fix or "own" in fix
+    assert "do not paraphrase" in fix
+
+def test_pointer_only_source_youtube_not_flagged():
+    assert check_pointer_only_source(row(source_url="https://youtu.be/x?t=1s")) is None
+
+def test_pointer_only_source_registered():
+    from scripts.checks import QUOTE_CHECKS
+    assert check_pointer_only_source in QUOTE_CHECKS
+
+def test_source_tier_defers_to_pointer_only_for_thevoterguide():
+    # thevoterguide.org also matches CAMPAIGN_SITE; pointer-only-source owns it, so no tier-4 noise.
+    r = row(source_url="https://api.thevoterguide.org/v1/race")
+    assert check_source_tier(r) is None
+    assert check_pointer_only_source(r) is not None

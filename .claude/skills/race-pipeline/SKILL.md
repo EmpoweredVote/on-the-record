@@ -166,6 +166,26 @@ pull verbatim, timestamp-deep-linked quotes later; a video covering several cand
 shared topics is the highest-value ingest. Note in the pipeline row's `notes` that
 discovery rows were filed for this race.
 
+#### VOTE411 as a pointer (interim — no LWV license yet)
+
+VOTE411 candidate-questionnaire answers are the candidate's own words (a tier-2 source
+in principle), but LWV's terms bar reproducing them or fetching them programmatically
+without written permission. Until a license lands, use VOTE411 as a **pointer only**:
+
+- A **human** opens the race's VOTE411 guide in a normal browser. Do NOT delegate this to
+  an agent/subagent and do NOT fetch `vote411.org` or `*.thevoterguide.org` from code.
+- Capture only facts: confirm the ballot line-up (against the SOS list), read each
+  candidate's own campaign URL from the guide's "Website" field into
+  `race_candidates.website_url`, and note which Compass topics they address.
+- **Store no VOTE411 answer text** — not in `notes`, `why`, or `editor_note`.
+- Then source quotes from each candidate's OWN materials (campaign site, press release,
+  their own post/video) per §5, and run publish-quotes → audit-quotes as normal.
+- `vote411.org` / `thevoterguide.org` are never a `source_url` — the `pointer-only-source`
+  audit check enforces this. If a position appears only on VOTE411, the candidate is absent
+  on that topic; never paraphrase the VOTE411 answer to fill the gap.
+
+Design: `docs/superpowers/specs/2026-09-12-vote411-pointer-lane-design.md`.
+
 ### quotes_staged → published
 Run the **publish-quotes** skill on each staged batch (dry-run, user OK, --commit). It
 inserts drafts and auto-runs **audit-quotes** on the new ids.
