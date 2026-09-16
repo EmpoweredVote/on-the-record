@@ -1167,3 +1167,337 @@ def test_reject_checkbox_absent_on_deferred_view(monkeypatch):
     client = TestClient(create_app())
     html = client.get("/discovery?show=deferred").text
     assert 'name="whole_source"' not in html
+
+
+# --- Task 5: outlet trust/undo DB layer ---
+#
+# No local/seeded discovery DB exists (see tests/conftest.py's _no_real_db_env
+# and live_db fixtures) — these follow the project's established three-tier
+# strategy: (1) pure SQL-fragment checks, (2) fake-cursor injection for SQL
+# construction (mirrors _capture_conn above), (3) best-effort no-DB checks.
+# No live_db test here: essentials.source_outlets.trusted/ingest_barred only
+# exist once the Task 1 migration is applied (gated on Chris, not yet done),
+# so a live query against them today could only fail, not confirm anything.
+
+# The critical trap this task's brief called out by name: _to_row does
+# `DiscoveredRow(*r)` — positional. _SELECT's two new columns must land
+# immediately after election_date and before race_label/family_count, or a
+# get_row()/pending_rows() call silently loads o.trusted into race_label.
+
+
+def test_select_joins_outlet_trust_flags():
+    sql = discovery._SELECT.lower()
+    assert "coalesce(o.trusted, false)" in sql
+    assert "coalesce(o.ingest_barred, false)" in sql
+    assert "left join essentials.source_outlets o on o.id = d.outlet_id" in sql
+    # The join must come after election_date in the column list, matching
+    # DiscoveredRow's field order (see the alignment test below).
+    assert sql.index("election_date") < sql.index("coalesce(o.trusted")
+
+
+def test_discovered_row_outlet_flags_default_false():
+    r = _row()
+    assert r.outlet_trusted is False
+    assert r.outlet_ingest_barred is False
+
+
+def test_get_row_maps_outlet_flags_without_misaligning_family_fields(monkeypatch):
+    """The alignment guard: feed a full 21-column row through get_row() (the
+    real _SELECT -> _to_row -> DiscoveredRow(*r) path) and confirm the two new
+    trailing columns land on outlet_trusted/outlet_ingest_barred — NOT on
+    race_label/family_count, which must stay at their dataclass defaults since
+    _SELECT never supplies them."""
+    row_tuple = (
+        "d1", "https://www.youtube.com/watch?v=abc12345678", "Title", "desc",
+        "Channel", "UCabc", "https://example.com/chan",
+        "00000000-0000-0000-0000-000000000001", 600, "2026-08-01", "r1",
+        "news_clip", 2, "quote_source", 0.5, "why", "search", "pending",
+        "2026-11-03",
+        True, False,   # coalesce(o.trusted, false), coalesce(o.ingest_barred, false)
+    )
+    assert len(row_tuple) == 21  # _SELECT's exact column count today
+
+    class _Cur:
+        def execute(self, sql, params=None):
+            pass
+
+        def fetchone(self):
+            return row_tuple
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+
+    row = discovery.get_row("d1")
+    assert row.election_date == "2026-11-03"
+    assert row.outlet_trusted is True
+    assert row.outlet_ingest_barred is False
+    # The trap: these must stay defaulted, never receive o.trusted/o.ingest_barred.
+    assert row.race_label is None
+    assert row.family_count == 0
+
+
+# --- Task 5: set_outlet_trusted ---
+
+def test_set_outlet_trusted_sql(monkeypatch):
+    captured = _capture_conn(monkeypatch)
+    ok = discovery.set_outlet_trusted("00000000-0000-0000-0000-000000000001")
+    assert ok is True
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.source_outlets" in sql
+    assert "trusted = true" in sql
+    assert "trusted_at = now()" in sql
+    assert "id = %s::uuid" in sql
+    assert captured["params"] == ("00000000-0000-0000-0000-000000000001",)
+
+
+def test_set_outlet_trusted_no_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.set_outlet_trusted("x") is False
+
+
+# --- Task 5: _outlet_id_for_channel ---
+
+def test_outlet_id_for_channel_sql(monkeypatch):
+    captured = {}
+
+    class _Cur:
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchone(self):
+            return ("00000000-0000-0000-0000-000000000009",)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+    outlet_id = discovery._outlet_id_for_channel("UCabc")
+    assert outlet_id == "00000000-0000-0000-0000-000000000009"
+    sql = captured["sql"].lower()
+    assert "source_outlets" in sql
+    assert "external_channel_id = %s" in sql
+    assert captured["params"] == ("UCabc",)
+
+
+def test_outlet_id_for_channel_none_when_not_found(monkeypatch):
+    class _Cur:
+        def execute(self, sql, params=None):
+            pass
+
+        def fetchone(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+    assert discovery._outlet_id_for_channel("UCabc") is None
+
+
+def test_outlet_id_for_channel_no_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery._outlet_id_for_channel("UCabc") is None
+
+
+def test_outlet_id_for_channel_blank_channel_id_short_circuits(monkeypatch):
+    called = {"connect": False}
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect",
+                        lambda url: called.update(connect=True))
+    assert discovery._outlet_id_for_channel(None) is None
+    assert called["connect"] is False
+
+
+# --- Task 5: trust_from_row ---
+
+def _fake_conn_for_sweep(monkeypatch, n=1):
+    """Minimal fake connect for the auto_approve_pending leg of trust_from_row
+    (a plain UPDATE...rowcount, no fetch needed)."""
+    class _Cur:
+        def execute(self, sql, params=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+    import src.discovery.autoapprove as autoapprove
+    monkeypatch.setattr(autoapprove, "auto_approve_pending",
+                        lambda cur, outlet_id=None: n)
+
+
+def test_trust_from_row_with_outlet_id_sweeps_and_returns_count(monkeypatch):
+    row = _row(outlet_id="00000000-0000-0000-0000-000000000001", channel_name="KXAN")
+    monkeypatch.setattr(discovery, "set_outlet_trusted", lambda oid: True)
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    _fake_conn_for_sweep(monkeypatch, n=5)
+    ok, msg, n = discovery.trust_from_row(row)
+    assert ok is True
+    assert n == 5
+    assert "KXAN" in msg
+
+
+def test_trust_from_row_channel_only_registers_then_trusts(monkeypatch):
+    row = _row(outlet_id=None, channel_id="UCk", channel_name="KXAN")
+    watched = {"called": False}
+    monkeypatch.setattr(discovery, "watch_channel",
+                        lambda r: watched.update(called=True) or (True, "watching KXAN"))
+    monkeypatch.setattr(discovery, "_outlet_id_for_channel",
+                        lambda cid: "00000000-0000-0000-0000-000000000002")
+    monkeypatch.setattr(discovery, "set_outlet_trusted", lambda oid: True)
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    _fake_conn_for_sweep(monkeypatch, n=2)
+    ok, msg, n = discovery.trust_from_row(row)
+    assert watched["called"] is True
+    assert ok is True
+    assert n == 2
+
+
+def test_trust_from_row_channel_only_watch_fails(monkeypatch):
+    row = _row(outlet_id=None, channel_id="UCk")
+    monkeypatch.setattr(discovery, "watch_channel", lambda r: (False, "boom"))
+    ok, msg, n = discovery.trust_from_row(row)
+    assert ok is False
+    assert n == 0
+    assert "register" in msg
+
+
+def test_trust_from_row_channel_only_outlet_not_found_after_register(monkeypatch):
+    row = _row(outlet_id=None, channel_id="UCk")
+    monkeypatch.setattr(discovery, "watch_channel", lambda r: (True, "watching"))
+    monkeypatch.setattr(discovery, "_outlet_id_for_channel", lambda cid: None)
+    ok, msg, n = discovery.trust_from_row(row)
+    assert ok is False
+    assert n == 0
+    assert "not found" in msg
+
+
+def test_trust_from_row_set_trusted_fails(monkeypatch):
+    row = _row(outlet_id="00000000-0000-0000-0000-000000000001")
+    monkeypatch.setattr(discovery, "set_outlet_trusted", lambda oid: False)
+    ok, msg, n = discovery.trust_from_row(row)
+    assert ok is False
+    assert n == 0
+
+
+def test_trust_from_row_no_db_with_outlet_id(monkeypatch):
+    """DATABASE_URL unset -> set_outlet_trusted degrades to False (its own
+    real best-effort code path, not mocked here) -> trust_from_row degrades
+    safely instead of raising."""
+    row = _row(outlet_id="00000000-0000-0000-0000-000000000001")
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    ok, msg, n = discovery.trust_from_row(row)
+    assert ok is False
+    assert n == 0
+
+
+def test_trust_from_row_no_db_channel_only(monkeypatch):
+    row = _row(outlet_id=None, channel_id="UCk")
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    ok, msg, n = discovery.trust_from_row(row)
+    assert ok is False
+    assert n == 0
+
+
+# --- Task 5: unapprove_auto ---
+
+def test_unapprove_auto_only_auto_rows(monkeypatch):
+    """The WHERE must restrict to status='approved' AND status_reason LIKE
+    'auto:%' — a human-approved row (no auto: reason) is never touched."""
+    captured = _capture_conn(monkeypatch, rowcount=2)
+    n = discovery.unapprove_auto(["a", "b"])
+    assert n == 2
+    assert captured["committed"] is True
+    sql = captured["sql"].lower()
+    assert "update essentials.discovered_sources" in sql
+    assert "status = 'pending'" in sql
+    assert "id = any(%s::uuid[])" in sql
+    assert "status = 'approved'" in sql
+    assert "status_reason like 'auto:%" in sql
+    assert captured["params"] == (["a", "b"],)
+
+
+def test_unapprove_auto_empty_is_noop(monkeypatch):
+    called = {"connect": False}
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect",
+                        lambda url: called.update(connect=True))
+    assert discovery.unapprove_auto([]) == 0
+    assert called["connect"] is False
+
+
+def test_unapprove_auto_no_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.unapprove_auto(["a"]) == 0
+
+
+# --- Task 5: live_db-gated shape checks ---
+#
+# Only for the two new functions whose SQL touches columns that already exist
+# in prod today (discovered_sources.status/status_reason/reviewed_at,
+# source_outlets.id/external_channel_id). set_outlet_trusted, trust_from_row
+# and auto_approve_pending all read/write source_outlets.trusted/ingest_barred,
+# which exist only after the Task 1 migration (ev-accounts 37313d43) is
+# applied — gated on Chris, not done yet — so a live test for those would
+# either error (column does not exist) or be meaningless; deliberately
+# omitted here rather than shipped red. Both tests below touch zero real rows
+# even if they do run (a random UUID / a channel id that doesn't exist), so
+# they're safe to leave enabled once someone does export DATABASE_URL.
+
+def test_unapprove_auto_live_db_shape(live_db):
+    n = discovery.unapprove_auto(["00000000-0000-0000-0000-000000000000"])
+    assert n == 0
+
+
+def test_outlet_id_for_channel_live_db_shape(live_db):
+    assert discovery._outlet_id_for_channel("UC_does_not_exist_00000000") is None
