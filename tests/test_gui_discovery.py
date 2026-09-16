@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gui.app import create_app
+import gui.coverage as coverage
 import gui.discovery as discovery
 from gui.discovery import DiscoveredRow
 
@@ -28,6 +29,12 @@ def _row(**over):
     return DiscoveredRow(**base)
 
 
+def _race(race_id="r1", position_name="U.S. Senate", level="state", locality=None,
+         candidates=0, quote_sources=0, ingested=0, pending=1):
+    return coverage.RaceCoverage(race_id, position_name, level, locality,
+                                 candidates, quote_sources, ingested, pending)
+
+
 def test_thumb_and_duration_properties():
     r = _row()
     assert r.thumb_url == "https://i.ytimg.com/vi/abc12345678/mqdefault.jpg"
@@ -37,30 +44,38 @@ def test_thumb_and_duration_properties():
     assert _row(url="https://x.example/ep/1").thumb_url is None
 
 
-def test_discovery_page_renders_rows_and_health(monkeypatch):
+def test_discovery_state_view_renders_row_details_and_alarms(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state",
+                        lambda state: [_race(position_name="U.S. Senate")])
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row()])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [("r9", "MI Governor (D primary)", "2026-08-04")],
         "stale_outlets": ["PBS Kansas"], "pending_total": 1})
     client = TestClient(create_app())
-    resp = client.get("/discovery")
+    resp = client.get("/discovery?state=TX")
     assert resp.status_code == 200
     body = resp.text
     assert "Full debate" in body
-    assert "TX · U.S. Senate" in body
-    assert "MI Governor (D primary)" in body       # alarm strip
+    assert "U.S. Senate" in body
+    assert "MI Governor (D primary)" in body       # alarm strip (state-agnostic)
     assert "58-min video" in body                   # the classifier's why
     assert "watch this channel" in body.lower()     # flywheel offer (no outlet_id)
 
 
-def test_discovery_page_empty_state(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "health",
-                        lambda: {"alarms": [], "stale_outlets": [], "pending_total": 0})
+def test_discovery_page_empty_state_no_states_tracked(monkeypatch):
+    monkeypatch.setattr(coverage, "state_index", lambda: [])
     client = TestClient(create_app())
     resp = client.get("/discovery")
     assert resp.status_code == 200
-    assert "No pending discoveries" in resp.text
+    assert "No tracked races yet" in resp.text
+
+
+def test_discovery_page_empty_state_for_state_with_no_races(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [])
+    client = TestClient(create_app())
+    resp = client.get("/discovery?state=WY")
+    assert resp.status_code == 200
+    assert "No tracked races in Wyoming" in resp.text
 
 
 def test_library_links_to_discovery(monkeypatch, tmp_meetings_dir):
@@ -277,12 +292,13 @@ def test_approve_ingest_coerces_community_meeting_to_forum_when_race_set(monkeyp
 # --- M2: published_at renders as a date, not a raw timestamptz ---
 
 def test_discovery_page_truncates_published_at_to_date(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race()])
     monkeypatch.setattr(discovery, "pending_rows",
                         lambda status="pending": [_row(published_at="2026-08-01 14:30:00+00")])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 1})
     client = TestClient(create_app())
-    resp = client.get("/discovery")
+    resp = client.get("/discovery?state=TX")
     body = resp.text
     assert "2026-08-01" in body
     assert "14:30" not in body
@@ -291,12 +307,13 @@ def test_discovery_page_truncates_published_at_to_date(monkeypatch):
 # --- M5: scheme-filter r.url so an unsafe scheme never becomes an href ---
 
 def test_discovery_page_blocks_unsafe_url_scheme(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race()])
     monkeypatch.setattr(discovery, "pending_rows",
                         lambda status="pending": [_row(url="javascript:alert(1)")])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 1})
     client = TestClient(create_app())
-    resp = client.get("/discovery")
+    resp = client.get("/discovery?state=TX")
     assert 'href="javascript:' not in resp.text
 
 
@@ -385,7 +402,6 @@ def test_health_defaults_include_last_run_keys_without_db(monkeypatch):
 
 def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
@@ -402,7 +418,6 @@ def test_discovery_page_renders_last_run_and_overdue(monkeypatch):
 
 def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": None,
@@ -418,7 +433,6 @@ def test_discovery_page_shows_running_not_crashed_for_inflight_run(monkeypatch):
 
 def test_discovery_page_reddens_pill_on_failures(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
@@ -434,7 +448,6 @@ def test_discovery_page_reddens_pill_on_failures(monkeypatch):
 
 def test_discovery_page_shows_crashed_for_stale_unfinished_run(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": {"started_at": "2026-08-01 08:00:04", "finished_at": None,
@@ -451,7 +464,6 @@ def test_discovery_page_shows_crashed_for_stale_unfinished_run(monkeypatch):
 
 def test_discovery_page_healthy_run_stays_grey(monkeypatch):
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats", lambda: [], raising=False)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 0,
         "last_run": {"started_at": "2026-08-03 08:00:04", "finished_at": "2026-08-03 08:11:40",
@@ -466,126 +478,15 @@ def test_discovery_page_healthy_run_stays_grey(monkeypatch):
     assert "background:#c0392b" not in resp.text
 
 
-# --- Task 9: mode-C evidence surface — per-outlet stats + group pending counts ---
+# --- Task 9: mode-C evidence surface (outlet_stats itself; no longer rendered
+# on /discovery — see Task 7's report for why: frictionless per-outlet trust,
+# shown in place inside each race, supersedes the old queue-wide evidence
+# table for this page's purposes. outlet_stats() itself is untouched and still
+# tested here.) ---
 
 def test_outlet_stats_empty_without_db(monkeypatch):
     monkeypatch.setattr(discovery, "_db_url", lambda: None)
     assert discovery.outlet_stats() == []
-
-
-def test_discovery_page_renders_outlet_evidence_and_group_counts(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row(), _row(id="d2")])
-    # health() now carries outlet_stats itself (the perf fold) — the standalone
-    # outlet_stats() must NOT be hit on this path.
-    called = {"hit": False}
-    monkeypatch.setattr(discovery, "outlet_stats",
-                        lambda: called.update(hit=True) or [])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 2,
-        "last_run": None, "scheduled_run_overdue": False,
-        "outlet_stats": [
-            {"name": "Fountainhead Forum", "reviewed": 2, "approved": 2, "identity_rejects": 0},
-            {"name": "Milwaukee Journal Sentinel", "reviewed": 6, "approved": 0, "identity_rejects": 1},
-        ],
-        "outletless_reviewed": 9,
-    })
-    import gui.races as races
-    monkeypatch.setattr(races, "race_labels", lambda ids: {"r1": "TX · U.S. Senate"})
-    client = TestClient(create_app())
-    resp = client.get("/discovery")
-    assert resp.status_code == 200
-    assert "Fountainhead Forum" in resp.text
-    assert "100%" in resp.text                       # 2/2 approved
-    assert "Outlet evidence" in resp.text
-    assert "<summary>" in resp.text and "<thead>" in resp.text
-    assert "2 pending</span></h2>" in resp.text.replace("\n", "")
-    assert "needs 4 more reviewed" in resp.text        # MJS: 6 reviewed, needs 10
-    assert "needs 8 more reviewed" in resp.text        # Fountainhead: 2 reviewed, needs 10
-    assert "9 reviewed item(s) have no outlet" in resp.text
-    assert called["hit"] is False
-
-
-def test_discovery_page_floors_approval_percent(monkeypatch):
-    """89.7% must not round up to 90% next to a >=90% qualification bar."""
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0,
-        "last_run": None, "scheduled_run_overdue": False,
-        "outlet_stats": [
-            {"name": "Big Outlet", "reviewed": 39, "approved": 35, "identity_rejects": 0},
-        ],
-        "outletless_reviewed": 0,
-    })
-    client = TestClient(create_app())
-    resp = client.get("/discovery")
-    assert "35 (89%)" in resp.text
-    assert "(90%)" not in resp.text   # copy elsewhere on the page legitimately says "90%"
-    assert "below bar" in resp.text   # 35/39 = 89.7% < 90%, reviewed already >= 10
-
-
-def test_discovery_page_qualifies_marker_for_a_bar_clearing_outlet(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0,
-        "last_run": None, "scheduled_run_overdue": False,
-        "outlet_stats": [
-            {"name": "Great Outlet", "reviewed": 10, "approved": 10, "identity_rejects": 0},
-        ],
-        "outletless_reviewed": 0,
-    })
-    client = TestClient(create_app())
-    resp = client.get("/discovery")
-    assert "&#10003; qualifies" in resp.text
-
-
-def test_discovery_page_below_bar_when_approval_rate_too_low(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0,
-        "last_run": None, "scheduled_run_overdue": False,
-        "outlet_stats": [
-            {"name": "Shaky Outlet", "reviewed": 10, "approved": 5, "identity_rejects": 0},
-        ],
-        "outletless_reviewed": 0,
-    })
-    client = TestClient(create_app())
-    resp = client.get("/discovery")
-    assert "below bar" in resp.text
-
-
-def test_discovery_page_uses_health_outlet_stats_when_key_present(monkeypatch):
-    """The perf fold: outlet_stats() must not be called when health() already
-    carries the key (the real DB path after this fold)."""
-    called = {"hit": False}
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats",
-                        lambda: called.update(hit=True) or [])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0,
-        "last_run": None, "scheduled_run_overdue": False,
-        "outlet_stats": [], "outletless_reviewed": 0,
-    })
-    client = TestClient(create_app())
-    resp = client.get("/discovery")
-    assert resp.status_code == 200
-    assert called["hit"] is False
-
-
-def test_discovery_page_falls_back_to_outlet_stats_when_key_absent(monkeypatch):
-    """Legacy/monkeypatched health() dicts without the key still work by
-    falling back to the standalone outlet_stats() call."""
-    called = {"hit": False}
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [])
-    monkeypatch.setattr(discovery, "outlet_stats",
-                        lambda: called.update(hit=True) or [])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0,
-        "last_run": None, "scheduled_run_overdue": False,
-    })
-    client = TestClient(create_app())
-    resp = client.get("/discovery")
-    assert resp.status_code == 200
-    assert called["hit"] is True
 
 
 # --- Task 12: extractability probe on approve->ingest for non-YouTube items ---
@@ -782,39 +683,12 @@ def test_pending_order_ranks_tier_before_confidence():
     assert tier_pos < conf_pos
 
 
-# --- Task 4: deferred-view toggle ---
-
-def test_discovery_page_deferred_view_lists_deferred(monkeypatch):
-    seen = {}
-    def fake_rows(status="pending"):
-        seen["status"] = status
-        return [_row(status=status)]
-    monkeypatch.setattr(discovery, "pending_rows", fake_rows)
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 1})
-    client = TestClient(create_app())
-    resp = client.get("/discovery?show=deferred")
-    assert resp.status_code == 200
-    assert seen["status"] == "deferred"
-
-
-def test_discovery_page_deferred_view_uses_deferred_copy_not_pending(monkeypatch):
-    """The deferred view's group heading pill and empty state must say
-    'deferred', not 'pending' — pin the copy so a future edit can't silently
-    regress it. (The header's overall pending_total pill is unrelated and
-    legitimately still says 'pending'.)"""
-    monkeypatch.setattr(discovery, "pending_rows",
-                        lambda status="pending": [_row(status=status)])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 1})
-    client = TestClient(create_app())
-    resp = client.get("/discovery?show=deferred")
-    assert resp.status_code == 200
-    body = resp.text.replace("\n", "")
-    assert "1 deferred</span></h2>" in body
-    assert "No pending discoveries" not in body
-    assert "1 pending</span></h2>" not in body
-
+# --- Task 4's deferred-view toggle (?show=deferred) and Task 7's page-wide
+# checkbox bulk bar both no longer exist: Task 7's reorg reads only `state`/
+# `flash` (see task-7-brief.md's Layout section) and nests review three levels
+# deep (state -> race -> outlet), which has no natural page-wide multi-select.
+# discovery.set_status_bulk and POST /discovery/bulk are untouched and still
+# fully tested below — only this page stopped rendering a UI control for them.
 
 # --- Task 5: bulk status change touches only pending/deferred rows ---
 
@@ -880,19 +754,6 @@ def test_bulk_no_rows_is_a_noop(monkeypatch):
     assert resp.status_code == 303
     assert "no rows selected" in _flash(resp)
 
-
-# --- Task 7: row checkboxes + bulk action bar in the triage template ---
-
-def test_triage_page_has_checkboxes_and_bulk_bar(monkeypatch):
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [_row(id="d1")])
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 1})
-    client = TestClient(create_app())
-    html = client.get("/discovery").text
-    assert 'action="/discovery/bulk"' in html
-    assert 'name="row_ids"' in html
-    assert 'value="d1"' in html
-    assert 'form="bulkform"' in html          # checkbox associated to the bulk form, not nested
 
 
 # --- Approve source family: matching key ---
@@ -1036,40 +897,36 @@ def test_reject_family_returns_zero_without_db(monkeypatch):
 
 
 # --- Approve source family: button count on the page ---
+#
+# family_count is whole-queue (see approve_source_family/reject_source_family's
+# own scope), so three rows sharing a channel across three different races each
+# still see "+2 more" once every race is attached under the selected state.
 
 def test_quote_source_button_shows_sibling_count(monkeypatch):
     rows = [_row(id="a", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r1"),
             _row(id="b", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r2"),
             _row(id="c", channel_id="UCw", channel_name="Wisconsin PBS", race_id="r3")]
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("r1"), _race("r2"), _race("r3")])
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 3})
     client = TestClient(create_app())
-    html = client.get("/discovery").text
+    html = client.get("/discovery?state=WI").text
     # three rows share a channel → each button offers "+2 more" (siblings across races)
     assert "(+2 more)" in html
 
 
 def test_quote_source_button_plain_for_loner(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race()])
     monkeypatch.setattr(discovery, "pending_rows",
                         lambda status="pending": [_row(id="a", channel_id="UCsolo")])
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 1})
     client = TestClient(create_app())
-    html = client.get("/discovery").text
+    html = client.get("/discovery?state=TX").text
     assert "Approve &rarr; quote source</button>" in html or \
            "Approve → quote source</button>" in html
-    assert "more)" not in html
-
-
-def test_quote_source_button_no_count_on_deferred_view(monkeypatch):
-    rows = [_row(id="a", channel_id="UCw", status="deferred"),
-            _row(id="b", channel_id="UCw", status="deferred")]
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0})
-    client = TestClient(create_app())
-    html = client.get("/discovery?show=deferred").text
     assert "more)" not in html
 
 
@@ -1149,24 +1006,161 @@ def test_reject_whole_source_blocks_non_pending(monkeypatch):
 def test_reject_checkbox_shows_only_with_siblings(monkeypatch):
     rows = [_row(id="a", channel_id="UCw"), _row(id="b", channel_id="UCw"),
             _row(id="c", channel_id="UConly")]
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race()])
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
     monkeypatch.setattr(discovery, "health", lambda: {
         "alarms": [], "stale_outlets": [], "pending_total": 3})
     client = TestClient(create_app())
-    html = client.get("/discovery").text
+    html = client.get("/discovery?state=TX").text
     assert 'name="whole_source"' in html          # the two UCw rows have a sibling
     assert "apply to all 2 from this source" in html
 
 
-def test_reject_checkbox_absent_on_deferred_view(monkeypatch):
-    rows = [_row(id="a", channel_id="UCw", status="deferred"),
-            _row(id="b", channel_id="UCw", status="deferred")]
-    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": rows)
-    monkeypatch.setattr(discovery, "health", lambda: {
-        "alarms": [], "stale_outlets": [], "pending_total": 0})
+# --- Task 7: reorganized /discovery — state index, state view, trust route,
+# barred-ingest gate ---
+
+def test_discovery_defaults_to_state_index(monkeypatch):
+    monkeypatch.setattr(coverage, "state_index", lambda: [{"state": "IN", "pending": 42}])
     client = TestClient(create_app())
-    html = client.get("/discovery?show=deferred").text
-    assert 'name="whole_source"' not in html
+    resp = client.get("/discovery")
+    assert resp.status_code == 200
+    assert "Indiana" in resp.text  # a state from the index, shown by full name
+
+
+def test_discovery_page_state_index_shows_pending_counts_and_links(monkeypatch):
+    monkeypatch.setattr(coverage, "state_index", lambda: [
+        {"state": "IN", "pending": 42}, {"state": "TX", "pending": 5}])
+    client = TestClient(create_app())
+    body = client.get("/discovery").text
+    assert 'href="/discovery?state=IN"' in body
+    assert "42 pending" in body
+    assert "Texas" in body and "5 pending" in body
+
+
+def test_discovery_state_view_groups_by_level(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("r-gov", "Indiana Governor", "state", None, 3, 2, 1, 0),
+        _race("r-may", "Bloomington Mayor", "local",
+              "City of Bloomington, Indiana", 2, 1, 0, 1),
+    ])
+    client = TestClient(create_app())
+    resp = client.get("/discovery?state=IN")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Indiana Governor" in body
+    assert "Bloomington Mayor" in body
+    # statewide/federal band label present
+    assert "tracked once" in body.lower()
+
+
+def test_discovery_left_rail_shows_locality_counts_and_done_check(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("r1", "Bloomington Mayor", "local",
+              "City of Bloomington, Indiana", 2, 1, 0, 3),
+        _race("r2", "Ellettsville Town Council", "local",
+              "Town of Ellettsville, Indiana", 1, 1, 0, 0),
+    ])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=IN").text
+    assert "City of Bloomington, Indiana" in body
+    assert "3 pending" in body
+    assert "Town of Ellettsville, Indiana" in body
+    assert "&#10003;" in body   # Ellettsville has 0 pending -> a done check, not a count
+
+
+def test_discovery_race_row_shows_four_counts(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("r1", "Indiana Governor", "state", None, 5, 4, 2, 7)])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=IN").text
+    assert "5 candidates" in body
+    assert "4 quote sources" in body
+    assert "2 ingested" in body
+    assert "7 pending" in body
+
+
+def test_discovery_state_view_shows_trust_button_for_unknown_outlet(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
+        _row(id="d1", race_id="r1", channel_name="Random Blog", outlet_id=None,
+            channel_id=None, event_kind_guess="other")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert "Trust outlet" in body
+    assert 'action="/discovery/d1/trust"' in body
+    assert "auto-kept as quote sources" not in body
+
+
+def test_discovery_state_view_mutes_trusted_outlets_news_clips(monkeypatch):
+    """A trusted outlet's news_clip-lane rows collapse to a muted count with no
+    per-row controls — content_lane('clip', 'other') is news_clip since 'other'
+    isn't a FORMAL_EVENT_KIND."""
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    row = _row(id="d1", race_id="r1", channel_name="WISH-TV",
+              outlet_id="00000000-0000-0000-0000-000000000001",
+              original_vs_clip="clip", event_kind_guess="other", outlet_trusted=True)
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [row])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert "1 auto-kept as quote sources" in body
+    assert "Trust outlet" not in body
+    assert "Approve &rarr; ingest" not in body   # a muted row carries no per-row controls
+
+
+def test_discovery_state_view_disables_ingest_button_for_barred_outlet(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    row = _row(id="d1", race_id="r1", channel_name="Nexstar Station",
+              outlet_ingest_barred=True)
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [row])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert '<button type="submit" class="enroll" disabled' in body
+    assert "chain ToS: pull a direct quote instead" in body
+
+
+def test_trust_route_sweeps(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(id="d1"))
+    monkeypatch.setattr(discovery, "trust_from_row",
+                        lambda row: (True, "trusted KXAN", 3))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/trust", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "trusted" in resp.headers["location"].lower()
+    assert "trusted kxan — auto-kept 3" in _flash(resp).lower()
+
+
+def test_trust_route_404_for_missing_row(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: None)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/trust", follow_redirects=False)
+    assert resp.status_code == 404
+
+
+def test_trust_route_reports_failure_message(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(id="d1"))
+    monkeypatch.setattr(discovery, "trust_from_row",
+                        lambda row: (False, "no channel id on this item", 0))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/trust", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "trust failed: no channel id on this item" in _flash(resp)
+
+
+def test_ingest_blocked_for_barred_outlet(monkeypatch):
+    import gui.batch as batch
+    monkeypatch.setattr(discovery, "get_row",
+                        lambda rid: _row(id="d1", outlet_ingest_barred=True))
+    called = {"hit": False}
+    monkeypatch.setattr(batch, "launch_or_enqueue",
+                        lambda p: called.update(hit=True) or ("started", "mid"))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest", follow_redirects=False)
+    assert resp.status_code == 303
+    # The redirect's flash is a whole phrase with spaces/punctuation, so it
+    # comes back %-encoded in the raw Location header (e.g. "chain%20ToS%3A");
+    # decode via _flash() rather than substring-matching the raw header.
+    assert "chain tos" in _flash(resp).lower()
+    assert called["hit"] is False
 
 
 # --- Task 5: outlet trust/undo DB layer ---

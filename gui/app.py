@@ -4,6 +4,7 @@ Slice 1: a single library route. Later slices mount review/launch/publish
 routers onto the same app."""
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -36,6 +37,70 @@ from gui.formmeta import humanize_kind as _humanize_kind
 _templates.env.filters["humanize_kind"] = _humanize_kind
 _REPO_DIR = _GUI_DIR.parent
 _RUN_LOCAL = str(_REPO_DIR / "run_local.py")
+
+# --- /discovery reorg: presentation-only helpers (see gui/coverage.py for the
+# geography data layer these decorate) -------------------------------------
+
+_STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
+    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas",
+    "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi",
+    "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
+    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma",
+    "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
+    "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia",
+    "WI": "Wisconsin", "WY": "Wyoming", "DC": "District of Columbia",
+}
+
+
+def _state_name(code: str | None) -> str:
+    """Display name for a 2-letter state code. Falls back to the raw code for
+    anything not in the table (a typo, a territory) rather than hiding it."""
+    return _STATE_NAMES.get((code or "").upper(), code or "")
+
+
+def _anchor_slug(text: str | None) -> str:
+    """A same-page-anchor-safe id fragment for a locality name."""
+    return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-") or "section"
+
+
+_templates.env.filters["state_name"] = _state_name
+_templates.env.filters["anchor_slug"] = _anchor_slug
+
+
+def _outlet_groups_for(rows: list) -> list:
+    """Group one race's pending rows by outlet identity (gui.discovery.family_key),
+    each tagged with its content lane (src.discovery.lanes.content_lane).
+
+    A trusted outlet's news_clip-lane rows collapse into a muted count: the
+    auto-approve sweep (gui.discovery.trust_from_row / poll_discovery) keeps them
+    out of the human queue, so they normally won't even reach here, but if one
+    does (a race between trusting and the sweep), show it as inert evidence, not
+    another row to click. Everything else — lane 1/2 rows, and every row from an
+    outlet that isn't trusted yet — keeps today's per-row controls untouched."""
+    from gui.discovery import family_key
+    from src.discovery.lanes import content_lane
+
+    groups: dict = {}
+    order: list = []
+    for r in rows:
+        key = family_key(r) or ("row", r.id)
+        if key not in groups:
+            groups[key] = {"name": r.channel_name or "source", "trusted": r.outlet_trusted,
+                           "muted": [], "open": [], "trust_row_id": r.id}
+            order.append(key)
+        lane = content_lane(r.original_vs_clip, r.event_kind_guess)
+        if r.outlet_trusted and lane == "news_clip":
+            groups[key]["muted"].append(r)
+        else:
+            groups[key]["open"].append({"row": r, "lane": lane})
+    order.sort(key=lambda k: groups[k]["name"].lower())
+    return [groups[k] for k in order]
 
 
 class _NoCacheStaticFiles(StaticFiles):
@@ -105,45 +170,71 @@ def create_app() -> FastAPI:
         return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
     @app.get("/discovery", response_class=HTMLResponse)
-    def discovery_page(request: Request, flash: str = "", show: str = "pending") -> HTMLResponse:
-        from gui import discovery, races
-        status = "deferred" if show == "deferred" else "pending"
-        rows = discovery.pending_rows(status)
-        labels = races.race_labels({r.race_id for r in rows if r.race_id})
-        groups: dict = {}
-        for r in rows:
-            if r.race_id and labels.get(r.race_id):
-                r.race_label = labels[r.race_id]
-            groups.setdefault(r.race_label or "Unmatched", []).append(r)
-        if status == "pending":
-            from collections import defaultdict
-            from gui.discovery import family_key
-            fam: dict = defaultdict(list)
-            for r in rows:
-                k = family_key(r)
-                if k is not None:
-                    fam[k].append(r)
-            for members in fam.values():
-                for r in members:
-                    r.family_count = len(members) - 1
+    def discovery_page(request: Request, state: str = "", flash: str = "") -> HTMLResponse:
+        from gui import coverage, discovery, races
+        from gui.discovery import family_key
+
         h = discovery.health()
-        # health() folds the outlet-stats aggregate onto its own connection
-        # (avoids a 4th DB round-trip per page load). Fall back to the
-        # standalone call only for monkeypatched/legacy health dicts that
-        # predate the fold and lack the key — every real call carries it.
-        ostats = h.get("outlet_stats")
-        if ostats is None:
-            ostats = discovery.outlet_stats()
+        state = (state or "").strip().upper()
+        if not state:
+            return _templates.TemplateResponse(
+                request, "discovery.html",
+                {"state": None, "states": coverage.state_index(), "health": h, "flash": flash})
+
+        state_races = coverage.races_for_state(state)
+        rows = discovery.pending_rows()
+        labels = races.race_labels({r.race_id for r in state_races if r.race_id})
+
+        by_race: dict = {}
+        for r in rows:
+            if not r.race_id:
+                continue
+            if labels.get(r.race_id):
+                r.race_label = labels[r.race_id]
+            by_race.setdefault(r.race_id, []).append(r)
+
+        # Sibling counts for the "+N more" / "apply to all" family-action
+        # previews are whole-queue, matching approve_source_family/
+        # reject_source_family's own scope — not just the rows visible under
+        # this state.
+        fam: dict = {}
+        for r in rows:
+            k = family_key(r)
+            if k is not None:
+                fam.setdefault(k, []).append(r)
+        for members in fam.values():
+            for r in members:
+                r.family_count = len(members) - 1
+
+        statewide = [r for r in state_races if r.level in ("federal", "state")]
+        localities: dict = {}
+        for r in state_races:
+            if r.level not in ("federal", "state"):
+                localities.setdefault(r.locality or "Unassigned", []).append(r)
+        localities = dict(sorted(localities.items(), key=lambda kv: kv[0]))
+
         return _templates.TemplateResponse(
             request, "discovery.html",
-            {"groups": list(groups.items()), "health": h,
-             "outlet_stats": ostats,
-             "outletless_reviewed": h.get("outletless_reviewed", 0),
-             "flash": flash, "show": status})
+            {"state": state, "statewide": statewide, "localities": localities,
+             "statewide_pending": sum(r.pending for r in statewide),
+             "locality_pending": {loc: sum(r.pending for r in rs)
+                                  for loc, rs in localities.items()},
+             "race_outlet_groups": {r.race_id: _outlet_groups_for(by_race.get(r.race_id, []))
+                                    for r in state_races},
+             "health": h, "flash": flash})
 
     def _discovery_redirect(flash: str) -> RedirectResponse:
         from urllib.parse import quote
         return RedirectResponse(url=f"/discovery?flash={quote(flash)}", status_code=303)
+
+    @app.post("/discovery/{row_id}/trust")
+    def discovery_trust(row_id: str):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        ok, msg, n = discovery.trust_from_row(row)
+        return _discovery_redirect(f"{msg} — auto-kept {n}" if ok else f"trust failed: {msg}")
 
     @app.post("/discovery/{row_id}/approve-ingest")
     def discovery_approve_ingest(row_id: str):
@@ -159,6 +250,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         if row.status != "pending":
             return _discovery_redirect(f"already {row.status}")
+        if row.outlet_ingest_barred:
+            return _discovery_redirect(
+                "chain ToS: don't host a transcript — pull a direct quote instead")
         existing = runner.find_meeting_by_source(row.url)
         if existing:
             ok = discovery.set_status(row_id, "superseded",
