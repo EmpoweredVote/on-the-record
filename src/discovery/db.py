@@ -75,15 +75,19 @@ def existing_source_keys(cur) -> set:
 
 
 def insert_discovered(cur, row: dict) -> bool:
-    """Idempotent on source_key. Returns True when a row was inserted."""
+    """Idempotent on source_key. Returns True when a row was inserted.
+
+    original_vs_clip is read via .get() (not []) so existing callers/test
+    fixtures that don't set the key still work — it lands NULL, same as any
+    row the classifier couldn't judge."""
     cur.execute("""
         insert into essentials.discovered_sources
           (source_key, url, title, description_snippet, channel_name, channel_id,
            channel_url, outlet_id, duration_seconds, published_at,
-           matched_politician_ids, race_id, event_kind_guess, source_tier_guess,
-           route, confidence, why, discovered_via, status)
+           matched_politician_ids, race_id, event_kind_guess, original_vs_clip,
+           source_tier_guess, route, confidence, why, discovered_via, status)
         values (%s, %s, %s, %s, %s, %s, %s, %s::uuid, %s, %s,
-                %s::uuid[], %s::uuid, %s, %s, %s, %s, %s, %s, %s)
+                %s::uuid[], %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s)
         on conflict (source_key) do nothing
         returning id
     """, (
@@ -91,6 +95,7 @@ def insert_discovered(cur, row: dict) -> bool:
         row["channel_name"], row["channel_id"], row["channel_url"], row["outlet_id"],
         row["duration_seconds"], row["published_at"],
         row["matched_politician_ids"], row["race_id"], row["event_kind_guess"],
+        row.get("original_vs_clip"),
         row["source_tier_guess"], row["route"], row["confidence"], row["why"],
         row["discovered_via"], row["status"],
     ))

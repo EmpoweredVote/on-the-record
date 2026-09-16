@@ -31,7 +31,8 @@ _SELECT = """
            d.published_at::text, d.race_id::text, d.event_kind_guess,
            d.source_tier_guess, d.route, d.confidence, d.why, d.discovered_via,
            d.status, e.election_date::text,
-           coalesce(o.trusted, false), coalesce(o.ingest_barred, false)
+           coalesce(o.trusted, false), coalesce(o.ingest_barred, false),
+           d.original_vs_clip
     from essentials.discovered_sources d
     left join essentials.races r on r.id = d.race_id
     left join essentials.elections e on e.id = r.election_id
@@ -67,14 +68,16 @@ class DiscoveredRow:
     discovered_via: str
     status: str
     election_date: Optional[str] = None
-    # The next two are positional-mapped from _SELECT's two trailing columns
-    # (see _to_row) — they MUST stay here, immediately after election_date and
-    # before race_label/family_count below. Those two are never supplied by
-    # _SELECT (filled later by callers), so they must stay past the last
-    # column _SELECT actually returns or DiscoveredRow(*r) misaligns silently
-    # (e.g. o.trusted landing in race_label instead of outlet_trusted).
+    # The next three are positional-mapped from _SELECT's three trailing
+    # columns (see _to_row) — they MUST stay here, immediately after
+    # election_date and before race_label/family_count below. Those two are
+    # never supplied by _SELECT (filled later by callers), so this block must
+    # stay past the last column _SELECT actually returns or DiscoveredRow(*r)
+    # misaligns silently (e.g. o.trusted landing in race_label instead of
+    # outlet_trusted).
     outlet_trusted: bool = False
     outlet_ingest_barred: bool = False
+    original_vs_clip: Optional[str] = None  # 'original' | 'clip' | None (Task 5b)
     race_label: Optional[str] = None  # filled by the route via races.race_labels
     family_count: int = 0  # other pending rows sharing this row's source key (page render)
 

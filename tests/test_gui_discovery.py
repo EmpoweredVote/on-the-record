@@ -1195,6 +1195,15 @@ def test_select_joins_outlet_trust_flags():
     assert sql.index("election_date") < sql.index("coalesce(o.trusted")
 
 
+def test_select_appends_original_vs_clip_as_last_column():
+    """Task 5b: d.original_vs_clip must be the LAST _SELECT column (appended
+    after the outlet-trust flags), keeping positional _to_row(*r) alignment
+    simplest — see the alignment test below."""
+    sql = discovery._SELECT.lower()
+    assert "d.original_vs_clip" in sql
+    assert sql.index("coalesce(o.ingest_barred") < sql.index("d.original_vs_clip")
+
+
 def test_discovered_row_outlet_flags_default_false():
     r = _row()
     assert r.outlet_trusted is False
@@ -1202,9 +1211,10 @@ def test_discovered_row_outlet_flags_default_false():
 
 
 def test_get_row_maps_outlet_flags_without_misaligning_family_fields(monkeypatch):
-    """The alignment guard: feed a full 21-column row through get_row() (the
-    real _SELECT -> _to_row -> DiscoveredRow(*r) path) and confirm the two new
-    trailing columns land on outlet_trusted/outlet_ingest_barred — NOT on
+    """The alignment guard: feed a full 22-column row through get_row() (the
+    real _SELECT -> _to_row -> DiscoveredRow(*r) path) and confirm the two
+    outlet-trust columns AND the trailing original_vs_clip column (Task 5b)
+    land on outlet_trusted/outlet_ingest_barred/original_vs_clip — NOT on
     race_label/family_count, which must stay at their dataclass defaults since
     _SELECT never supplies them."""
     row_tuple = (
@@ -1214,8 +1224,9 @@ def test_get_row_maps_outlet_flags_without_misaligning_family_fields(monkeypatch
         "news_clip", 2, "quote_source", 0.5, "why", "search", "pending",
         "2026-11-03",
         True, False,   # coalesce(o.trusted, false), coalesce(o.ingest_barred, false)
+        "clip",        # d.original_vs_clip
     )
-    assert len(row_tuple) == 21  # _SELECT's exact column count today
+    assert len(row_tuple) == 22  # _SELECT's exact column count today
 
     class _Cur:
         def execute(self, sql, params=None):
@@ -1244,6 +1255,7 @@ def test_get_row_maps_outlet_flags_without_misaligning_family_fields(monkeypatch
     assert row.election_date == "2026-11-03"
     assert row.outlet_trusted is True
     assert row.outlet_ingest_barred is False
+    assert row.original_vs_clip == "clip"
     # The trap: these must stay defaulted, never receive o.trusted/o.ingest_barred.
     assert row.race_label is None
     assert row.family_count == 0

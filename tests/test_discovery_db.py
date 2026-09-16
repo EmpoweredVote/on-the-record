@@ -43,6 +43,32 @@ def test_insert_discovered_returns_false_on_conflict():
     assert db.insert_discovered(cur, _minimal_row()) is False
 
 
+def test_insert_discovered_persists_original_vs_clip():
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    row["original_vs_clip"] = "clip"
+    db.insert_discovered(cur, row)
+    sql, params = cur.executed[0]
+    assert "original_vs_clip" in sql.lower()
+    # Column sits immediately after event_kind_guess in both the column list
+    # and the params tuple (index 12 = event_kind_guess, 13 = original_vs_clip).
+    assert params[13] == "clip"
+
+
+def test_insert_discovered_original_vs_clip_defaults_to_none_when_omitted():
+    """Existing callers/fixtures that don't set the key must still work —
+    insert_discovered must use row.get(...), not row[...]."""
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    row["source_tier_guess"] = 7  # distinct sentinel: proves the slot actually shifted
+    assert "original_vs_clip" not in row
+    db.insert_discovered(cur, row)  # must not raise KeyError
+    sql, params = cur.executed[0]
+    assert "original_vs_clip" in sql.lower()
+    assert params[13] is None
+    assert params[14] == 7  # source_tier_guess, now one slot right of original_vs_clip
+
+
 def _minimal_row():
     return {"source_key": "k", "url": "u", "title": None, "description_snippet": None,
             "channel_name": None, "channel_id": None, "channel_url": None,

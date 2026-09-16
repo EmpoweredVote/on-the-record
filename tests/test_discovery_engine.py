@@ -87,6 +87,12 @@ def test_watchlist_flow_inserts_pending_row(monkeypatch):
     assert stats.inserted_pending == 1 and stats.prefiltered_out == 1
 
 
+def test_process_dict_carries_original_vs_clip(monkeypatch):
+    inserted = []
+    stats, provider = _run(monkeypatch, inserted, skip_sweeps=True)
+    assert inserted[0]["original_vs_clip"] == "original"
+
+
 def test_already_seen_sources_are_skipped_before_classify(monkeypatch):
     inserted = []
     stats, provider = _run(monkeypatch, inserted, skip_sweeps=True,
