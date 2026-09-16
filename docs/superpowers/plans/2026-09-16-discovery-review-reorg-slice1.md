@@ -17,6 +17,8 @@
 - **Safety invariant:** the auto lane only ever writes `status='approved', route='quote_source'`. It never launches an ingest job. Ingest stays a human click.
 - Migrations live in `ev-accounts/backend/migrations/` (a **separate repo/checkout** at `../ev-accounts`). House style: idempotent (`ADD COLUMN IF NOT EXISTS`), a `DO $$ … RAISE EXCEPTION` post-verify gate, applied to prod via the migration tooling on a **direct** connection (not the pooler). Pick the next free number with `node ev-accounts/scripts/check-migration-numbers.mjs` and match the neighboring source-discovery migrations (`1551`, `1563`).
 - Geography scope: Slice 1 groups local races by their **government name** (a locality label like "City of Bloomington, Indiana" or "Monroe County, Indiana"), shown as sibling sections under a state. True county rollup (nesting city/school under a county via `essentials.districts` + `district_county_overlap` + `governments.geo_id`) is **out of scope** for Slice 1.
+- **Testing harness — there is NO local/seeded test database.** `tests/conftest.py` deletes `DATABASE_URL` for every test (autouse `_no_real_db_env`); the `live_db` fixture opts back into the real DB and **skips** unless `DATABASE_URL` is exported before pytest. So, for every DB-touching function: (1) test pure logic directly; (2) test the best-effort path by asserting `[]`/`0`/`False` with no `DATABASE_URL`; (3) test SQL construction by injecting a **fake cursor/connection** — `monkeypatch.setattr(psycopg2, "connect", …)` returning an object whose `cursor().execute(sql, params)` is recorded and whose `fetchall`/`fetchone` return canned rows — and assert on the recorded SQL/params; (4) test routes/templates by monkeypatching the data-layer functions and using `TestClient` (mirror `tests/test_gui_discovery.py`). Real-schema behavior goes in a `live_db`-gated test that is skipped by default. **Wherever a task's sample test names a `seeded_*_db` or `poll_harness` DB fixture, replace it with these patterns — those fixtures do not exist.** Every implementer reads `tests/conftest.py` and `tests/test_gui_discovery.py` before writing tests.
+- **Migration apply is gated.** An implementer writes and commits the migration but must **not** apply it to any database. Applying it, and any `live_db` verification against the real schema, is a manual step the human authorizes.
 
 ---
 
@@ -72,15 +74,14 @@ BEGIN
 END $$;
 ```
 
-- [ ] **Step 2: Apply to a branch/dev DB and verify**
+- [ ] **Step 2: Do NOT apply — verify by eye (apply is gated)**
 
-Run the migration via the ev-accounts migration tooling against a dev branch (not prod). Verify:
+Do not apply the migration to any database. Read three neighboring migrations (`1551_source_discovery.sql`, `1563_source_outlets_county.sql`, and any recent `CA_*`) and confirm this file matches house style: idempotent `ADD COLUMN IF NOT EXISTS`, a `DO $$ … RAISE EXCEPTION` post-verify gate, `essentials` schema. Report the exact migration number/filename you chose (from `check-migration-numbers.mjs`) so the human can apply it. The verification query the human will run after applying:
 ```sql
 SELECT column_name FROM information_schema.columns
 WHERE table_schema='essentials' AND table_name='source_outlets'
-  AND column_name IN ('trusted','trusted_at','ingest_barred');
+  AND column_name IN ('trusted','trusted_at','ingest_barred');  -- expect 3 rows
 ```
-Expected: three rows.
 
 - [ ] **Step 3: Commit (ev-accounts repo)**
 
