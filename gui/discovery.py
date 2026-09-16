@@ -281,7 +281,8 @@ def reject_source_family(row: "DiscoveredRow", reason: "str | None") -> int:
 def health() -> dict:
     empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
              "last_run": None, "scheduled_run_overdue": False,
-             "outlet_stats": [], "outletless_reviewed": 0}
+             "outlet_stats": [], "outletless_reviewed": 0,
+             "auto_kept_week": 0, "auto_kept_outlets": 0}
     url = _db_url()
     if not url:
         return empty
@@ -354,9 +355,19 @@ def health() -> dict:
                       and status in ('approved','ingested','rejected')
                 """)
                 outletless = cur.fetchone()[0]
+                # Task 6: how much the auto-approve sweep (poll_discovery,
+                # trust_from_row) has kept out of the human queue lately.
+                cur.execute("""
+                    select count(*), count(distinct outlet_id)
+                    from essentials.discovered_sources
+                    where status = 'approved' and status_reason like 'auto:%%'
+                      and reviewed_at > now() - interval '7 days'
+                """)
+                auto_kept_week, auto_kept_outlets = cur.fetchone()
             return {"alarms": alarms, "stale_outlets": stale, "pending_total": total,
                     "last_run": last_run, "scheduled_run_overdue": overdue,
-                    "outlet_stats": ostats, "outletless_reviewed": outletless}
+                    "outlet_stats": ostats, "outletless_reviewed": outletless,
+                    "auto_kept_week": auto_kept_week, "auto_kept_outlets": auto_kept_outlets}
         finally:
             conn.close()
     except Exception:

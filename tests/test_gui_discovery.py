@@ -1513,3 +1513,25 @@ def test_unapprove_auto_live_db_shape(live_db):
 
 def test_outlet_id_for_channel_live_db_shape(live_db):
     assert discovery._outlet_id_for_channel("UC_does_not_exist_00000000") is None
+
+
+# --- Task 6: health() auto-kept summary ---
+#
+# Unlike the Task 5 functions above, this query reads only
+# discovered_sources.status/status_reason/outlet_id/reviewed_at — columns that
+# already exist today — so it's safe to run against the live (not-yet-
+# migrated) DB, and gets a real live_db test rather than an omission note.
+
+def test_health_defaults_include_auto_kept_keys_without_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    h = discovery.health()
+    assert h["auto_kept_week"] == 0
+    assert h["auto_kept_outlets"] == 0
+
+
+def test_health_reports_auto_kept_live_db_shape(live_db):
+    h = discovery.health()
+    assert isinstance(h["auto_kept_week"], int)
+    assert isinstance(h["auto_kept_outlets"], int)
+    assert h["auto_kept_week"] >= 0
+    assert h["auto_kept_outlets"] >= 0
