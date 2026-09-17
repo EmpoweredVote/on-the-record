@@ -26,8 +26,8 @@ Non-goals / explicitly dropped:
 ## Part 1 — the hub registry + per-race polling
 
 ### The hub registry (a maintained, updatable table)
-A new table (proposed `essentials.source_hubs`; may instead extend `source_outlets` with a `hub` kind — decide in planning). Fields:
-- `name`, `scope` (`global` | `state:<XX>` | `local_type`), `kind` (`debate|forum|questionnaire|guide|pamphlet`), `poll_method` (`url_template|feed|search`), `url_template` / `domain` / `search_hint`, `tos_bucket` (`ballotpedia|vote411-lwv|govt|public-media|newspaper-or-tv-chain|other`), `active`, `added_via` (`seed|flywheel|manual`), `notes`.
+A new table, **`essentials.source_hubs`** (decided 2026-09-17 over extending `source_outlets`: hubs are *per-race-resolvable source types* with a scope + poll method — distinct from `source_outlets`'s "a global feed I poll"). Feed-type hubs may ALSO be registered as `source_outlets` to reuse Slice-1 polling. Fields:
+- `name`, `scope` (`global` | `state:<XX>` | `local_type`), `kind` (`debate|forum|questionnaire|guide|pamphlet`), `poll_method` (`feed|scoped_search`), `domain` / `query_template`, `tos_bucket` (`ballotpedia|vote411-lwv|govt|public-media|newspaper-or-tv-chain|other`), `active`, `added_via` (`seed|flywheel|manual`), `notes`.
 - Updatable by hand AND via a **flywheel**: when polling (or review) confirms a good new hub for a jurisdiction, it can be added — exactly like the Slice-1 outlet-trust flywheel. This is the "can we update the hubs?" answer: yes, forever.
 
 Seed set (from the eval): GLOBAL — Ballotpedia, VOTE411, Vote Smart. PER-STATE — e.g. AZ Citizens Clean Elections + Arizona PBS/KJZZ/AZPM; OR Oregon Voters' Pamphlet + OPB; CA LAist + Voter's Edge + LWV; TX Community Impact + Austin Monitor + KUT; UT Utah Debate Commission + KUER. LOCAL_TYPES — local LWV chapter forum, local newspaper voter guide, local public radio/TV, chamber forum, government sample ballot / voter pamphlet.
@@ -36,9 +36,8 @@ Seed set (from the eval): GLOBAL — Ballotpedia, VOTE411, Vote Smart. PER-STATE
 For a tracked race, applicable hubs = `global` ∪ `state:<elections.state>` ∪ `local_type` (instantiated with the race's locality via the Slice-1 geography derivation).
 
 ### Polling, by `poll_method`
-- **`url_template`** (Ballotpedia, VOTE411): derive the race's hub URL from the race/jurisdiction, fetch it, verify current-cycle + fill, extract the comparable source (or the candidate answers). VOTE411 403-blocks fetchers → pointer-only / rely on permitted access (see ToS).
-- **`feed`** (public media, clean-elections YouTube): reuse the existing Slice-1 feed-polling machinery (`source_outlets` youtube/web_rss), filtered to the race's candidates. Many hubs can simply be registered as outlets.
-- **`search`** (local types with no fixed URL): a *bounded, current-cycle-verified* targeted search for the locality — the one place an agent is used, and only after the deterministic hubs.
+- **`scoped_search`** (Ballotpedia, VOTE411, and local-type hubs) — decided 2026-09-17, over rigid URL templates (Ballotpedia URLs vary by office/state/year; VOTE411 uses opaque internal IDs): resolve via ONE bounded search restricted to the hub's `domain` or its `query_template` (e.g. `site:ballotpedia.org <race/candidates>`, or `"<locality>" League of Women Voters candidate forum <year>`), take the best hub-domain result, fetch it, and **mandatorily verify current-cycle + fill** (the spike's central lesson) before accepting. Deterministic — one search per hub per race, NOT an agentic loop. For Ballotpedia's Candidate Connection questionnaire, resolve **per candidate** (`ballotpedia.org/<Candidate Name>` is far more predictable than the race-page URL). **VOTE411 stays pointer-only** — its opaque IDs, 403-blocking, and LWV-permission ToS make automated resolution not worth it now.
+- **`feed`** (public media, state clean-elections YouTube): register as a `source_outlets` feed and reuse Slice-1 polling; the Part-2 classifier + value model tag and rank the comparable content as it flows in.
 
 ### The kept LLM job: current-cycle + fill verification
 Before accepting any hub result, confirm (a) it is the CURRENT election cycle for THIS race's candidates, and (b) it carries the candidates' own words (not an empty questionnaire form, not background reporting). This is the spike's central lesson — it is what separates a real find from a stale/partial trap.
@@ -64,13 +63,15 @@ Update the classifier/engine (`src/discovery/classify.py`, `lanes.py`, tier logi
 The 8-race hand-labeled eval set + the bakeoff harness (currently in a scratchpad spike dir) are promoted to a repo eval (`scripts/` + a fixture), measuring **recall of comparable sources per race** as hubs are added and the classifier is tuned. Because the metric is noisy, average multiple runs; a change must beat the noise band (cf. the discovery-classifier eval lesson).
 
 ## Phasing
-1. Hub registry table + seed + per-race resolution + the highest-yield deterministic hubs (Ballotpedia `url_template`, government voter pamphlets, state clean-elections/public-media as feeds), with current-cycle+fill verification. Disposition into the Slice-1 queue.
+1. Hub registry table + seed + per-race resolution + the highest-yield hubs (Ballotpedia via `scoped_search` incl. per-candidate Candidate Connection; state clean-elections/public-media registered as `feed` outlets), with mandatory current-cycle+fill verification. Disposition into the Slice-1 queue. **← the B plan (2B) covers this phase.**
 2. Part-2 classifier/value-model updates (`questionnaire` kind, ranking, stale rejection).
 3. Local-type `search` hubs (bounded, verified) + the flywheel to grow the registry.
 4. Promote the eval + harness into the repo as the recall regression test.
 
 ## Open questions
-- New `essentials.source_hubs` table vs. extending `source_outlets` with a `hub` kind + `poll_method`/`url_template` columns.
-- Exact URL-template derivation for Ballotpedia / VOTE411 per race (needs the race → canonical hub-URL mapping; overlaps the Slice-1 geography work).
-- How aggressively to run the local-type `search` hubs given their lower yield and cost.
+- How aggressively to run the `scoped_search` hubs (esp. local-type) given their lower yield and per-search cost — cadence + a per-race hub budget.
 - Whether the lane-1 "ingest glance" from the original Slice-2 sketch is still worth a small task, or folds into the reranked review.
+
+## Decided 2026-09-17 (were open questions)
+- **Table:** new `essentials.source_hubs` (not an extension of `source_outlets`) — see above.
+- **URL derivation:** `scoped_search` (one bounded domain/query-scoped search + mandatory current-cycle+fill verification), per-candidate for Ballotpedia Candidate Connection; VOTE411 pointer-only; feed hubs registered as `source_outlets` — see the Polling section.
