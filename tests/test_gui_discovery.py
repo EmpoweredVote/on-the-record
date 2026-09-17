@@ -1196,6 +1196,31 @@ def test_discovery_no_unmatched_section_when_none_raceless(monkeypatch):
     assert 'id="unmatched"' not in body
 
 
+# --- Whole-branch review fix pass, Fix 1 — a raceless (race_id NULL) trusted
+# news_clip row must NOT be muted as "auto-kept": the auto-approve sweep's own
+# eligibility (src/discovery/autoapprove.py's ELIGIBLE_LANE_SQL) requires
+# d.race_id is not null, so a raceless row is never actually swept. Muting it
+# in _outlet_groups_for anyway would strand it 'pending' forever with no
+# per-row controls to act on it — it must keep the normal controls, same as
+# any other row from an outlet that isn't (effectively) trusted for it.
+
+def test_discovery_unmatched_raceless_trusted_news_clip_keeps_per_row_controls(monkeypatch):
+    monkeypatch.setattr(coverage, "state_index", lambda: [{"state": "TX", "pending": 1}])
+    row = _row(id="orphan-trusted", race_id=None, channel_name="WISH-TV",
+              outlet_id="00000000-0000-0000-0000-000000000001",
+              original_vs_clip="clip", event_kind_guess="other", outlet_trusted=True,
+              title="Raceless trusted clip")
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [row])
+    client = TestClient(create_app())
+    body = client.get("/discovery").text
+    assert 'id="unmatched"' in body
+    section = body[body.index('id="unmatched"'):]
+    assert "Raceless trusted clip" in section
+    assert "auto-kept as quote sources" not in section
+    assert 'action="/discovery/orphan-trusted/reject"' in section
+    assert 'action="/discovery/orphan-trusted/quote-source"' in section
+
+
 # --- Task 7 fix pass: Finding 3 — the `?show=deferred` view (dropped by the
 # initial reorg) is back: a flat, not state-sectioned, listing of low-value
 # auto-filed rows, reachable via a toggle link near the top of the page.
@@ -1773,3 +1798,168 @@ def test_health_reports_auto_kept_live_db_shape(live_db):
     assert isinstance(h["auto_kept_outlets"], int)
     assert h["auto_kept_week"] >= 0
     assert h["auto_kept_outlets"] >= 0
+
+
+# --- Whole-branch review fix pass, Fix 2 — keep the reviewer's place after an
+# action. Before this fix, every POST action route redirected to bare
+# /discovery via _discovery_redirect(flash), dropping ?state=XX or
+# ?show=deferred and bouncing the reviewer back to the state-index page after
+# every single click. _discovery_redirect already supported extra query
+# params (used for show="auto-kept"); the fix threads state/show hidden form
+# fields through the templates and Form() params through the routes so the
+# redirect can carry them back.
+
+def test_trust_route_preserves_state_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(id="d1"))
+    monkeypatch.setattr(discovery, "trust_from_row",
+                        lambda row: (True, "trusted KXAN", 3))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/trust", data={"state": "TX"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "state=TX" in resp.headers["location"]
+
+
+def test_trust_route_no_state_omits_it_from_redirect(monkeypatch):
+    """Unchanged behavior when no state is posted (e.g. from the no-state
+    Unmatched section): no stray '?state=' in the redirect."""
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(id="d1"))
+    monkeypatch.setattr(discovery, "trust_from_row",
+                        lambda row: (True, "trusted KXAN", 3))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/trust", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "state=" not in resp.headers["location"]
+
+
+def test_bulk_reject_preserves_state_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda ids, status, reason=None: len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk",
+                       data={"action": "reject", "row_ids": ["a", "b"],
+                             "reason": "tier-5", "state": "TX"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "state=TX" in resp.headers["location"]
+
+
+def test_bulk_restore_preserves_show_deferred_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "set_status_bulk",
+                        lambda ids, status, reason=None: len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/bulk",
+                       data={"action": "restore", "row_ids": ["a"],
+                             "show": "deferred"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "show=deferred" in resp.headers["location"]
+
+
+def test_approve_ingest_preserves_state_and_show_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="ingested"))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/approve-ingest",
+                       data={"state": "TX", "show": "deferred"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    loc = resp.headers["location"]
+    assert "state=TX" in loc and "show=deferred" in loc
+
+
+def test_quote_source_preserves_state_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row(status="rejected"))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/quote-source", data={"state": "IN"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "state=IN" in resp.headers["location"]
+
+
+def test_reject_preserves_state_and_show_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "set_status",
+                        lambda rid, status, reason=None: True)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/reject",
+                       data={"reason": "other", "state": "TX", "show": "deferred"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    loc = resp.headers["location"]
+    assert "state=TX" in loc and "show=deferred" in loc
+
+
+def test_watch_channel_preserves_state_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "get_row", lambda rid: _row())
+    monkeypatch.setattr(discovery, "watch_channel", lambda row: (True, "watching KXAN"))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/watch-channel", data={"state": "TX"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "state=TX" in resp.headers["location"]
+
+
+def test_unapprove_auto_preserves_state_in_redirect(monkeypatch):
+    monkeypatch.setattr(discovery, "unapprove_auto", lambda ids: len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/unapprove-auto",
+                       data={"row_ids": ["ak1"], "state": "TX"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    loc = resp.headers["location"]
+    assert "show=auto-kept" in loc and "state=TX" in loc
+
+
+# --- Fix 2: the templates actually emit the hidden state/show fields the
+# routes above rely on — without these, a real browser POST would never send
+# the state/show the route-level tests above stub in as form data.
+
+def test_discovery_state_view_row_actions_carry_state_hidden_field(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(id="p1", race_id="r1")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert 'name="state" value="TX"' in body
+
+
+def test_discovery_state_view_trust_form_carries_state_hidden_field(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
+        _row(id="d1", race_id="r1", channel_name="Random Blog", outlet_id=None,
+            channel_id=None, event_kind_guess="other")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    trust_start = body.index('action="/discovery/d1/trust"')
+    trust_form = body[trust_start:trust_start + 300]
+    assert 'name="state" value="TX"' in trust_form
+
+
+def test_discovery_state_view_bulk_bar_carries_state_hidden_field(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(id="p1", race_id="r1")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    bulk_start = body.index('id="bulk-pending-form"')
+    bulk_form = body[bulk_start:bulk_start + 300]
+    assert 'name="state" value="TX"' in bulk_form
+
+
+def test_discovery_deferred_view_row_actions_carry_show_hidden_field(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "pending_rows",
+        lambda status="pending": [_row(id="d9")] if status == "deferred" else [])
+    client = TestClient(create_app())
+    body = client.get("/discovery?show=deferred").text
+    assert 'name="show" value="deferred"' in body
+
+
+def test_discovery_auto_kept_bulk_bar_carries_state_hidden_field(monkeypatch):
+    monkeypatch.setattr(discovery, "auto_kept_rows", lambda: [
+        _row(id="ak1", channel_name="WISH-TV", title="Auto kept clip")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?show=auto-kept&state=TX").text
+    bulk_start = body.index('id="bulk-autokept-form"')
+    bulk_form = body[bulk_start:bulk_start + 300]
+    assert 'name="state" value="TX"' in bulk_form

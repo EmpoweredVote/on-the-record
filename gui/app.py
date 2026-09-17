@@ -82,7 +82,14 @@ def _outlet_groups_for(rows: list) -> list:
     out of the human queue, so they normally won't even reach here, but if one
     does (a race between trusting and the sweep), show it as inert evidence, not
     another row to click. Everything else — lane 1/2 rows, and every row from an
-    outlet that isn't trusted yet — keeps today's per-row controls untouched."""
+    outlet that isn't trusted yet — keeps today's per-row controls untouched.
+
+    A raceless row (race_id NULL — a merged/deleted race) must never be muted
+    here: the sweep's own eligibility (src.discovery.autoapprove.ELIGIBLE_LANE_SQL)
+    requires d.race_id is not null, so a raceless row is never actually swept.
+    Muting it anyway would strand it 'pending' forever with no controls to act
+    on it — mirror the sweep's race_id requirement so it keeps its normal
+    per-row controls instead."""
     from gui.discovery import family_key
     from src.discovery.lanes import content_lane
 
@@ -95,7 +102,7 @@ def _outlet_groups_for(rows: list) -> list:
                            "muted": [], "open": [], "trust_row_id": r.id}
             order.append(key)
         lane = content_lane(r.original_vs_clip, r.event_kind_guess)
-        if r.outlet_trusted and lane == "news_clip":
+        if r.outlet_trusted and lane == "news_clip" and r.race_id:
             groups[key]["muted"].append(r)
         else:
             groups[key]["open"].append({"row": r, "lane": lane})
@@ -279,28 +286,30 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"/discovery?{qs}", status_code=303)
 
     @app.post("/discovery/{row_id}/trust")
-    def discovery_trust(row_id: str):
+    def discovery_trust(row_id: str, state: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         ok, msg, n = discovery.trust_from_row(row)
-        return _discovery_redirect(f"{msg} — auto-kept {n}" if ok else f"trust failed: {msg}")
+        return _discovery_redirect(
+            f"{msg} — auto-kept {n}" if ok else f"trust failed: {msg}", state=state)
 
     @app.post("/discovery/unapprove-auto")
-    def discovery_unapprove_auto(row_ids: list[str] = Form(default=[])):
+    def discovery_unapprove_auto(row_ids: list[str] = Form(default=[]),
+                                 state: str = Form("")):
         # Undo for the auto-approve sweep / an over-eager "Trust outlet"
         # click: returns previously auto-kept rows to pending. Restricted
         # server-side (discovery.unapprove_auto) to rows still carrying an
         # 'auto:' status_reason, so a since-reviewed row is never touched.
         from gui import discovery
         if not row_ids:
-            return _discovery_redirect("no rows selected", show="auto-kept")
+            return _discovery_redirect("no rows selected", show="auto-kept", state=state)
         n = discovery.unapprove_auto(row_ids)
-        return _discovery_redirect(f"returned {n} to pending", show="auto-kept")
+        return _discovery_redirect(f"returned {n} to pending", show="auto-kept", state=state)
 
     @app.post("/discovery/{row_id}/approve-ingest")
-    def discovery_approve_ingest(row_id: str):
+    def discovery_approve_ingest(row_id: str, state: str = Form(""), show: str = Form("")):
         import datetime as _dt
         from gui import batch, discovery, runner
         from gui.formmeta import (DEFAULT_COMPUTE, DEFAULT_DIARIZER,
@@ -312,10 +321,11 @@ def create_app() -> FastAPI:
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
-            return _discovery_redirect(f"already {row.status}")
+            return _discovery_redirect(f"already {row.status}", state=state, show=show)
         if row.outlet_ingest_barred:
             return _discovery_redirect(
-                "chain ToS: don't host a transcript — pull a direct quote instead")
+                "chain ToS: don't host a transcript — pull a direct quote instead",
+                state=state, show=show)
         existing = runner.find_meeting_by_source(row.url)
         if existing:
             ok = discovery.set_status(row_id, "superseded",
@@ -323,13 +333,14 @@ def create_app() -> FastAPI:
             flash = f"duplicate of {existing}"
             if not ok:
                 flash += " — SAVE FAILED, retry"
-            return _discovery_redirect(flash)
+            return _discovery_redirect(flash, state=state, show=show)
         from src.source_key import source_key as _source_key
         if not _source_key(row.url).startswith("youtube:"):
             ok_probe, err = discovery.probe_extractable(row.url)
             if not ok_probe:
                 return _discovery_redirect(
-                    f"no extractable video ({err or 'nothing found'}) — use Edit first")
+                    f"no extractable video ({err or 'nothing found'}) — use Edit first",
+                    state=state, show=show)
         kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
         if kind in ("community_meeting", "other") and row.race_id:
             kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)
@@ -350,73 +361,76 @@ def create_app() -> FastAPI:
         try:
             outcome, meeting_id = batch.launch_or_enqueue(params)
         except ValueError as exc:
-            return _discovery_redirect(f"error: {exc}")
+            return _discovery_redirect(f"error: {exc}", state=state, show=show)
         ok = discovery.set_status(row_id, "ingested")
         flash = f"{outcome}: {meeting_id or params.title}"
         if not ok:
             flash += " — SAVE FAILED, retry"
-        return _discovery_redirect(flash)
+        return _discovery_redirect(flash, state=state, show=show)
 
     @app.post("/discovery/{row_id}/quote-source")
-    def discovery_quote_source(row_id: str):
+    def discovery_quote_source(row_id: str, state: str = Form(""), show: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
-            return _discovery_redirect(f"already {row.status}")
+            return _discovery_redirect(f"already {row.status}", state=state, show=show)
         n = discovery.approve_source_family(row)
         if n:
             flash = f"approved {n} ({row.channel_name or 'source'})"
         else:
             flash = "approved as quote source — SAVE FAILED, retry"
-        return _discovery_redirect(flash)
+        return _discovery_redirect(flash, state=state, show=show)
 
     @app.post("/discovery/{row_id}/reject")
     def discovery_reject(row_id: str, reason: str = Form("other"),
-                         whole_source: str = Form("")):
+                         whole_source: str = Form(""), state: str = Form(""),
+                         show: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
-            return _discovery_redirect(f"already {row.status}")
+            return _discovery_redirect(f"already {row.status}", state=state, show=show)
         if whole_source:
             n = discovery.reject_source_family(row, reason)
             if n:
                 flash = f"rejected {n} ({row.channel_name or 'source'})"
             else:
                 flash = "rejected — SAVE FAILED, retry"
-            return _discovery_redirect(flash)
+            return _discovery_redirect(flash, state=state, show=show)
         ok = discovery.set_status(row_id, "rejected", reason=reason)
         flash = "rejected"
         if not ok:
             flash += " — SAVE FAILED, retry"
-        return _discovery_redirect(flash)
+        return _discovery_redirect(flash, state=state, show=show)
 
     @app.post("/discovery/{row_id}/watch-channel")
-    def discovery_watch_channel(row_id: str):
+    def discovery_watch_channel(row_id: str, state: str = Form(""), show: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         ok, message = discovery.watch_channel(row)
-        return _discovery_redirect(message if ok else f"error: {message}")
+        return _discovery_redirect(
+            message if ok else f"error: {message}", state=state, show=show)
 
     @app.post("/discovery/bulk")
     def discovery_bulk(action: str = Form(...),
                        row_ids: list[str] = Form(default=[]),
-                       reason: str = Form("other")):
+                       reason: str = Form("other"), state: str = Form(""),
+                       show: str = Form("")):
         from gui import discovery
         if not row_ids:
-            return _discovery_redirect("no rows selected")
+            return _discovery_redirect("no rows selected", state=state, show=show)
         if action == "reject":
             n = discovery.set_status_bulk(row_ids, "rejected", reason=reason)
-            return _discovery_redirect(f"rejected {n}")
+            return _discovery_redirect(f"rejected {n}", state=state, show=show)
         if action == "restore":
             n = discovery.set_status_bulk(row_ids, "pending", reason=None)
-            return _discovery_redirect(f"restored {n} to pending")
-        return _discovery_redirect(f"unknown action: {action}")
+            return _discovery_redirect(f"restored {n} to pending", state=state, show=show)
+        return _discovery_redirect(f"unknown action: {action}", state=state, show=show)
 
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:

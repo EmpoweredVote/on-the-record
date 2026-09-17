@@ -47,9 +47,11 @@
 </section>
 {% endif %}
 
-{% macro row_actions(r, race) %}
+{% macro row_actions(r, race, state='', show='') %}
 <div class="row-actions" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;margin-top:var(--sp-2);">
   <form method="post" action="/discovery/{{ r.id }}/approve-ingest" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
     {% if r.outlet_ingest_barred %}
     <button type="submit" class="enroll" disabled title="chain ToS: don't host a transcript — pull a direct quote instead">Approve &rarr; ingest</button>
     <small class="empty">chain ToS: don't host a transcript — pull a direct quote instead</small>
@@ -58,9 +60,13 @@
     {% endif %}
   </form>
   <form method="post" action="/discovery/{{ r.id }}/quote-source" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
     <button type="submit">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
   </form>
   <form method="post" action="/discovery/{{ r.id }}/reject" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
     <select name="reason">
       <option value="clip-not-original">clip, not original</option>
       <option value="stale">stale / old cycle</option>
@@ -81,13 +87,15 @@
   {% endif %}
   {% if not r.outlet_id and r.channel_id %}
   <form method="post" action="/discovery/{{ r.id }}/watch-channel" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
     <button type="submit" title="Add this channel to the watchlist">+ Watch this channel</button>
   </form>
   {% endif %}
 </div>
 {% endmacro %}
 
-{% macro pending_row(item, race) %}
+{% macro pending_row(item, race, state='') %}
 {% set r = item.row %}
 <div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
   <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form" style="margin-top:var(--sp-2);">
@@ -100,12 +108,12 @@
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
     <small><em>{{ r.why }}</em></small>
-    {{ row_actions(r, race) }}
+    {{ row_actions(r, race, state) }}
   </div>
 </div>
 {% endmacro %}
 
-{% macro outlet_groups(groups, race) %}
+{% macro outlet_groups(groups, race, state='') %}
   {% if not groups %}
   <p class="empty">No pending items{% if race %} for this race{% endif %}.</p>
   {% endif %}
@@ -115,6 +123,7 @@
       <strong>{{ group.name }}</strong>
       {% if not group.trusted %}
       <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
+        <input type="hidden" name="state" value="{{ state or '' }}">
         <button type="submit" title="Trust every future item from {{ group.name }} as a quote source">Trust outlet</button>
       </form>
       {% endif %}
@@ -123,13 +132,13 @@
     <p class="empty"><small>{{ group.muted|length }} auto-kept as quote sources</small></p>
     {% endif %}
     {% for item in group.open %}
-      {{ pending_row(item, race) }}
+      {{ pending_row(item, race, state) }}
     {% endfor %}
   </div>
   {% endfor %}
 {% endmacro %}
 
-{% macro race_block(race, groups_by_race) %}
+{% macro race_block(race, groups_by_race, state='') %}
 {% set groups = groups_by_race.get(race.race_id, []) %}
 <details class="race-row" id="race-{{ race.race_id }}" style="border:1px solid var(--c-line);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);">
   <summary style="cursor:pointer;">
@@ -139,12 +148,13 @@
     <span class="pill">{{ race.ingested }} ingested</span>
     <span class="pill">{{ race.pending }} pending</span>
   </summary>
-  {{ outlet_groups(groups, race) }}
+  {{ outlet_groups(groups, race, state) }}
 </details>
 {% endmacro %}
 
-{% macro bulk_pending_bar() %}
+{% macro bulk_pending_bar(state='') %}
 <form id="bulk-pending-form" method="post" action="/discovery/bulk" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;flex-wrap:wrap;margin:0 0 var(--sp-4);">
+  <input type="hidden" name="state" value="{{ state or '' }}">
   <label>Reason
     <select name="reason">
       <option value="tier-5">tier-5 (low value)</option>
@@ -158,7 +168,7 @@
 </form>
 {% endmacro %}
 
-{% macro deferred_row(r) %}
+{% macro deferred_row(r, state='') %}
 <div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
   <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form" style="margin-top:var(--sp-2);">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
@@ -169,7 +179,7 @@
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
     <small><em>{{ r.why }}</em></small>
-    {{ row_actions(r, None) }}
+    {{ row_actions(r, None, state, 'deferred') }}
   </div>
 </div>
 {% endmacro %}
@@ -192,12 +202,14 @@
 <p class="empty">No deferred discoveries.</p>
 {% else %}
 <form id="bulk-deferred-form" method="post" action="/discovery/bulk" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;margin:0 0 var(--sp-4);">
+  <input type="hidden" name="show" value="deferred">
+  <input type="hidden" name="state" value="{{ state or '' }}">
   <button type="submit" name="action" value="restore">Restore selected to pending</button>
 </form>
 {% for label, rows in deferred_groups %}
 <h2>{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
 {% for r in rows %}
-  {{ deferred_row(r) }}
+  {{ deferred_row(r, state) }}
 {% endfor %}
 {% endfor %}
 {% endif %}
@@ -208,6 +220,7 @@
 <p class="empty">No auto-kept quote sources.</p>
 {% else %}
 <form id="bulk-autokept-form" method="post" action="/discovery/unapprove-auto" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;margin:0 0 var(--sp-4);">
+  <input type="hidden" name="state" value="{{ state or '' }}">
   <button type="submit">Return selected to pending</button>
 </form>
 {% for r in auto_kept_rows %}
@@ -236,8 +249,8 @@
   <p class="empty"><small>These lost their race link — the race was merged or deleted
     (<code>discovered_sources.race_id</code> is <code>on delete set null</code>).
     Approve as a quote source, reject, or use Edit first to reattach.</small></p>
-  {{ bulk_pending_bar() }}
-  {{ outlet_groups(unmatched_groups, None) }}
+  {{ bulk_pending_bar(state) }}
+  {{ outlet_groups(unmatched_groups, None, state) }}
 </section>
 {% endif %}
 
@@ -265,13 +278,13 @@
     {% if not statewide and not localities %}
     <p class="empty">No tracked races in {{ state | state_name }} yet.</p>
     {% else %}
-    {{ bulk_pending_bar() }}
+    {{ bulk_pending_bar(state) }}
     {% endif %}
 
     <section id="statewide">
       <h2>Statewide &amp; federal <small class="empty">— tracked once, approved everywhere</small></h2>
       {% for race in statewide %}
-        {{ race_block(race, race_outlet_groups) }}
+        {{ race_block(race, race_outlet_groups, state) }}
       {% endfor %}
     </section>
 
@@ -279,7 +292,7 @@
     <section id="loc-{{ loc | anchor_slug }}">
       <h2>{{ loc }}</h2>
       {% for race in loc_races %}
-        {{ race_block(race, race_outlet_groups) }}
+        {{ race_block(race, race_outlet_groups, state) }}
       {% endfor %}
     </section>
     {% endfor %}
