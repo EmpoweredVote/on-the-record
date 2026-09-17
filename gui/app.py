@@ -170,16 +170,62 @@ def create_app() -> FastAPI:
         return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
     @app.get("/discovery", response_class=HTMLResponse)
-    def discovery_page(request: Request, state: str = "", flash: str = "") -> HTMLResponse:
+    def discovery_page(request: Request, state: str = "", flash: str = "",
+                       show: str = "pending") -> HTMLResponse:
         from gui import coverage, discovery, races
         from gui.discovery import family_key
 
         h = discovery.health()
         state = (state or "").strip().upper()
-        if not state:
+        show = (show or "pending").strip().lower()
+        if show not in ("pending", "deferred", "auto-kept"):
+            show = "pending"
+
+        if show == "auto-kept":
+            # Frictionless undo for the auto-approve sweep: a wrong "Trust
+            # outlet" click (or the sweep firing on a bad outlet) lands rows
+            # here, status='approved' + status_reason 'auto:...'. See
+            # discovery.unapprove_auto / POST /discovery/unapprove-auto.
             return _templates.TemplateResponse(
                 request, "discovery.html",
-                {"state": None, "states": coverage.state_index(), "health": h, "flash": flash})
+                {"state": state or None, "show": show,
+                 "auto_kept_rows": discovery.auto_kept_rows(),
+                 "health": h, "flash": flash})
+
+        if show == "deferred":
+            # Low-value, auto-filed items — a separate, flat (not
+            # state-sectioned) view, matching the pre-reorg page. family_count
+            # is deliberately NOT computed here (only "pending" rows get the
+            # "+N more"/"apply to all" family-action hints, same as before
+            # Task 7).
+            rows = discovery.pending_rows("deferred")
+            labels = races.race_labels({r.race_id for r in rows if r.race_id})
+            groups: dict = {}
+            for r in rows:
+                if r.race_id and labels.get(r.race_id):
+                    r.race_label = labels[r.race_id]
+                groups.setdefault(r.race_label or "Unmatched", []).append(r)
+            groups = dict(sorted(groups.items()))
+            return _templates.TemplateResponse(
+                request, "discovery.html",
+                {"state": state or None, "show": show,
+                 "deferred_groups": list(groups.items()),
+                 "health": h, "flash": flash})
+
+        # show == "pending" (default): state index / state-sectioned view.
+        if not state:
+            # Every pending row with no race_id (races.race_id ON DELETE SET
+            # NULL, or a race merge/delete) would otherwise never attach to
+            # any state's section and vanish silently — surfaced here, with
+            # normal per-row controls, since it has no state to live under.
+            rows = discovery.pending_rows()
+            unmatched = [r for r in rows if not r.race_id]
+            return _templates.TemplateResponse(
+                request, "discovery.html",
+                {"state": None, "show": show, "states": coverage.state_index(),
+                 "unmatched_groups": _outlet_groups_for(unmatched),
+                 "unmatched_count": len(unmatched),
+                 "health": h, "flash": flash})
 
         state_races = coverage.races_for_state(state)
         rows = discovery.pending_rows()
@@ -206,16 +252,17 @@ def create_app() -> FastAPI:
             for r in members:
                 r.family_count = len(members) - 1
 
-        statewide = [r for r in state_races if r.level in ("federal", "state")]
+        statewide_levels = coverage.LEVEL_ORDER[:2]  # ("federal", "state")
+        statewide = [r for r in state_races if r.level in statewide_levels]
         localities: dict = {}
         for r in state_races:
-            if r.level not in ("federal", "state"):
+            if r.level not in statewide_levels:
                 localities.setdefault(r.locality or "Unassigned", []).append(r)
         localities = dict(sorted(localities.items(), key=lambda kv: kv[0]))
 
         return _templates.TemplateResponse(
             request, "discovery.html",
-            {"state": state, "statewide": statewide, "localities": localities,
+            {"state": state, "show": show, "statewide": statewide, "localities": localities,
              "statewide_pending": sum(r.pending for r in statewide),
              "locality_pending": {loc: sum(r.pending for r in rs)
                                   for loc, rs in localities.items()},
@@ -223,9 +270,13 @@ def create_app() -> FastAPI:
                                     for r in state_races},
              "health": h, "flash": flash})
 
-    def _discovery_redirect(flash: str) -> RedirectResponse:
+    def _discovery_redirect(flash: str, **extra) -> RedirectResponse:
         from urllib.parse import quote
-        return RedirectResponse(url=f"/discovery?flash={quote(flash)}", status_code=303)
+        qs = f"flash={quote(flash)}"
+        for k, v in extra.items():
+            if v:
+                qs += f"&{k}={quote(str(v))}"
+        return RedirectResponse(url=f"/discovery?{qs}", status_code=303)
 
     @app.post("/discovery/{row_id}/trust")
     def discovery_trust(row_id: str):
@@ -235,6 +286,18 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         ok, msg, n = discovery.trust_from_row(row)
         return _discovery_redirect(f"{msg} — auto-kept {n}" if ok else f"trust failed: {msg}")
+
+    @app.post("/discovery/unapprove-auto")
+    def discovery_unapprove_auto(row_ids: list[str] = Form(default=[])):
+        # Undo for the auto-approve sweep / an over-eager "Trust outlet"
+        # click: returns previously auto-kept rows to pending. Restricted
+        # server-side (discovery.unapprove_auto) to rows still carrying an
+        # 'auto:' status_reason, so a since-reviewed row is never touched.
+        from gui import discovery
+        if not row_ids:
+            return _discovery_redirect("no rows selected", show="auto-kept")
+        n = discovery.unapprove_auto(row_ids)
+        return _discovery_redirect(f"returned {n} to pending", show="auto-kept")
 
     @app.post("/discovery/{row_id}/approve-ingest")
     def discovery_approve_ingest(row_id: str):

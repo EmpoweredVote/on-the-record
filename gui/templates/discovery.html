@@ -6,7 +6,7 @@
   <strong>Discovery</strong>
   <span class="pill">{{ health.pending_total }} pending</span>
   {% if health.auto_kept_week %}
-  <span class="pill" title="{{ health.auto_kept_outlets }} outlet(s)">auto-kept {{ health.auto_kept_week }} this week</span>
+  <a class="pill" href="/discovery?show=auto-kept" title="{{ health.auto_kept_outlets }} outlet(s) — click to review / undo">auto-kept {{ health.auto_kept_week }} this week</a>
   {% endif %}
   {% if health.stale_outlets %}
   <span class="pill" title="{{ health.stale_outlets|join(', ') }}">
@@ -26,6 +26,16 @@
 
 {% if flash %}<p class="flash">{{ flash }}</p>{% endif %}
 
+<p class="view-toggle">
+  {% if show == 'deferred' %}
+    <a href="/discovery{{ '?state=' ~ state if state else '' }}">&larr; Back to pending</a> · showing <strong>deferred</strong> (low-value, auto-filed)
+  {% elif show == 'auto-kept' %}
+    <a href="/discovery{{ '?state=' ~ state if state else '' }}">&larr; Back to pending</a> · showing <strong>auto-kept</strong> quote sources (auto-approved by a trusted outlet — return any of these to pending below)
+  {% else %}
+    <a href="/discovery?show=deferred">View deferred items &rarr;</a>
+  {% endif %}
+</p>
+
 {% if health.alarms %}
 <section class="flash-pending">
   <strong>Zero-source alarms</strong> — races inside 30 days with no approved sources:
@@ -41,8 +51,8 @@
 <div class="row-actions" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;margin-top:var(--sp-2);">
   <form method="post" action="/discovery/{{ r.id }}/approve-ingest" style="margin:0;">
     {% if r.outlet_ingest_barred %}
-    <button type="submit" class="enroll" disabled title="chain ToS: pull a direct quote instead">Approve &rarr; ingest</button>
-    <small class="empty">chain ToS: pull a direct quote instead</small>
+    <button type="submit" class="enroll" disabled title="chain ToS: don't host a transcript — pull a direct quote instead">Approve &rarr; ingest</button>
+    <small class="empty">chain ToS: don't host a transcript — pull a direct quote instead</small>
     {% else %}
     <button type="submit" class="enroll">Approve &rarr; ingest</button>
     {% endif %}
@@ -66,7 +76,7 @@
   <a class="pill" href="/new?{{ {'input': r.safe_url,
       'date': (r.published_at or '')[:10], 'title': r.title or '',
       'event_kind': r.event_kind_guess or 'news_clip',
-      'race_id': r.race_id or '', 'race_label': r.race_label or race.position_name or '',
+      'race_id': r.race_id or '', 'race_label': r.race_label or (race.position_name if race else '') or '',
       'event_orgs': r.channel_name or ''}|urlencode }}">Edit first</a>
   {% endif %}
   {% if not r.outlet_id and r.channel_id %}
@@ -80,6 +90,7 @@
 {% macro pending_row(item, race) %}
 {% set r = item.row %}
 <div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form" style="margin-top:var(--sp-2);">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
   <div style="flex:1;min-width:0;">
     <span class="pill">{{ item.lane | humanize_kind }}</span>
@@ -94,18 +105,9 @@
 </div>
 {% endmacro %}
 
-{% macro race_block(race, groups_by_race) %}
-{% set groups = groups_by_race.get(race.race_id, []) %}
-<details class="race-row" id="race-{{ race.race_id }}" style="border:1px solid var(--c-line);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);">
-  <summary style="cursor:pointer;">
-    <strong>{{ race.position_name or "Unlabeled race" }}</strong>
-    <span class="pill">{{ race.candidates }} candidates</span>
-    <span class="pill">{{ race.quote_sources }} quote sources</span>
-    <span class="pill">{{ race.ingested }} ingested</span>
-    <span class="pill">{{ race.pending }} pending</span>
-  </summary>
+{% macro outlet_groups(groups, race) %}
   {% if not groups %}
-  <p class="empty">No pending items for this race.</p>
+  <p class="empty">No pending items{% if race %} for this race{% endif %}.</p>
   {% endif %}
   {% for group in groups %}
   <div class="outlet-group" style="margin:var(--sp-4) 0 0;padding:var(--sp-3) var(--sp-4);border:1px solid var(--c-line-soft);border-radius:var(--r-md);">
@@ -125,10 +127,95 @@
     {% endfor %}
   </div>
   {% endfor %}
+{% endmacro %}
+
+{% macro race_block(race, groups_by_race) %}
+{% set groups = groups_by_race.get(race.race_id, []) %}
+<details class="race-row" id="race-{{ race.race_id }}" style="border:1px solid var(--c-line);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);">
+  <summary style="cursor:pointer;">
+    <strong>{{ race.position_name or "Unlabeled race" }}</strong>
+    <span class="pill">{{ race.candidates }} candidates</span>
+    <span class="pill">{{ race.quote_sources }} quote sources</span>
+    <span class="pill">{{ race.ingested }} ingested</span>
+    <span class="pill">{{ race.pending }} pending</span>
+  </summary>
+  {{ outlet_groups(groups, race) }}
 </details>
 {% endmacro %}
 
-{% if not state %}
+{% macro bulk_pending_bar() %}
+<form id="bulk-pending-form" method="post" action="/discovery/bulk" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;flex-wrap:wrap;margin:0 0 var(--sp-4);">
+  <label>Reason
+    <select name="reason">
+      <option value="tier-5">tier-5 (low value)</option>
+      <option value="wrong-person">wrong-person</option>
+      <option value="clip-not-original">clip-not-original</option>
+      <option value="other" selected>other</option>
+    </select>
+  </label>
+  <button type="submit" name="action" value="reject">Reject selected</button>
+  <span class="empty"><small>checkboxes below select rows for this bar, across every race/outlet shown</small></span>
+</form>
+{% endmacro %}
+
+{% macro deferred_row(r) %}
+<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form" style="margin-top:var(--sp-2);">
+  {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
+  <div style="flex:1;min-width:0;">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
+    <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+      {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
+      {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
+    <small><em>{{ r.why }}</em></small>
+    {{ row_actions(r, None) }}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro auto_kept_row(r) %}
+<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-autokept-form" style="margin-top:var(--sp-2);">
+  {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
+  <div style="flex:1;min-width:0;">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
+    <small>{{ r.channel_name or "?" }} · {{ (r.published_at or "?")[:10] }}
+      {% if r.event_kind_guess %} · {{ r.event_kind_guess }}{% endif %}</small>
+  </div>
+</div>
+{% endmacro %}
+
+{% if show == 'deferred' %}
+
+{% if not deferred_groups %}
+<p class="empty">No deferred discoveries.</p>
+{% else %}
+<form id="bulk-deferred-form" method="post" action="/discovery/bulk" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;margin:0 0 var(--sp-4);">
+  <button type="submit" name="action" value="restore">Restore selected to pending</button>
+</form>
+{% for label, rows in deferred_groups %}
+<h2>{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
+{% for r in rows %}
+  {{ deferred_row(r) }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% elif show == 'auto-kept' %}
+
+{% if not auto_kept_rows %}
+<p class="empty">No auto-kept quote sources.</p>
+{% else %}
+<form id="bulk-autokept-form" method="post" action="/discovery/unapprove-auto" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;margin:0 0 var(--sp-4);">
+  <button type="submit">Return selected to pending</button>
+</form>
+{% for r in auto_kept_rows %}
+  {{ auto_kept_row(r) }}
+{% endfor %}
+{% endif %}
+
+{% elif not state %}
 <h1>Choose a state</h1>
 {% if not states %}
 <p class="empty">No tracked races yet.</p>
@@ -141,6 +228,17 @@
   </li>
   {% endfor %}
 </ul>
+{% endif %}
+
+{% if unmatched_groups %}
+<section id="unmatched" style="margin-top:var(--sp-6);">
+  <h2>Unmatched <span class="pill">{{ unmatched_count }} pending</span></h2>
+  <p class="empty"><small>These lost their race link — the race was merged or deleted
+    (<code>discovered_sources.race_id</code> is <code>on delete set null</code>).
+    Approve as a quote source, reject, or use Edit first to reattach.</small></p>
+  {{ bulk_pending_bar() }}
+  {{ outlet_groups(unmatched_groups, None) }}
+</section>
 {% endif %}
 
 {% else %}
@@ -166,6 +264,8 @@
   <div style="flex:1;min-width:0;">
     {% if not statewide and not localities %}
     <p class="empty">No tracked races in {{ state | state_name }} yet.</p>
+    {% else %}
+    {{ bulk_pending_bar() }}
     {% endif %}
 
     <section id="statewide">

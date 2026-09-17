@@ -683,12 +683,15 @@ def test_pending_order_ranks_tier_before_confidence():
     assert tier_pos < conf_pos
 
 
-# --- Task 4's deferred-view toggle (?show=deferred) and Task 7's page-wide
-# checkbox bulk bar both no longer exist: Task 7's reorg reads only `state`/
-# `flash` (see task-7-brief.md's Layout section) and nests review three levels
-# deep (state -> race -> outlet), which has no natural page-wide multi-select.
-# discovery.set_status_bulk and POST /discovery/bulk are untouched and still
-# fully tested below — only this page stopped rendering a UI control for them.
+# --- Task 4's deferred-view toggle (?show=deferred) and the page-wide
+# checkbox bulk bar were dropped by Task 7's initial reorg, then restored by
+# the Task 7 fix pass (see task-7-report.md's FIX REPORT): `show` is back as a
+# query param (pending|deferred|auto-kept), and the bulk bar's checkboxes now
+# nest inside the state -> race -> outlet layout via the HTML `form=` attribute
+# (checkbox and <form> don't need to be DOM-adjacent), so one bar can still
+# select rows across every race/outlet on the page. discovery.set_status_bulk
+# and POST /discovery/bulk are unchanged; see the reorg tests further down for
+# the restored UI coverage.
 
 # --- Task 5: bulk status change touches only pending/deferred rows ---
 
@@ -1115,7 +1118,8 @@ def test_discovery_state_view_disables_ingest_button_for_barred_outlet(monkeypat
     client = TestClient(create_app())
     body = client.get("/discovery?state=TX").text
     assert '<button type="submit" class="enroll" disabled' in body
-    assert "chain ToS: pull a direct quote instead" in body
+    # Aligned with the flash copy in discovery_approve_ingest's barred-gate.
+    assert "chain ToS: don't host a transcript — pull a direct quote instead" in body
 
 
 def test_trust_route_sweeps(monkeypatch):
@@ -1161,6 +1165,153 @@ def test_ingest_blocked_for_barred_outlet(monkeypatch):
     # decode via _flash() rather than substring-matching the raw header.
     assert "chain tos" in _flash(resp).lower()
     assert called["hit"] is False
+
+
+# --- Task 7 fix pass: Finding 1 — race-less pending rows (race_id NULL, e.g.
+# a merged/deleted race — discovered_sources.race_id is ON DELETE SET NULL)
+# used to be silently dropped by `if not r.race_id: continue`. Restored as an
+# "Unmatched" section on the no-state index page, with the normal per-row
+# controls (via the same _outlet_groups_for/outlet_groups machinery races use).
+
+def test_discovery_unmatched_section_lists_raceless_pending_rows(monkeypatch):
+    monkeypatch.setattr(coverage, "state_index", lambda: [{"state": "TX", "pending": 1}])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
+        _row(id="orphan1", race_id=None, channel_name="Orphan Outlet",
+            title="Orphaned item")])
+    client = TestClient(create_app())
+    body = client.get("/discovery").text
+    assert 'id="unmatched"' in body
+    section = body[body.index('id="unmatched"'):]
+    assert "Orphaned item" in section
+    assert "1 pending" in section
+    assert 'action="/discovery/orphan1/quote-source"' in section
+
+
+def test_discovery_no_unmatched_section_when_none_raceless(monkeypatch):
+    monkeypatch.setattr(coverage, "state_index", lambda: [])
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(id="a1", race_id="r1")])
+    client = TestClient(create_app())
+    body = client.get("/discovery").text
+    assert 'id="unmatched"' not in body
+
+
+# --- Task 7 fix pass: Finding 3 — the `?show=deferred` view (dropped by the
+# initial reorg) is back: a flat, not state-sectioned, listing of low-value
+# auto-filed rows, reachable via a toggle link near the top of the page.
+
+def test_discovery_view_toggle_links_to_deferred(monkeypatch):
+    client = TestClient(create_app())
+    body = client.get("/discovery").text
+    assert 'href="/discovery?show=deferred"' in body
+
+
+def test_discovery_deferred_view_lists_deferred_rows(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "pending_rows",
+        lambda status="pending": [_row(id="d9", title="Old clip")] if status == "deferred" else [])
+    client = TestClient(create_app())
+    resp = client.get("/discovery?show=deferred")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Old clip" in body
+    assert "deferred" in body.lower()
+    assert "&larr; Back to pending" in body
+
+
+def test_discovery_deferred_view_groups_raceless_rows_as_unmatched(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "pending_rows",
+        lambda status="pending": [_row(id="d9", race_id=None, race_label=None)]
+        if status == "deferred" else [])
+    client = TestClient(create_app())
+    body = client.get("/discovery?show=deferred").text
+    assert "Unmatched" in body
+
+
+def test_discovery_deferred_view_has_restore_bulk_bar(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "pending_rows",
+        lambda status="pending": [_row(id="d9")] if status == "deferred" else [])
+    client = TestClient(create_app())
+    body = client.get("/discovery?show=deferred").text
+    assert 'id="bulk-deferred-form"' in body
+    assert 'action="/discovery/bulk"' in body
+    assert 'name="row_ids" value="d9"' in body
+    assert 'form="bulk-deferred-form"' in body
+    assert 'value="restore"' in body
+
+
+# --- Task 7 fix pass: Finding 4 — the cross-outlet bulk reject/restore bar
+# is back, reintegrated into the new nested (state -> race -> outlet) layout:
+# a single <form id="bulk-pending-form"> posts to the existing POST
+# /discovery/bulk, and every pending row's checkbox — no matter which race or
+# outlet group it's nested under — references that form by id (the HTML
+# `form=` attribute lets a checkbox and its <form> live anywhere in the DOM).
+
+def test_discovery_state_view_shows_bulk_reject_bar_with_checkbox(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(id="p1", race_id="r1")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert 'id="bulk-pending-form"' in body
+    assert 'action="/discovery/bulk"' in body
+    assert 'name="row_ids" value="p1"' in body
+    assert 'form="bulk-pending-form"' in body
+
+
+def test_discovery_bulk_bar_spans_every_race_and_outlet_on_the_page(monkeypatch):
+    """Two different races, two different outlets — one shared bulk form."""
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("rA", "Race A"), _race("rB", "Race B")])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
+        _row(id="a1", race_id="rA", channel_name="Outlet A"),
+        _row(id="b1", race_id="rB", channel_name="Outlet B"),
+    ])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    import re
+    forms_referenced = set(re.findall(r'form="([^"]+)"', body))
+    assert forms_referenced == {"bulk-pending-form"}
+    assert 'name="row_ids" value="a1"' in body
+    assert 'name="row_ids" value="b1"' in body
+
+
+# --- Task 7 fix pass: Minor — a county/local/school race with locality=None
+# still renders (grouped under "Unassigned", same as an unset locality always
+# has been), and expanding one race's pending rows never bleeds into another
+# race's — regression coverage for the state -> race -> outlet nesting.
+
+def test_discovery_locality_none_renders_under_unassigned(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("r1", "County Commissioner", "county", None, 1, 0, 0, 1)])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert "Unassigned" in body
+    assert "County Commissioner" in body
+
+
+def test_discovery_multi_race_isolation(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [
+        _race("rA", "Race A", "state", None, 0, 0, 0, 1),
+        _race("rB", "Race B", "state", None, 0, 0, 0, 1),
+    ])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
+        _row(id="a1", race_id="rA", channel_name="Outlet A", title="Only in A"),
+        _row(id="b1", race_id="rB", channel_name="Outlet B", title="Only in B"),
+    ])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    start_a = body.index('id="race-rA"')
+    start_b = body.index('id="race-rB"')
+    assert start_a < start_b
+    block_a = body[start_a:start_b]
+    assert "Only in A" in block_a
+    assert "Only in B" not in block_a
+    block_b = body[start_b:]
+    assert "Only in B" in block_b
+    assert "Only in A" not in block_b
 
 
 # --- Task 5: outlet trust/undo DB layer ---
@@ -1485,6 +1636,99 @@ def test_unapprove_auto_empty_is_noop(monkeypatch):
 def test_unapprove_auto_no_db(monkeypatch):
     monkeypatch.setattr(discovery, "_db_url", lambda: None)
     assert discovery.unapprove_auto(["a"]) == 0
+
+
+# --- Task 7 fix pass: Finding 2 — wire discovery.unapprove_auto up to a UI.
+# auto_kept_rows() mirrors pending_rows' shape/_SELECT but with a different
+# WHERE (status='approved' AND status_reason LIKE 'auto:%'), so a wrong
+# "Trust outlet" click (or the sweep firing on a bad outlet) is recoverable
+# from a dedicated /discovery?show=auto-kept view.
+
+def test_auto_kept_rows_sql(monkeypatch):
+    captured = {}
+
+    class _Cur:
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cur()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery, "_db_url", lambda: "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: _Conn())
+    assert discovery.auto_kept_rows() == []
+    sql = captured["sql"].lower()
+    assert "status = 'approved'" in sql
+    assert "status_reason like 'auto:%" in sql
+    # Same _SELECT as pending_rows (same DiscoveredRow shape/column order).
+    assert "coalesce(o.trusted, false)" in sql
+
+
+def test_auto_kept_rows_no_db(monkeypatch):
+    monkeypatch.setattr(discovery, "_db_url", lambda: None)
+    assert discovery.auto_kept_rows() == []
+
+
+def test_discovery_auto_kept_view_lists_rows_with_checkbox(monkeypatch):
+    monkeypatch.setattr(discovery, "auto_kept_rows", lambda: [
+        _row(id="ak1", channel_name="WISH-TV", title="Auto kept clip")])
+    client = TestClient(create_app())
+    resp = client.get("/discovery?show=auto-kept")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Auto kept clip" in body
+    assert 'name="row_ids" value="ak1"' in body
+    assert 'form="bulk-autokept-form"' in body
+    assert 'action="/discovery/unapprove-auto"' in body
+    assert "&larr; Back to pending" in body
+
+
+def test_discovery_health_strip_auto_kept_pill_links_to_view(monkeypatch):
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 0,
+        "auto_kept_week": 5, "auto_kept_outlets": 2})
+    client = TestClient(create_app())
+    body = client.get("/discovery").text
+    assert 'href="/discovery?show=auto-kept"' in body
+    assert "auto-kept 5 this week" in body
+
+
+def test_unapprove_auto_route_returns_rows_to_pending(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(discovery, "unapprove_auto",
+                        lambda ids: calls.update(ids=ids) or len(ids))
+    client = TestClient(create_app())
+    resp = client.post("/discovery/unapprove-auto",
+                       data={"row_ids": ["ak1", "ak2"]}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls["ids"] == ["ak1", "ak2"]
+    assert "returned 2 to pending" in _flash(resp)
+    assert "show=auto-kept" in resp.headers["location"]
+
+
+def test_unapprove_auto_route_noop_when_none_selected(monkeypatch):
+    called = {"hit": False}
+    monkeypatch.setattr(discovery, "unapprove_auto",
+                        lambda ids: called.update(hit=True) or 0)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/unapprove-auto", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "no rows selected" in _flash(resp)
+    assert called["hit"] is False
 
 
 # --- Task 5: live_db-gated shape checks ---

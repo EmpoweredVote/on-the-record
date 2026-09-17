@@ -142,6 +142,35 @@ def pending_rows(status: str = "pending") -> list:
         return []
 
 
+_AUTO_KEPT_WHERE = """
+    where d.status = 'approved' and d.status_reason like 'auto:%%'
+    order by d.published_at desc nulls last, d.created_at desc
+"""
+
+
+def auto_kept_rows() -> list:
+    """Rows the auto-approve sweep (trust_from_row's outlet-trust check, or
+    poll_discovery's own sweep) kept out of the human queue — status='approved'
+    with a status_reason starting 'auto:'. Mirrors pending_rows' shape (same
+    _SELECT, same DiscoveredRow) so the auto-kept view can reuse a row's
+    display properties (thumb_url, safe_url, ...). A wrong 'Trust outlet'
+    click is recoverable from here via unapprove_auto. Best-effort: no
+    DATABASE_URL or any DB error returns []."""
+    url = _db_url()
+    if not url:
+        return []
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(_SELECT + _AUTO_KEPT_WHERE)
+                return [_to_row(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
 def get_row(row_id: str) -> Optional[DiscoveredRow]:
     url = _db_url()
     if not url:
