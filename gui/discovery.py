@@ -30,10 +30,13 @@ _SELECT = """
            d.channel_id, d.channel_url, d.outlet_id::text, d.duration_seconds,
            d.published_at::text, d.race_id::text, d.event_kind_guess,
            d.source_tier_guess, d.route, d.confidence, d.why, d.discovered_via,
-           d.status, e.election_date::text
+           d.status, e.election_date::text,
+           coalesce(o.trusted, false), coalesce(o.ingest_barred, false),
+           d.original_vs_clip
     from essentials.discovered_sources d
     left join essentials.races r on r.id = d.race_id
     left join essentials.elections e on e.id = r.election_id
+    left join essentials.source_outlets o on o.id = d.outlet_id
 """
 
 _LIST_WHERE_ORDER = """
@@ -65,6 +68,16 @@ class DiscoveredRow:
     discovered_via: str
     status: str
     election_date: Optional[str] = None
+    # The next three are positional-mapped from _SELECT's three trailing
+    # columns (see _to_row) — they MUST stay here, immediately after
+    # election_date and before race_label/family_count below. Those two are
+    # never supplied by _SELECT (filled later by callers), so this block must
+    # stay past the last column _SELECT actually returns or DiscoveredRow(*r)
+    # misaligns silently (e.g. o.trusted landing in race_label instead of
+    # outlet_trusted).
+    outlet_trusted: bool = False
+    outlet_ingest_barred: bool = False
+    original_vs_clip: Optional[str] = None  # 'original' | 'clip' | None (Task 5b)
     race_label: Optional[str] = None  # filled by the route via races.race_labels
     family_count: int = 0  # other pending rows sharing this row's source key (page render)
 
@@ -122,6 +135,35 @@ def pending_rows(status: str = "pending") -> list:
         try:
             with conn.cursor() as cur:
                 cur.execute(_SELECT + _LIST_WHERE_ORDER, (status,))
+                return [_to_row(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+_AUTO_KEPT_WHERE = """
+    where d.status = 'approved' and d.status_reason like 'auto:%%'
+    order by d.published_at desc nulls last, d.created_at desc
+"""
+
+
+def auto_kept_rows() -> list:
+    """Rows the auto-approve sweep (trust_from_row's outlet-trust check, or
+    poll_discovery's own sweep) kept out of the human queue — status='approved'
+    with a status_reason starting 'auto:'. Mirrors pending_rows' shape (same
+    _SELECT, same DiscoveredRow) so the auto-kept view can reuse a row's
+    display properties (thumb_url, safe_url, ...). A wrong 'Trust outlet'
+    click is recoverable from here via unapprove_auto. Best-effort: no
+    DATABASE_URL or any DB error returns []."""
+    url = _db_url()
+    if not url:
+        return []
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(_SELECT + _AUTO_KEPT_WHERE)
                 return [_to_row(r) for r in cur.fetchall()]
         finally:
             conn.close()
@@ -268,7 +310,8 @@ def reject_source_family(row: "DiscoveredRow", reason: "str | None") -> int:
 def health() -> dict:
     empty = {"alarms": [], "stale_outlets": [], "pending_total": 0,
              "last_run": None, "scheduled_run_overdue": False,
-             "outlet_stats": [], "outletless_reviewed": 0}
+             "outlet_stats": [], "outletless_reviewed": 0,
+             "auto_kept_week": 0, "auto_kept_outlets": 0}
     url = _db_url()
     if not url:
         return empty
@@ -341,9 +384,19 @@ def health() -> dict:
                       and status in ('approved','ingested','rejected')
                 """)
                 outletless = cur.fetchone()[0]
+                # Task 6: how much the auto-approve sweep (poll_discovery,
+                # trust_from_row) has kept out of the human queue lately.
+                cur.execute("""
+                    select count(*), count(distinct outlet_id)
+                    from essentials.discovered_sources
+                    where status = 'approved' and status_reason like 'auto:%%'
+                      and reviewed_at > now() - interval '7 days'
+                """)
+                auto_kept_week, auto_kept_outlets = cur.fetchone()
             return {"alarms": alarms, "stale_outlets": stale, "pending_total": total,
                     "last_run": last_run, "scheduled_run_overdue": overdue,
-                    "outlet_stats": ostats, "outletless_reviewed": outletless}
+                    "outlet_stats": ostats, "outletless_reviewed": outletless,
+                    "auto_kept_week": auto_kept_week, "auto_kept_outlets": auto_kept_outlets}
         finally:
             conn.close()
     except Exception:
@@ -439,6 +492,114 @@ def watch_channel(row: DiscoveredRow) -> "tuple[bool, str]":
             conn.close()
     except Exception:
         return False, "failed to add outlet (db error)"
+
+
+def _outlet_id_for_channel(channel_id: "str | None") -> Optional[str]:
+    """Best-effort: the id of the outlet registered for a YouTube channel, or
+    None if there isn't one (or there's no DB). Used right after watch_channel
+    upserts an outlet, to recover its id for the trust+sweep that follows."""
+    if not channel_id:
+        return None
+    url = _db_url()
+    if not url:
+        return None
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    select id::text from essentials.source_outlets
+                    where external_channel_id = %s
+                """, (channel_id,))
+                r = cur.fetchone()
+                return r[0] if r else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def set_outlet_trusted(outlet_id: str) -> bool:
+    url = _db_url()
+    if not url:
+        return False
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    update essentials.source_outlets
+                    set trusted = true, trusted_at = now(), updated_at = now()
+                    where id = %s::uuid
+                """, (outlet_id,))
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+    except Exception:
+        return False
+
+
+def trust_from_row(row: "DiscoveredRow") -> "tuple[bool, str, int]":
+    """Trust the row's outlet — registering it first (via watch_channel) if
+    the row is channel-only and has no outlet yet — then sweep its pending
+    news clips into approved quote sources. Returns (ok, message, n_auto),
+    best-effort: any DB failure along the way returns (False, ..., 0) rather
+    than raising."""
+    from src.discovery.autoapprove import auto_approve_pending
+
+    outlet_id = row.outlet_id
+    if not outlet_id:
+        ok, _ = watch_channel(row)  # upserts/revives an outlet for the channel
+        if not ok:
+            return False, "could not register outlet", 0
+        outlet_id = _outlet_id_for_channel(row.channel_id)
+        if not outlet_id:
+            return False, "outlet not found after register", 0
+    if not set_outlet_trusted(outlet_id):
+        return False, "failed to set trusted", 0
+    url = _db_url()
+    n = 0
+    if url:
+        try:
+            conn = psycopg2.connect(url)
+            try:
+                with conn.cursor() as cur:
+                    n = auto_approve_pending(cur, outlet_id)
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:
+            n = 0
+    return True, f"trusted {row.channel_name or 'outlet'}", n
+
+
+def unapprove_auto(row_ids: "list[str]") -> int:
+    """Undo: return auto-approved rows to pending. Restricted to rows whose
+    status_reason still starts with 'auto:' — a since-reviewed or
+    human-approved row is never touched, even if its id is passed in."""
+    if not row_ids:
+        return 0
+    url = _db_url()
+    if not url:
+        return 0
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    update essentials.discovered_sources
+                    set status = 'pending', status_reason = null, reviewed_at = null
+                    where id = any(%s::uuid[])
+                      and status = 'approved' and status_reason like 'auto:%%'
+                """, (row_ids,))
+                n = cur.rowcount
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    except Exception:
+        return 0
 
 
 def probe_extractable(url: str) -> "tuple[bool, str]":

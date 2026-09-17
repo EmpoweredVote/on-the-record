@@ -31,7 +31,7 @@ _ROW = ("11111111-1111-1111-1111-111111111111",  # id
         "WI Governor (primary)", 3)  # race_label, old_tier
 
 
-def test_reclassify_row_updates_tier_kind_confidence_why_only():
+def test_reclassify_row_updates_classifier_guess_fields_only():
     provider = _FakeProvider(['{"relevant": true, "confidence": 0.9,'
                               ' "event_kind": "forum", "source_tier": 1,'
                               ' "original_vs_clip": "original",'
@@ -41,9 +41,12 @@ def test_reclassify_row_updates_tier_kind_confidence_why_only():
     assert (old_tier, new_tier) == (3, 1)
     update_sql = cur.executed[-1][0]
     assert "set source_tier_guess" in update_sql
+    assert "original_vs_clip = %s" in update_sql
     for untouched in ("status", "route", "discovered_via"):
         assert untouched not in update_sql
     assert "Alice Example" in provider.prompts[0]
+    params = cur.executed[-1][1]
+    assert params[-2] == "original"  # verdict.original_vs_clip, right before the id
 
 
 def test_reclassify_row_skips_on_parse_failure():

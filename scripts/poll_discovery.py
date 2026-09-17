@@ -25,6 +25,7 @@ load_env_local()  # before src.config so CS_DATA_DIR / API keys are visible
 
 from src import config  # noqa: E402
 from src.discovery import db, engine, feeds, search  # noqa: E402
+from src.discovery.autoapprove import auto_approve_pending  # noqa: E402
 from src.llm_providers import get_provider  # noqa: E402
 from src.source_key import source_key  # noqa: E402
 
@@ -152,6 +153,21 @@ def main() -> int:
             deferred = db.apply_tier3_defer(cur)
             conn.commit()
             print(f"DEFERRED {deferred} low-value items")
+        # Auto-approve trusted outlets' pending news-clip rows as quote
+        # sources, once this run's own inserts have landed (last step, so a
+        # failure here can't poison anything that still needed this
+        # connection). Best-effort: the ev-accounts migration adding
+        # source_outlets.trusted / discovered_sources.original_vs_clip may
+        # not be applied yet, so a schema mismatch must warn and continue,
+        # never abort an otherwise-successful poll.
+        if not args.dry_run:
+            try:
+                cur = conn.cursor()
+                n_auto = auto_approve_pending(cur)
+                conn.commit()
+                print(f"auto-kept {n_auto} trusted news-clip rows")
+            except Exception as exc:  # noqa: BLE001 — best-effort sweep, never fatal to the poll
+                print(f"WARNING auto-approve sweep failed: {exc}", file=sys.stderr)
         if stats.failures:
             print(f"{len(stats.failures)} failure(s)", file=sys.stderr)
             return 1

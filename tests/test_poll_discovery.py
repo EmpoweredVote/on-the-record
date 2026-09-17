@@ -58,6 +58,10 @@ def _patch_common(monkeypatch, log):
         log.append("defer")
         return 0
 
+    def _fake_auto_approve_pending(cur, outlet_id=None):
+        log.append("auto_approve")
+        return 0
+
     monkeypatch.setattr(poll_discovery.db, "connect", lambda: _FakeConn(log))
     monkeypatch.setattr(poll_discovery, "get_provider", lambda *a, **kw: object())
     monkeypatch.setattr(poll_discovery, "_meeting_source_keys", lambda: set())
@@ -66,6 +70,7 @@ def _patch_common(monkeypatch, log):
     monkeypatch.setattr(poll_discovery.db, "record_alarms", _fake_record_alarms)
     monkeypatch.setattr(poll_discovery.db, "alarm_races", _fake_alarm_races)
     monkeypatch.setattr(poll_discovery.db, "apply_tier3_defer", _fake_apply_tier3_defer)
+    monkeypatch.setattr(poll_discovery, "auto_approve_pending", _fake_auto_approve_pending)
 
 
 def _make_engine_stub(log, *, raise_error=False, stats=None):
@@ -226,3 +231,82 @@ def test_defer_sweep_runs_after_finish_run(monkeypatch):
     assert "finish_run" in log and "record_alarms" in log and "defer" in log
     assert log.index("defer") > log.index("finish_run")   # defer runs in finalize, after the record
     assert log.index("defer") > log.index("record_alarms")   # ...and after alarms are committed
+
+
+# --- Task 6: auto-approve sweep at the end of the poll ---
+
+def test_auto_approve_runs_after_engine_and_commits(monkeypatch, capsys):
+    log = []
+    _patch_common(monkeypatch, log)
+    stats = poll_discovery.engine.RunStats()
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py"])
+
+    rc = poll_discovery.main()
+
+    assert rc == 0
+    assert "auto_approve" in log
+    idx = log.index("auto_approve")
+    assert idx > log.index("engine")
+    assert idx > log.index("defer")   # runs last, in finalize
+    assert log[idx + 1] == "commit"   # explicit commit follows the sweep, on success
+    assert "auto-kept 0 trusted news-clip rows" in capsys.readouterr().out
+
+
+def test_auto_approve_reports_count_from_sweep(monkeypatch, capsys):
+    log = []
+    _patch_common(monkeypatch, log)
+
+    def _fake_auto_approve_pending(cur, outlet_id=None):
+        log.append("auto_approve")
+        return 7
+
+    monkeypatch.setattr(poll_discovery, "auto_approve_pending", _fake_auto_approve_pending)
+    stats = poll_discovery.engine.RunStats()
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py"])
+
+    rc = poll_discovery.main()
+
+    assert rc == 0
+    assert "auto-kept 7 trusted news-clip rows" in capsys.readouterr().out
+
+
+def test_auto_approve_failure_does_not_crash_poll(monkeypatch, capsys):
+    """The Task-1 migration (source_outlets.trusted / original_vs_clip) may not
+    be applied yet, so the sweep's SQL can error against the real schema. That
+    must degrade to a logged warning, never abort an otherwise-successful poll."""
+    log = []
+    _patch_common(monkeypatch, log)
+
+    def _raising_auto_approve_pending(cur, outlet_id=None):
+        log.append("auto_approve")
+        raise Exception('column "trusted" does not exist')
+
+    monkeypatch.setattr(poll_discovery, "auto_approve_pending", _raising_auto_approve_pending)
+    stats = poll_discovery.engine.RunStats()
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py"])
+
+    rc = poll_discovery.main()   # must not raise
+
+    assert rc == 0
+    assert "auto_approve" in log
+    assert "auto-approve sweep failed" in capsys.readouterr().err
+
+
+def test_auto_approve_skipped_on_dry_run(monkeypatch):
+    log = []
+    _patch_common(monkeypatch, log)
+    stats = poll_discovery.engine.RunStats()
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py", "--dry-run"])
+
+    rc = poll_discovery.main()
+
+    assert rc == 0
+    assert "auto_approve" not in log

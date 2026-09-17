@@ -4,6 +4,7 @@ Slice 1: a single library route. Later slices mount review/launch/publish
 routers onto the same app."""
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -36,6 +37,77 @@ from gui.formmeta import humanize_kind as _humanize_kind
 _templates.env.filters["humanize_kind"] = _humanize_kind
 _REPO_DIR = _GUI_DIR.parent
 _RUN_LOCAL = str(_REPO_DIR / "run_local.py")
+
+# --- /discovery reorg: presentation-only helpers (see gui/coverage.py for the
+# geography data layer these decorate) -------------------------------------
+
+_STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
+    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas",
+    "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi",
+    "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
+    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma",
+    "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
+    "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia",
+    "WI": "Wisconsin", "WY": "Wyoming", "DC": "District of Columbia",
+}
+
+
+def _state_name(code: str | None) -> str:
+    """Display name for a 2-letter state code. Falls back to the raw code for
+    anything not in the table (a typo, a territory) rather than hiding it."""
+    return _STATE_NAMES.get((code or "").upper(), code or "")
+
+
+def _anchor_slug(text: str | None) -> str:
+    """A same-page-anchor-safe id fragment for a locality name."""
+    return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-") or "section"
+
+
+_templates.env.filters["state_name"] = _state_name
+_templates.env.filters["anchor_slug"] = _anchor_slug
+
+
+def _outlet_groups_for(rows: list) -> list:
+    """Group one race's pending rows by outlet identity (gui.discovery.family_key),
+    each tagged with its content lane (src.discovery.lanes.content_lane).
+
+    A trusted outlet's news_clip-lane rows collapse into a muted count: the
+    auto-approve sweep (gui.discovery.trust_from_row / poll_discovery) keeps them
+    out of the human queue, so they normally won't even reach here, but if one
+    does (a race between trusting and the sweep), show it as inert evidence, not
+    another row to click. Everything else — lane 1/2 rows, and every row from an
+    outlet that isn't trusted yet — keeps today's per-row controls untouched.
+
+    A raceless row (race_id NULL — a merged/deleted race) must never be muted
+    here: the sweep's own eligibility (src.discovery.autoapprove.ELIGIBLE_LANE_SQL)
+    requires d.race_id is not null, so a raceless row is never actually swept.
+    Muting it anyway would strand it 'pending' forever with no controls to act
+    on it — mirror the sweep's race_id requirement so it keeps its normal
+    per-row controls instead."""
+    from gui.discovery import family_key
+    from src.discovery.lanes import content_lane
+
+    groups: dict = {}
+    order: list = []
+    for r in rows:
+        key = family_key(r) or ("row", r.id)
+        if key not in groups:
+            groups[key] = {"name": r.channel_name or "source", "trusted": r.outlet_trusted,
+                           "muted": [], "open": [], "trust_row_id": r.id}
+            order.append(key)
+        lane = content_lane(r.original_vs_clip, r.event_kind_guess)
+        if r.outlet_trusted and lane == "news_clip" and r.race_id:
+            groups[key]["muted"].append(r)
+        else:
+            groups[key]["open"].append({"row": r, "lane": lane})
+    order.sort(key=lambda k: groups[k]["name"].lower())
+    return [groups[k] for k in order]
 
 
 class _NoCacheStaticFiles(StaticFiles):
@@ -105,48 +177,139 @@ def create_app() -> FastAPI:
         return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
     @app.get("/discovery", response_class=HTMLResponse)
-    def discovery_page(request: Request, flash: str = "", show: str = "pending") -> HTMLResponse:
-        from gui import discovery, races
-        status = "deferred" if show == "deferred" else "pending"
-        rows = discovery.pending_rows(status)
-        labels = races.race_labels({r.race_id for r in rows if r.race_id})
-        groups: dict = {}
-        for r in rows:
-            if r.race_id and labels.get(r.race_id):
-                r.race_label = labels[r.race_id]
-            groups.setdefault(r.race_label or "Unmatched", []).append(r)
-        if status == "pending":
-            from collections import defaultdict
-            from gui.discovery import family_key
-            fam: dict = defaultdict(list)
-            for r in rows:
-                k = family_key(r)
-                if k is not None:
-                    fam[k].append(r)
-            for members in fam.values():
-                for r in members:
-                    r.family_count = len(members) - 1
+    def discovery_page(request: Request, state: str = "", flash: str = "",
+                       show: str = "pending") -> HTMLResponse:
+        from gui import coverage, discovery, races
+        from gui.discovery import family_key
+
         h = discovery.health()
-        # health() folds the outlet-stats aggregate onto its own connection
-        # (avoids a 4th DB round-trip per page load). Fall back to the
-        # standalone call only for monkeypatched/legacy health dicts that
-        # predate the fold and lack the key — every real call carries it.
-        ostats = h.get("outlet_stats")
-        if ostats is None:
-            ostats = discovery.outlet_stats()
+        state = (state or "").strip().upper()
+        show = (show or "pending").strip().lower()
+        if show not in ("pending", "deferred", "auto-kept"):
+            show = "pending"
+
+        if show == "auto-kept":
+            # Frictionless undo for the auto-approve sweep: a wrong "Trust
+            # outlet" click (or the sweep firing on a bad outlet) lands rows
+            # here, status='approved' + status_reason 'auto:...'. See
+            # discovery.unapprove_auto / POST /discovery/unapprove-auto.
+            return _templates.TemplateResponse(
+                request, "discovery.html",
+                {"state": state or None, "show": show,
+                 "auto_kept_rows": discovery.auto_kept_rows(),
+                 "health": h, "flash": flash})
+
+        if show == "deferred":
+            # Low-value, auto-filed items — a separate, flat (not
+            # state-sectioned) view, matching the pre-reorg page. family_count
+            # is deliberately NOT computed here (only "pending" rows get the
+            # "+N more"/"apply to all" family-action hints, same as before
+            # Task 7).
+            rows = discovery.pending_rows("deferred")
+            labels = races.race_labels({r.race_id for r in rows if r.race_id})
+            groups: dict = {}
+            for r in rows:
+                if r.race_id and labels.get(r.race_id):
+                    r.race_label = labels[r.race_id]
+                groups.setdefault(r.race_label or "Unmatched", []).append(r)
+            groups = dict(sorted(groups.items()))
+            return _templates.TemplateResponse(
+                request, "discovery.html",
+                {"state": state or None, "show": show,
+                 "deferred_groups": list(groups.items()),
+                 "health": h, "flash": flash})
+
+        # show == "pending" (default): state index / state-sectioned view.
+        if not state:
+            # Every pending row with no race_id (races.race_id ON DELETE SET
+            # NULL, or a race merge/delete) would otherwise never attach to
+            # any state's section and vanish silently — surfaced here, with
+            # normal per-row controls, since it has no state to live under.
+            rows = discovery.pending_rows()
+            unmatched = [r for r in rows if not r.race_id]
+            return _templates.TemplateResponse(
+                request, "discovery.html",
+                {"state": None, "show": show, "states": coverage.state_index(),
+                 "unmatched_groups": _outlet_groups_for(unmatched),
+                 "unmatched_count": len(unmatched),
+                 "health": h, "flash": flash})
+
+        state_races = coverage.races_for_state(state)
+        rows = discovery.pending_rows()
+        labels = races.race_labels({r.race_id for r in state_races if r.race_id})
+
+        by_race: dict = {}
+        for r in rows:
+            if not r.race_id:
+                continue
+            if labels.get(r.race_id):
+                r.race_label = labels[r.race_id]
+            by_race.setdefault(r.race_id, []).append(r)
+
+        # Sibling counts for the "+N more" / "apply to all" family-action
+        # previews are whole-queue, matching approve_source_family/
+        # reject_source_family's own scope — not just the rows visible under
+        # this state.
+        fam: dict = {}
+        for r in rows:
+            k = family_key(r)
+            if k is not None:
+                fam.setdefault(k, []).append(r)
+        for members in fam.values():
+            for r in members:
+                r.family_count = len(members) - 1
+
+        statewide_levels = coverage.LEVEL_ORDER[:2]  # ("federal", "state")
+        statewide = [r for r in state_races if r.level in statewide_levels]
+        localities: dict = {}
+        for r in state_races:
+            if r.level not in statewide_levels:
+                localities.setdefault(r.locality or "Unassigned", []).append(r)
+        localities = dict(sorted(localities.items(), key=lambda kv: kv[0]))
+
         return _templates.TemplateResponse(
             request, "discovery.html",
-            {"groups": list(groups.items()), "health": h,
-             "outlet_stats": ostats,
-             "outletless_reviewed": h.get("outletless_reviewed", 0),
-             "flash": flash, "show": status})
+            {"state": state, "show": show, "statewide": statewide, "localities": localities,
+             "statewide_pending": sum(r.pending for r in statewide),
+             "locality_pending": {loc: sum(r.pending for r in rs)
+                                  for loc, rs in localities.items()},
+             "race_outlet_groups": {r.race_id: _outlet_groups_for(by_race.get(r.race_id, []))
+                                    for r in state_races},
+             "health": h, "flash": flash})
 
-    def _discovery_redirect(flash: str) -> RedirectResponse:
+    def _discovery_redirect(flash: str, **extra) -> RedirectResponse:
         from urllib.parse import quote
-        return RedirectResponse(url=f"/discovery?flash={quote(flash)}", status_code=303)
+        qs = f"flash={quote(flash)}"
+        for k, v in extra.items():
+            if v:
+                qs += f"&{k}={quote(str(v))}"
+        return RedirectResponse(url=f"/discovery?{qs}", status_code=303)
+
+    @app.post("/discovery/{row_id}/trust")
+    def discovery_trust(row_id: str, state: str = Form("")):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        ok, msg, n = discovery.trust_from_row(row)
+        return _discovery_redirect(
+            f"{msg} — auto-kept {n}" if ok else f"trust failed: {msg}", state=state)
+
+    @app.post("/discovery/unapprove-auto")
+    def discovery_unapprove_auto(row_ids: list[str] = Form(default=[]),
+                                 state: str = Form("")):
+        # Undo for the auto-approve sweep / an over-eager "Trust outlet"
+        # click: returns previously auto-kept rows to pending. Restricted
+        # server-side (discovery.unapprove_auto) to rows still carrying an
+        # 'auto:' status_reason, so a since-reviewed row is never touched.
+        from gui import discovery
+        if not row_ids:
+            return _discovery_redirect("no rows selected", show="auto-kept", state=state)
+        n = discovery.unapprove_auto(row_ids)
+        return _discovery_redirect(f"returned {n} to pending", show="auto-kept", state=state)
 
     @app.post("/discovery/{row_id}/approve-ingest")
-    def discovery_approve_ingest(row_id: str):
+    def discovery_approve_ingest(row_id: str, state: str = Form(""), show: str = Form("")):
         import datetime as _dt
         from gui import batch, discovery, runner
         from gui.formmeta import (DEFAULT_COMPUTE, DEFAULT_DIARIZER,
@@ -158,7 +321,11 @@ def create_app() -> FastAPI:
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
-            return _discovery_redirect(f"already {row.status}")
+            return _discovery_redirect(f"already {row.status}", state=state, show=show)
+        if row.outlet_ingest_barred:
+            return _discovery_redirect(
+                "chain ToS: don't host a transcript — pull a direct quote instead",
+                state=state, show=show)
         existing = runner.find_meeting_by_source(row.url)
         if existing:
             ok = discovery.set_status(row_id, "superseded",
@@ -166,13 +333,14 @@ def create_app() -> FastAPI:
             flash = f"duplicate of {existing}"
             if not ok:
                 flash += " — SAVE FAILED, retry"
-            return _discovery_redirect(flash)
+            return _discovery_redirect(flash, state=state, show=show)
         from src.source_key import source_key as _source_key
         if not _source_key(row.url).startswith("youtube:"):
             ok_probe, err = discovery.probe_extractable(row.url)
             if not ok_probe:
                 return _discovery_redirect(
-                    f"no extractable video ({err or 'nothing found'}) — use Edit first")
+                    f"no extractable video ({err or 'nothing found'}) — use Edit first",
+                    state=state, show=show)
         kind = row.event_kind_guess if row.event_kind_guess in EVENT_KINDS else "news_clip"
         if kind in ("community_meeting", "other") and row.race_id:
             kind = "forum"  # electoral town halls anchor to the race (domain: forum = electoral event)
@@ -193,73 +361,76 @@ def create_app() -> FastAPI:
         try:
             outcome, meeting_id = batch.launch_or_enqueue(params)
         except ValueError as exc:
-            return _discovery_redirect(f"error: {exc}")
+            return _discovery_redirect(f"error: {exc}", state=state, show=show)
         ok = discovery.set_status(row_id, "ingested")
         flash = f"{outcome}: {meeting_id or params.title}"
         if not ok:
             flash += " — SAVE FAILED, retry"
-        return _discovery_redirect(flash)
+        return _discovery_redirect(flash, state=state, show=show)
 
     @app.post("/discovery/{row_id}/quote-source")
-    def discovery_quote_source(row_id: str):
+    def discovery_quote_source(row_id: str, state: str = Form(""), show: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
-            return _discovery_redirect(f"already {row.status}")
+            return _discovery_redirect(f"already {row.status}", state=state, show=show)
         n = discovery.approve_source_family(row)
         if n:
             flash = f"approved {n} ({row.channel_name or 'source'})"
         else:
             flash = "approved as quote source — SAVE FAILED, retry"
-        return _discovery_redirect(flash)
+        return _discovery_redirect(flash, state=state, show=show)
 
     @app.post("/discovery/{row_id}/reject")
     def discovery_reject(row_id: str, reason: str = Form("other"),
-                         whole_source: str = Form("")):
+                         whole_source: str = Form(""), state: str = Form(""),
+                         show: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         if row.status != "pending":
-            return _discovery_redirect(f"already {row.status}")
+            return _discovery_redirect(f"already {row.status}", state=state, show=show)
         if whole_source:
             n = discovery.reject_source_family(row, reason)
             if n:
                 flash = f"rejected {n} ({row.channel_name or 'source'})"
             else:
                 flash = "rejected — SAVE FAILED, retry"
-            return _discovery_redirect(flash)
+            return _discovery_redirect(flash, state=state, show=show)
         ok = discovery.set_status(row_id, "rejected", reason=reason)
         flash = "rejected"
         if not ok:
             flash += " — SAVE FAILED, retry"
-        return _discovery_redirect(flash)
+        return _discovery_redirect(flash, state=state, show=show)
 
     @app.post("/discovery/{row_id}/watch-channel")
-    def discovery_watch_channel(row_id: str):
+    def discovery_watch_channel(row_id: str, state: str = Form(""), show: str = Form("")):
         from gui import discovery
         row = discovery.get_row(row_id)
         if row is None:
             raise HTTPException(status_code=404)
         ok, message = discovery.watch_channel(row)
-        return _discovery_redirect(message if ok else f"error: {message}")
+        return _discovery_redirect(
+            message if ok else f"error: {message}", state=state, show=show)
 
     @app.post("/discovery/bulk")
     def discovery_bulk(action: str = Form(...),
                        row_ids: list[str] = Form(default=[]),
-                       reason: str = Form("other")):
+                       reason: str = Form("other"), state: str = Form(""),
+                       show: str = Form("")):
         from gui import discovery
         if not row_ids:
-            return _discovery_redirect("no rows selected")
+            return _discovery_redirect("no rows selected", state=state, show=show)
         if action == "reject":
             n = discovery.set_status_bulk(row_ids, "rejected", reason=reason)
-            return _discovery_redirect(f"rejected {n}")
+            return _discovery_redirect(f"rejected {n}", state=state, show=show)
         if action == "restore":
             n = discovery.set_status_bulk(row_ids, "pending", reason=None)
-            return _discovery_redirect(f"restored {n} to pending")
-        return _discovery_redirect(f"unknown action: {action}")
+            return _discovery_redirect(f"restored {n} to pending", state=state, show=show)
+        return _discovery_redirect(f"unknown action: {action}", state=state, show=show)
 
     @app.get("/meetings/{meeting_id}/thumbnail")
     def thumbnail(meeting_id: str) -> FileResponse:
