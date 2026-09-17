@@ -1,0 +1,172 @@
+{
+  "_comment": "DATA, not code -- update this list as hubs are found to be dead/renamed/replaced, or as new states/hub types are added. Consumed by engine_c.py. `kind` reuses the same source-type taxonomy as the rest of the harness (common.SOURCE_TYPES: debate|forum|interview|questionnaire|guide|voter_pamphlet). `hint` is a query TEMPLATE with <angle-bracket> placeholders (<race/candidates>, <candidate name>, <locality>, <county>, <year>) -- the agent (or, in --dry-run, a best-effort string substitution) fills these in with the actual race's specifics before searching.",
+
+  "global": [
+    {
+      "name": "Ballotpedia",
+      "kind": "questionnaire",
+      "hint": "site:ballotpedia.org \"Candidate Connection\" <race/candidates>",
+      "note": "Candidate Connection questionnaire. A candidate having a Ballotpedia page is NOT enough -- confirm the survey was actually completed (the page states this explicitly), not just that the page exists."
+    },
+    {
+      "name": "VOTE411 (League of Women Voters)",
+      "kind": "questionnaire",
+      "hint": "site:vote411.org OR site:onyourballot.vote411.org <race/candidates>",
+      "note": "LWV's national voter-guide tool. vote411.org and onyourballot.vote411.org frequently return HTTP 403 to fetchers -- rely on search-engine result snippets to judge whether it's filled; an unfetchable page is not the same as a nonexistent one."
+    },
+    {
+      "name": "Vote Smart",
+      "kind": "questionnaire",
+      "hint": "site:votesmart.org <candidate name>",
+      "note": "Political Courage Test / VoteEasy profile. Many candidates have a page but never answered -- check for actual submitted responses, not just a blank profile."
+    }
+  ],
+
+  "by_state": {
+    "AZ": [
+      {
+        "name": "Citizens Clean Elections Commission",
+        "kind": "debate",
+        "hint": "site:azcleanelections.gov <race/candidates> debate <year>",
+        "note": "Runs the official general-election debate series plus a voter education guide. Confirm the debate is the current general-election cycle (not a primary or a prior cycle) and which candidates actually participated."
+      },
+      {
+        "name": "Arizona PBS (\"Arizona Horizon\" / AZ Votes)",
+        "kind": "interview",
+        "hint": "site:azpbs.org \"Arizona Horizon\" <candidate name> <year>",
+        "note": "Long-form candidate interviews and election coverage. Check whether comparable candidates in the same race were each given equivalent air time."
+      },
+      {
+        "name": "KJZZ voter guide",
+        "kind": "guide",
+        "hint": "site:kjzz.org voter guide <race/candidates> <year>",
+        "note": "Phoenix-market NPR affiliate voter guide and election coverage."
+      },
+      {
+        "name": "AZPM",
+        "kind": "interview",
+        "hint": "site:news.azpm.org <race/candidates> <year>",
+        "note": "Tucson-market NPR/PBS affiliate. Frequently runs one-on-one interviews and debate coverage -- check both/all candidates got equivalent interviews, not just one side."
+      }
+    ],
+    "OR": [
+      {
+        "name": "Oregon Voters' Pamphlet",
+        "kind": "voter_pamphlet",
+        "hint": "site:oregonvotes.gov OR site:sos.oregon.gov voters pamphlet <year> <race/candidates>",
+        "note": "Official state government pamphlet: every candidate's own statement in their own words, distributed to every household. Extremely high-signal when it exists for the race."
+      },
+      {
+        "name": "OPB",
+        "kind": "guide",
+        "hint": "site:opb.org voter guide <race/candidates> <year>",
+        "note": "Statewide NPR/PBS affiliate. Also hosts/covers debates and forums and runs candidate Q&As."
+      },
+      {
+        "name": "Bend Bulletin",
+        "kind": "guide",
+        "hint": "site:bendbulletin.com <race/candidates> <year>",
+        "note": "Central Oregon newspaper of record. Candidate forums, Q&As, and endorsem*nt-adjacent coverage -- check neutrality of the specific piece."
+      }
+    ],
+    "TX": [
+      {
+        "name": "Community Impact",
+        "kind": "questionnaire",
+        "hint": "site:communityimpact.com \"meet the candidates\" <race/candidates> <year>",
+        "note": "Runs recurring 'meet the candidates' Q&As covering every candidate in a race with the same questions -- a consistently strong TX local source."
+      },
+      {
+        "name": "Austin Monitor",
+        "kind": "guide",
+        "hint": "site:austinmonitor.com <race/candidates> <year>",
+        "note": "Austin-focused nonprofit local news outlet. Candidate coverage and forum write-ups."
+      },
+      {
+        "name": "KUT",
+        "kind": "guide",
+        "hint": "site:kut.org voter guide <race/candidates> <year>",
+        "note": "Austin NPR affiliate. Voter guides and candidate coverage."
+      },
+      {
+        "name": "local county elections office",
+        "kind": "voter_pamphlet",
+        "hint": "\"<county> County\" elections office sample ballot candidate statements <year>",
+        "note": "Some TX counties publish official candidate statements or a sample-ballot guide -- check for a per-county elections-office site."
+      }
+    ],
+    "CA": [
+      {
+        "name": "LAist / KPCC",
+        "kind": "guide",
+        "hint": "site:laist.com voter guide <race/candidates> <year>",
+        "note": "The dominant neutral local hub in the LA market: runs its own written candidate questionnaire, AirTalk long-form interviews, AND debate coverage/co-hosting -- check all three sub-formats, not just the first hit."
+      },
+      {
+        "name": "Voter's Edge California",
+        "kind": "guide",
+        "hint": "site:votersedge.org <race/candidates> <year>",
+        "note": "LWV California / MapLight voter guide tool. Coverage is incomplete for many down-ballot CA races -- confirm a page for THIS specific race actually exists before counting it."
+      },
+      {
+        "name": "League of Women Voters California (state + local chapters)",
+        "kind": "questionnaire",
+        "hint": "\"League of Women Voters\" <locality> California voter guide <race/candidates> <year>",
+        "note": "Often points to VOTE411 or Voter's Edge rather than hosting its own content directly -- check both the chapter page and where it links."
+      }
+    ],
+    "UT": [
+      {
+        "name": "Utah Debate Commission",
+        "kind": "debate",
+        "hint": "site:utahdebatecommission.org <race/candidates> <year>",
+        "note": "Statewide nonpartisan debate host for major Utah races."
+      },
+      {
+        "name": "KUER",
+        "kind": "guide",
+        "hint": "site:kuer.org voter guide <race/candidates> <year>",
+        "note": "Salt Lake City NPR affiliate. Candidate coverage and forums."
+      },
+      {
+        "name": "Salt Lake Tribune voter guide",
+        "kind": "guide",
+        "hint": "site:sltrib.com voter guide <race/candidates> <year>",
+        "note": "Statewide newspaper voter guide."
+      }
+    ]
+  },
+
+  "local_types": [
+    {
+      "name": "local League of Women Voters chapter forum",
+      "kind": "forum",
+      "hint": "\"<locality>\" League of Women Voters candidate forum <year>",
+      "note": "Substitute the race's actual city/county name for <locality>. Often co-moderates with a chamber of commerce or neighborhood association."
+    },
+    {
+      "name": "local newspaper voter guide / candidate Q&A",
+      "kind": "questionnaire",
+      "hint": "\"<locality>\" newspaper candidate questionnaire OR voter guide <year>",
+      "note": "Substitute the race's actual city/county/paper name. Look for the SAME questions asked of every candidate, not a general profile piece."
+    },
+    {
+      "name": "local public radio/TV candidate coverage",
+      "kind": "interview",
+      "hint": "\"<locality>\" public radio OR public television candidate interview <year>",
+      "note": "Substitute the race's actual city/region. Check that comparable candidates each got an equivalent interview, not a one-sided profile."
+    },
+    {
+      "name": "chamber of commerce candidate forum",
+      "kind": "forum",
+      "hint": "\"<locality>\" chamber of commerce candidate forum <year>",
+      "note": "Substitute the race's actual city/region. Usually neutral/civic but genuinely ad hoc -- confirm it isn't a members-only or endorsem*nt event."
+    },
+    {
+      "name": "government voter pamphlet / sample ballot",
+      "kind": "voter_pamphlet",
+      "hint": "\"<locality>\" OR \"<county>\" voter pamphlet OR sample ballot candidate statements <year>",
+      "note": "Substitute the race's actual city/county name. Official government-issued candidate statements are the highest-trust source when they exist."
+    }
+  ]
+}
