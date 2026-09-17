@@ -60,6 +60,10 @@ Set "relevant" to true ONLY for original sources of the candidates' own words â€
 i.e. when original_vs_clip is "original". News packages ABOUT candidates, campaign
 ads, and highlight/clip compilations are relevant=false even when the candidate
 appears or is quoted in them.
+Current cycle: the tracked race is {race_label}. If this item is about a PRIOR
+or different election cycle (a wrong year or a past contest, e.g. an archived
+page still showing an earlier cycle's candidates), set "relevant" to false â€”
+it is stale, not this race's current comparable source.
 If a captions or article-page excerpt is provided, judge DISCOURSE SHAPE: sustained
 first-person policy speech and moderator/Q&A signatures suggest an original event;
 third-person anchor narration with soundbites suggests a news package. Do not guess

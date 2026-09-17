@@ -192,3 +192,13 @@ def test_parse_verdict_keeps_questionnaire_kind():
                       ' "original_vs_clip": "original", "route": "quote_source", "why": "x"}')
     assert v.event_kind_guess == "questionnaire"
     assert v.route == "quote_source"
+
+
+def test_prompt_has_current_cycle_check():
+    from src.discovery.classify import build_prompt
+    from src.discovery.models import RawItem
+    item = RawItem(url="https://ballotpedia.org/x", title="2022 debate", description="prior cycle")
+    prompt = build_prompt(item, race_label="AZ · U.S. Senate · General · 2026", roster_names=["A", "B"])
+    low = prompt.lower()
+    assert "current" in low and ("cycle" in low or "prior" in low)
+    assert "AZ · U.S. Senate · General · 2026" in prompt  # the check is keyed on race_label
