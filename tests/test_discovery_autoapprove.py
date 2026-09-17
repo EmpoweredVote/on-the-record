@@ -67,6 +67,34 @@ def test_questionnaire_never_matches_eligible_lane_sql():
     assert row["original_vs_clip"] != "clip"
 
 
+def test_clip_questionnaire_never_matches_eligible_lane_sql():
+    """A questionnaire that the classifier mistakenly (or someday validly)
+    tags original_vs_clip='clip' must still never be auto-approved: the
+    exclusion has to be structural (on event_kind_guess), not an accident of
+    the clip gate. This is the case test_questionnaire_never_matches_eligible_
+    lane_sql cannot catch — that test hardcodes original_vs_clip='original',
+    so it never exercises the clip branch. Here every other gate is open
+    (trusted, pending, raced, clip) and only the kind clause should exclude
+    it."""
+    assert "coalesce(d.event_kind_guess, '') <> 'questionnaire'" in ELIGIBLE_LANE_SQL
+
+    row = dict(trusted=True, status="pending", race_id="r1",
+               original_vs_clip="clip", event_kind_guess="questionnaire")
+    eligible = (
+        row["trusted"]
+        and row["status"] == "pending"
+        and row["race_id"] is not None
+        and row["original_vs_clip"] == "clip"
+        and row["event_kind_guess"] not in FORMAL_EVENT_KINDS
+        and (row["event_kind_guess"] or "") != "questionnaire"
+    )
+    assert eligible is False
+    # Confirm the clip gate alone would NOT have excluded this row — the kind
+    # clause is what's doing the work here.
+    assert row["original_vs_clip"] == "clip"
+    assert row["event_kind_guess"] not in FORMAL_EVENT_KINDS
+
+
 def test_eligible_lane_sql_never_references_ingest_barred_or_ingested():
     # Barred outlets are still eligible for auto-quote-source — the bar is on
     # ingest only, applied elsewhere. And this lane never ingests, full stop.

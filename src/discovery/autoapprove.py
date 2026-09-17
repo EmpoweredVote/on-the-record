@@ -3,7 +3,9 @@
 Safety invariant: this only ever sets status='approved', route='quote_source'.
 It never ingests. Lane parity with src.discovery.lanes.content_lane: a row is
 eligible iff its outlet is trusted, it is pending, it has a race, it is a clip,
-and its event kind is NOT a formal-event kind (so it is the 'news_clip' lane).
+its event kind is NOT a formal-event kind, and its event kind is NOT
+'questionnaire' (excluded explicitly by kind, not only by the clip
+requirement) — so it is the 'news_clip' lane.
 Barred outlets are still eligible — the bar is on ingest, not on quoting.
 """
 from __future__ import annotations
@@ -17,7 +19,8 @@ from src.discovery.lanes import FORMAL_EVENT_KINDS
 ELIGIBLE_LANE_SQL = (
     "o.trusted and d.status = 'pending' and d.race_id is not null "
     "and d.original_vs_clip = 'clip' "
-    "and coalesce(d.event_kind_guess, '') not in %s"
+    "and coalesce(d.event_kind_guess, '') not in %s "
+    "and coalesce(d.event_kind_guess, '') <> 'questionnaire'"
 )
 
 
