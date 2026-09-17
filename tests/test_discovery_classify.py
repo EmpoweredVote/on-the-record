@@ -201,4 +201,8 @@ def test_prompt_has_current_cycle_check():
     prompt = build_prompt(item, race_label="AZ · U.S. Senate · General · 2026", roster_names=["A", "B"])
     low = prompt.lower()
     assert "current" in low and ("cycle" in low or "prior" in low)
-    assert "AZ · U.S. Senate · General · 2026" in prompt  # the check is keyed on race_label
+    # The current-cycle instruction itself must name THIS race (keyed on
+    # race_label) — assert the binding phrase from the instruction, not merely
+    # that race_label appears somewhere (it is also echoed in the "Race:" line,
+    # so a bare containment check would pass even if the instruction dropped it).
+    assert "the tracked race is AZ · U.S. Senate · General · 2026" in prompt
