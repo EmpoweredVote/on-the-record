@@ -23,7 +23,7 @@ live (see .superpowers/sdd/2026-09-16-discovery-review-reorg-slice1/).
 from __future__ import annotations
 
 from src.discovery.autoapprove import ELIGIBLE_LANE_SQL, auto_approve_pending
-from src.discovery.lanes import FORMAL_EVENT_KINDS
+from src.discovery.lanes import FORMAL_EVENT_KINDS, content_lane
 
 
 # --- 1. Pure: the eligibility WHERE fragment's shape (plan's Step 1 test) ---
@@ -35,6 +35,36 @@ def test_eligible_where_shape():
     for needle in ("o.trusted", "d.status = 'pending'", "d.race_id is not null",
                    "d.original_vs_clip = 'clip'", "not in %s"):
         assert needle in frag
+
+
+def test_questionnaire_never_matches_eligible_lane_sql():
+    """A questionnaire (lane='questionnaire' per content_lane — a high-value
+    written quote source) must never be auto-approved by the sweep: it's a web
+    page, not a video clip, so it needs a human's Approve -> quote source
+    click, never a robo-approval. There is no local discovery DB (see module
+    docstring), so — mirroring test_eligible_where_shape's structural style —
+    this reproduces ELIGIBLE_LANE_SQL's AND-ed conditions as plain Python
+    predicates and evaluates them against a fully trusted, pending, raced
+    questionnaire row: even with every other gate open, it fails solely on
+    'd.original_vs_clip = 'clip'' — the same field content_lane ignores when
+    tagging a questionnaire row for display."""
+    row = dict(trusted=True, status="pending", race_id="r1",
+               original_vs_clip="original", event_kind_guess="questionnaire")
+    assert content_lane(row["original_vs_clip"], row["event_kind_guess"]) == "questionnaire"
+
+    assert "d.original_vs_clip = 'clip'" in ELIGIBLE_LANE_SQL
+    eligible = (
+        row["trusted"]
+        and row["status"] == "pending"
+        and row["race_id"] is not None
+        and row["original_vs_clip"] == "clip"
+        and row["event_kind_guess"] not in FORMAL_EVENT_KINDS
+    )
+    assert eligible is False
+    # Not smuggled in via the formal-kinds set either — a questionnaire isn't
+    # a FORMAL_EVENT_KIND, so the exclusion rests entirely on the clip gate.
+    assert row["event_kind_guess"] not in FORMAL_EVENT_KINDS
+    assert row["original_vs_clip"] != "clip"
 
 
 def test_eligible_lane_sql_never_references_ingest_barred_or_ingested():
