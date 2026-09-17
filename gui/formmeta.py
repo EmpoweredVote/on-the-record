@@ -13,6 +13,7 @@ EVENT_KIND_HELP = {
     "news_clip": "A journalist interviewing a subject.",
     "press_conference": "A subject making a statement and taking questions.",
     "podcast": "A podcast or radio interview episode (audio-only).",
+    "questionnaire": "A candidate's written questionnaire (unedited answers to fixed questions) — electoral, no audio.",
     "other": "Anything else.",
 }
 
@@ -45,6 +46,7 @@ MEETING_TYPE_DEFAULTS = {
     "news_clip": "Interview",
     "press_conference": "Press Conference",
     "podcast": "Podcast",
+    "questionnaire": "Questionnaire",
     "other": "Recording",
 }
 
@@ -62,6 +64,7 @@ FIELDS_BY_KIND = {
     "news_clip":         ("guest", "race"),
     "press_conference":  ("guest", "race"),
     "podcast":           ("guest", "race"),
+    "questionnaire":     ("race",),
     "other":             ("city",),
 }
 

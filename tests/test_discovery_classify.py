@@ -178,3 +178,17 @@ def test_build_prompt_tiers_by_questioner_independence():
     assert "stump speech" in prompt.split("4 =")[0].split("3 =")[1]
     # questionnaire is an emittable kind (pins the JSON enum, not just the tier sentence)
     assert "community_meeting|questionnaire|other" in prompt
+
+
+def test_questionnaire_is_a_known_event_kind():
+    from src.event_kinds import EVENT_KINDS
+    assert "questionnaire" in EVENT_KINDS
+
+
+def test_parse_verdict_keeps_questionnaire_kind():
+    from src.discovery.classify import parse_verdict
+    v = parse_verdict('{"relevant": true, "confidence": 0.8, "candidates_present": [],'
+                      ' "event_kind": "questionnaire", "source_tier": 2,'
+                      ' "original_vs_clip": "original", "route": "quote_source", "why": "x"}')
+    assert v.event_kind_guess == "questionnaire"
+    assert v.route == "quote_source"
