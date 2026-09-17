@@ -1287,6 +1287,25 @@ def test_discovery_deferred_view_has_restore_bulk_bar(monkeypatch):
     assert 'value="restore"' in body
 
 
+def test_discovery_deferred_view_questionnaire_hides_ingest(monkeypatch):
+    """A questionnaire that lands in the deferred view is still a written page,
+    not a video: it must not offer Approve -> ingest there either. The deferred
+    view computes content_lane per row (via the Jinja global) and passes it to
+    row_actions, exactly as the pending view does — so the questionnaire lane
+    suppresses the ingest control while quote-source / reject stay available."""
+    row = _row(id="dq", title="Candidate questionnaire",
+               original_vs_clip="original", event_kind_guess="questionnaire",
+               status="deferred")
+    monkeypatch.setattr(
+        discovery, "pending_rows",
+        lambda status="pending": [row] if status == "deferred" else [])
+    client = TestClient(create_app())
+    body = client.get("/discovery?show=deferred").text
+    assert "Candidate questionnaire" in body
+    assert "Approve &rarr; ingest" not in body
+    assert 'action="/discovery/dq/quote-source"' in body
+
+
 # --- Task 7 fix pass: Finding 4 — the cross-outlet bulk reject/restore bar
 # is back, reintegrated into the new nested (state -> race -> outlet) layout:
 # a single <form id="bulk-pending-form"> posts to the existing POST

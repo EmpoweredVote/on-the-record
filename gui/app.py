@@ -35,6 +35,12 @@ _templates = Jinja2Templates(directory=str(_GUI_DIR / "templates"))
 # (values stay snake_case for form submission / filtering).
 from gui.formmeta import humanize_kind as _humanize_kind
 _templates.env.filters["humanize_kind"] = _humanize_kind
+# The content-lane rule (src.discovery.lanes.content_lane) is the single source
+# of truth shared by the pending view, the deferred view, and the auto-approve
+# sweep. Expose it to templates so the deferred view can suppress the ingest
+# control on a questionnaire the same way the pending view does.
+from src.discovery.lanes import content_lane as _content_lane
+_templates.env.globals["content_lane"] = _content_lane
 _REPO_DIR = _GUI_DIR.parent
 _RUN_LOCAL = str(_REPO_DIR / "run_local.py")
 
