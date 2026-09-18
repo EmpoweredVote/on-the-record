@@ -1268,16 +1268,30 @@ def test_discovery_race_row_shows_four_counts(monkeypatch):
     assert "7 pending" in body
 
 
-def test_discovery_state_view_shows_trust_button_for_unknown_outlet(monkeypatch):
+def test_discovery_trust_button_hidden_for_channelless_web_source(monkeypatch):
+    # A plain web source (no outlet_id, no channel_id) cannot be "trusted" as an
+    # outlet — trust_from_row would fail. So the button must NOT be offered.
     monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
         _row(id="d1", race_id="r1", channel_name="Random Blog", outlet_id=None,
             channel_id=None, event_kind_guess="other")])
     client = TestClient(create_app())
     body = client.get("/discovery?state=TX").text
+    assert "Trust outlet" not in body
+    assert "unknown" in body            # still labeled as an unknown source
+    assert "auto-kept as quote sources" not in body
+
+
+def test_discovery_trust_button_shown_for_channel_backed_source(monkeypatch):
+    # A YouTube-channel-backed untrusted source CAN be trusted -> button shown.
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
+        _row(id="d1", race_id="r1", channel_name="Some Channel",
+            channel_id="UCabc", outlet_id=None, event_kind_guess="other")])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
     assert "Trust outlet" in body
     assert 'action="/discovery/d1/trust"' in body
-    assert "auto-kept as quote sources" not in body
 
 
 def test_discovery_state_view_mutes_trusted_outlets_news_clips(monkeypatch):
@@ -2150,9 +2164,11 @@ def test_discovery_state_view_row_actions_carry_state_hidden_field(monkeypatch):
 
 def test_discovery_state_view_trust_form_carries_state_hidden_field(monkeypatch):
     monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    # A channel-backed source, so the (now gated) Trust-outlet form renders and
+    # its hidden-state-field plumbing can be checked.
     monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [
-        _row(id="d1", race_id="r1", channel_name="Random Blog", outlet_id=None,
-            channel_id=None, event_kind_guess="other")])
+        _row(id="d1", race_id="r1", channel_name="Some Channel", outlet_id=None,
+            channel_id="UCabc", event_kind_guess="other")])
     client = TestClient(create_app())
     body = client.get("/discovery?state=TX").text
     trust_start = body.index('action="/discovery/d1/trust"')

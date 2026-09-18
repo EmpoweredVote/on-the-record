@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Discovery — Council Scribe{% endblock %}
+{% from "_icons.html" import icon %}
 {% block content %}
 <header class="batch-header">
   <a href="/">&larr; Library</a>
@@ -48,7 +49,7 @@
 {% endif %}
 
 {% macro row_actions(r, race, state='', show='', lane='') %}
-<div class="row-actions" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;margin-top:var(--sp-2);">
+<div class="row-actions">
   {% if lane != 'questionnaire' %}
   <form method="post" action="/discovery/{{ r.id }}/approve-ingest" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
@@ -64,7 +65,7 @@
   <form method="post" action="/discovery/{{ r.id }}/quote-source" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
     <input type="hidden" name="show" value="{{ show or '' }}">
-    <button type="submit">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
+    <button type="submit" class="btn btn--primary">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
   </form>
   <form method="post" action="/discovery/{{ r.id }}/reject" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
@@ -91,7 +92,7 @@
   <form method="post" action="/discovery/{{ r.id }}/watch-channel" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
     <input type="hidden" name="show" value="{{ show or '' }}">
-    <button type="submit" title="Add this channel to the watchlist">+ Watch this channel</button>
+    <button type="submit" class="btn btn--ghost" title="Add this channel to the watchlist">+ Watch this channel</button>
   </form>
   {% endif %}
   {% if r.hub_domain %}
@@ -115,18 +116,18 @@
 
 {% macro pending_row(item, race, state='') %}
 {% set r = item.row %}
-<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
-  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form" style="margin-top:var(--sp-2);">
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-  <div style="flex:1;min-width:0;">
+  <div class="disc-item-body">
     <span class="pill">{{ item.lane | humanize_kind }}</span>
-    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-    <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
       {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
-      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
-    <small><em>{{ r.why }}</em></small>
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</div>
+    <div class="disc-why">{{ r.why }}</div>
     {{ row_actions(r, race, state, lane=item.lane) }}
   </div>
 </div>
@@ -137,14 +138,19 @@
   <p class="empty">No pending items{% if race %} for this race{% endif %}.</p>
   {% endif %}
   {% for group in groups %}
-  <div class="outlet-group" style="margin:var(--sp-4) 0 0;padding:var(--sp-3) var(--sp-4);border:1px solid var(--c-line-soft);border-radius:var(--r-md);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);">
-      <strong>{{ group.name }}</strong>
-      {% if not group.trusted %}
-      <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
-        <input type="hidden" name="state" value="{{ state or '' }}">
-        <button type="submit" title="Trust every future item from {{ group.name }} as a quote source">Trust outlet</button>
-      </form>
+  <div class="disc-outlet">
+    <div class="disc-outlet-head">
+      <span class="disc-outlet-name">{{ group.name }}
+        {% if group.trusted %}<span class="badge--trusted">trusted</span>{% else %}<span class="badge--unknown">unknown</span>{% endif %}
+      </span>
+      {% if not group.trusted and group.trustable %}
+      <div class="disc-trust">
+        <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
+          <input type="hidden" name="state" value="{{ state or '' }}">
+          <button type="submit" class="btn btn--ghost" title="Auto-approve every future item from {{ group.name }} as a quote source">Trust outlet</button>
+        </form>
+        <p class="disc-trust-note">auto-approves everything this outlet sends</p>
+      </div>
       {% endif %}
     </div>
     {% if group.muted %}
@@ -157,17 +163,23 @@
   {% endfor %}
 {% endmacro %}
 
+{% macro count_chip(n, word, glyph) -%}
+<span class="count-chip{% if not n %} is-zero{% endif %}" title="{{ n }} {{ word }}">{{ icon(glyph) }} {{ n }}</span>
+{%- endmacro %}
+
 {% macro race_block(race, groups_by_race, state='') %}
 {% set groups = groups_by_race.get(race.race_id, []) %}
-<details class="race-row" id="race-{{ race.race_id }}" style="border:1px solid var(--c-line);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);">
-  <summary style="cursor:pointer;">
-    <strong>{{ race.position_name or "Unlabeled race" }}</strong>
-    <span class="pill">{{ race.candidates }} candidates</span>
-    <span class="pill">{{ race.quote_sources }} quote sources</span>
-    <span class="pill">{{ race.ingested }} ingested</span>
-    <span class="pill">{{ race.pending }} pending</span>
+<details class="disc-race" id="race-{{ race.race_id }}">
+  <summary>
+    <span class="chevron">{{ icon('chevron') }}</span><span class="race-name">{{ race.position_name or "Unlabeled race" }}</span>
+    <span class="count-chips">
+      {{ count_chip(race.candidates, 'candidates', 'people') }}
+      {{ count_chip(race.quote_sources, 'quote sources', 'quote') }}
+      {{ count_chip(race.ingested, 'ingested', 'mic') }}
+      {{ count_chip(race.pending, 'pending', 'screen') }}
+    </span>
   </summary>
-  {{ outlet_groups(groups, race, state) }}
+  <div class="disc-race-body">{{ outlet_groups(groups, race, state) }}</div>
 </details>
 {% endmacro %}
 
@@ -189,30 +201,30 @@
 
 {% macro deferred_row(r, state='') %}
 {% set lane = content_lane(r.original_vs_clip, r.event_kind_guess) %}
-<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
-  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form" style="margin-top:var(--sp-2);">
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-  <div style="flex:1;min-width:0;">
-    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-    <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+  <div class="disc-item-body">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
       {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
-      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
-    <small><em>{{ r.why }}</em></small>
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</div>
+    <div class="disc-why">{{ r.why }}</div>
     {{ row_actions(r, None, state, 'deferred', lane=lane) }}
   </div>
 </div>
 {% endmacro %}
 
 {% macro auto_kept_row(r) %}
-<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
-  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-autokept-form" style="margin-top:var(--sp-2);">
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-autokept-form">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-  <div style="flex:1;min-width:0;">
-    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-    <small>{{ r.channel_name or "?" }} · {{ (r.published_at or "?")[:10] }}
-      {% if r.event_kind_guess %} · {{ r.event_kind_guess }}{% endif %}</small>
+  <div class="disc-item-body">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ (r.published_at or "?")[:10] }}
+      {% if r.event_kind_guess %} · {{ r.event_kind_guess }}{% endif %}</div>
   </div>
 </div>
 {% endmacro %}
@@ -228,7 +240,7 @@
   <button type="submit" name="action" value="restore">Restore selected to pending</button>
 </form>
 {% for label, rows in deferred_groups %}
-<h2>{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
+<h2 class="disc-section-title">{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
 {% for r in rows %}
   {{ deferred_row(r, state) }}
 {% endfor %}
@@ -254,9 +266,9 @@
 {% if not states %}
 <p class="empty">No tracked races yet.</p>
 {% else %}
-<ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:var(--sp-2);max-width:28rem;">
+<ul class="disc-statelist">
   {% for s in states %}
-  <li style="display:flex;justify-content:space-between;align-items:center;padding:var(--sp-3) var(--sp-4);border:1px solid var(--c-line);border-radius:var(--r-md);">
+  <li>
     <a href="/discovery?state={{ s.state }}">{{ s.state | state_name }}</a>
     <span class="pill">{{ s.pending }} pending</span>
   </li>
@@ -266,7 +278,7 @@
 
 {% if unmatched_groups %}
 <section id="unmatched" style="margin-top:var(--sp-6);">
-  <h2>Unmatched <span class="pill">{{ unmatched_count }} pending</span></h2>
+  <h2 class="disc-section-title">Unmatched <span class="pill">{{ unmatched_count }} pending</span></h2>
   <p class="empty"><small>These lost their race link — the race was merged or deleted
     (<code>discovered_sources.race_id</code> is <code>on delete set null</code>).
     Approve as a quote source, reject, or use Edit first to reattach.</small></p>
@@ -276,8 +288,8 @@
 {% endif %}
 
 {% else %}
-<div style="display:flex;gap:var(--sp-6);align-items:flex-start;">
-  <nav style="min-width:14rem;flex:none;position:sticky;top:var(--sp-3);">
+<div class="disc-layout">
+  <nav class="disc-nav">
     <p><a href="/discovery">&larr; All states</a></p>
     <h2>{{ state | state_name }}</h2>
     <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:var(--sp-2);">
@@ -295,7 +307,13 @@
     </ul>
   </nav>
 
-  <div style="flex:1;min-width:0;">
+  <div class="disc-main">
+    <div class="disc-legend">
+      <span class="count-chip">{{ icon('people') }} candidates</span>
+      <span class="count-chip">{{ icon('quote') }} quote sources</span>
+      <span class="count-chip">{{ icon('mic') }} ingested</span>
+      <span class="count-chip">{{ icon('screen') }} pending</span>
+    </div>
     {% if not statewide and not localities %}
     <p class="empty">No tracked races in {{ state | state_name }} yet.</p>
     {% else %}
@@ -303,7 +321,7 @@
     {% endif %}
 
     <section id="statewide">
-      <h2>Statewide &amp; federal <small class="empty">— tracked once, approved everywhere</small></h2>
+      <h2 class="disc-section-title">Statewide &amp; federal <small>— tracked once, approved everywhere</small></h2>
       {% for race in statewide %}
         {{ race_block(race, race_outlet_groups, state) }}
       {% endfor %}
@@ -311,7 +329,7 @@
 
     {% for loc, loc_races in localities.items() %}
     <section id="loc-{{ loc | anchor_slug }}">
-      <h2>{{ loc }}</h2>
+      <h2 class="disc-section-title">{{ loc }}</h2>
       {% for race in loc_races %}
         {{ race_block(race, race_outlet_groups, state) }}
       {% endfor %}
