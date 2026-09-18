@@ -98,6 +98,7 @@ def run_race(race: dict, all_hubs: list, provider, *, budget: int, do_classify: 
     items = hub_search.raw_items_for_race(
         applicable, candidates=race["candidates"],
         locality=race["race_label"], year=race.get("year"), budget=budget)
+    items = list({it.url: it for it in items}.values())  # dedup by URL: two hubs can return the same page; don't classify or count it twice (production dedups by source_key)
     found_urls = [it.url for it in items]
     accepted_urls = []
     if do_classify:
@@ -161,10 +162,10 @@ def main(argv=None) -> int:
         if not races:
             print(f"FATAL: no ground-truth race matched {sorted(want)}", file=sys.stderr)
             return 2
-    provider = get_provider(config.DISCOVERY_MODEL_ACTIVE) if do_classify else None
     if args.runs < 1:
         print("FATAL: --runs must be >= 1", file=sys.stderr)
         return 2
+    provider = get_provider(config.DISCOVERY_MODEL_ACTIVE) if do_classify else None
 
     print(f"model={config.DISCOVERY_MODEL_ACTIVE if do_classify else '(none)'} "
           f"runs={args.runs} budget={args.budget} races={len(races)} "
@@ -208,19 +209,25 @@ def main(argv=None) -> int:
 
     pooled = hre.recalls_from_per_source(all_majority)
     n_addr_verified = sum(1 for r in all_majority if r["addressable"] and r["accepted"])
+    n_addr_retrieved = sum(1 for r in all_majority if r["addressable"] and r["retrieved"])
     hv = [h for h in per_run_headline if h is not None]
     spread = (f"{min(hv):.2f}..{max(hv):.2f} (median {statistics.median(hv):.2f})"
               if hv else "n/a")
     print("\n== POOLED (majority vote over runs, micro-averaged over races) ==")
-    print(f"addressable recall (headline): {_fmt(pooled['addressable_recall'])}  "
-          f"[{n_addr_verified}∩A / {pooled['n_addressable']}]")
-    print(f"overall recall:                {_fmt(pooled['overall_recall'])}  "
-          f"[{pooled['n_verified']} / {pooled['n_gt']}]")
+    if do_classify:
+        print(f"addressable recall (headline): {_fmt(pooled['addressable_recall'])}  "
+              f"[{n_addr_verified}∩A / {pooled['n_addressable']}]")
+        print(f"overall recall:                {_fmt(pooled['overall_recall'])}  "
+              f"[{pooled['n_verified']} / {pooled['n_gt']}]")
+    else:
+        print(f"retrieval recall (headline, addressable): {_fmt(pooled['retrieval_recall_addressable'])}  "
+              f"[{n_addr_retrieved}∩A / {pooled['n_addressable']}]")
     print(f"retrieval-only recall:         {_fmt(pooled['retrieval_recall_overall'])}  "
           f"[{pooled['n_retrieved']} / {pooled['n_gt']}]")
-    pooled_prec = (precision_matched / precision_total) if precision_total else None
-    print(f"precision (pooled over runs):  {_fmt(pooled_prec)}  "
-          f"[{precision_matched} / {precision_total}]")
+    if do_classify:
+        pooled_prec = (precision_matched / precision_total) if precision_total else None
+        print(f"precision (pooled over runs):  {_fmt(pooled_prec)}  "
+              f"[{precision_matched} / {precision_total}]")
     print(f"per-run headline spread:       {spread}")
     return 0
 
