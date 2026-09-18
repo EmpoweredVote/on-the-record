@@ -356,6 +356,34 @@ def _fetch_page_bytes(url: str, *, max_bytes: int = _PAGE_TEXT_MAX_BYTES) -> "tu
     return content_type, b"".join(chunks)[:max_bytes]
 
 
+# Ballotpedia Candidate Connection answers -- the candidate's own words, the
+# high-value comparable quote source -- sit deep in a candidate page (well past
+# the ~6 KB peek), under a run of Ballotpedia's standardized survey questions.
+# A completed page lists cycles most-recent-first, so the FIRST question
+# occurrence is the current cycle; the classifier's own current-cycle check
+# (Slice 2A) backstops any older-cycle capture. Anchors are apostrophe-free so
+# entity/curly-quote scrubbing in _html_to_text can't break the match.
+_CC_QUESTIONS = (
+    "What areas of public policy are you personally passionate about?",
+    "What characteristics or principles are most important for an elected official?",
+    "Who do you look up to?",
+    "What was your very first job?",
+    "What legacy would you like to leave?",
+)
+
+
+def _candidate_connection_window(text: str, *, prefix: int = 300) -> "str | None":
+    """If `text` holds a Ballotpedia Candidate Connection Q&A (a candidate's own
+    answers), return the slice starting just before the first standardized
+    question, so the peek surfaces the answers instead of the top-of-page bio.
+    None when the page carries no such Q&A (an uncompleted survey, or any other
+    page) -- the caller then keeps the ordinary top-of-page peek."""
+    hits = [i for i in (text.find(q) for q in _CC_QUESTIONS) if i >= 0]
+    if not hits:
+        return None
+    return text[max(0, min(hits) - prefix):]
+
+
 def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> str:
     """Article-page text for the stage-2 page peek (web analog of the
     captions peek). Robots-gated and paced like every other web-lane fetch;
@@ -382,7 +410,14 @@ def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> 
     match = max(_ARTICLE_OR_MAIN_RE.finditer(cleaned),
                 key=lambda m: len(m.group(0)), default=None)
     slice_ = match.group(0) if match and len(match.group(0)) >= 200 else cleaned
-    return _html_to_text(slice_, max_chars=max_chars)
+    # Extract the whole slice first, then, on a Ballotpedia Candidate Connection
+    # page, shift the peek to the answers section (which sits past max_chars) so
+    # the candidate's own words reach the classifier; every other page keeps the
+    # ordinary top-of-page peek. _html_to_text's max_chars is a final truncation,
+    # so full[:max_chars] is byte-identical to the old capped extraction.
+    full = _html_to_text(slice_)
+    window = _candidate_connection_window(full)
+    return (window if window is not None else full)[:max_chars]
 
 
 def fetch_outlet_items(outlet: Outlet, *, sleep_fn=time.sleep) -> list:
