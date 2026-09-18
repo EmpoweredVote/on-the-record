@@ -108,6 +108,7 @@
     <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
       {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
+      {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
       · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
     <small><em>{{ r.why }}</em></small>
     {{ row_actions(r, race, state, lane=item.lane) }}
@@ -180,6 +181,7 @@
     <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
       {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
+      {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
       · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
     <small><em>{{ r.why }}</em></small>
     {{ row_actions(r, None, state, 'deferred', lane=lane) }}
