@@ -49,9 +49,11 @@ def fetch_active_outlets(cur) -> list:
 def fetch_tracked_candidates(cur) -> list:
     cur.execute("""
         select rc.politician_id::text, rc.race_id::text, rc.full_name,
-               p.race_label, p.election_date::text
+               p.race_label, p.election_date::text, e.state
         from essentials.race_candidates rc
         join essentials.readrank_race_pipeline p on p.race_id = rc.race_id
+        left join essentials.races r on r.id = rc.race_id
+        left join essentials.elections e on e.id = r.election_id
         where p.status in ('needs_quotes','quotes_staged','published')
           and p.election_date >= current_date
           and coalesce(rc.candidate_status, 'active') not in ('withdrawn','removed')
@@ -59,7 +61,7 @@ def fetch_tracked_candidates(cur) -> list:
         order by rc.race_id, rc.full_name
     """)
     return [TrackedCandidate(politician_id=r[0], race_id=r[1], full_name=r[2],
-                             race_label=r[3], election_date=r[4])
+                             race_label=r[3], election_date=r[4], state=r[5])
             for r in cur.fetchall()]
 
 

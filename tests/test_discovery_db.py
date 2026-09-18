@@ -79,14 +79,18 @@ def _minimal_row():
 
 
 def test_fetch_tracked_candidates_filters_active_pipeline_races():
-    cur = _FakeCursor(rows=[("p1", "r1", "Maria Delgado", "TX Senate (general)", "2026-11-03")])
+    cur = _FakeCursor(rows=[("p1", "r1", "Maria Delgado", "TX Senate (general)",
+                             "2026-11-03", "TX")])
     tracked = db.fetch_tracked_candidates(cur)
     sql, _ = cur.executed[0]
     assert "readrank_race_pipeline" in sql
     assert "'needs_quotes','quotes_staged','published'" in sql.replace(" ", "")
     assert "order by" in sql.lower()
+    assert "elections" in sql.lower()
+    assert "state" in sql.lower()
     assert tracked[0].full_name == "Maria Delgado"
     assert tracked[0].race_label == "TX Senate (general)"
+    assert tracked[0].state == "TX"
 
 
 def test_alarm_races_excludes_races_with_approved_sources():

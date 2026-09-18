@@ -73,9 +73,11 @@ def _patch_common(monkeypatch, log):
     monkeypatch.setattr(poll_discovery, "auto_approve_pending", _fake_auto_approve_pending)
 
 
-def _make_engine_stub(log, *, raise_error=False, stats=None):
+def _make_engine_stub(log, *, raise_error=False, stats=None, captured_kwargs=None):
     def _stub(conn, **kwargs):
         log.append("engine")
+        if captured_kwargs is not None:
+            captured_kwargs.update(kwargs)
         if raise_error:
             raise RuntimeError("boom")
         return stats
@@ -296,6 +298,40 @@ def test_auto_approve_failure_does_not_crash_poll(monkeypatch, capsys):
     assert rc == 0
     assert "auto_approve" in log
     assert "auto-approve sweep failed" in capsys.readouterr().err
+
+
+# --- Task 4: hub lane wiring -------------------------------------------
+
+def test_default_run_passes_hub_lane_deps_to_engine(monkeypatch):
+    log = []
+    _patch_common(monkeypatch, log)
+    stats = poll_discovery.engine.RunStats()
+    captured = {}
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats, captured_kwargs=captured))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py"])
+
+    rc = poll_discovery.main()
+
+    assert rc == 0
+    assert captured.get("skip_hubs") is False
+    assert captured.get("load_hubs_fn") is poll_discovery.hubs.load_hubs
+    assert captured.get("hub_raw_items_fn") is poll_discovery.hub_search.raw_items_for_race
+
+
+def test_skip_hubs_flag_passes_skip_hubs_true(monkeypatch):
+    log = []
+    _patch_common(monkeypatch, log)
+    stats = poll_discovery.engine.RunStats()
+    captured = {}
+    monkeypatch.setattr(poll_discovery.engine, "run_discovery",
+                         _make_engine_stub(log, stats=stats, captured_kwargs=captured))
+    monkeypatch.setattr(sys, "argv", ["poll_discovery.py", "--skip-hubs"])
+
+    rc = poll_discovery.main()
+
+    assert rc == 0
+    assert captured.get("skip_hubs") is True
 
 
 def test_auto_approve_skipped_on_dry_run(monkeypatch):
