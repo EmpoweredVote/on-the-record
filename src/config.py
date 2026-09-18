@@ -137,6 +137,7 @@ DISCOVERY_BACKOFF_BASE_SECONDS = 5.0
 DISCOVERY_WEB_FETCH_SLEEP_SECONDS = 2.0         # per-domain politeness for web_rss
 DISCOVERY_SWEEP_ABORT_AFTER = 5                 # consecutive exhausted searches -> abort sweep phase
 DISCOVERY_HUB_BUDGET = 6                        # max scoped searches per race per hub-lane run
+DISCOVERY_HUB_LOCAL_TYPE_BUDGET = 2             # sub-cap: speculative local_type scoped searches per race
 
 # --- Thresholds ---
 VOICE_MATCH_THRESHOLD = 0.85          # Auto-enroll: voice match or high-confidence ID

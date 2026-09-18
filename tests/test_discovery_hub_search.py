@@ -197,3 +197,66 @@ def test_domain_hub_falls_back_to_locality_when_no_candidates(monkeypatch):
     )
 
     assert fake.calls == ["site:ballotpedia.org Springfield 2026"]
+
+
+def test_local_type_sub_cap_limits_only_local_type_searches(monkeypatch):
+    fake = _FakeTavily()
+    monkeypatch.setattr("src.discovery.hub_search.tavily_search", fake)
+
+    hubs = [
+        Hub(name="LT1", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> forum <year>"),
+        Hub(name="LT2", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> voter guide <year>"),
+        Hub(name="LT3", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> chamber <year>"),
+        Hub(name="Domain", scope="global", poll_method="scoped_search", domain="a.com"),
+    ]
+    raw_items_for_race(hubs, candidates=["Jane"], locality="Springfield",
+                       year="2026", budget=6, local_type_budget=1)
+
+    # exactly ONE local_type search + the domain search = 2 total
+    assert len(fake.calls) == 2
+    assert any(c.startswith("site:a.com") for c in fake.calls)
+    assert sum(1 for c in fake.calls if "Springfield" in c and "site:" not in c) == 1
+
+
+def test_local_type_sub_cap_does_not_gate_state_scope_template_hubs(monkeypatch):
+    fake = _FakeTavily()
+    monkeypatch.setattr("src.discovery.hub_search.tavily_search", fake)
+
+    hubs = [
+        Hub(name="LT1", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> forum <year>"),
+        Hub(name="LT2", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> chamber <year>"),
+        Hub(name="AZ Voter Guide", scope="state", poll_method="scoped_search",
+            query_template="<locality> voter guide <year>"),
+    ]
+    raw_items_for_race(hubs, candidates=["Jane"], locality="Springfield",
+                       year="2026", budget=6, local_type_budget=1)
+
+    # The sub-cap keys on hub.scope == "local_type", not on "no domain" -- a
+    # state-scope template hub (also domain-less) must run its search
+    # regardless of how many local_type searches already used up the sub-cap.
+    assert "Springfield voter guide 2026" in fake.calls
+    # ... while only ONE of the two local_type hubs actually searched.
+    local_type_calls = [c for c in fake.calls if c in
+                        ("Springfield forum 2026", "Springfield chamber 2026")]
+    assert len(local_type_calls) == 1
+    assert len(fake.calls) == 2  # one local_type search + the state hub search
+
+
+def test_local_type_budget_none_means_no_sub_cap(monkeypatch):
+    fake = _FakeTavily()
+    monkeypatch.setattr("src.discovery.hub_search.tavily_search", fake)
+
+    hubs = [
+        Hub(name="LT1", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> a <year>"),
+        Hub(name="LT2", scope="local_type", poll_method="scoped_search",
+            query_template="<locality> b <year>"),
+    ]
+    raw_items_for_race(hubs, candidates=["Jane"], locality="Springfield",
+                       year="2026", budget=6)  # local_type_budget defaults None
+    assert len(fake.calls) == 2

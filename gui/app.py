@@ -302,6 +302,18 @@ def create_app() -> FastAPI:
         return _discovery_redirect(
             f"{msg} — auto-kept {n}" if ok else f"trust failed: {msg}", state=state)
 
+    @app.post("/discovery/{row_id}/add-hub")
+    def discovery_add_hub(row_id: str, scope: str = Form("state"),
+                          kind: str = Form("guide"), state: str = Form(""),
+                          show: str = Form("")):
+        from gui import discovery
+        row = discovery.get_row(row_id)
+        if row is None:
+            raise HTTPException(status_code=404)
+        ok, msg = discovery.add_hub_from_row(row, scope=scope, kind=kind)
+        return _discovery_redirect(msg if ok else f"add hub failed: {msg}",
+                                   state=state, show=show)
+
     @app.post("/discovery/unapprove-auto")
     def discovery_unapprove_auto(row_ids: list[str] = Form(default=[]),
                                  state: str = Form("")):

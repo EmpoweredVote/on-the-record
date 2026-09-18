@@ -40,6 +40,8 @@ class TrackedCandidate:
     race_label: str
     election_date: Optional[str] = None  # ISO date
     state: Optional[str] = None  # 2-letter, UPPERCASE (via races -> elections join)
+    position_name: Optional[str] = None   # races.position_name (level classifier input)
+    government_name: Optional[str] = None  # governments.name (locality source; see locality.py)
 
 
 @dataclass

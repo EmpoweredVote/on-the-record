@@ -2,41 +2,20 @@
 plus DB aggregation (added in Task 4). Best-effort like gui/discovery.py: no
 DATABASE_URL or any DB error -> empty list, never a crash.
 
-`race_level` is a heuristic over position_name. It is used only for grouping and
-is easy to extend; misgrouping a race is cosmetic, never unsafe.
+`race_level` is a heuristic over position_name. It is a shared classifier: this
+module uses it for grouping, and it also gates local-type hub searches (see
+src/race_level.py). It is easy to extend; misgrouping a race is cosmetic, never
+unsafe.
 """
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from typing import Optional
 
 import psycopg2
 
-_FEDERAL = re.compile(r"\b(president|u\.?s\.?|united states|congress)\b", re.I)
-_STATE = re.compile(
-    r"\b(governor|lieutenant governor|attorney general|secretary of state|"
-    r"state\s+(?:senat\w*|represent\w*|assembly|house)|comptroller|treasurer|"
-    r"superintendent)\b", re.I)
-_SCHOOL = re.compile(r"\b(school board|board of education|school district)\b", re.I)
-_COUNTY = re.compile(r"\bcounty\b", re.I)
-
-
-def race_level(position_name: "str | None") -> str:
-    name = position_name or ""
-    if _FEDERAL.search(name):
-        return "federal"
-    if _STATE.search(name):
-        return "state"
-    if _SCHOOL.search(name):
-        return "school"
-    if _COUNTY.search(name):
-        return "county"
-    return "local"
-
-
-LEVEL_ORDER = ("federal", "state", "county", "local", "school")
+from src.race_level import LEVEL_ORDER, race_level  # noqa: F401  (re-exported for callers/tests)
 
 
 def _db_url() -> Optional[str]:
@@ -57,9 +36,11 @@ class RaceCoverage:
 
 
 # Join chain: races.office_id -> offices.id, offices.chamber_id ->
-# chambers.id, chambers.government_id -> governments.id (governments.name is
-# the locality shown for county/local/school races; statewide and federal
-# races have no office row and so surface locality = NULL).
+# chambers.id, chambers.government_id -> governments.id. governments.name is
+# the jurisdiction name; NOTE it is populated for federal/statewide races too
+# (e.g. 'United States Federal Government', 'State of Arizona'), NOT just local
+# ones, and can be NULL for some statewide offices — so it is a display label
+# here, never a "is this local?" test (see src/discovery/locality.py for that).
 # races.election_id -> elections.id carries elections.state, the filter here.
 _RACES_SQL = """
     select r.id::text, r.position_name, g.name as locality,
