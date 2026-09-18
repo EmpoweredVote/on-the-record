@@ -127,11 +127,14 @@
       <span class="disc-outlet-name">{{ group.name }}
         {% if group.trusted %}<span class="badge--trusted">trusted</span>{% else %}<span class="badge--unknown">unknown</span>{% endif %}
       </span>
-      {% if not group.trusted %}
-      <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
-        <input type="hidden" name="state" value="{{ state or '' }}">
-        <button type="submit" class="btn btn--ghost" title="Auto-approve every future item from {{ group.name }} as a quote source">Trust outlet</button>
-      </form>
+      {% if not group.trusted and group.trustable %}
+      <div class="disc-trust">
+        <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
+          <input type="hidden" name="state" value="{{ state or '' }}">
+          <button type="submit" class="btn btn--ghost" title="Auto-approve every future item from {{ group.name }} as a quote source">Trust outlet</button>
+        </form>
+        <p class="disc-trust-note">auto-approves everything this outlet sends</p>
+      </div>
       {% endif %}
     </div>
     {% if group.muted %}
