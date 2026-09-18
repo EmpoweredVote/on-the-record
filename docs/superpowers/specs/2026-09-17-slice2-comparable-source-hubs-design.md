@@ -75,3 +75,23 @@ The 8-race hand-labeled eval set + the bakeoff harness (currently in a scratchpa
 ## Decided 2026-09-17 (were open questions)
 - **Table:** new `essentials.source_hubs` (not an extension of `source_outlets`) — see above.
 - **URL derivation:** `scoped_search` (one bounded domain/query-scoped search + mandatory current-cycle+fill verification), per-candidate for Ballotpedia Candidate Connection; VOTE411 pointer-only; feed hubs registered as `source_outlets` — see the Polling section.
+
+## Decided 2026-09-18 — prior-cycle handling: FLAG, not GUARD, for a candidate's own answers
+
+Context: the first live hub runs (LA Mayor, CA-34) showed the current-cycle check is too blunt. It treats "prior/different cycle" as one reject bucket, but there are two very different cases, and only one is noise.
+
+- **Case 1 — wrong contest / different candidates** (an archived prior-election page whose candidate set isn't this race; clearly-superseded content). This is the precision-killer the spike found. **Keep the GUARD** — reject → `auto_filtered`, out of the review queue.
+- **Case 2 — a tracked candidate's OWN prior-cycle answers to the SAME standardized comparable questions** (e.g. Ballotpedia Candidate Connection across cycles). Same person, running again; the answers are often still their current view, and a hard reject discards real signal. **FLAG, don't guard** — surface it to the Slice-1 review queue, **tagged with its cycle year**, ranked **below** current-cycle answers; the human confirms and dates it.
+
+Rationale:
+- **Comparability survives the cycle gap.** Candidate Connection asks the same questions every cycle, so a prior-cycle answer is still directly comparable to another candidate's current answer — the core Slice-2 value holds.
+- **The review queue is the judge** (Slice-1's whole design). "Flag for review" is what it's for; a guard silently drops the item.
+
+🔴 **Hard guardrail (non-negotiable): attribution must carry the cycle.** A prior-cycle answer must be labeled and quoted as *"<year> Candidate Connection,"* never presented as a current statement — some views change, so the reader and the curator must see the date. "Flag" therefore means **"surface it, tagged with its cycle,"** not "treat it as current."
+
+Implications for implementation (the flag-vs-guard slice):
+1. **Capture the cycle** of the surfaced answers (the peek/section carries a year; today the answer prose often has no visible year, so the classifier can't yet tell current from prior reliably — this is the enabling piece).
+2. **Distinguish the two cases in the classifier** (2A): reject Case 1; for Case 2 emit `relevant=true` + a `prior_cycle` flag rather than rejecting.
+3. **Disposition:** a `prior_cycle`-flagged item is `pending` (not `auto_filtered`), tagged, lower tier — needs a flag on `discovered_sources` (ev-accounts migration) and engine wiring.
+4. **Review UI** shows the flag + cycle so the human curates and dates it correctly.
+5. **Re-run the recall/precision eval** — the guard exists because prior-cycle content hurt precision; measure the trade, don't guess it.
