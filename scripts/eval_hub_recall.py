@@ -23,12 +23,16 @@ Usage (repo root; keys from .env.local):
 The metric is noisy — use --runs N and treat a change as real only when it beats
 the per-run spread this harness prints (use --runs 5 for a tuning decision).
 
-Baseline: re-measuring after the FILLED-target change (Slice 2 Phase 4a) — filled
-in by the re-run. Treat a recall change smaller than ~0.10 (or the per-run spread,
-whichever is larger) as noise; use --runs 5 for a tuning decision. (Prior all-GT
-baseline for reference: addressable 0.00 [0/5], overall 0.03 [1/29], retrieval
-0.17 [5/29] — the headline sat at the floor because the addressable set was mostly
-UNFILLED Ballotpedia; restricting the target to filled sources fixes that.)
+Baseline (measured 2026-09-18, deepseek, runs=3, snapshot registry, FILLED target):
+addressable recall 0.00 [0/2], overall 0.00 [0/14], retrieval-only 0.14 [2/14];
+per-run headline spread 0.00. The two filled+addressable sources (la-mayor and
+ut-sboe-14 Ballotpedia) are RETRIEVED but not verified — the classifier rejects the
+fetched Candidate Connection page — so the headline is a clean 0/2, not a floor
+artifact. Between-run (Tavily) variance is high: an earlier session retrieved and
+verified the az-mine-inspector debate (a filled, non-addressable source) that this
+run did not retrieve at all. Use --runs 5; treat a change smaller than the observed
+spread (or ~0.10) as noise. Open follow-up: why is a completed Ballotpedia Candidate
+Connection page retrieved but not verified?
 """
 from __future__ import annotations
 
@@ -197,7 +201,7 @@ def main(argv=None) -> int:
         per_run_headline.append(hl)
         print(f"run {run_i + 1}/{args.runs}: headline recall = {_fmt(hl)}")
 
-    print("\n| race | addr | overall | retr | n(addr/gt) |")
+    print("\n| race | addr | overall | retr | n(addr/T) |   (T = filled target, exists==\"yes\")")
     print("|---|---|---|---|---|")
     all_majority = []
     for race in races:
