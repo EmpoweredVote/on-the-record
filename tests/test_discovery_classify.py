@@ -208,6 +208,22 @@ def test_prompt_has_current_cycle_check():
     assert "the tracked race is AZ · U.S. Senate · General · 2026" in prompt
 
 
+def test_prompt_prior_cycle_only_when_strictly_earlier_and_guards_wrong_contest():
+    """Increment-3 tightening (eval-driven): prior_cycle is set ONLY when the
+    content's cycle year is EARLIER than the race's (same year -> current), and
+    the wrong-contest guard holds even when the page carries a candidate's own
+    words but they aren't in this race's roster."""
+    from src.discovery.classify import build_prompt
+    from src.discovery.models import RawItem
+    item = RawItem(url="https://ballotpedia.org/Jane_Doe", title="Jane Doe", description="")
+    prompt = build_prompt(item, race_label="CA · Mayor · 2026", roster_names=["Jane Doe"])
+    low = " ".join(prompt.lower().split())   # whitespace-normalized so line wraps don't hide phrases
+    assert "earlier" in low            # prior_cycle only when content year < race year
+    assert "same year" in low          # equal years -> current (prior_cycle false)
+    assert "not in the tracked candidates" in low   # wrong-contest guard keyed on roster
+    assert "different race" in low                   # own words about another race != this race's source
+
+
 def test_parse_verdict_reads_prior_cycle_flag():
     """A tracked candidate's OWN prior-cycle answers are FLAGGED, not rejected:
     relevant stays true, prior_cycle true, and the cycle year is carried."""
