@@ -153,6 +153,9 @@ def main(argv=None) -> int:
             print(f"FATAL: no ground-truth race matched {sorted(want)}", file=sys.stderr)
             return 2
     provider = get_provider(config.DISCOVERY_MODEL_ACTIVE) if do_classify else None
+    if args.runs < 1:
+        print("FATAL: --runs must be >= 1", file=sys.stderr)
+        return 2
 
     print(f"model={config.DISCOVERY_MODEL_ACTIVE if do_classify else '(none)'} "
           f"runs={args.runs} budget={args.budget} races={len(races)} "
@@ -195,12 +198,13 @@ def main(argv=None) -> int:
               f"| {_fmt(rr['retrieval_recall_overall'])} | {rr['n_addressable']}/{rr['n_gt']} |")
 
     pooled = hre.recalls_from_per_source(all_majority)
+    n_addr_verified = sum(1 for r in all_majority if r["addressable"] and r["accepted"])
     hv = [h for h in per_run_headline if h is not None]
     spread = (f"{min(hv):.2f}..{max(hv):.2f} (median {statistics.median(hv):.2f})"
               if hv else "n/a")
     print("\n== POOLED (majority vote over runs, micro-averaged over races) ==")
     print(f"addressable recall (headline): {_fmt(pooled['addressable_recall'])}  "
-          f"[{pooled['n_verified']}∩A / {pooled['n_addressable']}]")
+          f"[{n_addr_verified}∩A / {pooled['n_addressable']}]")
     print(f"overall recall:                {_fmt(pooled['overall_recall'])}  "
           f"[{pooled['n_verified']} / {pooled['n_gt']}]")
     print(f"retrieval-only recall:         {_fmt(pooled['retrieval_recall_overall'])}  "
