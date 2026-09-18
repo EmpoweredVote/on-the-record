@@ -30,15 +30,21 @@ def _query_for_hub(hub, *, candidates, locality, year) -> "str | None":
 
 
 def raw_items_for_race(hubs_for_this_race, *, candidates, locality, year,
-                        budget: int = 6) -> "list[RawItem]":
+                        budget: int = 6,
+                        local_type_budget: "int | None" = None) -> "list[RawItem]":
     items: list[RawItem] = []
     searches_done = 0
+    local_type_done = 0
 
     for hub in hubs_for_this_race:
         if _is_pointer_only(hub):
             continue
         if searches_done >= budget:
             break
+        is_local_type = hub.scope == "local_type"
+        if is_local_type and local_type_budget is not None \
+                and local_type_done >= local_type_budget:
+            continue
 
         query = _query_for_hub(hub, candidates=candidates, locality=locality, year=year)
         if query is None:
@@ -46,6 +52,8 @@ def raw_items_for_race(hubs_for_this_race, *, candidates, locality, year,
 
         results = tavily_search(query)
         searches_done += 1
+        if is_local_type:
+            local_type_done += 1
 
         if hub.domain:
             results = [r for r in results if hub.domain in (r.get("url") or "")]
