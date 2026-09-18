@@ -1,0 +1,41 @@
+{
+  "_about": "Flag-vs-guard eval cases (2026-09-18). Measures the classifier's prior-cycle behavior after the flag-not-guard change: a tracked candidate's own CURRENT-cycle answers are relevant + NOT flagged; their own PRIOR-cycle answers are relevant + FLAGGED (prior_cycle=true, not rejected); a WRONG-contest page (page evaluated against a race whose candidates it is not about) is GUARDED (relevant=false). Each case is a real Ballotpedia page fetched via the production peek. Grow this set as more verified cases appear. Metric is noisy (LLM) — average multiple runs; a change must beat the noise band.",
+  "cases": [
+    {
+      "id": "bass-current",
+      "url": "https://ballotpedia.org/Karen_Bass",
+      "race_label": "Los Angeles Mayor (CA, 2026-11-03)",
+      "roster": ["Karen Bass"],
+      "category": "current_own_answers",
+      "expect_relevant": true,
+      "expect_prior_cycle": false
+    },
+    {
+      "id": "raman-current",
+      "url": "https://ballotpedia.org/Nithya_Raman",
+      "race_label": "Los Angeles City Council District 4 (CA, 2026-11-03)",
+      "roster": ["Nithya Raman"],
+      "category": "current_own_answers",
+      "expect_relevant": true,
+      "expect_prior_cycle": false
+    },
+    {
+      "id": "gomez-prior",
+      "url": "https://ballotpedia.org/Jimmy_Gomez",
+      "race_label": "U.S. Representative District 34 (CA, 2026-11-03)",
+      "roster": ["Jimmy Gomez"],
+      "category": "prior_own_answers",
+      "expect_relevant": true,
+      "expect_prior_cycle": true
+    },
+    {
+      "id": "wrong-contest-bass-vs-tx-senate",
+      "url": "https://ballotpedia.org/Karen_Bass",
+      "race_label": "U.S. Senate · Texas · General · 2026",
+      "roster": ["John Cornyn", "Colin Allred"],
+      "category": "wrong_contest",
+      "expect_relevant": false,
+      "expect_prior_cycle": null
+    }
+  ]
+}
