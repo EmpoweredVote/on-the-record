@@ -49,7 +49,7 @@
 {% endif %}
 
 {% macro row_actions(r, race, state='', show='', lane='') %}
-<div class="row-actions" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;margin-top:var(--sp-2);">
+<div class="row-actions">
   {% if lane != 'questionnaire' %}
   <form method="post" action="/discovery/{{ r.id }}/approve-ingest" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
@@ -65,7 +65,7 @@
   <form method="post" action="/discovery/{{ r.id }}/quote-source" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
     <input type="hidden" name="show" value="{{ show or '' }}">
-    <button type="submit">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
+    <button type="submit" class="btn btn--primary">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
   </form>
   <form method="post" action="/discovery/{{ r.id }}/reject" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
@@ -92,7 +92,7 @@
   <form method="post" action="/discovery/{{ r.id }}/watch-channel" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
     <input type="hidden" name="show" value="{{ show or '' }}">
-    <button type="submit" title="Add this channel to the watchlist">+ Watch this channel</button>
+    <button type="submit" class="btn btn--ghost" title="Add this channel to the watchlist">+ Watch this channel</button>
   </form>
   {% endif %}
 </div>
@@ -100,18 +100,18 @@
 
 {% macro pending_row(item, race, state='') %}
 {% set r = item.row %}
-<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
-  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form" style="margin-top:var(--sp-2);">
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-  <div style="flex:1;min-width:0;">
+  <div class="disc-item-body">
     <span class="pill">{{ item.lane | humanize_kind }}</span>
-    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-    <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
       {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
-      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
-    <small><em>{{ r.why }}</em></small>
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</div>
+    <div class="disc-why">{{ r.why }}</div>
     {{ row_actions(r, race, state, lane=item.lane) }}
   </div>
 </div>
@@ -122,13 +122,15 @@
   <p class="empty">No pending items{% if race %} for this race{% endif %}.</p>
   {% endif %}
   {% for group in groups %}
-  <div class="outlet-group" style="margin:var(--sp-4) 0 0;padding:var(--sp-3) var(--sp-4);border:1px solid var(--c-line-soft);border-radius:var(--r-md);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);">
-      <strong>{{ group.name }}</strong>
+  <div class="disc-outlet">
+    <div class="disc-outlet-head">
+      <span class="disc-outlet-name">{{ group.name }}
+        {% if group.trusted %}<span class="badge--trusted">trusted</span>{% else %}<span class="badge--unknown">unknown</span>{% endif %}
+      </span>
       {% if not group.trusted %}
       <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
         <input type="hidden" name="state" value="{{ state or '' }}">
-        <button type="submit" title="Trust every future item from {{ group.name }} as a quote source">Trust outlet</button>
+        <button type="submit" class="btn btn--ghost" title="Auto-approve every future item from {{ group.name }} as a quote source">Trust outlet</button>
       </form>
       {% endif %}
     </div>
@@ -180,30 +182,30 @@
 
 {% macro deferred_row(r, state='') %}
 {% set lane = content_lane(r.original_vs_clip, r.event_kind_guess) %}
-<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
-  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form" style="margin-top:var(--sp-2);">
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-  <div style="flex:1;min-width:0;">
-    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-    <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+  <div class="disc-item-body">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
       {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
-      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
-    <small><em>{{ r.why }}</em></small>
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</div>
+    <div class="disc-why">{{ r.why }}</div>
     {{ row_actions(r, None, state, 'deferred', lane=lane) }}
   </div>
 </div>
 {% endmacro %}
 
 {% macro auto_kept_row(r) %}
-<div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
-  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-autokept-form" style="margin-top:var(--sp-2);">
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-autokept-form">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-  <div style="flex:1;min-width:0;">
-    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-    <small>{{ r.channel_name or "?" }} · {{ (r.published_at or "?")[:10] }}
-      {% if r.event_kind_guess %} · {{ r.event_kind_guess }}{% endif %}</small>
+  <div class="disc-item-body">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ (r.published_at or "?")[:10] }}
+      {% if r.event_kind_guess %} · {{ r.event_kind_guess }}{% endif %}</div>
   </div>
 </div>
 {% endmacro %}
