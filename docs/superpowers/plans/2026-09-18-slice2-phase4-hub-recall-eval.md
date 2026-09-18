@@ -396,7 +396,7 @@ print(f"wrote {OUT} — {len(out['races'])} races, "
 PY
 ```
 
-Expected output: `wrote tests/fixtures/hub_recall_ground_truth.json — 8 races, 27 sources`.
+Expected output: `wrote tests/fixtures/hub_recall_ground_truth.json — 8 races, 29 sources` (every spike source with `exists` in {yes, partial} and a URL: 5+4+1+5+4+3+3+4).
 
 - [ ] **Step 4: Run the schema test to verify it passes**
 
