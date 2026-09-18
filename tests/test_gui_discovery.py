@@ -1110,6 +1110,26 @@ def test_discovery_state_view_mutes_trusted_outlets_news_clips(monkeypatch):
     assert "Approve &rarr; ingest" not in body   # a muted row carries no per-row controls
 
 
+def test_discovery_state_view_questionnaire_is_quote_source_not_ingest(monkeypatch):
+    """A questionnaire is a written page, not a video: content_lane returns
+    'questionnaire' regardless of original_vs_clip, so the row must render as a
+    high-value quote source (the Questionnaire pill + quote-source control) and
+    must NEVER offer Approve -> ingest — even for a trusted outlet, since the
+    trusted-outlet mute only ever applies to the news_clip lane."""
+    monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
+    row = _row(id="d1", race_id="r1", channel_name="League of Women Voters",
+              outlet_id="00000000-0000-0000-0000-000000000001",
+              original_vs_clip="original", event_kind_guess="questionnaire",
+              outlet_trusted=True)
+    monkeypatch.setattr(discovery, "pending_rows", lambda status="pending": [row])
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert "Questionnaire" in body
+    assert "auto-kept as quote sources" not in body   # never muted, unlike news_clip
+    assert 'action="/discovery/d1/quote-source"' in body
+    assert "Approve &rarr; ingest" not in body
+
+
 def test_discovery_state_view_disables_ingest_button_for_barred_outlet(monkeypatch):
     monkeypatch.setattr(coverage, "races_for_state", lambda state: [_race("r1")])
     row = _row(id="d1", race_id="r1", channel_name="Nexstar Station",
@@ -1265,6 +1285,25 @@ def test_discovery_deferred_view_has_restore_bulk_bar(monkeypatch):
     assert 'name="row_ids" value="d9"' in body
     assert 'form="bulk-deferred-form"' in body
     assert 'value="restore"' in body
+
+
+def test_discovery_deferred_view_questionnaire_hides_ingest(monkeypatch):
+    """A questionnaire that lands in the deferred view is still a written page,
+    not a video: it must not offer Approve -> ingest there either. The deferred
+    view computes content_lane per row (via the Jinja global) and passes it to
+    row_actions, exactly as the pending view does — so the questionnaire lane
+    suppresses the ingest control while quote-source / reject stay available."""
+    row = _row(id="dq", title="Candidate questionnaire",
+               original_vs_clip="original", event_kind_guess="questionnaire",
+               status="deferred")
+    monkeypatch.setattr(
+        discovery, "pending_rows",
+        lambda status="pending": [row] if status == "deferred" else [])
+    client = TestClient(create_app())
+    body = client.get("/discovery?show=deferred").text
+    assert "Candidate questionnaire" in body
+    assert "Approve &rarr; ingest" not in body
+    assert 'action="/discovery/dq/quote-source"' in body
 
 
 # --- Task 7 fix pass: Finding 4 — the cross-outlet bulk reject/restore bar

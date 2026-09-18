@@ -17,6 +17,7 @@ import psycopg2
 from src import config
 from src.discovery import db
 from src.discovery.classify import classify_item
+from src.discovery.hubs import hubs_for_race
 from src.discovery.prefilter import is_stale, normalize, prefilter_item
 from src.discovery.search import queries_for_candidate
 from src.source_key import source_key
@@ -32,6 +33,7 @@ class RunStats:
     inserted_pending: int = 0
     inserted_auto_filtered: int = 0
     spend_capped: int = 0
+    hub_items_examined: int = 0
     failures: list = field(default_factory=list)
 
 
@@ -68,6 +70,7 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                   dry_run: bool = False, race_filter: "str | None" = None,
                   classify_cap: "int | None" = None,
                   skip_watchlist: bool = False, skip_sweeps: bool = False,
+                  skip_hubs: bool = False, load_hubs_fn=None, hub_raw_items_fn=None,
                   reconnect_fn=None) -> RunStats:
     stats = RunStats()
     cur = conn.cursor()
@@ -222,6 +225,53 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             if not dry_run:
                 commit_unit(lambda: db.mark_outlet_polled(cur, outlet.id),
                             label=f"outlet {outlet.name}")
+
+    # Hub lane (Slice 2B): comparable-source hubs (debate/forum registries,
+    # voter-guide sites) checked per race via scoped search. Runs BEFORE the
+    # sweep phase and does NOT call record_sweep -- it piggybacks on the
+    # sweep cadence (sweep_due against the pre-run snapshot below). Sweeps
+    # call record_sweep as they go, so a hub phase running AFTER them would
+    # read a freshly-updated last_swept_at and see every race as not-due.
+    # Running first means the hub phase reads the same pre-run cadence
+    # sweeps do, keeping --skip-hubs and --skip-sweeps independent.
+    if not skip_hubs and load_hubs_fn is not None and hub_raw_items_fn is not None:
+        try:
+            all_hubs = load_hubs_fn(cur)
+        except Exception as exc:            # loud, non-fatal — a hub-registry read failure never aborts the run
+            stats.failures.append(f"load_hubs: {exc}")
+            print(f"FAILED load_hubs: {exc}", file=sys.stderr)
+            all_hubs = []
+        if all_hubs:
+            hub_state = db.fetch_sweep_state(cur)     # pre-run snapshot (hub phase runs before sweeps record)
+            for race_id, cands in by_race.items():
+                if race_filter and race_id != race_filter:
+                    continue
+                if not race_filter and not sweep_due(cands[0].election_date, hub_state.get(race_id), today):
+                    continue
+                if not dry_run and stats.classified >= cap:
+                    print("SPEND CAP: deferring remaining hub lanes to next run")
+                    break
+                applicable = hubs_for_race(all_hubs, state=cands[0].state)   # global + matching-state + local_type, scoped_search only
+                if not applicable:
+                    continue
+                year = (cands[0].election_date or "")[:4]
+                try:
+                    items = hub_raw_items_fn(
+                        applicable,
+                        candidates=[c.full_name for c in cands],
+                        locality=cands[0].race_label,        # best per-race locality string the engine has
+                        year=year,
+                        budget=config.DISCOVERY_HUB_BUDGET,
+                    )
+                except Exception as exc:    # per-race, loud, non-fatal
+                    stats.failures.append(f"hub race {race_id}: {exc}")
+                    print(f"FAILED hub race {race_id}: {exc}", file=sys.stderr)
+                    items = []
+                for it in items:
+                    stats.hub_items_examined += 1
+                    process_safe(it, [c.full_name for c in cands], race_id)
+                if not dry_run:
+                    commit_unit(lambda: None, label=f"hub race {race_id}")
 
     if not skip_sweeps:
         state = db.fetch_sweep_state(cur)

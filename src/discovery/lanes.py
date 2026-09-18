@@ -2,6 +2,10 @@
 `original_vs_clip` and `event_kind_guess`. Pure — no DB, no I/O — because both
 the review UI (row tags) and the auto-approve sweep must agree on the rule.
 
+Lanes: `questionnaire` (written comparable Q&A — a high-value quote source,
+independent of `original_vs_clip`), `full_event`, `event_clip`, `news_clip`,
+`unknown`.
+
 Note: `src.event_kinds.EVENT_KINDS` has no `interview`/`town_hall`. A full
 candidate interview surfaces as `original_vs_clip == 'original'` (the full-event
 lane); a town hall is `community_meeting`.
@@ -16,6 +20,8 @@ FORMAL_EVENT_KINDS = frozenset({
 
 def content_lane(original_vs_clip: "str | None",
                  event_kind_guess: "str | None") -> str:
+    if event_kind_guess == "questionnaire":
+        return "questionnaire"          # written comparable Q&A — a high-value quote source
     if original_vs_clip == "original":
         return "full_event"
     if original_vs_clip == "clip":

@@ -47,8 +47,9 @@
 </section>
 {% endif %}
 
-{% macro row_actions(r, race, state='', show='') %}
+{% macro row_actions(r, race, state='', show='', lane='') %}
 <div class="row-actions" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;margin-top:var(--sp-2);">
+  {% if lane != 'questionnaire' %}
   <form method="post" action="/discovery/{{ r.id }}/approve-ingest" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
     <input type="hidden" name="show" value="{{ show or '' }}">
@@ -59,6 +60,7 @@
     <button type="submit" class="enroll">Approve &rarr; ingest</button>
     {% endif %}
   </form>
+  {% endif %}
   <form method="post" action="/discovery/{{ r.id }}/quote-source" style="margin:0;">
     <input type="hidden" name="state" value="{{ state or '' }}">
     <input type="hidden" name="show" value="{{ show or '' }}">
@@ -108,7 +110,7 @@
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
     <small><em>{{ r.why }}</em></small>
-    {{ row_actions(r, race, state) }}
+    {{ row_actions(r, race, state, lane=item.lane) }}
   </div>
 </div>
 {% endmacro %}
@@ -169,6 +171,7 @@
 {% endmacro %}
 
 {% macro deferred_row(r, state='') %}
+{% set lane = content_lane(r.original_vs_clip, r.event_kind_guess) %}
 <div class="pending-row" style="display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--c-line-soft);">
   <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form" style="margin-top:var(--sp-2);">
   {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
@@ -179,7 +182,7 @@
       {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
       · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
     <small><em>{{ r.why }}</em></small>
-    {{ row_actions(r, None, state, 'deferred') }}
+    {{ row_actions(r, None, state, 'deferred', lane=lane) }}
   </div>
 </div>
 {% endmacro %}

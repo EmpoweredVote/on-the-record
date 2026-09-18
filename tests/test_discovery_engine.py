@@ -4,6 +4,7 @@ import psycopg2
 
 from src import config
 from src.discovery import db, engine
+from src.discovery.hubs import Hub
 from src.discovery.models import Outlet, RawItem, TrackedCandidate, Verdict
 
 
@@ -657,4 +658,68 @@ def test_hydrated_publish_date_also_recency_filtered(monkeypatch):
                            fetch_feed_items=lambda outlet: [undated],
                            hydrate_fn=hydrate, skip_sweeps=True)
     assert stats.recency_filtered == 1
+    assert inserted == []
+
+
+# --- Hub lane (Slice 2B Task 4) ---------------------------------------------
+
+_HUB_ITEM = RawItem(url="https://ballotpedia.org/Maria_Delgado",
+                    title="Maria Delgado candidate connection",
+                    description="answers", via="hub")
+
+
+def test_hub_lane_inserts_pending_row_via_existing_path(monkeypatch):
+    inserted = []
+    stats, provider = _run(
+        monkeypatch, inserted, skip_watchlist=True, skip_sweeps=True,
+        load_hubs_fn=lambda cur: [Hub(name="Ballotpedia", scope="global",
+                                      poll_method="scoped_search", domain="ballotpedia.org")],
+        hub_raw_items_fn=lambda applicable, **kw: [_HUB_ITEM])
+    assert len(inserted) == 1
+    row = inserted[0]
+    assert row["status"] == "pending"
+    assert row["discovered_via"] == "hub"
+    assert row["race_id"] == "r1"
+    assert stats.hub_items_examined == 1
+
+
+def test_skip_hubs_flag_skips_the_lane(monkeypatch):
+    inserted = []
+    calls = []
+
+    def boom(applicable, **kw):
+        calls.append(applicable)
+        raise AssertionError("hub_raw_items_fn must not be called when skip_hubs=True")
+
+    stats, provider = _run(
+        monkeypatch, inserted, skip_watchlist=True, skip_sweeps=True, skip_hubs=True,
+        load_hubs_fn=lambda cur: [Hub(name="Ballotpedia", scope="global",
+                                      poll_method="scoped_search", domain="ballotpedia.org")],
+        hub_raw_items_fn=boom)
+    assert calls == []
+    assert inserted == []
+    assert stats.hub_items_examined == 0
+
+
+def test_hub_deps_absent_lane_is_inert(monkeypatch):
+    """Existing callers that don't pass load_hubs_fn/hub_raw_items_fn (as every
+    pre-Task-4 test in this file does) must see zero hub behavior — a plain
+    no-hub run stays valid."""
+    inserted = []
+    stats, provider = _run(monkeypatch, inserted, skip_sweeps=True)
+    assert stats.hub_items_examined == 0
+
+
+def test_hub_registry_load_failure_is_nonfatal(monkeypatch):
+    inserted = []
+
+    def raising_load_hubs(cur):
+        raise RuntimeError("hub registry down")
+
+    stats, provider = _run(
+        monkeypatch, inserted, skip_watchlist=True, skip_sweeps=True,
+        load_hubs_fn=raising_load_hubs,
+        hub_raw_items_fn=lambda applicable, **kw: [])
+    assert any("load_hubs" in f for f in stats.failures)
+    assert stats.hub_items_examined == 0
     assert inserted == []

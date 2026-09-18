@@ -10,6 +10,7 @@ EVENT_KINDS = (
     "news_clip",
     "press_conference",
     "podcast",
+    "questionnaire",
     "other",
 )
 

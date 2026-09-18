@@ -24,7 +24,7 @@ from gui.env import load_env_local  # noqa: E402
 load_env_local()  # before src.config so CS_DATA_DIR / API keys are visible
 
 from src import config  # noqa: E402
-from src.discovery import db, engine, feeds, search  # noqa: E402
+from src.discovery import db, engine, feeds, search, hubs, hub_search  # noqa: E402
 from src.discovery.autoapprove import auto_approve_pending  # noqa: E402
 from src.llm_providers import get_provider  # noqa: E402
 from src.source_key import source_key  # noqa: E402
@@ -77,6 +77,7 @@ def main() -> int:
     ap.add_argument("--race", help="race_id: sweep this race now regardless of cadence")
     ap.add_argument("--skip-watchlist", action="store_true")
     ap.add_argument("--skip-sweeps", action="store_true")
+    ap.add_argument("--skip-hubs", action="store_true")
     ap.add_argument("--classify-cap", type=int, default=None)
     ap.add_argument("--print-alarms", action="store_true")
     ap.add_argument("--trigger", choices=("scheduled", "manual"), default="manual",
@@ -128,13 +129,17 @@ def main() -> int:
             classify_cap=args.classify_cap,
             skip_watchlist=args.skip_watchlist,
             skip_sweeps=args.skip_sweeps,
+            skip_hubs=args.skip_hubs,
+            load_hubs_fn=hubs.load_hubs,
+            hub_raw_items_fn=hub_search.raw_items_for_race,
             reconnect_fn=reconnect,
         )
         print(f"DONE examined={stats.examined} queued={stats.inserted_pending} "
               f"auto_filtered={stats.inserted_auto_filtered} "
               f"prefiltered_out={stats.prefiltered_out} "
               f"recency_filtered={stats.recency_filtered} seen={stats.skipped_seen} "
-              f"classified={stats.classified} capped={stats.spend_capped}")
+              f"classified={stats.classified} capped={stats.spend_capped} "
+              f"hub_examined={stats.hub_items_examined}")
         alarms = db.alarm_races(conn.cursor())
         for alarm in alarms:
             print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")

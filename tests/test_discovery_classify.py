@@ -178,3 +178,31 @@ def test_build_prompt_tiers_by_questioner_independence():
     assert "stump speech" in prompt.split("4 =")[0].split("3 =")[1]
     # questionnaire is an emittable kind (pins the JSON enum, not just the tier sentence)
     assert "community_meeting|questionnaire|other" in prompt
+
+
+def test_questionnaire_is_a_known_event_kind():
+    from src.event_kinds import EVENT_KINDS
+    assert "questionnaire" in EVENT_KINDS
+
+
+def test_parse_verdict_keeps_questionnaire_kind():
+    from src.discovery.classify import parse_verdict
+    v = parse_verdict('{"relevant": true, "confidence": 0.8, "candidates_present": [],'
+                      ' "event_kind": "questionnaire", "source_tier": 2,'
+                      ' "original_vs_clip": "original", "route": "quote_source", "why": "x"}')
+    assert v.event_kind_guess == "questionnaire"
+    assert v.route == "quote_source"
+
+
+def test_prompt_has_current_cycle_check():
+    from src.discovery.classify import build_prompt
+    from src.discovery.models import RawItem
+    item = RawItem(url="https://ballotpedia.org/x", title="2022 debate", description="prior cycle")
+    prompt = build_prompt(item, race_label="AZ · U.S. Senate · General · 2026", roster_names=["A", "B"])
+    low = prompt.lower()
+    assert "current" in low and ("cycle" in low or "prior" in low)
+    # The current-cycle instruction itself must name THIS race (keyed on
+    # race_label) — assert the binding phrase from the instruction, not merely
+    # that race_label appears somewhere (it is also echoed in the "Race:" line,
+    # so a bare containment check would pass even if the instruction dropped it).
+    assert "the tracked race is AZ · U.S. Senate · General · 2026" in prompt
