@@ -17,7 +17,8 @@ import psycopg2
 from src import config
 from src.discovery import db
 from src.discovery.classify import classify_item
-from src.discovery.hubs import hubs_for_race
+from src.discovery.hubs import hubs_for_race, rank_hubs
+from src.discovery.locality import local_query_locality
 from src.discovery.prefilter import is_stale, normalize, prefilter_item
 from src.discovery.search import queries_for_candidate
 from src.source_key import source_key
@@ -256,7 +257,10 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                 if not dry_run and stats.classified >= cap:
                     print("SPEND CAP: deferring remaining hub lanes to next run")
                     break
-                applicable = hubs_for_race(all_hubs, state=cands[0].state)   # global + matching-state + local_type, scoped_search only
+                locality = local_query_locality(cands[0].position_name,
+                                                 cands[0].government_name)
+                applicable = rank_hubs(hubs_for_race(
+                    all_hubs, state=cands[0].state, locality=locality))
                 if not applicable:
                     continue
                 year = (cands[0].election_date or "")[:4]
@@ -264,9 +268,10 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                     items = hub_raw_items_fn(
                         applicable,
                         candidates=[c.full_name for c in cands],
-                        locality=cands[0].race_label,        # best per-race locality string the engine has
+                        locality=locality,                       # None for federal/statewide
                         year=year,
                         budget=config.DISCOVERY_HUB_BUDGET,
+                        local_type_budget=config.DISCOVERY_HUB_LOCAL_TYPE_BUDGET,
                     )
                 except Exception as exc:    # per-race, loud, non-fatal
                     stats.failures.append(f"hub race {race_id}: {exc}")

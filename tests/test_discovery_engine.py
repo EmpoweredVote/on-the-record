@@ -38,8 +38,9 @@ NOISE_ITEM = RawItem(url="https://www.youtube.com/watch?v=zzz12345678",
                      duration_seconds=120, outlet_id="o1", via="watchlist")
 
 
-def _patch_db(monkeypatch, inserted):
-    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+def _patch_db(monkeypatch, inserted, tracked=None):
+    monkeypatch.setattr(db, "fetch_tracked_candidates",
+                        lambda cur: list(TRACKED if tracked is None else tracked))
     monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
     monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
     monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
@@ -64,7 +65,7 @@ def _run(monkeypatch, inserted, **kwargs):
         '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
         ' "event_kind": "debate", "source_tier": 1, "original_vs_clip": "original",'
         ' "route": "ingest", "why": "long full debate"}'))
-    _patch_db(monkeypatch, inserted)
+    _patch_db(monkeypatch, inserted, tracked=kwargs.pop("tracked", None))
     stats = engine.run_discovery(
         _FakeConn(), provider=provider,
         fetch_feed_items=kwargs.pop("fetch_feed_items", lambda o: [GOOD_ITEM, NOISE_ITEM]),
@@ -741,3 +742,38 @@ def test_hub_registry_load_failure_is_nonfatal(monkeypatch):
     assert any("load_hubs" in f for f in stats.failures)
     assert stats.hub_items_examined == 0
     assert inserted == []
+
+
+def test_hub_lane_gates_local_type_and_passes_clean_locality(monkeypatch):
+    import dataclasses
+    fed = TrackedCandidate("pf", "rf", "Jane Fed", "U.S. Representative District 9",
+                           "2026-11-03", state="CA",
+                           position_name="U.S. Representative District 9",
+                           government_name="United States Federal Government")
+    loc = TrackedCandidate("pl", "rl", "Kay Local", "Los Angeles Mayor",
+                           "2026-11-03", state="CA",
+                           position_name="Los Angeles Mayor",
+                           government_name="Los Angeles, California, US")
+
+    hubs = [
+        Hub(name="Ballotpedia", scope="global", poll_method="scoped_search",
+            domain="ballotpedia.org", kind="questionnaire"),
+        Hub(name="Local LWV forum", scope="local_type", poll_method="scoped_search",
+            query_template='"<locality>" League of Women Voters candidate forum <year>'),
+    ]
+    calls = {}
+
+    def capture(applicable, **kw):
+        # key by whether a local_type hub survived the gate for this race
+        calls[kw["locality"]] = [h.name for h in applicable]
+        return []
+
+    inserted = []
+    stats, _ = _run(
+        monkeypatch, inserted, tracked=[fed, loc], skip_watchlist=True, skip_sweeps=True,
+        load_hubs_fn=lambda cur: hubs, hub_raw_items_fn=capture)
+
+    # federal race: locality is None -> local_type excluded
+    assert calls[None] == ["Ballotpedia"]
+    # local race: clean locality "Los Angeles" -> local_type included, ranked last
+    assert calls["Los Angeles"] == ["Ballotpedia", "Local LWV forum"]
