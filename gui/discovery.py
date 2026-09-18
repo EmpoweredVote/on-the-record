@@ -9,6 +9,7 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 import psycopg2
 
@@ -19,6 +20,22 @@ def _db_url() -> Optional[str]:
 
 
 _YT_ID = re.compile(r"(?:v=|youtu\.be/|/shorts/|/live/|/embed/)([A-Za-z0-9_-]{11})")
+
+_HUB_KINDS = ("debate", "forum", "questionnaire", "guide", "pamphlet")
+_WWW = re.compile(r"^www\.")
+
+
+def _hub_domain(url: "str | None") -> "str | None":
+    """Registrable host of an http(s) URL (lowercased, leading www. stripped);
+    None for empty/non-http/YouTube URLs (YouTube uses the outlet flywheel)."""
+    try:
+        host = urlparse((url or "").strip()).netloc.lower()
+    except ValueError:
+        return None
+    if not host or "youtube" in host or host == "youtu.be":
+        return None
+    return _WWW.sub("", host) or None
+
 
 # Spec Q4's zero-tolerance set for mode C. Deliberately narrower than the eval
 # harvest's GOLD_FALSE_REASONS (which adds tier-5): tier-5 already drags the
@@ -109,6 +126,14 @@ class DiscoveredRow:
         unvetted scheme (javascript:, data:, ...) as an href."""
         u = (self.url or "").strip()
         return u if u.startswith(("http://", "https://")) else None
+
+    @property
+    def hub_domain(self) -> "str | None":
+        return _hub_domain(self.url)
+
+    @property
+    def hub_kind_default(self) -> str:
+        return self.event_kind_guess if self.event_kind_guess in _HUB_KINDS else "guide"
 
 
 def _to_row(r) -> DiscoveredRow:
@@ -542,6 +567,76 @@ def set_outlet_trusted(outlet_id: str) -> bool:
             conn.close()
     except Exception:
         return False
+
+
+def _race_state(race_id: "str | None") -> "str | None":
+    """Best-effort 2-letter state for a race (races -> elections), or None."""
+    if not race_id:
+        return None
+    url = _db_url()
+    if not url:
+        return None
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    select e.state from essentials.races r
+                    join essentials.elections e on e.id = r.election_id
+                    where r.id = %s::uuid
+                """, (race_id,))
+                r = cur.fetchone()
+                return (r[0] or None) if r else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def add_hub_from_row(row: "DiscoveredRow", *, scope: str, kind: str) -> "tuple[bool, str]":
+    """Flywheel: register the row's web domain as a comparable-source hub
+    (poll_method='scoped_search', added_via='flywheel'). Domain-scoped only —
+    scope in {'global','state'}; state is resolved from the row's race. Idempotent
+    via WHERE NOT EXISTS (no unique constraint on the table). Best-effort."""
+    domain = _hub_domain(row.url)
+    if not domain:
+        return False, "no web domain on this row"
+    if scope not in ("global", "state"):
+        return False, "scope must be global or state"
+    if kind not in _HUB_KINDS:
+        return False, "invalid hub kind"
+    url = _db_url()
+    if not url:
+        return False, "no DATABASE_URL"
+    state = None
+    if scope == "state":
+        state = _race_state(row.race_id)
+        if not state:
+            return False, "no state for this race — choose global scope"
+    name = row.channel_name or domain
+    try:
+        conn = psycopg2.connect(url)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    insert into essentials.source_hubs
+                      (name, scope, state, kind, poll_method, domain, tos_bucket,
+                       active, added_via)
+                    select %s, %s, %s, %s, 'scoped_search', %s, 'other', true, 'flywheel'
+                    where not exists (
+                        select 1 from essentials.source_hubs
+                        where domain = %s and scope = %s
+                          and coalesce(state, '') = coalesce(%s, ''))
+                    returning id
+                """, (name, scope, state, kind, domain, domain, scope, state))
+                added = cur.fetchone() is not None
+            conn.commit()
+            return (True, f"added hub {domain}") if added \
+                else (True, f"hub {domain} already registered")
+        finally:
+            conn.close()
+    except Exception:
+        return False, "failed to add hub (db error)"
 
 
 def trust_from_row(row: "DiscoveredRow") -> "tuple[bool, str, int]":

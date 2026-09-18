@@ -44,6 +44,82 @@ def test_thumb_and_duration_properties():
     assert _row(url="https://x.example/ep/1").thumb_url is None
 
 
+def test_hub_domain_property_strips_www_and_ignores_youtube():
+    assert _row(url="https://www.laist.com/x/y").hub_domain == "laist.com"
+    assert _row(url="https://ballotpedia.org/Karen_Bass").hub_domain == "ballotpedia.org"
+    assert _row(url="https://www.youtube.com/watch?v=abc12345678").hub_domain is None
+    assert _row(url="").hub_domain is None
+
+
+def test_hub_kind_default_maps_guess_or_falls_back():
+    assert _row(event_kind_guess="forum").hub_kind_default == "forum"
+    assert _row(event_kind_guess="questionnaire").hub_kind_default == "questionnaire"
+    assert _row(event_kind_guess="news_clip").hub_kind_default == "guide"
+    assert _row(event_kind_guess=None).hub_kind_default == "guide"
+
+
+class _FakeHubConn:
+    def __init__(self, inserted_id=("hub-1",)):
+        self.executed = []
+        self._id = inserted_id
+
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+    def fetchone(self):
+        return self._id
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def test_add_hub_from_row_inserts_flywheel_hub(monkeypatch):
+    conn = _FakeHubConn()
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: conn)
+    monkeypatch.setattr(discovery, "_race_state", lambda race_id: "CA")
+
+    row = _row(url="https://www.laist.com/elections/la-mayor", channel_name="LAist",
+               event_kind_guess="forum", race_id="r1")
+    ok, msg = discovery.add_hub_from_row(row, scope="state", kind="forum")
+
+    assert ok is True
+    sql, params = conn.executed[0]
+    assert "essentials.source_hubs" in sql
+    assert "'flywheel'" in sql and "'scoped_search'" in sql
+    assert "where not exists" in sql.lower()
+    assert "laist.com" in params            # domain bound
+    assert "CA" in params                   # resolved state bound
+    assert "forum" in params                # kind bound
+
+
+def test_add_hub_from_row_state_scope_without_state_fails(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    monkeypatch.setattr(discovery, "_race_state", lambda race_id: None)
+    row = _row(url="https://www.laist.com/x", race_id="r1")
+    ok, msg = discovery.add_hub_from_row(row, scope="state", kind="forum")
+    assert ok is False and "state" in msg.lower()
+
+
+def test_add_hub_from_row_rejects_youtube_row(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    row = _row(url="https://www.youtube.com/watch?v=abc12345678")
+    ok, msg = discovery.add_hub_from_row(row, scope="global", kind="forum")
+    assert ok is False
+
+
 def test_discovery_state_view_renders_row_details_and_alarms(monkeypatch):
     monkeypatch.setattr(coverage, "races_for_state",
                         lambda state: [_race(position_name="U.S. Senate")])
