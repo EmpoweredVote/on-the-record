@@ -221,7 +221,7 @@
   <button type="submit" name="action" value="restore">Restore selected to pending</button>
 </form>
 {% for label, rows in deferred_groups %}
-<h2>{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
+<h2 class="disc-section-title">{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
 {% for r in rows %}
   {{ deferred_row(r, state) }}
 {% endfor %}
@@ -247,9 +247,9 @@
 {% if not states %}
 <p class="empty">No tracked races yet.</p>
 {% else %}
-<ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:var(--sp-2);max-width:28rem;">
+<ul class="disc-statelist">
   {% for s in states %}
-  <li style="display:flex;justify-content:space-between;align-items:center;padding:var(--sp-3) var(--sp-4);border:1px solid var(--c-line);border-radius:var(--r-md);">
+  <li>
     <a href="/discovery?state={{ s.state }}">{{ s.state | state_name }}</a>
     <span class="pill">{{ s.pending }} pending</span>
   </li>
@@ -259,7 +259,7 @@
 
 {% if unmatched_groups %}
 <section id="unmatched" style="margin-top:var(--sp-6);">
-  <h2>Unmatched <span class="pill">{{ unmatched_count }} pending</span></h2>
+  <h2 class="disc-section-title">Unmatched <span class="pill">{{ unmatched_count }} pending</span></h2>
   <p class="empty"><small>These lost their race link — the race was merged or deleted
     (<code>discovered_sources.race_id</code> is <code>on delete set null</code>).
     Approve as a quote source, reject, or use Edit first to reattach.</small></p>
@@ -269,8 +269,8 @@
 {% endif %}
 
 {% else %}
-<div style="display:flex;gap:var(--sp-6);align-items:flex-start;">
-  <nav style="min-width:14rem;flex:none;position:sticky;top:var(--sp-3);">
+<div class="disc-layout">
+  <nav class="disc-nav">
     <p><a href="/discovery">&larr; All states</a></p>
     <h2>{{ state | state_name }}</h2>
     <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:var(--sp-2);">
@@ -288,7 +288,13 @@
     </ul>
   </nav>
 
-  <div style="flex:1;min-width:0;">
+  <div class="disc-main">
+    <div class="disc-legend">
+      <span class="count-chip">{{ icon('people') }} candidates</span>
+      <span class="count-chip">{{ icon('quote') }} quote sources</span>
+      <span class="count-chip">{{ icon('mic') }} ingested</span>
+      <span class="count-chip">{{ icon('screen') }} pending</span>
+    </div>
     {% if not statewide and not localities %}
     <p class="empty">No tracked races in {{ state | state_name }} yet.</p>
     {% else %}
@@ -296,7 +302,7 @@
     {% endif %}
 
     <section id="statewide">
-      <h2>Statewide &amp; federal <small class="empty">— tracked once, approved everywhere</small></h2>
+      <h2 class="disc-section-title">Statewide &amp; federal <small>— tracked once, approved everywhere</small></h2>
       {% for race in statewide %}
         {{ race_block(race, race_outlet_groups, state) }}
       {% endfor %}
@@ -304,7 +310,7 @@
 
     {% for loc, loc_races in localities.items() %}
     <section id="loc-{{ loc | anchor_slug }}">
-      <h2>{{ loc }}</h2>
+      <h2 class="disc-section-title">{{ loc }}</h2>
       {% for race in loc_races %}
         {{ race_block(race, race_outlet_groups, state) }}
       {% endfor %}
