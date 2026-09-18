@@ -94,6 +94,22 @@ def test_process_dict_carries_original_vs_clip(monkeypatch):
     assert inserted[0]["original_vs_clip"] == "original"
 
 
+def test_prior_cycle_item_is_flagged_pending_not_guarded(monkeypatch):
+    """A tracked candidate's own prior-cycle answers are FLAGGED for review
+    (pending), with the cycle marked in `why`, not dropped to auto_filtered."""
+    inserted = []
+    stats, _ = _run(monkeypatch, inserted, skip_sweeps=True, provider=_FakeProvider(
+        '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
+        ' "event_kind": "questionnaire", "source_tier": 2, "original_vs_clip": "original",'
+        ' "route": "quote_source", "prior_cycle": true, "source_cycle_year": "2020",'
+        ' "why": "the candidate\'s own 2020 Candidate Connection answers"}'))
+    assert len(inserted) == 1
+    row = inserted[0]
+    assert row["status"] == "pending"                 # flagged for review, not guarded out
+    assert row["why"].startswith("[PRIOR CYCLE 2020]")  # cycle surfaced to the reviewer
+    assert stats.inserted_pending == 1
+
+
 def test_already_seen_sources_are_skipped_before_classify(monkeypatch):
     inserted = []
     stats, provider = _run(monkeypatch, inserted, skip_sweeps=True,

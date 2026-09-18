@@ -60,4 +60,6 @@ class Verdict:
     original_vs_clip: Optional[str] = None  # 'original' | 'clip'
     route: str = "ingest"
     why: str = ""
+    prior_cycle: bool = False               # this candidate's OWN answers, but from an earlier cycle
+    source_cycle_year: Optional[str] = None  # the cycle year of the content, when known
     rejected_reason: Optional[str] = None   # set when the reply wasn't parseable

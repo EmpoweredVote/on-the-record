@@ -370,18 +370,28 @@ _CC_QUESTIONS = (
     "What was your very first job?",
     "What legacy would you like to leave?",
 )
+# The sentence that introduces a cycle's answers -- "<name> completed Ballotpedia's
+# Candidate Connection survey in <year>." -- carries the cycle YEAR. Anchoring the
+# window here (not just at the first question) lets the classifier tell a
+# current-cycle answer from a prior one (the flag-vs-guard decision, 2026-09-18).
+_CC_COMPLETION_MARKER = "completed Ballotpedia's Candidate Connection survey"
 
 
 def _candidate_connection_window(text: str, *, prefix: int = 300) -> "str | None":
     """If `text` holds a Ballotpedia Candidate Connection Q&A (a candidate's own
-    answers), return the slice starting just before the first standardized
-    question, so the peek surfaces the answers instead of the top-of-page bio.
-    None when the page carries no such Q&A (an uncompleted survey, or any other
-    page) -- the caller then keeps the ordinary top-of-page peek."""
+    answers), return the slice starting at the completion sentence that
+    introduces those answers (it carries the cycle year), so the peek surfaces
+    both the cycle and the answers instead of the top-of-page bio. Falls back to
+    a short prefix before the first question when the completion sentence isn't
+    found. None when the page carries no such Q&A (an uncompleted survey, or any
+    other page) -- the caller then keeps the ordinary top-of-page peek."""
     hits = [i for i in (text.find(q) for q in _CC_QUESTIONS) if i >= 0]
     if not hits:
         return None
-    return text[max(0, min(hits) - prefix):]
+    first_q = min(hits)
+    lead = text.rfind(_CC_COMPLETION_MARKER, 0, first_q)  # completion sentence before the Q&A
+    start = lead if lead >= 0 else max(0, first_q - prefix)
+    return text[start:]
 
 
 def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> str:
