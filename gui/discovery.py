@@ -32,7 +32,8 @@ _SELECT = """
            d.source_tier_guess, d.route, d.confidence, d.why, d.discovered_via,
            d.status, e.election_date::text,
            coalesce(o.trusted, false), coalesce(o.ingest_barred, false),
-           d.original_vs_clip
+           d.original_vs_clip,
+           coalesce(d.prior_cycle, false), d.source_cycle_year
     from essentials.discovered_sources d
     left join essentials.races r on r.id = d.race_id
     left join essentials.elections e on e.id = r.election_id
@@ -42,6 +43,7 @@ _SELECT = """
 _LIST_WHERE_ORDER = """
     where d.status = %s
     order by e.election_date asc nulls last,
+             d.prior_cycle asc,
              d.source_tier_guess asc nulls last,
              d.confidence desc nulls last, d.created_at desc
 """
@@ -68,7 +70,7 @@ class DiscoveredRow:
     discovered_via: str
     status: str
     election_date: Optional[str] = None
-    # The next three are positional-mapped from _SELECT's three trailing
+    # The next FIVE are positional-mapped from _SELECT's five trailing
     # columns (see _to_row) — they MUST stay here, immediately after
     # election_date and before race_label/family_count below. Those two are
     # never supplied by _SELECT (filled later by callers), so this block must
@@ -78,6 +80,8 @@ class DiscoveredRow:
     outlet_trusted: bool = False
     outlet_ingest_barred: bool = False
     original_vs_clip: Optional[str] = None  # 'original' | 'clip' | None (Task 5b)
+    prior_cycle: bool = False               # Slice 2B: a candidate's own answers from an EARLIER cycle
+    source_cycle_year: Optional[str] = None  # the cycle year of the content, when known
     race_label: Optional[str] = None  # filled by the route via races.race_labels
     family_count: int = 0  # other pending rows sharing this row's source key (page render)
 

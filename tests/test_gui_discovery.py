@@ -62,6 +62,44 @@ def test_discovery_state_view_renders_row_details_and_alarms(monkeypatch):
     assert "watch this channel" in body.lower()     # flywheel offer (no outlet_id)
 
 
+def test_to_row_maps_prior_cycle_columns_in_alignment(monkeypatch):
+    """Alignment guard: a full _SELECT-shaped tuple maps prior_cycle +
+    source_cycle_year onto DiscoveredRow without shifting the trailing
+    outlet_trusted / original_vs_clip columns (the positional-map trap)."""
+    r = (
+        "d1", "https://x/1", "T", "snip", "KXAN", "UCk", None, None, 1800,
+        "2026-08-01", "r1", "questionnaire", 2, "quote_source", 0.9, "own 2020 answers",
+        "hub", "pending", "2026-11-03",
+        True, False, "original",          # outlet_trusted, outlet_ingest_barred, original_vs_clip
+        True, "2020",                     # prior_cycle, source_cycle_year (the two new trailing cols)
+    )
+    row = discovery._to_row(r)
+    assert row.original_vs_clip == "original"   # still aligned
+    assert row.outlet_trusted is True
+    assert row.prior_cycle is True
+    assert row.source_cycle_year == "2020"
+
+
+def test_pending_query_selects_and_ranks_prior_cycle():
+    assert "prior_cycle" in discovery._SELECT
+    assert "source_cycle_year" in discovery._SELECT
+    # prior-cycle rows rank BELOW current-cycle within a race (after election_date).
+    assert "d.prior_cycle asc" in discovery._LIST_WHERE_ORDER
+
+
+def test_discovery_page_shows_prior_cycle_badge(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state",
+                        lambda state: [_race(position_name="U.S. Senate")])
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(prior_cycle=True, source_cycle_year="2020")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "alarms": [], "stale_outlets": [], "pending_total": 1})
+    client = TestClient(create_app())
+    body = client.get("/discovery?state=TX").text
+    assert "prior cycle" in body.lower()   # reviewer sees the cycle to date the quote
+    assert "2020" in body
+
+
 def test_discovery_page_empty_state_no_states_tracked(monkeypatch):
     monkeypatch.setattr(coverage, "state_index", lambda: [])
     client = TestClient(create_app())
