@@ -185,8 +185,19 @@ def classify_item(provider, item: RawItem, *, race_label: str, roster_names: lis
         max_tokens=config.DISCOVERY_CLASSIFY_MAX_TOKENS, temperature=0.0, system=_SYSTEM)
     verdict = parse_verdict(text)
     low, high = config.DISCOVERY_CAPTIONS_BAND
+    in_band = low <= verdict.confidence < high
+    # A metadata-only REJECT of a web page is unreliable for the "candidate's
+    # own words" test: a questionnaire / Ballotpedia Candidate Connection page
+    # reads as third-person election boilerplate in its title and search
+    # snippet, but the candidate's own answers live deep in the page body —
+    # exactly what the peek surfaces. So re-check a rejected web page with the
+    # page text even when the first pass was confident (out of the mid band).
+    # YouTube captions keep the mid-band-only trigger, and a first-pass ACCEPT
+    # already stands — so the only added cost is one peek per rejected web page.
+    reject_web_page = (not verdict.relevant
+                       and not source_key(item.url).startswith("youtube:"))
     if (peek_fetcher is not None and verdict.rejected_reason is None
-            and low <= verdict.confidence < high):
+            and (in_band or reject_web_page)):
         excerpt = peek_fetcher(item.url)
         if excerpt:
             text2 = provider.complete(

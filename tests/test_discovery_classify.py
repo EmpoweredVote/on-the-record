@@ -158,6 +158,76 @@ def test_page_peek_second_pass_uses_plain_excerpt_verbatim():
     assert _VTT_SHAPED_EXCERPT in prompts[1]
 
 
+# A Ballotpedia Candidate Connection page (and questionnaire pages generally)
+# reads as third-person election boilerplate in its title/search snippet -- the
+# candidate's OWN answers live deep in the page body, which only the page peek
+# surfaces. So a metadata-only reject of a WEB PAGE is unreliable for the
+# "candidate's own words" test and must still trigger the peek + re-classify,
+# even when the first pass was confident (out of the mid band). Regression for
+# the Slice-2 Phase-4a finding: completed Ballotpedia CC pages were retrieved
+# and the peek carried the answers, but classify_item never fetched the peek.
+_CC_EXCERPT = ("completed Ballotpedia's Candidate Connection survey in 2026. "
+               "Who are you? Tell us about yourself. I am running to ...")
+
+
+def test_classify_item_confident_reject_of_web_page_still_peeks():
+    provider = _FakeProvider([
+        '{"relevant": false, "confidence": 0.9, "why": "third-person page"}',
+        '{"relevant": true, "confidence": 0.9, "event_kind": "questionnaire",'
+        ' "original_vs_clip": "original", "why": "candidate own answers"}',
+    ])
+    fetched = {}
+
+    def fake_peek(url):
+        fetched["url"] = url
+        return _CC_EXCERPT
+
+    item = RawItem(url="https://ballotpedia.org/Karen_Bass",
+                   title="Karen Bass - Ballotpedia",
+                   description="Incumbent Karen Bass and Nithya Raman are running ...",
+                   via="hub")
+    v = classify.classify_item(provider, item, race_label="Los Angeles Mayor (CA, 2026)",
+                               roster_names=["Karen Bass", "Nithya Raman"],
+                               peek_fetcher=fake_peek)
+    assert fetched.get("url") == item.url          # the peek WAS fetched
+    assert len(provider.prompts) == 2              # a second (peek) pass ran
+    assert _CC_EXCERPT in provider.prompts[1]
+    assert v.relevant is True and v.event_kind_guess == "questionnaire"
+
+
+def test_classify_item_confident_reject_of_youtube_does_not_peek():
+    """The re-peek-on-reject widening is web-page-only: a confident YouTube
+    reject keeps its single-pass behavior (the captions peek stays mid-band
+    gated), so the caption-lane cost model is unchanged."""
+    provider = _FakeProvider(['{"relevant": false, "confidence": 0.9, "why": "clip"}'])
+    called = {"n": 0}
+
+    def fake_peek(url):
+        called["n"] += 1
+        return _VTT_SHAPED_EXCERPT
+
+    v = classify.classify_item(provider, _item(), race_label="TX Senate",
+                               roster_names=["Maria Delgado"], peek_fetcher=fake_peek)
+    assert called["n"] == 0 and len(provider.prompts) == 1 and v.relevant is False
+
+
+def test_classify_item_confident_accept_of_web_page_does_not_peek():
+    """A confident first-pass ACCEPT already stands -- no peek, no extra LLM
+    call -- so widening the reject path adds cost only for rejected web pages."""
+    provider = _FakeProvider(['{"relevant": true, "confidence": 0.9, "why": "clear"}'])
+    called = {"n": 0}
+
+    def fake_peek(url):
+        called["n"] += 1
+        return _CC_EXCERPT
+
+    item = RawItem(url="https://ballotpedia.org/Karen_Bass", title="t",
+                   description="d", via="hub")
+    v = classify.classify_item(provider, item, race_label="Los Angeles Mayor (CA, 2026)",
+                               roster_names=["Karen Bass"], peek_fetcher=fake_peek)
+    assert called["n"] == 0 and len(provider.prompts) == 1 and v.relevant is True
+
+
 def test_parse_verdict_accepts_questionnaire_kind():
     v = classify.parse_verdict(
         '{"relevant": true, "confidence": 0.8, "event_kind": "questionnaire",'

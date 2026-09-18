@@ -23,16 +23,18 @@ Usage (repo root; keys from .env.local):
 The metric is noisy — use --runs N and treat a change as real only when it beats
 the per-run spread this harness prints (use --runs 5 for a tuning decision).
 
-Baseline (measured 2026-09-18, deepseek, runs=3, snapshot registry, FILLED target):
-addressable recall 0.00 [0/2], overall 0.00 [0/14], retrieval-only 0.14 [2/14];
-per-run headline spread 0.00. The two filled+addressable sources (la-mayor and
-ut-sboe-14 Ballotpedia) are RETRIEVED but not verified — the classifier rejects the
-fetched Candidate Connection page — so the headline is a clean 0/2, not a floor
-artifact. Between-run (Tavily) variance is high: an earlier session retrieved and
-verified the az-mine-inspector debate (a filled, non-addressable source) that this
-run did not retrieve at all. Use --runs 5; treat a change smaller than the observed
-spread (or ~0.10) as noise. Open follow-up: why is a completed Ballotpedia Candidate
-Connection page retrieved but not verified?
+Baseline (la-mayor + ut-sboe-14, deepseek, runs=3, snapshot, FILLED target):
+addressable recall 1.00 [2/2], precision 1.00, per-run spread 0.00 — the two
+filled+addressable Ballotpedia Candidate Connection pages (Bass/Raman, Isom) are
+now retrieved AND verified. Before the classify_item peek-gating fix they were
+retrieved but rejected 0/2: a metadata-only first pass reads a Ballotpedia CC page
+as third-person election boilerplate and rejects it at conf ~0.90 — above the
+mid-confidence captions band — so the page peek that carries the candidate's own
+answers was never fetched. classify_item now also peeks on a confident reject of a
+web page (not just the mid band). Between-run (Tavily) variance is still high:
+an earlier session retrieved+verified the az-mine-inspector debate (a filled,
+non-addressable source) that a later run did not retrieve at all. Use --runs 5;
+treat a change smaller than the observed spread (or ~0.10) as noise.
 """
 from __future__ import annotations
 
