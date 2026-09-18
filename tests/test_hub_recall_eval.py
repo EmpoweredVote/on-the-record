@@ -93,3 +93,18 @@ def test_majority_per_source_rolls_up_counts():
     recs = [{"id": "a", "addressable": True, "retrieved_count": 3, "accepted_count": 2}]
     out = hre.majority_per_source(recs, n_runs=3)
     assert out == [{"id": "a", "addressable": True, "retrieved": True, "accepted": True}]
+
+
+def test_filled_targets_keeps_only_exists_yes():
+    sources = [
+        {"id": "a", "url": "u1", "exists": "yes"},
+        {"id": "b", "url": "u2", "exists": "partial"},
+        {"id": "c", "url": "u3", "exists": "yes"},
+        {"id": "d", "url": "u4"},              # no exists key -> not filled
+        {"id": "e", "url": "u5", "exists": "YES"},  # case-sensitive: not "yes"
+    ]
+    out = hre.filled_targets(sources)
+    assert [s["id"] for s in out] == ["a", "c"]
+    # returns the same source dicts (not copies), preserving order
+    assert out[0] is sources[0]
+    assert hre.filled_targets([]) == []

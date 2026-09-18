@@ -48,6 +48,15 @@ def registrable_domain(url_or_host: str) -> str:
     return last2
 
 
+def filled_targets(gt_sources: list) -> list:
+    """The recall TARGET set: only sources that actually carry the candidates'
+    own words, i.e. `exists == "yes"`. `partial` sources (unfilled questionnaire,
+    scheduled-not-yet-aired event, access-blocked, or unconfirmed) can never be
+    verified, so counting them in a recall denominator would punish the lane for
+    correctly rejecting an empty page. Preserves order; returns the same dicts."""
+    return [s for s in gt_sources if s.get("exists") == "yes"]
+
+
 def source_urls(source: dict) -> list:
     return [source["url"], *(source.get("accept_urls") or [])]
 

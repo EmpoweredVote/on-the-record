@@ -2,17 +2,19 @@
 """Hub-lane comparable-source recall eval (Slice 2 Phase 4).
 
 Manual ONLINE harness (live Tavily + OpenRouter) — NOT a pytest test. Runs the
-shipped hub lane for each ground-truth race and reports recall of the comparable
-common-question sources the ground truth says exist:
+shipped hub lane for each ground-truth race and reports recall against the FILLED
+comparable common-question sources (those carrying the candidates' own words —
+exists == "yes"; partial/unfilled/scheduled/blocked pages can never verify, so
+they are excluded from every denominator):
 
   hubs.hubs_for_race -> hub_search.raw_items_for_race (Tavily)
       -> prefilter_item -> classify.classify_item (OpenRouter + page peek)
 
 Reported per race and pooled (micro-averaged) over --runs (majority vote per
-source):
-  * addressable recall (headline) = found+verified / GT a scoped_search hub domain reaches
-  * overall recall (context)      = found+verified / all GT
-  * retrieval-only recall (debug) = retrieved by Tavily / GT   (pre-classify)
+source); T = the filled target set (exists == "yes"):
+  * addressable recall (headline) = found+verified / T a scoped_search hub domain reaches
+  * overall recall (context)      = found+verified / all T
+  * retrieval-only recall (debug) = retrieved by Tavily / T   (pre-classify)
 
 Usage (repo root; keys from .env.local):
   .venv/bin/python scripts/eval_hub_recall.py [--races SLUG ...] [--runs N]
@@ -21,16 +23,16 @@ Usage (repo root; keys from .env.local):
 The metric is noisy — use --runs N and treat a change as real only when it beats
 the per-run spread this harness prints (use --runs 5 for a tuning decision).
 
-Baseline (measured 2026-09-18, deepseek, runs=3, snapshot registry of 17 hubs):
-addressable recall 0.00 [0/5], overall 0.03 [1/29], retrieval-only 0.17 [5/29],
-precision 0.38; per-run headline spread 0.00..0.00 (stable at the floor). The
-addressable set is dominated by Ballotpedia pages that are mostly UNFILLED for
-these races (per the ground truth); an unfilled questionnaire is correctly
-rejected by the classifier (no candidate's own words), so the headline sits at
-0.00 while retrieval reaches 17%. Treat a recall change smaller than ~0.10 (or the
-per-run spread, whichever is larger) as noise; use --runs 5 for a tuning decision.
-Possible follow-up: restrict the addressable/GT set to FILLED comparable sources
-so the headline reflects verifiable finds.
+Baseline (measured 2026-09-18, deepseek, runs=3, snapshot registry, FILLED target):
+addressable recall 0.00 [0/2], overall 0.00 [0/14], retrieval-only 0.14 [2/14];
+per-run headline spread 0.00. The two filled+addressable sources (la-mayor and
+ut-sboe-14 Ballotpedia) are RETRIEVED but not verified — the classifier rejects the
+fetched Candidate Connection page — so the headline is a clean 0/2, not a floor
+artifact. Between-run (Tavily) variance is high: an earlier session retrieved and
+verified the az-mine-inspector debate (a filled, non-addressable source) that this
+run did not retrieve at all. Use --runs 5; treat a change smaller than the observed
+spread (or ~0.10) as noise. Open follow-up: why is a completed Ballotpedia Candidate
+Connection page retrieved but not verified?
 """
 from __future__ import annotations
 
@@ -180,9 +182,12 @@ def main(argv=None) -> int:
         for race in races:
             hub_domains, found, accepted = run_race(
                 race, all_hubs, provider, budget=args.budget, do_classify=do_classify)
-            rows = hre.score_run(race["sources"], hub_domains, found, accepted)
+            # Target set = FILLED sources only (exists == "yes"). Unfilled/partial
+            # pages can never verify, so they don't belong in a recall denominator.
+            targets = hre.filled_targets(race["sources"])
+            rows = hre.score_run(targets, hub_domains, found, accepted)
             run_rows.extend(rows)
-            prec = hre.precision(race["sources"], accepted)
+            prec = hre.precision(targets, accepted)
             precision_matched += prec["n_matched"]
             precision_total += prec["n_accepted"]
             slot = acc.setdefault(race["race"], {})
@@ -196,7 +201,7 @@ def main(argv=None) -> int:
         per_run_headline.append(hl)
         print(f"run {run_i + 1}/{args.runs}: headline recall = {_fmt(hl)}")
 
-    print("\n| race | addr | overall | retr | n(addr/gt) |")
+    print("\n| race | addr | overall | retr | n(addr/T) |   (T = filled target, exists==\"yes\")")
     print("|---|---|---|---|---|")
     all_majority = []
     for race in races:

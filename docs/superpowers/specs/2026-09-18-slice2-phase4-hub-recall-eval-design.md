@@ -184,3 +184,30 @@ harness end to end and gives the number future tuning is compared against. This 
 - **Ground-truth staleness.** The labels are a 2026-09-17 snapshot; some `partial` sources
   were "scheduled, not yet aired." That is acceptable for a recall regression baseline (the
   target set is fixed); note it in the fixture's `_about`.
+
+## Amendment 2026-09-18 — the recall target set is FILLED sources only (Phase 4a)
+
+Decided with Chris after the first baseline came back with addressable recall 0.00. The
+addressable set was dominated by Ballotpedia pages that are **unfilled** for these races,
+and an unfilled questionnaire can never verify (no candidate's own words), so the classifier
+correctly rejects it — which pinned the headline at the floor and made it uninformative.
+
+**Decision:** the recall **target set** is only the sources that actually carry the
+candidates' own words — `exists == "yes"` in the ground truth. Every `partial` source
+(incompletely filled, scheduled-not-yet-aired, access-blocked, or unconfirmed) is excluded
+from **every** recall denominator (addressable, overall, retrieval-only) and from precision
+matching. "filled" is defined as the objective `exists == "yes"` label — no per-source hand
+judgment; `partial` genuinely means "not a clean, complete comparable source."
+
+**Implementation:** a pure `hub_recall_eval.filled_targets(gt_sources)` helper
+(`[s for s in gt_sources if s.get("exists") == "yes"]`, order-preserving), unit-tested
+offline. The runner filters `race["sources"]` through it before `score_run` and `precision`.
+The scorer is otherwise unchanged; the fixture is unchanged — `partial` sources stay in it as
+provenance (a record of the full landscape) and can power an all-source diagnostic later.
+
+**Consequence:** the filled target is 14 of 29 sources; only 2 are filled **and** addressable
+under the seed registry (both filled Ballotpedia pages: la-mayor Bass/Raman, ut-sboe-14 Isom),
+because the registry has only five `scoped_search` domain hubs. The headline is therefore
+small-N (denominator 2) but meaningful — those are the filled comparable sources the lane
+should land — and it grows as domain hubs are added. The all-GT baseline is retained in the
+runner docstring for reference; the filled-target baseline replaces it as the headline number.
