@@ -242,6 +242,47 @@ def test_fetch_page_bytes_caps_body_size(monkeypatch):
     assert closed == [True]   # capped early-exit must still close the response
 
 
+def test_fetch_page_bytes_uses_browser_compatible_identifying_user_agent(monkeypatch):
+    """CloudFront-fronted civic sites (Ballotpedia, e.g.) soft-block a bare bot
+    User-Agent: CouncilScribeBot/1.0 got HTTP 202 with an empty body, which
+    starved the stage-2 page peek and made the classifier auto-filter real
+    Candidate Connection pages. The web-lane UA must be browser-COMPATIBLE
+    (Mozilla/5.0 prefix, so those pages return 200) while STILL identifying the
+    crawler and its contact URL; robots matching keeps the bot token."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    captured = {}
+
+    class _FakeResp:
+        headers = {"Content-Type": "text/html"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size=8192):
+            yield b"<html></html>"
+
+    def fake_get(url, **kwargs):
+        captured["headers"] = kwargs.get("headers", {})
+        return _FakeResp()
+
+    monkeypatch.setattr(feeds.requests, "get", fake_get)
+    feeds._fetch_page_bytes("https://ballotpedia.org/Some_Candidate")
+
+    ua = captured["headers"].get("User-Agent", "")
+    assert ua.startswith("Mozilla/5.0"), (
+        f"web-lane UA must be browser-compatible to clear CloudFront soft-blocks, got {ua!r}")
+    assert "CouncilScribeBot" in ua      # still identifies the crawler
+    assert "empowered.vote" in ua        # still carries the contact URL
+    assert feeds.UA_TOKEN == "CouncilScribeBot"   # robots matching unchanged
+
+
 def test_html_to_text_preserves_less_than_greater_than_comparisons():
     text = feeds._html_to_text("Turnout < 50% but > 40% statewide")
     assert text == "Turnout < 50% but > 40% statewide"

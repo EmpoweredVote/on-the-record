@@ -32,8 +32,17 @@ _NS = {
 }
 
 UA_TOKEN = "CouncilScribeBot"
-WEB_USER_AGENT = ("CouncilScribeBot/1.0 (+https://empowered.vote; "
-                  "non-commercial civic source discovery)")
+# Browser-COMPATIBLE but still self-identifying: a bare "CouncilScribeBot/1.0"
+# UA is soft-blocked by CloudFront-fronted civic sites (Ballotpedia returns
+# HTTP 202 with an empty body), which starved the stage-2 page peek and made
+# the classifier auto-filter real Candidate Connection questionnaire pages. The
+# "Mozilla/5.0 (compatible; ...)" form — the long-standing convention for
+# well-behaved bots (cf. Googlebot) — clears those blocks (Ballotpedia returns
+# 200) while a server-log reader still sees the crawler name and contact URL.
+# UA_TOKEN stays "CouncilScribeBot" so robots.txt rule-matching is unchanged.
+WEB_USER_AGENT = ("Mozilla/5.0 (compatible; CouncilScribeBot/1.0; "
+                  "+https://empowered.vote; non-commercial civic source discovery) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 
 class RobotsDenied(Exception):
