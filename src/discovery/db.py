@@ -79,17 +79,22 @@ def existing_source_keys(cur) -> set:
 def insert_discovered(cur, row: dict) -> bool:
     """Idempotent on source_key. Returns True when a row was inserted.
 
-    original_vs_clip is read via .get() (not []) so existing callers/test
-    fixtures that don't set the key still work — it lands NULL, same as any
-    row the classifier couldn't judge."""
+    original_vs_clip, prior_cycle, and source_cycle_year are read via .get()
+    (not []) so existing callers/test fixtures that don't set the keys still
+    work — they land NULL/false, same as any row the classifier couldn't judge.
+    prior_cycle + source_cycle_year (Slice 2B flag-vs-guard) are appended AFTER
+    status so existing positional param expectations are unshifted. 🔴 Needs the
+    1876 migration applied first (the columns must exist)."""
     cur.execute("""
         insert into essentials.discovered_sources
           (source_key, url, title, description_snippet, channel_name, channel_id,
            channel_url, outlet_id, duration_seconds, published_at,
            matched_politician_ids, race_id, event_kind_guess, original_vs_clip,
-           source_tier_guess, route, confidence, why, discovered_via, status)
+           source_tier_guess, route, confidence, why, discovered_via, status,
+           prior_cycle, source_cycle_year)
         values (%s, %s, %s, %s, %s, %s, %s, %s::uuid, %s, %s,
-                %s::uuid[], %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s)
+                %s::uuid[], %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s)
         on conflict (source_key) do nothing
         returning id
     """, (
@@ -100,6 +105,7 @@ def insert_discovered(cur, row: dict) -> bool:
         row.get("original_vs_clip"),
         row["source_tier_guess"], row["route"], row["confidence"], row["why"],
         row["discovered_via"], row["status"],
+        row.get("prior_cycle", False), row.get("source_cycle_year"),
     ))
     return cur.fetchone() is not None
 

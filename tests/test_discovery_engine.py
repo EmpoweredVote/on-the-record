@@ -106,7 +106,9 @@ def test_prior_cycle_item_is_flagged_pending_not_guarded(monkeypatch):
     assert len(inserted) == 1
     row = inserted[0]
     assert row["status"] == "pending"                 # flagged for review, not guarded out
-    assert row["why"].startswith("[PRIOR CYCLE 2020]")  # cycle surfaced to the reviewer
+    assert row["prior_cycle"] is True                 # structured flag persisted...
+    assert row["source_cycle_year"] == "2020"         # ...with its cycle year
+    assert "[PRIOR CYCLE" not in (row["why"] or "")   # structured column replaces the interim why marker
     assert stats.inserted_pending == 1
 
 
