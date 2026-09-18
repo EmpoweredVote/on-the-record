@@ -142,17 +142,23 @@
   {% endfor %}
 {% endmacro %}
 
+{% macro count_chip(n, word, glyph) -%}
+<span class="count-chip{% if not n %} is-zero{% endif %}" title="{{ n }} {{ word }}">{{ icon(glyph) }} {{ n }}</span>
+{%- endmacro %}
+
 {% macro race_block(race, groups_by_race, state='') %}
 {% set groups = groups_by_race.get(race.race_id, []) %}
-<details class="race-row" id="race-{{ race.race_id }}" style="border:1px solid var(--c-line);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);">
-  <summary style="cursor:pointer;">
-    <strong>{{ race.position_name or "Unlabeled race" }}</strong>
-    <span class="pill">{{ race.candidates }} candidates</span>
-    <span class="pill">{{ race.quote_sources }} quote sources</span>
-    <span class="pill">{{ race.ingested }} ingested</span>
-    <span class="pill">{{ race.pending }} pending</span>
+<details class="disc-race" id="race-{{ race.race_id }}">
+  <summary>
+    <span class="chevron">{{ icon('chevron') }}</span><span class="race-name">{{ race.position_name or "Unlabeled race" }}</span>
+    <span class="count-chips">
+      {{ count_chip(race.candidates, 'candidates', 'people') }}
+      {{ count_chip(race.quote_sources, 'quote sources', 'quote') }}
+      {{ count_chip(race.ingested, 'ingested', 'mic') }}
+      {{ count_chip(race.pending, 'pending', 'screen') }}
+    </span>
   </summary>
-  {{ outlet_groups(groups, race, state) }}
+  <div class="disc-race-body">{{ outlet_groups(groups, race, state) }}</div>
 </details>
 {% endmacro %}
 

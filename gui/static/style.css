@@ -325,7 +325,8 @@ table.library .ctx { font-size: var(--fs-xs); color: var(--c-ink-soft); margin: 
 .disc-race > summary::-webkit-details-marker { display: none; }
 .disc-race > summary:hover { background: var(--c-surface); }
 .disc-race .race-name { font-weight: 600; flex: 1; min-width: 0; }
-.disc-race .chevron { color: var(--c-muted-fg); transition: transform 0.15s ease; }
+.disc-race .chevron { color: var(--c-muted-fg); transition: transform 0.15s ease; display: inline-flex; flex: none; }
+.disc-race .chevron .icon { width: 14px; height: 14px; }
 .disc-race[open] > summary .chevron { transform: rotate(90deg); }
 .disc-race[open] > summary { border-radius: var(--r-md) var(--r-md) 0 0; border-bottom: 1px solid var(--c-line-soft); }
 .disc-race-body { padding: 0 var(--sp-4) var(--sp-3); }
