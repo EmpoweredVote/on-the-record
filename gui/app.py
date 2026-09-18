@@ -105,6 +105,7 @@ def _outlet_groups_for(rows: list) -> list:
         key = family_key(r) or ("row", r.id)
         if key not in groups:
             groups[key] = {"name": r.channel_name or "source", "trusted": r.outlet_trusted,
+                           "trustable": key[0] in ("outlet", "channel"),
                            "muted": [], "open": [], "trust_row_id": r.id}
             order.append(key)
         lane = content_lane(r.original_vs_clip, r.event_kind_guess)
