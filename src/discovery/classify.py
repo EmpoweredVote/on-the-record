@@ -60,16 +60,18 @@ Set "relevant" to true ONLY for original sources of the candidates' own words �
 i.e. when original_vs_clip is "original". News packages ABOUT candidates, campaign
 ads, and highlight/clip compilations are relevant=false even when the candidate
 appears or is quoted in them.
-Current cycle: the tracked race is {race_label}. Handle prior/other cycles in two ways:
-- WRONG CONTEST — a different election or a past contest whose candidates are not this
-  race's tracked candidates (e.g. an archived page showing an earlier cycle's different
-  candidate set). Set "relevant" to false; it is stale.
-- A TRACKED CANDIDATE'S OWN PRIOR-CYCLE ANSWERS — the SAME tracked candidate's own answers
-  to the same standardized questions from an earlier cycle (e.g. a Ballotpedia Candidate
-  Connection survey the candidate completed in a prior year). These stay comparable: keep
-  "relevant" true, set "prior_cycle" true, and put the answers' cycle year in
-  "source_cycle_year". A current-cycle item has "prior_cycle" false and "source_cycle_year"
-  the item's cycle year (or null if unknown).
+Current cycle & contest: the tracked race is {race_label}; its cycle year is the year in
+that label, and its candidates are the Tracked candidates listed above. Apply two rules:
+- WRONG CONTEST — if the item's words or answers are from a person NOT in the Tracked
+  candidates list, or are about a different race/contest, set "relevant" to false — EVEN IF
+  the page carries that person's own substantive, first-person answers. Someone's own words
+  about a different race are not a source for THIS race.
+- PRIOR-CYCLE OWN ANSWERS — for a tracked candidate's OWN answers to the same standardized
+  questions, compare the content's cycle year to the race's cycle year. Set "prior_cycle"
+  true ONLY when the content's year is EARLIER than the race's year, and put that earlier
+  year in "source_cycle_year". If the years are the SAME year (or no earlier year is
+  evident), "prior_cycle" is false — a same year survey is the current cycle. Prior-cycle
+  own answers stay comparable, so keep "relevant" true (flagged for review, not rejected).
 If a captions or article-page excerpt is provided, judge DISCOURSE SHAPE: sustained
 first-person policy speech and moderator/Q&A signatures suggest an original event;
 third-person anchor narration with soundbites suggests a news package. Do not guess
