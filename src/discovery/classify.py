@@ -60,10 +60,16 @@ Set "relevant" to true ONLY for original sources of the candidates' own words �
 i.e. when original_vs_clip is "original". News packages ABOUT candidates, campaign
 ads, and highlight/clip compilations are relevant=false even when the candidate
 appears or is quoted in them.
-Current cycle: the tracked race is {race_label}. If this item is about a PRIOR
-or different election cycle (a wrong year or a past contest, e.g. an archived
-page still showing an earlier cycle's candidates), set "relevant" to false —
-it is stale, not this race's current comparable source.
+Current cycle: the tracked race is {race_label}. Handle prior/other cycles in two ways:
+- WRONG CONTEST — a different election or a past contest whose candidates are not this
+  race's tracked candidates (e.g. an archived page showing an earlier cycle's different
+  candidate set). Set "relevant" to false; it is stale.
+- A TRACKED CANDIDATE'S OWN PRIOR-CYCLE ANSWERS — the SAME tracked candidate's own answers
+  to the same standardized questions from an earlier cycle (e.g. a Ballotpedia Candidate
+  Connection survey the candidate completed in a prior year). These stay comparable: keep
+  "relevant" true, set "prior_cycle" true, and put the answers' cycle year in
+  "source_cycle_year". A current-cycle item has "prior_cycle" false and "source_cycle_year"
+  the item's cycle year (or null if unknown).
 If a captions or article-page excerpt is provided, judge DISCOURSE SHAPE: sustained
 first-person policy speech and moderator/Q&A signatures suggest an original event;
 third-person anchor narration with soundbites suggests a news package. Do not guess
@@ -83,6 +89,7 @@ Respond with JSON only:
   "event_kind": "debate|forum|news_clip|press_conference|podcast|community_meeting|questionnaire|other",
   "source_tier": 1-4, "original_vs_clip": "original|clip",
   "route": "ingest|quote_source",
+  "prior_cycle": true/false, "source_cycle_year": "YYYY or null",
   "why": "one sentence citing your strongest evidence"}}"""
 
 
@@ -126,6 +133,8 @@ def parse_verdict(text: str) -> Verdict:
         tier = None
     ovc = data.get("original_vs_clip")
     route = data.get("route")
+    scy = data.get("source_cycle_year")
+    source_cycle_year = str(scy) if scy not in (None, "", "null") else None
     return Verdict(
         relevant=bool(data.get("relevant")),
         confidence=confidence,
@@ -135,6 +144,8 @@ def parse_verdict(text: str) -> Verdict:
         original_vs_clip=ovc if ovc in ("original", "clip") else None,
         route=route if route in ALLOWED_ROUTES else "ingest",
         why=str(data.get("why") or ""),
+        prior_cycle=bool(data.get("prior_cycle")),
+        source_cycle_year=source_cycle_year,
     )
 
 

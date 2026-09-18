@@ -206,3 +206,48 @@ def test_prompt_has_current_cycle_check():
     # that race_label appears somewhere (it is also echoed in the "Race:" line,
     # so a bare containment check would pass even if the instruction dropped it).
     assert "the tracked race is AZ · U.S. Senate · General · 2026" in prompt
+
+
+def test_parse_verdict_reads_prior_cycle_flag():
+    """A tracked candidate's OWN prior-cycle answers are FLAGGED, not rejected:
+    relevant stays true, prior_cycle true, and the cycle year is carried."""
+    v = classify.parse_verdict(
+        '{"relevant": true, "confidence": 0.85, "candidates_present": ["Jane Doe"],'
+        ' "event_kind": "questionnaire", "source_tier": 2, "original_vs_clip": "original",'
+        ' "route": "quote_source", "prior_cycle": true, "source_cycle_year": "2020",'
+        ' "why": "candidate\'s own 2020 Candidate Connection answers"}')
+    assert v.relevant is True
+    assert v.prior_cycle is True
+    assert v.source_cycle_year == "2020"
+
+
+def test_parse_verdict_prior_cycle_defaults_false_when_absent():
+    """Back-compat: replies without the new keys land prior_cycle False /
+    source_cycle_year None (existing fixtures/callers keep working)."""
+    v = classify.parse_verdict(
+        '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+        ' "event_kind": "debate", "source_tier": 1, "original_vs_clip": "original",'
+        ' "route": "ingest", "why": "current debate"}')
+    assert v.prior_cycle is False
+    assert v.source_cycle_year is None
+
+
+def test_parse_verdict_coerces_source_cycle_year_int_to_str():
+    v = classify.parse_verdict(
+        '{"relevant": true, "confidence": 0.8, "prior_cycle": true, "source_cycle_year": 2018,'
+        ' "why": "x"}')
+    assert v.source_cycle_year == "2018"
+
+
+def test_prompt_distinguishes_wrong_contest_from_own_prior_answers():
+    """The current-cycle instruction must GUARD a wrong-contest page but FLAG a
+    tracked candidate's own prior-cycle answers, and expose the new JSON keys."""
+    from src.discovery.classify import build_prompt
+    from src.discovery.models import RawItem
+    item = RawItem(url="https://ballotpedia.org/Jane_Doe", title="Jane Doe", description="")
+    prompt = build_prompt(item, race_label="CA · Mayor · 2026", roster_names=["Jane Doe"])
+    low = prompt.lower()
+    assert "prior_cycle" in low                     # the flag is in the JSON schema
+    assert "source_cycle_year" in low               # and the cycle year field
+    assert "wrong contest" in low or "different election" in low  # the guard case
+    assert "own" in low and "prior" in low          # the flag case (own prior-cycle answers)
