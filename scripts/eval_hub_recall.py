@@ -21,7 +21,16 @@ Usage (repo root; keys from .env.local):
 The metric is noisy — use --runs N and treat a change as real only when it beats
 the per-run spread this harness prints (use --runs 5 for a tuning decision).
 
-Baseline: NOT YET MEASURED — filled by Task 5 of the plan.
+Baseline (measured 2026-09-18, deepseek, runs=3, snapshot registry of 17 hubs):
+addressable recall 0.00 [0/5], overall 0.03 [1/29], retrieval-only 0.17 [5/29],
+precision 0.38; per-run headline spread 0.00..0.00 (stable at the floor). The
+addressable set is dominated by Ballotpedia pages that are mostly UNFILLED for
+these races (per the ground truth); an unfilled questionnaire is correctly
+rejected by the classifier (no candidate's own words), so the headline sits at
+0.00 while retrieval reaches 17%. Treat a recall change smaller than ~0.10 (or the
+per-run spread, whichever is larger) as noise; use --runs 5 for a tuning decision.
+Possible follow-up: restrict the addressable/GT set to FILLED comparable sources
+so the headline reflects verifiable finds.
 """
 from __future__ import annotations
 
