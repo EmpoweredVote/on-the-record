@@ -29,9 +29,12 @@ def _hub_domain(url: "str | None") -> "str | None":
     """Registrable host of an http(s) URL (lowercased, leading www. stripped);
     None for empty/non-http/YouTube URLs (YouTube uses the outlet flywheel)."""
     try:
-        host = urlparse((url or "").strip()).netloc.lower()
+        parsed = urlparse((url or "").strip())
     except ValueError:
         return None
+    if parsed.scheme not in ("http", "https"):
+        return None
+    host = parsed.netloc.lower()
     if not host or "youtube" in host or host == "youtu.be":
         return None
     return _WWW.sub("", host) or None

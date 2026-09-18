@@ -51,6 +51,12 @@ def test_hub_domain_property_strips_www_and_ignores_youtube():
     assert _row(url="").hub_domain is None
 
 
+def test_hub_domain_property_rejects_non_http_schemes():
+    assert _row(url="ftp://mirror.example.org/x").hub_domain is None
+    assert _row(url="javascript://evil.com/payload").hub_domain is None
+    assert _row(url="//example.com/path").hub_domain is None
+
+
 def test_hub_kind_default_maps_guess_or_falls_back():
     assert _row(event_kind_guess="forum").hub_kind_default == "forum"
     assert _row(event_kind_guess="questionnaire").hub_kind_default == "questionnaire"
@@ -118,6 +124,33 @@ def test_add_hub_from_row_rejects_youtube_row(monkeypatch):
     row = _row(url="https://www.youtube.com/watch?v=abc12345678")
     ok, msg = discovery.add_hub_from_row(row, scope="global", kind="forum")
     assert ok is False
+
+
+def test_add_hub_from_row_rejects_invalid_scope(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    row = _row(url="https://www.laist.com/x")
+    ok, msg = discovery.add_hub_from_row(row, scope="local_type", kind="forum")
+    assert ok is False
+
+
+def test_add_hub_from_row_rejects_invalid_kind(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    row = _row(url="https://www.laist.com/x")
+    ok, msg = discovery.add_hub_from_row(row, scope="global", kind="news_clip")
+    assert ok is False
+
+
+def test_add_hub_from_row_already_registered_succeeds_without_insert(monkeypatch):
+    conn = _FakeHubConn(inserted_id=None)
+    monkeypatch.setenv("DATABASE_URL", "postgres://x")
+    monkeypatch.setattr(discovery.psycopg2, "connect", lambda url: conn)
+
+    row = _row(url="https://www.laist.com/elections/la-mayor", channel_name="LAist",
+               event_kind_guess="forum")
+    ok, msg = discovery.add_hub_from_row(row, scope="global", kind="forum")
+
+    assert ok is True
+    assert "already registered" in msg
 
 
 def test_discovery_state_view_renders_row_details_and_alarms(monkeypatch):
