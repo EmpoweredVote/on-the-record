@@ -227,7 +227,9 @@ def test_fetch_page_text_surfaces_candidate_connection_answers_past_the_peek_cap
         "<p>Jane Doe completed Ballotpedia's Candidate Connection survey in 2026. "
         "Click here to read the survey answers.</p>"
         f"<p>{bio}</p>"
-        f"<div class='panel panel-default'><p>{answer}</p></div>"
+        # Real pages repeat the completion sentence as the answers-section lead-in.
+        "<div class='panel panel-default'><p>Jane Doe completed Ballotpedia's "
+        f"Candidate Connection survey in 2026. {answer}</p></div>"
         "</article>"
     ).encode("utf-8")
     monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
@@ -254,6 +256,43 @@ def test_fetch_page_text_without_candidate_connection_returns_top_of_page(monkey
                         lambda url: ("text/html", html))
     text = fetch_page_text("https://news.example/story", max_chars=40, sleep_fn=lambda s: None)
     assert text.startswith("TOP OF PAGE")
+
+
+def test_fetch_page_text_candidate_connection_window_carries_the_cycle_year(monkeypatch):
+    """The peek must include the cycle the answers belong to, so the classifier
+    can tell a current-cycle answer from a prior one (flag-vs-guard). The window
+    anchors on the 'completed ... Candidate Connection survey in <year>' sentence
+    that introduces the Q&A, not just the first question — so the year rides in."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    bio = "Jane Doe was born in Springfield and served on the city council. " * 200
+    completed = "Jane Doe completed Ballotpedia's Candidate Connection survey in 2024."
+    # A long first answer sits between the completion sentence and the first
+    # standardized question (as on real pages), so a mere question-minus-prefix
+    # window would miss the year -- the anchor must be the completion sentence.
+    first_answer = "My accomplishments in office include the following initiatives. " * 40
+    answer = ("What areas of public policy are you personally passionate about? "
+              "I am deeply passionate about housing affordability.")
+    html = (
+        "<article>"
+        "<p>Jane Doe completed Ballotpedia's Candidate Connection survey in 2026. "
+        "Click here to read the survey answers.</p>"
+        f"<p>{bio}</p>"
+        f"<div class='panel panel-default'><p>{completed} {first_answer} {answer}</p></div>"
+        "</article>"
+    ).encode("utf-8")
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("text/html; charset=utf-8", html))
+
+    text = fetch_page_text("https://ballotpedia.org/Jane_Doe", max_chars=6000,
+                           sleep_fn=lambda s: None)
+
+    # The window starts at the completion sentence, so the cycle year (2024) and
+    # the answer both ride into the peek.
+    assert "completed Ballotpedia's Candidate Connection survey in 2024" in text
+    assert "I am deeply passionate about housing affordability" in text
+    assert len(text) <= 6000
 
 
 def test_fetch_page_bytes_caps_body_size(monkeypatch):
