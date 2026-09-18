@@ -20,7 +20,7 @@ class RawItem:
     duration_seconds: Optional[int] = None
     published_at: Optional[str] = None  # ISO date or datetime string
     outlet_id: Optional[str] = None     # set for watchlist finds
-    via: str = "watchlist"              # 'watchlist' | 'search' | 'agent'
+    via: str = "watchlist"              # 'watchlist' | 'search' | 'agent' | 'hub'
 
 
 @dataclass
