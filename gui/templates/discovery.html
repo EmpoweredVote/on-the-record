@@ -94,6 +94,22 @@
     <button type="submit" title="Add this channel to the watchlist">+ Watch this channel</button>
   </form>
   {% endif %}
+  {% if r.hub_domain %}
+  <form method="post" action="/discovery/{{ r.id }}/add-hub" style="margin:0;display:flex;gap:var(--sp-1);align-items:center;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
+    <select name="scope" title="Hub scope">
+      <option value="state" selected>state</option>
+      <option value="global">global</option>
+    </select>
+    <select name="kind" title="Hub kind">
+      {% for k in ['debate','forum','questionnaire','guide','pamphlet'] %}
+      <option value="{{ k }}"{% if k == r.hub_kind_default %} selected{% endif %}>{{ k }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" title="Register {{ r.hub_domain }} as a comparable-source hub for future races in this scope">+ Add {{ r.hub_domain }} as hub</button>
+  </form>
+  {% endif %}
 </div>
 {% endmacro %}
 

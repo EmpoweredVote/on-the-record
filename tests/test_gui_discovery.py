@@ -153,6 +153,45 @@ def test_add_hub_from_row_already_registered_succeeds_without_insert(monkeypatch
     assert "already registered" in msg
 
 
+def test_add_hub_route_calls_helper_and_flashes(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(discovery, "get_row",
+                        lambda rid: _row(url="https://www.laist.com/x"))
+
+    def fake_add(row, *, scope, kind):
+        captured["scope"], captured["kind"] = scope, kind
+        return (True, "added hub laist.com")
+
+    monkeypatch.setattr(discovery, "add_hub_from_row", fake_add)
+    client = TestClient(create_app())
+    resp = client.post("/discovery/d1/add-hub",
+                       data={"scope": "state", "kind": "forum"},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    assert "added hub laist.com" in _flash(resp)
+    assert captured == {"scope": "state", "kind": "forum"}
+
+
+def test_add_hub_form_shown_for_web_row_not_youtube(monkeypatch):
+    monkeypatch.setattr(coverage, "races_for_state",
+                        lambda state: [_race(position_name="Los Angeles Mayor", level="local")])
+    monkeypatch.setattr(discovery, "health", lambda: {
+        "pending": 1, "auto_kept": 0, "deferred": 0, "alarms": [], "recent_runs": []})
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row(url="https://www.laist.com/la-mayor",
+                                                       race_id="r1")])
+    client = TestClient(create_app())
+    html = client.get("/discovery", params={"state": "CA"}).text
+    assert "/add-hub" in html
+    assert "laist.com" in html
+
+    # a YouTube row must NOT show the add-hub form
+    monkeypatch.setattr(discovery, "pending_rows",
+                        lambda status="pending": [_row()])  # default youtube url
+    html2 = client.get("/discovery", params={"state": "CA"}).text
+    assert "/add-hub" not in html2
+
+
 def test_discovery_state_view_renders_row_details_and_alarms(monkeypatch):
     monkeypatch.setattr(coverage, "races_for_state",
                         lambda state: [_race(position_name="U.S. Senate")])
