@@ -210,6 +210,52 @@ def test_fetch_page_text_rejects_non_html_content_type(monkeypatch):
     assert text == ""
 
 
+def test_fetch_page_text_surfaces_candidate_connection_answers_past_the_peek_cap(monkeypatch):
+    """A completed Ballotpedia Candidate Connection page carries the candidate's
+    own answers deep in the page (well past the ~6 KB peek). The peek must jump
+    to that Q&A section, not stop at the top-of-page bio — otherwise the
+    classifier judges a real questionnaire source from the bio alone and
+    auto-filters it (the LA-Mayor / CA-34 finding, 2026-09-18)."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    bio = "Jane Doe was born in Springfield and served on the city council. " * 200  # ~13 KB, pushes the Q&A past 6 KB
+    answer = ("What areas of public policy are you personally passionate about? "
+              "I am deeply passionate about housing affordability and homelessness, "
+              "which I treat as a life-and-death emergency.")
+    html = (
+        "<article>"
+        "<p>Jane Doe completed Ballotpedia's Candidate Connection survey in 2026. "
+        "Click here to read the survey answers.</p>"
+        f"<p>{bio}</p>"
+        f"<div class='panel panel-default'><p>{answer}</p></div>"
+        "</article>"
+    ).encode("utf-8")
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("text/html; charset=utf-8", html))
+
+    text = fetch_page_text("https://ballotpedia.org/Jane_Doe", max_chars=6000,
+                           sleep_fn=lambda s: None)
+
+    # The candidate's own words are surfaced despite sitting past the 6 KB cap...
+    assert "I am deeply passionate about housing affordability" in text
+    # ...and the peek stays within its size budget.
+    assert len(text) <= 6000
+
+
+def test_fetch_page_text_without_candidate_connection_returns_top_of_page(monkeypatch):
+    """A page with no Candidate Connection questions is unchanged: the peek is
+    the top of the page, not shifted anywhere."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    html = ("<article><p>TOP OF PAGE. </p><p>" + ("filler word " * 2000) + "</p></article>").encode("utf-8")
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("text/html", html))
+    text = fetch_page_text("https://news.example/story", max_chars=40, sleep_fn=lambda s: None)
+    assert text.startswith("TOP OF PAGE")
+
+
 def test_fetch_page_bytes_caps_body_size(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
