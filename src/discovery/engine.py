@@ -174,11 +174,8 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                    and verdict.confidence >= config.DISCOVERY_CONFIDENCE_FLOOR)
         status = "pending" if pending else "auto_filtered"
         # Flag-not-guard (2026-09-18): a tracked candidate's own prior-cycle answers
-        # stay pending (relevant), but the cycle is surfaced to the reviewer. Interim
-        # marker in `why` until the structured prior_cycle column ships (increment 2).
-        why = verdict.why or verdict.rejected_reason
-        if verdict.prior_cycle:
-            why = f"[PRIOR CYCLE {verdict.source_cycle_year or 'unknown'}] {why or ''}".strip()
+        # stay pending (relevant) and carry the structured prior_cycle + cycle year
+        # so the review UI can label + rank them; the interim `why` marker is gone.
         matched_ids = sorted({t.politician_id for t in matched})
         db.insert_discovered(cur, {
             "source_key": key, "url": item.url, "title": item.title,
@@ -192,8 +189,10 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             "original_vs_clip": verdict.original_vs_clip,
             "source_tier_guess": verdict.source_tier_guess,
             "route": verdict.route, "confidence": verdict.confidence,
-            "why": why,
+            "why": verdict.why or verdict.rejected_reason,
             "discovered_via": item.via, "status": status,
+            "prior_cycle": verdict.prior_cycle,
+            "source_cycle_year": verdict.source_cycle_year,
         })
         seen.add(key)
         if status == "pending":

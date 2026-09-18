@@ -69,6 +69,33 @@ def test_insert_discovered_original_vs_clip_defaults_to_none_when_omitted():
     assert params[14] == 7  # source_tier_guess, now one slot right of original_vs_clip
 
 
+def test_insert_discovered_binds_prior_cycle_and_cycle_year():
+    """Slice 2B flag-vs-guard: the prior_cycle flag + cycle year are persisted
+    (appended after status, so existing param positions are unshifted)."""
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    row["prior_cycle"] = True
+    row["source_cycle_year"] = "2020"
+    db.insert_discovered(cur, row)
+    sql, params = cur.executed[0]
+    assert "prior_cycle" in sql.lower() and "source_cycle_year" in sql.lower()
+    assert params[13] is None          # original_vs_clip still at 13 (columns appended, not inserted)
+    assert params[-2] is True          # prior_cycle
+    assert params[-1] == "2020"        # source_cycle_year
+
+
+def test_insert_discovered_prior_cycle_defaults_when_omitted():
+    """Back-compat: callers/fixtures that don't set the keys still work —
+    prior_cycle lands False, source_cycle_year None (row.get, not row[])."""
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    assert "prior_cycle" not in row and "source_cycle_year" not in row
+    db.insert_discovered(cur, row)     # must not raise KeyError
+    _, params = cur.executed[0]
+    assert params[-2] is False
+    assert params[-1] is None
+
+
 def _minimal_row():
     return {"source_key": "k", "url": "u", "title": None, "description_snippet": None,
             "channel_name": None, "channel_id": None, "channel_url": None,
