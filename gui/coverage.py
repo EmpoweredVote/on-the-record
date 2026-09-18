@@ -2,13 +2,14 @@
 plus DB aggregation (added in Task 4). Best-effort like gui/discovery.py: no
 DATABASE_URL or any DB error -> empty list, never a crash.
 
-`race_level` is a heuristic over position_name. It is used only for grouping and
-is easy to extend; misgrouping a race is cosmetic, never unsafe.
+`race_level` is a heuristic over position_name. It is a shared classifier: this
+module uses it for grouping, and it also gates local-type hub searches (see
+src/race_level.py). It is easy to extend; misgrouping a race is cosmetic, never
+unsafe.
 """
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from typing import Optional
 

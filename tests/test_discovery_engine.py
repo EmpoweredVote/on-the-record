@@ -745,7 +745,6 @@ def test_hub_registry_load_failure_is_nonfatal(monkeypatch):
 
 
 def test_hub_lane_gates_local_type_and_passes_clean_locality(monkeypatch):
-    import dataclasses
     fed = TrackedCandidate("pf", "rf", "Jane Fed", "U.S. Representative District 9",
                            "2026-11-03", state="CA",
                            position_name="U.S. Representative District 9",
