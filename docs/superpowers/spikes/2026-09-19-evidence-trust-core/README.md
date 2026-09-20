@@ -158,6 +158,26 @@ aggregator) or genuinely hard (`ffyf.org` / `acf.gov` Cloudflare-JS challenges; 
 (both from Raman's site; all of Bass's pages still WAF-blocked) → + UA fallback: **8 green
 across both candidates**, dead drops 13 → 5.
 
+### Human gold — first labelling (Chris, 2026-09-20): precision 0.375 + the HOW finding
+
+Chris labelled the 8 green picks: **confirmed 3, rejected 5 → precision 0.375** (`gold.json`).
+Confirmed: #7/#8 (housing — "build much more housing", "triple annual housing construction")
+and #2 (Bass — a reluctant keep; it at least names "services and support"). Rejected: #1
+(Bass, purely rhetorical) and **#3–#6, all four Raman homelessness quotes** — including the
+ones the pipeline judged strongest (`reduce encampments 50% by 2028`, `eliminate long-term
+encampments`, `direct dollars to programs that work`, `immediate treatment on our streets`).
+
+**The finding (a real calibration target, not a bug).** Chris's HOW bar is stricter and more
+specific than the judge enforces: a green quote must name the **concrete, contestable policy
+lever** — "building shelters, enforcing encampment laws, expanding support services" — not a
+**goal** ("reduce homelessness"), a **target/metric** ("by 50% by 2028"), or a **vague means**
+("direct dollars to what works", "immediate treatment", "work with the County"). The judge
+(deepseek) currently greenlights targets and vague directions, so precision sits at 0.375.
+Next iteration: tighten the differentiation gate — in the judge prompt AND in
+`docs/quote-curation/PRINCIPLES.md#differentiation` and the `audit-quotes` checks — to demand a
+named policy instrument, and re-eval against this gold. This is the human-in-the-loop steering
+the whole slice was built to enable.
+
 ### First run — judge mis-configured (superseded, kept for the record)
 
 **First full live run — 2026-09-20** (LA Mayor race, both candidates, all cited
