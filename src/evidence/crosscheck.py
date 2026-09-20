@@ -36,6 +36,8 @@ def parse_crosscheck(raw: str) -> CrossCheckVerdict:
         d = json.loads(payload)
     except json.JSONDecodeError:
         return CrossCheckVerdict(False, False, False, False, None, "unparseable")
+    if not isinstance(d, dict):
+        return CrossCheckVerdict(False, False, False, False, None, "unparseable")
     return CrossCheckVerdict(
         own_words=bool(d.get("own_words")), in_context=bool(d.get("in_context")),
         primary=bool(d.get("primary")), tag_agree=False,

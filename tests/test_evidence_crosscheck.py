@@ -28,3 +28,9 @@ def test_tag_disagreement_when_issues_differ():
     v = crosscheck(cand, "…We will build…", candidate_name="Bass", provider=p,
                    extractor_issue="housing")
     assert v.tag_agree is False
+
+def test_parse_crosscheck_unparseable_returns_all_false():
+    for bad in ("not json", "null", "[1,2,3]", "42", '"a string"'):
+        v = parse_crosscheck(bad)
+        assert v.own_words is False and v.in_context is False
+        assert v.primary is False and v.tag_agree is False and v.issue is None
