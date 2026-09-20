@@ -18,7 +18,13 @@ CONTEXT: {context}
 - context_sufficient: is the CONTEXT enough for a reader to vet the quote (1) or thin (0)?
 - dispute_risk: how likely the speaker could say "I never said that" / "out of context"
   (0 = safe, 1 = high risk).
-Return JSON: {{"tag_ok","context_sufficient","dispute_risk","notes"}}.
+- mechanism: does the quote name a SPECIFIC, CONTESTABLE policy lever/instrument the
+  candidate would use (e.g. build shelters, enforce encampment ordinances, expand
+  treatment/services, triple housing construction) — score near 1. A bare GOAL
+  ("reduce homelessness — no one disagrees"), a TARGET/METRIC ("cut encampments 50%
+  by 2028"), or a VAGUE direction ("direct dollars to what works", "deliver immediate
+  treatment", "work with the County") names no concrete lever — score near 0.
+Return JSON: {{"tag_ok","context_sufficient","dispute_risk","mechanism","notes"}}.
 """
 
 
@@ -46,6 +52,7 @@ def parse_judge(raw: str) -> JudgeScores:
         tag_ok=_clamp(d.get("tag_ok"), 0.0),
         context_sufficient=_clamp(d.get("context_sufficient"), 0.0),
         dispute_risk=_clamp(d.get("dispute_risk"), 1.0),
+        mechanism=_clamp(d.get("mechanism"), 0.0),
         notes=(d.get("notes") or ""),
     )
 

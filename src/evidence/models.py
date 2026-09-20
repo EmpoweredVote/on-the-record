@@ -30,6 +30,7 @@ class GateResults:
     judge_tag_ok: Optional[float] = None
     judge_context_sufficient: Optional[float] = None
     judge_dispute_risk: Optional[float] = None
+    judge_mechanism: Optional[float] = None
 
 
 @dataclass
@@ -60,6 +61,7 @@ class JudgeScores:
     tag_ok: float
     context_sufficient: float
     dispute_risk: float
+    mechanism: float
     notes: str = ""
 
 

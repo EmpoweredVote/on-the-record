@@ -19,13 +19,31 @@ def test_primary_quote_that_passes_is_green():
         "primary_handle":None}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,
                         "issue":"housing","notes":""})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
     items, leads = run_source(politician_id="p1",
         source_url="https://karenbass.com/housing", cited_via=None,
         providers=_providers(extract, cross, jud), fetcher=lambda u: SRC,
         candidate_name="Karen Bass", batch_id="b1")
     assert len(items) == 1 and items[0].status == Status.GREEN.value
     assert items[0].source_type == SourceType.PRIMARY.value
+
+def test_primary_quote_with_only_a_goal_is_flagged_no_mechanism():
+    # High tag/context, low dispute risk — but the judge scores mechanism low
+    # (e.g. the quote names only a GOAL, not a concrete policy lever), so the
+    # item must be FLAGGED, not GREEN. This is the whole point of the gate.
+    extract = json.dumps({"quotes": [{"text":"We will build 30,000 units of housing",
+        "context": SRC, "issue":"housing","date":"2026","setting":"campaign site",
+        "is_own_words":True,"is_primary_venue":True,"reported_event":None,
+        "primary_handle":None}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,
+                        "issue":"housing","notes":""})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.1})
+    items, leads = run_source(politician_id="p1",
+        source_url="https://karenbass.com/housing", cited_via=None,
+        providers=_providers(extract, cross, jud), fetcher=lambda u: SRC,
+        candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.FLAGGED.value
+    assert "judge:no-mechanism" in items[0].status_reasons
 
 def test_reported_secondary_becomes_lead_not_item():
     extract = json.dumps({"quotes": [{"text":"I will end street homelessness",
@@ -95,7 +113,7 @@ def test_run_candidate_aggregates_across_sources():
         "primary_handle": None}]})
     cross = json.dumps({"own_words": True, "in_context": True, "primary": True,
                         "issue": "housing", "notes": ""})
-    jud = json.dumps({"tag_ok": 0.9, "context_sufficient": 0.9, "dispute_risk": 0.1})
+    jud = json.dumps({"tag_ok": 0.9, "context_sufficient": 0.9, "dispute_risk": 0.1, "mechanism": 0.9})
     providers = Providers(extractor=FP([extract]), crosschecker=FP([cross]), judge=FP([jud]))
     items, leads = run_candidate(politician_id="p1", candidate_name="Karen Bass",
         sources=[("https://karenbass.com/housing", None), ("https://lcv.org/x", None)],

@@ -72,7 +72,7 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
         gates = GateResults(verbatim=True, own_words=cc.own_words,
             in_context=cc.in_context, primary=cc.primary, tag_agree=cc.tag_agree,
             judge_tag_ok=js.tag_ok, judge_context_sufficient=js.context_sufficient,
-            judge_dispute_risk=js.dispute_risk)
+            judge_dispute_risk=js.dispute_risk, judge_mechanism=js.mechanism)
         status, reasons = decide(gates, source_type)
         items.append(EvidenceItem(politician_id=politician_id, issue=cand.issue,
             evidence_type="quote", verbatim_text=cand.text, source_url=source_url,

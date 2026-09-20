@@ -4,6 +4,7 @@ from .models import GateResults, SourceType, Status
 TAG_MIN = 0.7
 CONTEXT_MIN = 0.7
 DISPUTE_MAX = 0.3
+MECHANISM_MIN = 0.7
 
 _DROP_TYPES = {SourceType.SCORECARD_QUIZ.value, SourceType.DEAD.value}
 
@@ -31,4 +32,6 @@ def decide(gates: GateResults, source_type) -> tuple[str, list]:
         reasons.append("judge:context")
     if gates.judge_dispute_risk is not None and gates.judge_dispute_risk > DISPUTE_MAX:
         reasons.append("judge:dispute-risk")
+    if gates.judge_mechanism is not None and gates.judge_mechanism < MECHANISM_MIN:
+        reasons.append("judge:no-mechanism")
     return (Status.FLAGGED.value, reasons) if reasons else (Status.GREEN.value, [])

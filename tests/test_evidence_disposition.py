@@ -4,7 +4,7 @@ from src.evidence.disposition import decide
 def _full(**kw):
     base = dict(verbatim=True, own_words=True, in_context=True, primary=True,
                 tag_agree=True, judge_tag_ok=0.9, judge_context_sufficient=0.9,
-                judge_dispute_risk=0.1)
+                judge_dispute_risk=0.1, judge_mechanism=0.9)
     base.update(kw)
     return GateResults(**base)
 
@@ -42,3 +42,15 @@ def test_none_gate_dims_do_not_flag():
 def test_source_type_accepts_plain_string():
     status, reasons = decide(_full(), "primary")
     assert status == Status.GREEN.value and reasons == []
+
+def test_low_mechanism_flags_no_mechanism():
+    status, reasons = decide(_full(judge_mechanism=0.4), SourceType.PRIMARY)
+    assert status == Status.FLAGGED.value and "judge:no-mechanism" in reasons
+
+def test_mechanism_at_min_does_not_flag():
+    status, reasons = decide(_full(judge_mechanism=0.7), SourceType.PRIMARY)
+    assert status == Status.GREEN.value and "judge:no-mechanism" not in reasons
+
+def test_mechanism_none_does_not_flag():
+    status, reasons = decide(_full(judge_mechanism=None), SourceType.PRIMARY)
+    assert status == Status.GREEN.value and "judge:no-mechanism" not in reasons
