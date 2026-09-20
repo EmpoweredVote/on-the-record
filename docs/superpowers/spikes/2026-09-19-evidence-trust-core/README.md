@@ -190,6 +190,23 @@ is far more likely to carry the lever, and the gate then confirms it. Fold into 
 iteration (extractor prompt: prefer a coherent multi-sentence stance passage over an atomized
 claim; keep contiguous same-source sentences carrying the mechanism), then re-run + re-label.
 
+### Calibration run (run 4, 2026-09-20) — HOW gate live; `tag_agree` is the new binding gate
+
+Extractor granularity + a judge `mechanism` gate (`MECHANISM_MIN=0.7`, reason `judge:no-mechanism`)
+shipped and re-ran. Result: **0 green / 10 flagged / 13 dropped**. This is the gate working, not a
+regression: the goals/targets/vague-means Chris rejected now score mechanism 0.1–0.3 and flag
+correctly, AND the extractor now surfaces fuller, lever-bearing quotes scoring mechanism **0.7–0.9**
+(e.g. "Create a City of LA Immigrant Economic Opportunity Hub: permitting support, microloans, legal
+guidance…" 0.8; "Mandate acceptance of consular IDs, foreign passports, and ITINs across all city
+departments…" 0.9). **But 0 green because a different gate is now over-strict:** those strong quotes
+are flagged only on `crosscheck:tag_agree` — the exact free-text issue label from the extractor does
+not string-match the cross-checker's independently-chosen label. Requiring two LLMs to emit the SAME
+free-text tag is brittle; ~3 mechanism-0.8–0.9 quotes are blocked by nothing else. **Next finding /
+fix:** make the cross-check tag test a JUDGMENT ("is the extractor's issue tag defensible for this
+quote?", yes/no) instead of an exact string match — or canonicalize both tags to a compass topic
+before comparing. (Also noted: run-to-run extraction variance dropped the housing greens this pass;
+inherent to LLM extraction, not chased.)
+
 ### First run — judge mis-configured (superseded, kept for the record)
 
 **First full live run — 2026-09-20** (LA Mayor race, both candidates, all cited
