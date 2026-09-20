@@ -128,7 +128,31 @@ with `--gold path/to/your_gold.json`.
 
 ## Baseline
 
-### Current baseline — calibrated judge + browser-UA fallback, 2026-09-20
+### Current baseline — full calibration (run 5), 2026-09-20
+
+All three calibrations live: extractor granularity (coherent multi-sentence stance passages),
+the judge `mechanism`/HOW gate (`MECHANISM_MIN=0.7`), and `tag_agree` as a cross-checker judgment
+(not a string match). Defaults `--extractor haiku-or --crosschecker gemini-flash --judge deepseek`.
+
+| metric | value |
+|---|---|
+| items | 23 (green **5** / flagged **5** / dropped **13**) |
+| leads (chase-the-primary) | 24 |
+| verbatim pass rate | 0.43 |
+| primary-source rate (of green) | 1.00 |
+| per-domain green yield | nithyaforthecity.com: 5 |
+
+The 5 green are all **concrete-lever, on-bar quotes** (Raman, primary, mechanism 0.7–1.0): appoint an
+LAPD chief; ensure LAPD doesn't cooperate with ICE + audit; create an Immigrant Economic Opportunity
+Hub (permitting/microloans/legal/workforce); expand+staff the Office of Immigrant Affairs; mandate
+acceptance of consular IDs/passports/ITINs. This is the differentiation bar Chris set, now enforced.
+Bass yielded 0 green this pass (her homelessness statements are rhetorical/goal-ish → correctly
+flagged by the HOW gate; plus run-to-run extraction variance). **Green arc across the session: 1
+(judge broken) → 4 (judge fix) → 8 (UA fallback) → 0 (HOW gate on, tag_agree over-strict) → 5
+(tag_agree judgment) — the last being on-bar, mechanism-bearing quotes.** Human re-label + precision
+pending.
+
+### Earlier baseline — calibrated judge + browser-UA fallback, 2026-09-20
 
 Two fixes landed after the first run: (1) the judge was recalibrated (`gpt5-mini` →
 `deepseek`, `judge` `max_tokens` 300 → 800); (2) the shared `feeds` fetcher gained a
