@@ -178,6 +178,18 @@ Next iteration: tighten the differentiation gate — in the judge prompt AND in
 named policy instrument, and re-eval against this gold. This is the human-in-the-loop steering
 the whole slice was built to enable.
 
+**Second finding — extraction granularity (same root cause).** The extractor's "one claim per
+quote" atomization is too aggressive for evidence, and it actively *hides* the HOW. Concrete
+case: green #7 surfaced only "We must build much more housing to reduce housing costs," while the
+very next sentence — "This includes housing at all income levels, everything from deed-restricted
+affordable housing to market-rate housing to social housing to homeless shelters" — the concrete
+levers Chris wants — was demoted to the quote's `context` and never shown. Chris's call: adjacent,
+same-source sentences that together form one coherent stance (goal + its mechanism) should be kept
+as **one 2–3 sentence quote**, not split. This is complementary to the HOW gate: a fuller passage
+is far more likely to carry the lever, and the gate then confirms it. Fold into the same next
+iteration (extractor prompt: prefer a coherent multi-sentence stance passage over an atomized
+claim; keep contiguous same-source sentences carrying the mechanism), then re-run + re-label.
+
 ### First run — judge mis-configured (superseded, kept for the record)
 
 **First full live run — 2026-09-20** (LA Mayor race, both candidates, all cited
