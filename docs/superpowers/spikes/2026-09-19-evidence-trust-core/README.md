@@ -127,4 +127,47 @@ with `--gold path/to/your_gold.json`.
 
 ## Baseline
 
-Baseline: to be recorded after the first live run (Task 14).
+**First full live run — 2026-09-20** (LA Mayor race, both candidates, all cited
+sources; models: `--extractor haiku-or --crosschecker gemini-flash --judge gpt5-mini`,
+all via OpenRouter). No gold labelled yet, so precision/recall are `n/a`.
+
+| metric | value |
+|---|---|
+| items | 25 (green **1** / flagged **10** / dropped **14**) |
+| leads (chase-the-primary) | 24 |
+| verbatim pass rate | 0.44 |
+| primary-source rate (of green) | 1.00 |
+| per-domain green yield | nithyaforthecity.com: 1 |
+
+Per candidate: Karen Bass 14 items / 19 leads from 36 sources; Nithya Raman 11 items /
+5 leads from 25 sources.
+
+**Read of the baseline (the eval-first harness did its job — it surfaced two blockers
+before we trusted the pipeline):**
+
+1. **The judge step is effectively non-functional as configured.** Every one of the 10
+   flagged items has judge scores of exactly `0.0 / 0.0 / 1.0` — the worst-case default
+   `parse_judge` returns when the model reply does not parse — while the single green item
+   has a perfect `1.0 / 1.0 / 0.0`. So `gpt5-mini` (at `--judge`, `max_tokens=300`) is
+   mostly returning unparseable/truncated JSON, defaulting to worst, and forcing everything
+   to FLAGGED. This is a calibration issue, not a code bug (defaulting to worst is the safe
+   direction). **~5 of the flagged items pass every real gate (verbatim + all cross-checks)
+   and are held back only by the broken judge** — so realistic green potential is ~6, not 1.
+   Next: raise the judge token budget, and/or swap the judge model (e.g. `deepseek` /
+   `gemini-flash`), and/or tighten the judge prompt to force pure JSON; then re-run.
+2. **Fetch quality is the top yield leak.** 13 of the 14 drops are `dead` — legitimate
+   primary/news pages (e.g. `mayor.lacity.gov`) that `feeds.fetch_page_text` returned empty
+   for (robots / content-type / JS-rendering). All of Bass's 14 items dropped this way, which
+   is why her green/flagged yield is zero. Improving the fetcher (a separate task, outside
+   this slice's trust-core scope) would surface far more candidate quotes.
+
+**What worked (trust core proven):** zero hallucinations, zero false greens; the deterministic
+verbatim gate + independent cross-check behaved correctly (the cross-checker produced varied,
+discriminating verdicts — 4 tag disagreements, 2 primary, 1 own-words); the 24 leads populated
+the chase-the-primary ingestion queue with real, well-attributed reported quotes (e.g. a
+rent-control quote from an ordinance signing).
+
+🔴 **Runner default gotcha:** the shipped default `--extractor sonnet` routes to the **direct
+Anthropic API, which has no credits in this environment** (OpenRouter-only). Live runs must
+pass OpenRouter model keys, as above. Changing the runner's default extractor to an
+OpenRouter-backed model is a recommended small follow-up.
