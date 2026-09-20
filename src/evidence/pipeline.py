@@ -65,7 +65,7 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
                 status_reasons=["verbatim-fail"], provenance=prov))
             continue
         cc = crosscheck(cand, text, candidate_name=candidate_name,
-                        provider=providers.crosschecker, extractor_issue=cand.issue)
+                        provider=providers.crosschecker)
         js = judge_quote(cand, provider=providers.judge)
         source_type = (SourceType.POINTER.value if domain_type is SourceType.POINTER
                        else SourceType.PRIMARY.value)
