@@ -1,3 +1,5 @@
+import importlib
+
 from src.evidence.commit import build_rows, WRITE_STATUSES
 
 TOPICS = {"housing": "topic-housing-uuid", "homelessness": "topic-homeless-uuid"}
@@ -35,3 +37,10 @@ def test_gate_flags_and_provenance_shaped():
                                "gates": {"verbatim": True, "judge_mechanism": 0.2}}
     assert r["provenance"]["extractor"] == "haiku-or" and r["batch_id"] == "b1"
     assert r["source_cycle_year"] is None
+
+def test_commit_cli_parses_args():
+    mod = importlib.import_module("scripts.commit_evidence")
+    args = mod.build_parser().parse_args(["run.json"])
+    assert args.artifact == "run.json" and args.commit is False
+    args2 = mod.build_parser().parse_args(["run.json", "--commit", "--env-file", "/tmp/e"])
+    assert args2.commit is True and args2.env_file == "/tmp/e"
