@@ -11,7 +11,16 @@ _SYSTEM = ("You extract a politician's own VERBATIM sentences that state a view 
 _INSTRUCTIONS = """From the SOURCE below, extract sentences spoken or written by {name}
 that state a forward-looking view on a policy issue. Rules:
 - VERBATIM only — copy the exact words from the SOURCE; never summarize or reword.
-- One claim per quote. Trim only filler; mark substantive cuts with … .
+- Capture the candidate's COMPLETE stance on ONE issue as a coherent, CONTIGUOUS
+  passage — usually 1 to 3 sentences. When the candidate states HOW they would act
+  (a specific policy mechanism or lever: e.g. build shelters, enforce encampment
+  laws, expand services, triple housing construction) in sentences ADJACENT to the
+  goal, INCLUDE those sentences in `text`. Do NOT reduce the quote to the bare goal
+  and leave the mechanism behind in the surrounding text.
+- Keep `text` VERBATIM and CONTIGUOUS — one unbroken run of the SOURCE, or adjacent
+  sentences from it; never stitch together non-adjacent passages, and keep ONE
+  stance per quote (do not merge unrelated claims). Trim only filler; mark a
+  substantive internal cut with … .
 - issue = a short lowercase topic label (e.g. "housing", "homelessness", "policing").
 - is_own_words: true only if these are {name}'s own words (not the author's or an
   interviewer's).
