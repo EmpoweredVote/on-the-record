@@ -31,3 +31,14 @@ def test_crosscheck_disagreement_flags():
 def test_high_dispute_risk_flags():
     status, reasons = decide(_full(judge_dispute_risk=0.8), SourceType.PRIMARY)
     assert status == Status.FLAGGED.value and "judge:dispute-risk" in reasons
+
+def test_none_gate_dims_do_not_flag():
+    # Only verbatim set; all crosscheck dims and judge scores left at their
+    # None defaults must NOT add reasons — a primary source stays green.
+    gates = GateResults(verbatim=True)
+    status, reasons = decide(gates, SourceType.PRIMARY)
+    assert status == Status.GREEN.value and reasons == []
+
+def test_source_type_accepts_plain_string():
+    status, reasons = decide(_full(), "primary")
+    assert status == Status.GREEN.value and reasons == []
