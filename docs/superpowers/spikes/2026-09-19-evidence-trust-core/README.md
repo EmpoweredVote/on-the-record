@@ -33,7 +33,7 @@ Run it with the **main-checkout** venv, not a worktree venv:
 ```bash
 ~/Documents/GitHub/on-the-record/.venv/bin/python scripts/evidence_slice.py \
     [--race ID] [--candidate POLITICIAN_ID] [--limit N] \
-    [--extractor sonnet] [--crosschecker gemini-flash] [--judge gpt5-mini] \
+    [--extractor haiku-or] [--crosschecker gemini-flash] [--judge deepseek] \
     [--env-file PATH] [--out DIR] [--gold PATH]
 ```
 
@@ -44,9 +44,9 @@ Flags (all optional):
 | `--race` | the LA Mayor race id (`9e888818-c50b-4c61-a106-a0839ff2479d`) | which race's roster to pull |
 | `--candidate` | none (all roster candidates) | restrict to one `politician_id` |
 | `--limit` | none (all cited sources) | cap sources processed per candidate |
-| `--extractor` | `sonnet` | model key for quote extraction |
+| `--extractor` | `haiku-or` | model key for quote extraction |
 | `--crosschecker` | `gemini-flash` | model key for the independent cross-check |
-| `--judge` | `gpt5-mini` | model key for the final judge pass |
+| `--judge` | `deepseek` | model key for the final judge pass |
 | `--env-file` | none (falls back to `os.environ` / the `ev-accounts` backend `.env`) | env file `src.evidence.data.connect` reads `DATABASE_URL` from |
 | `--out` | this spike directory (`docs/superpowers/spikes/2026-09-19-evidence-trust-core/`) | where artifacts are written |
 | `--gold` | none | path to a filled-in gold JSON (see below); omitted → precision/recall are reported as `n/a` |
@@ -57,11 +57,12 @@ Flags (all optional):
   `--env-file` (or the `ev-accounts/backend/.env` default). The main
   checkout's `.env.local` also carries a `DATABASE_URL` line, so pointing
   `--env-file` at it works too.
-- **LLM keys** (`ANTHROPIC_API_KEY` for `sonnet`, `OPENROUTER_API_KEY` for
-  the OpenRouter-routed keys like `gemini-flash` / `gpt5-mini`): the runner
-  reads these straight from `os.environ` — it does not parse `--env-file`
-  for them. Export the main checkout's `.env.local` into your shell before
-  running:
+- **LLM keys**: the runner reads these straight from `os.environ` — it does
+  not parse `--env-file` for them. By default, all three models
+  (`haiku-or` / `gemini-flash` / `deepseek`) are OpenRouter-routed, so only
+  `OPENROUTER_API_KEY` is needed. If you explicitly pass `--extractor sonnet`,
+  you also need `ANTHROPIC_API_KEY`. Export the main checkout's `.env.local`
+  into your shell before running:
 
   ```bash
   cd ~/Documents/GitHub/on-the-record

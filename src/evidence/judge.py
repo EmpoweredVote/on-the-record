@@ -50,7 +50,7 @@ def parse_judge(raw: str) -> JudgeScores:
     )
 
 
-def judge(cand, *, provider, max_tokens=300) -> JudgeScores:
+def judge(cand, *, provider, max_tokens=800) -> JudgeScores:
     raw = provider.complete(
         build_judge_prompt(cand),
         max_tokens=max_tokens,
