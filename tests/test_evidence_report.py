@@ -20,3 +20,26 @@ def test_render_review_html_escapes_and_groups():
         "https://n.com", None)], "LA Mayor")
     assert "&lt;build&gt;" in html          # escaped
     assert "green" in html.lower() and "leads" in html.lower()
+
+def test_review_html_does_not_emit_javascript_href():
+    it = EvidenceItem(politician_id="p1", issue="housing", evidence_type="quote",
+        verbatim_text="x", source_url="javascript:alert(1)", cited_via=None,
+        context="…", deep_link="javascript:alert(document.cookie)",
+        source_type=SourceType.PRIMARY, gates=GateResults(verbatim=True),
+        status=Status.GREEN.value, status_reasons=[], provenance={})
+    html = render_review_html([it], [], "X")
+    assert 'href="javascript:' not in html.replace(" ", "")
+
+def test_review_html_renders_http_deep_link_as_href():
+    it = EvidenceItem(politician_id="p1", issue="housing", evidence_type="quote",
+        verbatim_text="x", source_url="https://ex.com/x", cited_via=None,
+        context="…", deep_link="https://ex.com/x",
+        source_type=SourceType.PRIMARY, gates=GateResults(verbatim=True),
+        status=Status.GREEN.value, status_reasons=[], provenance={})
+    html = render_review_html([it], [], "X")
+    assert 'href="https://ex.com/x"' in html
+
+def test_report_none_precision_recall_shows_na():
+    m = Metrics(total=0)
+    md = render_report(m, "X")
+    assert "n/a" in md

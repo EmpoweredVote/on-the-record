@@ -3,6 +3,15 @@ from html import escape
 from .models import Status
 
 
+def _safe_link(url: str, label: str) -> str:
+    """Render a link only if URL is http/https; otherwise plain text."""
+    u = (url or "").strip()
+    if u.startswith(("http://", "https://")):
+        return (f'<a href="{escape(u)}" target="_blank" '
+                f'rel="noopener noreferrer">{escape(label)}</a>')
+    return f'<span class="badurl">{escape(u)}</span>' if u else ""
+
+
 def render_report(metrics, scope_label: str) -> str:
     m = metrics
     def pct(x): return "n/a" if x is None else f"{x:.2f}"
@@ -22,10 +31,10 @@ def render_report(metrics, scope_label: str) -> str:
 def _card(it) -> str:
     return (f'<div class="card {escape(it.status)}">'
             f'<div class="q">{escape(it.verbatim_text)}</div>'
-            f'<div class="meta">{escape(it.issue)} · {escape(str(it.source_type))} · '
+            f'<div class="meta">{escape(it.issue)} · {escape(str(getattr(it.source_type, "value", it.source_type)))} · '
             f'{escape(", ".join(it.status_reasons))}</div>'
             f'<div class="ctx">{escape(it.context)}</div>'
-            f'<a href="{escape(it.deep_link)}" target="_blank">source</a></div>')
+            f'{_safe_link(it.deep_link, "source")}</div>')
 
 
 def render_review_html(items, leads, scope_label: str) -> str:
@@ -41,7 +50,7 @@ def render_review_html(items, leads, scope_label: str) -> str:
         body.append(f'<div class="lead"><b>{escape(ld.issue)}</b> — '
                     f'{escape(ld.reported_text)}<br><i>{escape(ld.note)}</i><br>'
                     f'event: {escape(ld.event)} · '
-                    f'<a href="{escape(ld.secondary_url)}" target="_blank">secondary</a></div>')
+                    f'{_safe_link(ld.secondary_url, "secondary")}</div>')
     style = ("<style>body{font:14px system-ui;margin:2rem;max-width:52rem}"
              ".card,.lead{border:1px solid #ddd;border-radius:8px;padding:.6rem;margin:.5rem 0}"
              ".green{border-left:5px solid #2e7d32}.flagged{border-left:5px solid #ed6c02}"
