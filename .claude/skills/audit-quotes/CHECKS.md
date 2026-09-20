@@ -153,8 +153,9 @@ Raising the bar would start flagging good quotes.
 
 **The ambiguous middle is deliberately left to the judgment pass**, which is better equipped for
 it: `source-summary` (§3, high) already covers a platform page rendered as a curator-summarized
-bullet list, and `non-differentiating-goal` (§3, medium) covers an agreeable goal stated with no
-mechanism. `stance-label` is only the mechanical floor beneath them — the cases so short that no
+bullet list, and `non-differentiating-goal` (§3, medium) covers a quote that names no concrete
+policy lever (a goal, target/metric, or vague direction). `stance-label` is only the mechanical
+floor beneath them — the cases so short that no
 reading rescues them.
 
 Source-verification checks (`scripts/verify_source.py`) — also deterministic. **Video sources**
@@ -340,7 +341,7 @@ not pattern-matching. A Claude agent applies them per race (or race×topic) usin
 | `note-not-self-contained` | `editor_note` doesn't state how the quote aligns with the candidate's current Compass stance on the topic, or a skeptical reader who hasn't read the principles doc couldn't follow it without outside context. | medium | guided |
 | `source-summary` | A written source at ANY tier (op-ed, platform page, questionnaire answer) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
 | `coupling-in-tension` | The quote pulls against the direction of the candidate's synthesized Compass `value` for this topic (as opposed to reinforcing it or elaborating on a different sub-dimension). This doesn't mean the quote is wrong — it means the tension needs resolving before the quote is surfaced next to the value. | medium | decision-required |
-| `non-differentiating-goal` | The quote clears responsiveness but states only an **agreeable goal no candidate in the race would contest** ("who wouldn't want safe streets?") **and names no mechanism/approach/means** — the HOW. Both conditions required: a contested/directional goal without a mechanism is fine and does not trip this. A preference, not a gate. | medium | decision-required |
+| `non-differentiating-goal` | The quote clears responsiveness but **names no concrete, contestable policy lever** — the means/instrument the candidate would use. It offers only a **goal** ("reduce homelessness"), a **target/metric** ("cut encampments 50% by 2028" — quantifies the end, names no means), or a **vague direction** ("direct dollars to what works", "work with the county"). Being contested or specific about the *outcome* does not rescue it — the contest a ranking needs is over the *means*. Not rankable on its own: flag for human judgment; surface only if a curator affirms it carries a real distinguishing position. | medium | decision-required |
 
 ## 4. Judgment-agent prompt template
 
@@ -414,14 +415,18 @@ each topic has a `quotes` array. Each quote has:
   valid), or in tension (pulls against the synthesized value — needs a flag, not a silent
   pass). Use `stance.chairs` to understand what each end of the spectrum means before
   judging reinforcing vs. in-tension.
-- **Prefer the HOW.** Among quotes that pass the responsiveness gate, prefer the one that
-  shows *how* the candidate would pursue the goal — the mechanism, approach, or means — not
-  merely that the goal is desirable. Flag a quote **only** when BOTH hold: (1) it is
-  *non-differentiating* — no candidate in this race would plausibly disagree with the goal
-  ("who wouldn't want safe, beautiful streets?"), and (2) it is *mechanism-free* — it names no
-  approach or means. A contested/directional goal without a mechanism is fine (it is still
-  rankable contrast). This is a preference, never a gate; do not use it to reject positions you
-  find thin.
+- **Require the lever (the HOW).** A rankable stance names the concrete, contestable **policy
+  lever** — the means/instrument the candidate would use (build shelters, enforce the encampment
+  ordinance, appoint a chief committed to a stated aim, create a named program, mandate acceptance
+  of a document, triple housing construction). Flag `non-differentiating-goal` when the quote names
+  **no** such lever — i.e. it offers only a *goal* ("reduce homelessness"), a *target/metric*
+  ("cut encampments 50% by 2028" — quantifies the end, names no means), or a *vague direction*
+  ("direct dollars to what works", "work with the county"). Being contested or specific about the
+  *outcome* does not rescue it; the contest a ranking needs is over the *means*. This is not an
+  auto-reject: a mechanism-less quote is flagged for human judgment and surfaced only if a curator
+  affirms it carries a real distinguishing position (prefer, and look for, a lever-bearing quote
+  first). Keep the lever with the goal — it usually sits in the adjacent sentence, so prefer the
+  coherent 2–3 sentence passage over the atomized goal.
 
 <!-- inject:gates:end -->
 ## Your task
@@ -441,8 +446,9 @@ For every quote in the bundle, apply these judgment checks:
   sentence (severity high, decision-required)
 - `coupling-in-tension` — quote pulls against the candidate's Compass value (severity
   medium, decision-required)
-- `non-differentiating-goal` — on-question quote states an agreeable goal no one would
-  contest AND names no mechanism/HOW (severity medium, decision-required)
+- `non-differentiating-goal` — on-question quote names no concrete policy lever (only a
+  goal, a target/metric, or a vague direction — no means); flag for human judgment
+  (severity medium, decision-required)
 
 ## Output
 
