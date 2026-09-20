@@ -1,5 +1,5 @@
 import json
-from src.evidence.pipeline import Providers, run_source
+from src.evidence.pipeline import Providers, run_source, run_candidate
 from src.evidence.models import Status, SourceType
 
 class FP:
@@ -57,3 +57,49 @@ def test_scorecard_domain_dropped_without_llm():
         providers=_providers("{}", "{}", "{}"), fetcher=lambda u: "should not fetch",
         candidate_name="Karen Bass", batch_id="b1")
     assert len(items) == 1 and items[0].status == Status.DROPPED.value
+
+def test_video_domain_becomes_lead_without_fetch_or_llm():
+    called = {"fetched": False}
+    def fetcher(u):
+        called["fetched"] = True
+        return "should not fetch"
+    items, leads = run_source(politician_id="p1",
+        source_url="https://youtu.be/abc", cited_via=None,
+        providers=_providers("{}", "{}", "{}"), fetcher=fetcher,
+        candidate_name="Karen Bass", batch_id="b1")
+    assert items == [] and len(leads) == 1
+    assert called["fetched"] is False
+    assert "youtu.be/abc" in (leads[0].event or "") or "youtu.be/abc" in (leads[0].primary_handle or "")
+
+def test_pointer_source_quote_is_flagged_never_green():
+    extract = json.dumps({"quotes": [{"text": "We will build 30,000 units of housing",
+        "context": SRC, "issue": "housing", "date": "2026", "setting": "wiki",
+        "is_own_words": True, "is_primary_venue": True, "reported_event": None,
+        "primary_handle": None}]})
+    cross = json.dumps({"own_words": True, "in_context": True, "primary": True,
+                        "issue": "housing", "notes": ""})
+    jud = json.dumps({"tag_ok": 0.9, "context_sufficient": 0.9, "dispute_risk": 0.1})
+    items, leads = run_source(politician_id="p1",
+        source_url="https://en.wikipedia.org/wiki/Karen_Bass", cited_via=None,
+        providers=_providers(extract, cross, jud), fetcher=lambda u: SRC,
+        candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1
+    assert items[0].source_type == SourceType.POINTER.value
+    assert items[0].status == Status.FLAGGED.value
+    assert "not-primary" in items[0].status_reasons
+
+def test_run_candidate_aggregates_across_sources():
+    extract = json.dumps({"quotes": [{"text": "We will build 30,000 units of housing",
+        "context": SRC, "issue": "housing", "date": "2026", "setting": "site",
+        "is_own_words": True, "is_primary_venue": True, "reported_event": None,
+        "primary_handle": None}]})
+    cross = json.dumps({"own_words": True, "in_context": True, "primary": True,
+                        "issue": "housing", "notes": ""})
+    jud = json.dumps({"tag_ok": 0.9, "context_sufficient": 0.9, "dispute_risk": 0.1})
+    providers = Providers(extractor=FP([extract]), crosschecker=FP([cross]), judge=FP([jud]))
+    items, leads = run_candidate(politician_id="p1", candidate_name="Karen Bass",
+        sources=[("https://karenbass.com/housing", None), ("https://lcv.org/x", None)],
+        providers=providers, fetcher=lambda u: SRC, batch_id="b1")
+    assert len(items) == 2
+    statuses = {it.status for it in items}
+    assert Status.GREEN.value in statuses and Status.DROPPED.value in statuses
