@@ -30,6 +30,14 @@ def test_parse_extract_returns_empty_on_malformed_shapes():
     assert parse_extract("not json at all") == []
     assert parse_extract('{"quotes": ["just a string", 123]}') == []
 
+def test_parse_extract_skips_non_string_text_without_raising():
+    payload = json.dumps({"quotes": [
+        {"text": 42, "context": "junk", "issue": "housing"},
+        {"text": "Real verbatim line.", "context": "ctx", "issue": "housing"}]})
+    out = parse_extract(payload)
+    assert len(out) == 1
+    assert out[0].text == "Real verbatim line."
+
 def test_extract_quotes_passes_zero_temperature_and_system():
     class RecordingProvider:
         def __init__(self, resp): self.resp = resp; self.kw = None

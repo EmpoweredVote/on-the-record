@@ -46,12 +46,16 @@ def parse_extract(raw: str) -> list:
     for q in items:
         if not isinstance(q, dict):
             continue
-        if not (q.get("text") or "").strip():
+        text = q.get("text")
+        if not isinstance(text, str) or not text.strip():
             continue
+        ctx = q.get("context"); iss = q.get("issue")
         out.append(QuoteCandidate(
-            text=q["text"].strip(), context=(q.get("context") or "").strip(),
-            issue=(q.get("issue") or "").strip().lower(), date=q.get("date"),
-            setting=q.get("setting"), is_own_words=bool(q.get("is_own_words", True)),
+            text=text.strip(),
+            context=ctx.strip() if isinstance(ctx, str) else "",
+            issue=iss.strip().lower() if isinstance(iss, str) else "",
+            date=q.get("date"), setting=q.get("setting"),
+            is_own_words=bool(q.get("is_own_words", True)),
             is_primary_venue=bool(q.get("is_primary_venue", True)),
             reported_event=q.get("reported_event"),
             primary_handle=q.get("primary_handle")))

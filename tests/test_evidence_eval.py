@@ -23,3 +23,18 @@ def test_precision_recall_against_gold():
     m = score([it], leads=[], gold=gold)
     assert m.precision == 1.0
     assert m.recall == 0.5   # 1 found of 2 expected on the sampled source
+
+def test_precision_is_over_green_picks_only_reject_lowers_score():
+    it = _item("p1","https://a.com","We build 30k units","green")
+    gold = {"labels": {item_key(it): "reject"}, "recall_sample": {}}
+    m = score([it], leads=[], gold=gold)
+    assert m.precision == 0.0
+
+def test_labeling_a_dropped_item_does_not_change_green_only_precision():
+    green_it = _item("p1","https://a.com","We build 30k units","green")
+    dropped_it = _item("p1","https://x.com","made up","dropped")
+    gold = {"labels": {item_key(green_it): "green",
+                       item_key(dropped_it): "reject"},
+            "recall_sample": {}}
+    m = score([green_it, dropped_it], leads=[], gold=gold)
+    assert m.precision == 1.0

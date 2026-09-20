@@ -191,6 +191,19 @@ OpenRouter, per the `openrouter-llm-migration` policy) so the swarm genuinely ca
 mistakes rather than sharing a blind spot. Exact model choices are a tuning parameter; higher-
 stakes than discovery, so a stronger class than the discovery deepseek default.
 
+**Slice-1 scope notes (as delivered).** A few points where the shipped code is narrower than the
+pipeline description above; recorded here so the spec stays honest against the implementation:
+
+- **Pointers flag, they don't resolve.** `triage` classifies a pointer domain (wikipedia,
+  ontheissues, etc.) but the pipeline does not follow it to the cited target and re-triage —
+  recursive pointer-following is descoped from slice 1. A pointer source stays `source_type
+  pointer` (never becomes `pointer_followed`) and is routed to `flagged`, not `green`.
+- **No pointer-follow-success metric.** Because pointers aren't followed, `src.evidence.eval.score`
+  has no metric for pointer-follow yield/success; it's not tracked in this slice.
+- **No fetch caching.** `fetch_page_text` is called fresh per source on every run; there is no
+  on-disk or in-process cache of page bodies (see the runner README's "Fetch behavior on
+  re-runs" note). Every re-run re-fetches every source over the network.
+
 ---
 
 ## Ingestion leads (chase the primaries that matter)

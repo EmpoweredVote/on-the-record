@@ -102,15 +102,19 @@ before re-running.
 gold set after a run:
 
 1. Open `review.html` from that run and read through it.
-2. **`labels`** — pick roughly **20–30 items** spread across the green,
-   flagged, and dropped buckets (favor ones you can judge confidently) and
-   label each `"green"` (belongs) or `"reject"` (doesn't). The key for each
-   item is `f"{politician_id}|{source_url}|{verbatim_text[:60]}"` — the
-   same key `src.evidence.eval.item_key` computes, so you can read it
-   straight off `evidence_items.json` (`politician_id`, `source_url`,
-   `verbatim_text`) rather than retyping it by hand. `eval.score` uses this
-   to compute precision: out of everything you labeled, how many of the
-   pipeline's green picks are ones you also labeled `"green"`.
+2. **`labels`** — this map is for the candidate's **GREEN picks only**.
+   Pick roughly **20–30 of the pipeline's green items** (favor ones you can
+   judge confidently) and label each `"green"` (belongs) or `"reject"`
+   (doesn't). The key for each item is
+   `f"{politician_id}|{source_url}|{verbatim_text[:60]}"` — the same key
+   `src.evidence.eval.item_key` computes, so you can read it straight off
+   `evidence_items.json` (`politician_id`, `source_url`, `verbatim_text`)
+   rather than retyping it by hand. `eval.score` uses this to compute
+   precision: of the green picks you labeled, how many did you also mark
+   `"green"` (right green picks / labeled green picks). Flagged and
+   dropped items don't belong in `labels` — a quote the pipeline correctly
+   dropped isn't a green pick to grade; misses like that belong only in
+   `recall_sample` below.
 3. **`recall_sample`** — pick a handful of sources you personally read in
    full (not skimmed) and record how many genuinely-green quotes *should*
    have come out of that page, keyed by `source_url`. `eval.score` uses

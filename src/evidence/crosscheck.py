@@ -38,10 +38,12 @@ def parse_crosscheck(raw: str) -> CrossCheckVerdict:
         return CrossCheckVerdict(False, False, False, False, None, "unparseable")
     if not isinstance(d, dict):
         return CrossCheckVerdict(False, False, False, False, None, "unparseable")
+    iss = d.get("issue")
+    issue = iss.strip() if isinstance(iss, str) and iss.strip() else None
     return CrossCheckVerdict(
         own_words=bool(d.get("own_words")), in_context=bool(d.get("in_context")),
         primary=bool(d.get("primary")), tag_agree=False,
-        issue=(d.get("issue") or None), notes=(d.get("notes") or ""))
+        issue=issue, notes=(d.get("notes") if isinstance(d.get("notes"), str) else ""))
 
 
 def crosscheck(cand, source_text, *, candidate_name, provider, extractor_issue,

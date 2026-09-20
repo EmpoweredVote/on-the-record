@@ -12,6 +12,7 @@ writes artifacts (no DB writes). Keys from the main-checkout .env.local or
 """
 from __future__ import annotations
 import argparse
+import functools
 import json
 import pathlib
 import sys
@@ -40,6 +41,7 @@ def build_parser():
     ap.add_argument("--env-file", default=None)
     ap.add_argument("--out", default=str(SPIKE_DIR))
     ap.add_argument("--gold", default=None)
+    ap.add_argument("--max-chars", type=int, default=200000)
     return ap
 
 
@@ -53,6 +55,8 @@ def main(argv=None):
     if args.candidate:
         roster = [r for r in roster if r["politician_id"] == args.candidate]
 
+    fetcher = functools.partial(fetch_page_text, max_chars=args.max_chars)
+
     all_items, all_leads = [], []
     for cand in roster:
         sources = data.fetch_cited_sources(conn, cand["politician_id"])
@@ -60,7 +64,7 @@ def main(argv=None):
             sources = sources[:args.limit]
         items, leads = pipeline.run_candidate(
             politician_id=cand["politician_id"], candidate_name=cand["name"],
-            sources=sources, providers=providers, fetcher=fetch_page_text,
+            sources=sources, providers=providers, fetcher=fetcher,
             batch_id="evidence-slice-la-mayor")
         print(f"{cand['name']}: {len(items)} items, {len(leads)} leads "
               f"from {len(sources)} sources")

@@ -34,3 +34,17 @@ def test_parse_crosscheck_unparseable_returns_all_false():
         v = parse_crosscheck(bad)
         assert v.own_words is False and v.in_context is False
         assert v.primary is False and v.tag_agree is False and v.issue is None
+
+def test_parse_crosscheck_non_string_issue_does_not_raise():
+    v = parse_crosscheck(json.dumps({"own_words": True, "in_context": True,
+        "primary": True, "issue": 5, "notes": "ok"}))
+    assert v.issue is None
+
+def test_crosscheck_non_string_issue_through_full_flow_does_not_raise():
+    p = FakeProvider([json.dumps({"own_words": True, "in_context": True,
+        "primary": True, "issue": 5, "notes": ""})])
+    from src.evidence.models import QuoteCandidate
+    cand = QuoteCandidate(text="We will build.", context="…", issue="housing")
+    v = crosscheck(cand, "…We will build…", candidate_name="Bass", provider=p,
+                   extractor_issue="housing")
+    assert v.tag_agree is False

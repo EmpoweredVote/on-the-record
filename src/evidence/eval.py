@@ -42,9 +42,10 @@ def score(items, leads, gold) -> Metrics:
 
     labels = (gold or {}).get("labels", {})
     if labels:
-        agree = sum(1 for it in green_items if labels.get(item_key(it)) == "green")
-        labeled = sum(1 for it in items if item_key(it) in labels)
-        m.precision = agree / labeled if labeled else None
+        labeled_green = [it for it in green_items if item_key(it) in labels]
+        if labeled_green:
+            agree = sum(1 for it in labeled_green if labels.get(item_key(it)) == "green")
+            m.precision = agree / len(labeled_green)
 
     sample = (gold or {}).get("recall_sample", {})
     if sample:
