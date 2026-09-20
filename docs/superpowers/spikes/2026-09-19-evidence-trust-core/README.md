@@ -128,29 +128,35 @@ with `--gold path/to/your_gold.json`.
 
 ## Baseline
 
-### Current baseline — calibrated re-run, 2026-09-20
+### Current baseline — calibrated judge + browser-UA fallback, 2026-09-20
 
-After the first run exposed a broken judge (below), the judge was recalibrated
-(model `gpt5-mini` → `deepseek`, `judge` `max_tokens` 300 → 800) and the run
-repeated with the calibrated defaults (`--extractor haiku-or --crosschecker
-gemini-flash --judge deepseek`, all via OpenRouter). No gold labelled yet, so
-precision/recall are `n/a`.
+Two fixes landed after the first run: (1) the judge was recalibrated (`gpt5-mini` →
+`deepseek`, `judge` `max_tokens` 300 → 800); (2) the shared `feeds` fetcher gained a
+browser-UA fallback + 429 retry, which unblocked the LA city government pages
+(`mayor.lacity.gov`, `cd4.lacity.gov`) a WAF had been 403-ing (including their
+`robots.txt`, which had made our robots gate fail closed). Run with the calibrated
+defaults (`--extractor haiku-or --crosschecker gemini-flash --judge deepseek`). No gold
+labelled yet, so precision/recall are `n/a`.
 
 | metric | value |
 |---|---|
-| items | 24 (green **4** / flagged **7** / dropped **13**) |
-| leads (chase-the-primary) | 24 |
-| verbatim pass rate | 0.46 |
+| items | 26 (green **8** / flagged **7** / dropped **11**) |
+| leads (chase-the-primary) | 27 |
+| verbatim pass rate | 0.58 |
 | primary-source rate (of green) | 1.00 |
-| per-domain green yield | nithyaforthecity.com: 4 |
+| per-domain green yield | nithyaforthecity.com: 6, mayor.lacity.gov: 2 |
 
-Per candidate: Karen Bass 13 items / 19 leads from 36 sources; Nithya Raman 11 items /
-5 leads from 25 sources. **The judge now works:** zero items fall to the worst-case
-default (`0/0/1`); green items score `1.0/1.0/0.0`, and the 7 flags now fail on specific,
-real reasons (`crosscheck:primary`, `crosscheck:tag_agree`, `crosscheck:own_words`,
-`judge:context`, `judge:dispute-risk`) — a genuine human-judgment queue. The 4 green are
-Raman's homelessness + housing stances (all primary, `nithyaforthecity.com`). Fetch quality
-(13 dead, all Bass) remains the top yield leak — a separate task.
+Per candidate: Karen Bass 2 green / 2 flagged / 11 dropped (15 items) + 22 leads from 36
+sources; Nithya Raman 6 green / 5 flagged (11 items) + 5 leads from 25 sources. **Both
+candidates now yield greens**, all primary and verbatim: Bass's are official
+`mayor.lacity.gov` homelessness statements; Raman's are homelessness + housing campaign
+stances. The 5 remaining dead are correctly excluded (`ontheissues.org` ×2 — a banned
+aggregator) or genuinely hard (`ffyf.org` / `acf.gov` Cloudflare-JS challenges; one
+`web.archive.org` 429).
+
+**Progression:** first run **1 green** (judge broken) → judge recalibrated: **4 green**
+(both from Raman's site; all of Bass's pages still WAF-blocked) → + UA fallback: **8 green
+across both candidates**, dead drops 13 → 5.
 
 ### First run — judge mis-configured (superseded, kept for the record)
 
