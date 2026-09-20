@@ -1,0 +1,8 @@
+{
+  "labels": {
+    "<politician_id>|<source_url>|<first 60 chars of verbatim_text>": "green"
+  },
+  "recall_sample": {
+    "<source_url a curator read fully>": 2
+  }
+}

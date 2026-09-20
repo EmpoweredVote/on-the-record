@@ -9,6 +9,14 @@ themselves via WEB_USER_AGENT, respect robots.txt (including treating a
 per-origin via _polite_pause. The YouTube/podcast lanes are unaffected —
 they keep the original Mozilla UA and no robots gate (spec scope: only the
 open-web watchlist layer needs the ToS-posture hardening).
+
+The page-text peek (_fetch_page_bytes) and the robots.txt fetch
+(_fetch_robots_text) additionally fall back to BROWSER_FALLBACK_UA when
+WEB_USER_AGENT is soft-blocked (401/403, or a 2xx with an empty body) —
+some WAFs soft-block the identifying UA on both the page AND its
+robots.txt even though the site's real robots.txt permits crawling — and
+retry a transient 429 with a short backoff before giving up on a UA. The
+identifying UA is always tried first; the fallback is a last resort.
 """
 from __future__ import annotations
 
@@ -43,6 +51,19 @@ UA_TOKEN = "CouncilScribeBot"
 WEB_USER_AGENT = ("Mozilla/5.0 (compatible; CouncilScribeBot/1.0; "
                   "+https://empowered.vote; non-commercial civic source discovery) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+
+# Fallback UA for WAFs that soft-block the identifying UA (its "CouncilScribeBot"
+# token trips some WAFs on the page AND on robots.txt). Tried ONLY after the
+# identifying UA is blocked — never first — so logs still identify us and robots
+# rule-matching is unchanged for sites that behave.
+BROWSER_FALLBACK_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+_WEB_FETCH_UAS = (WEB_USER_AGENT, BROWSER_FALLBACK_UA)
+_MAX_429_RETRIES = 2
+_RETRY_BACKOFF_SECONDS = 1.0
+
+# Injectable so tests never actually sleep through a 429 backoff.
+_retry_sleep = time.sleep
 
 
 class RobotsDenied(Exception):
@@ -186,19 +207,37 @@ def _polite_pause(origin: str, *, crawl_delay: float = 0.0, sleep_fn=time.sleep)
 
 def _fetch_robots_text(url: str) -> str:
     """Default robots.txt fetcher used by _robots_allowed when no
-    fetch_text_fn is injected. Identifies via WEB_USER_AGENT."""
-    resp = requests.get(url, timeout=(10, 30), headers={"User-Agent": WEB_USER_AGENT})
-    if resp.status_code in (401, 403):
-        # A bot wall on robots.txt itself is a clear "no" — don't fall
-        # through to the "missing robots.txt means allowed" default below.
-        raise RobotsDenied(f"{resp.status_code} fetching {url}")
-    if 400 <= resp.status_code < 500:
-        return ""  # other 4xx (typically 404 = no robots.txt) -> no rules -> allow, RFC 9309
-    resp.raise_for_status()  # 5xx -> exception, caught by _robots_allowed's
-    # broad except -> allowed. Simplification: at our volume a transient
-    # outage on the target's own robots.txt shouldn't permanently block a
-    # small civic-discovery crawl (RFC 9309 would have us treat 5xx as deny).
-    return resp.text
+    fetch_text_fn is injected. Identifies via WEB_USER_AGENT first; on a
+    401/403 (the identifying UA's "CouncilScribeBot" token trips some WAFs on
+    robots.txt too, same as on the page itself), retries under
+    BROWSER_FALLBACK_UA before giving up. RobotsDenied is raised only when
+    BOTH UAs are blocked — a real robots.txt reachable only via the fallback
+    still gets read (and its rules honored) instead of failing closed."""
+    last_ua_index = len(_WEB_FETCH_UAS) - 1
+    for ua_index, ua in enumerate(_WEB_FETCH_UAS):
+        is_last_ua = ua_index == last_ua_index
+        retries = 0
+        while True:
+            resp = requests.get(url, timeout=(10, 30), headers={"User-Agent": ua})
+            if resp.status_code == 429 and retries < _MAX_429_RETRIES:
+                retries += 1
+                _retry_sleep(_RETRY_BACKOFF_SECONDS)
+                continue
+            break
+        if resp.status_code in (401, 403):
+            # A bot wall on robots.txt itself reads as "no" -- but only once
+            # the fallback UA has also been tried.
+            if is_last_ua:
+                raise RobotsDenied(f"{resp.status_code} fetching {url}")
+            continue  # blocked -- try the next UA
+        if 400 <= resp.status_code < 500:
+            return ""  # other 4xx (typically 404 = no robots.txt) -> no rules -> allow, RFC 9309
+        resp.raise_for_status()  # 5xx -> exception, caught by _robots_allowed's
+        # broad except -> allowed. Simplification: at our volume a transient
+        # outage on the target's own robots.txt shouldn't permanently block a
+        # small civic-discovery crawl (RFC 9309 would have us treat 5xx as deny).
+        return resp.text
+    raise AssertionError("unreachable: _WEB_FETCH_UAS is never empty")
 
 
 def _robots_allowed(url: str, fetch_text_fn=None) -> bool:
@@ -337,23 +376,52 @@ def _fetch_page_bytes(url: str, *, max_bytes: int = _PAGE_TEXT_MAX_BYTES) -> "tu
     slow or huge page shouldn't stall the peek or bloat memory/prompt size —
     and hands the caller the response's raw Content-Type so it can refuse
     non-HTML/text content before ever decoding it (a podcast .mp3 enclosure
-    or a PDF must not dump binary into a prompt)."""
-    # Context manager matters: a capped early break leaves the body
-    # part-consumed, and an unclosed streamed response leaks its socket.
-    with requests.get(url, timeout=(30, 120),
-                      headers={"User-Agent": WEB_USER_AGENT}, stream=True) as resp:
-        resp.raise_for_status()
-        content_type = resp.headers.get("Content-Type", "")
-        chunks = []
-        total = 0
-        for chunk in resp.iter_content(chunk_size=8192):
-            if not chunk:
-                continue
-            chunks.append(chunk)
-            total += len(chunk)
-            if total >= max_bytes:
-                break
-    return content_type, b"".join(chunks)[:max_bytes]
+    or a PDF must not dump binary into a prompt).
+
+    Tries the UAs in _WEB_FETCH_UAS order — the identifying WEB_USER_AGENT
+    first, BROWSER_FALLBACK_UA only if that's blocked — since some WAFs
+    soft-block the identifying UA with a 401/403, or a 2xx with an empty body,
+    on pages whose real robots.txt permits crawling. A transient 429 is
+    retried on the SAME UA (short backoff, bounded by _MAX_429_RETRIES)
+    before moving on. A genuinely-blocked page (both UAs denied) still
+    surfaces as an exception — callers treat that as dead, same as before."""
+    last_ua_index = len(_WEB_FETCH_UAS) - 1
+    for ua_index, ua in enumerate(_WEB_FETCH_UAS):
+        is_last_ua = ua_index == last_ua_index
+        retries = 0
+        while True:
+            # Context manager matters: a capped early break leaves the body
+            # part-consumed, and an unclosed streamed response leaks its socket.
+            with requests.get(url, timeout=(30, 120),
+                              headers={"User-Agent": ua}, stream=True) as resp:
+                status = resp.status_code
+                if status == 429 and retries < _MAX_429_RETRIES:
+                    retries += 1
+                    _retry_sleep(_RETRY_BACKOFF_SECONDS)
+                    continue  # retry the same UA
+                if status in (401, 403, 429):
+                    if is_last_ua:
+                        resp.raise_for_status()  # genuinely blocked -> surface as an exception
+                    break  # blocked -- try the next UA
+                if status >= 400:
+                    resp.raise_for_status()  # real 4xx/5xx -- unchanged behavior
+                content_type = resp.headers.get("Content-Type", "")
+                chunks = []
+                total = 0
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    chunks.append(chunk)
+                    total += len(chunk)
+                    if total >= max_bytes:
+                        break
+                body = b"".join(chunks)[:max_bytes]
+            if body:
+                return content_type, body  # non-empty 2xx -- don't try the next UA
+            if is_last_ua:
+                return content_type, body  # exhausted with an empty body, nothing left to raise
+            break  # empty-body soft block -- try the next UA
+    raise AssertionError("unreachable: _WEB_FETCH_UAS is never empty")
 
 
 # Ballotpedia Candidate Connection answers -- the candidate's own words, the

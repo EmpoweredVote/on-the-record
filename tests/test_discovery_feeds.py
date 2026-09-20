@@ -302,6 +302,7 @@ def test_fetch_page_bytes_caps_body_size(monkeypatch):
     closed = []
 
     class _FakeResp:
+        status_code = 200
         headers = {"Content-Type": "text/html"}
 
         def __enter__(self):
@@ -339,6 +340,7 @@ def test_fetch_page_bytes_uses_browser_compatible_identifying_user_agent(monkeyp
     captured = {}
 
     class _FakeResp:
+        status_code = 200
         headers = {"Content-Type": "text/html"}
 
         def __enter__(self):
@@ -366,6 +368,168 @@ def test_fetch_page_bytes_uses_browser_compatible_identifying_user_agent(monkeyp
     assert "CouncilScribeBot" in ua      # still identifies the crawler
     assert "empowered.vote" in ua        # still carries the contact URL
     assert feeds.UA_TOKEN == "CouncilScribeBot"   # robots matching unchanged
+
+
+# --- UA fallback + 429 retry (src/discovery/feeds.py) -----------------------
+#
+# Several civic sites (mayor.lacity.gov, cd4.lacity.gov, ...) sit behind a WAF
+# that soft-blocks our identifying UA (WEB_USER_AGENT, "CouncilScribeBot"
+# token) with a 403 -- or a 202 with an empty body -- on BOTH the page and its
+# robots.txt, even though the real robots.txt (fetched with a plain browser
+# UA) permits crawling. These tests cover the fix: try the identifying UA
+# FIRST always, fall back to BROWSER_FALLBACK_UA only when blocked, and retry
+# transient 429s with a short backoff before giving up on a UA.
+
+import requests as _requests_module
+
+
+class _FakeUAResponse:
+    """Minimal requests.Response stand-in covering both call shapes used by
+    feeds.py: the streamed context-manager GET in _fetch_page_bytes, and the
+    plain (non-streamed) GET in _fetch_robots_text."""
+
+    def __init__(self, status_code=200, body=b"", content_type="text/html"):
+        self.status_code = status_code
+        self._body = body if isinstance(body, bytes) else body.encode("utf-8")
+        self.headers = {"Content-Type": content_type}
+
+    @property
+    def text(self):
+        return self._body.decode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise _requests_module.HTTPError(f"{self.status_code} error for url", response=self)
+
+    def iter_content(self, chunk_size=8192):
+        if self._body:
+            yield self._body
+
+
+def _ua_get_factory(monkeypatch, plan, calls=None):
+    """plan: {ua_string: [_FakeUAResponse, ...]} -- responses are consumed in
+    order per UA; once a UA's queue is down to one entry, that entry repeats
+    for any further calls (so a test doesn't have to pre-count retries).
+    calls (if given) records each request's User-Agent header, in order."""
+    if calls is None:
+        calls = []
+    queues = {ua: list(resps) for ua, resps in plan.items()}
+
+    def fake_get(url, **kwargs):
+        ua = kwargs.get("headers", {}).get("User-Agent", "")
+        calls.append(ua)
+        if ua not in queues:
+            raise AssertionError(f"unexpected User-Agent requested: {ua!r}")
+        queue = queues[ua]
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(feeds.requests, "get", fake_get)
+    return calls
+
+
+def test_fetch_page_bytes_identifying_ua_200_never_tries_fallback(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(200, b"<html>hi</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>hi</html>"
+    assert content_type == "text/html"
+    assert calls == [feeds.WEB_USER_AGENT]   # fallback UA never requested
+
+
+def test_fetch_page_bytes_falls_back_on_403(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, b"<html>fallback body</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>fallback body</html>"
+    assert calls == [feeds.WEB_USER_AGENT, feeds.BROWSER_FALLBACK_UA]  # identifying tried first
+
+
+def test_fetch_page_bytes_falls_back_on_soft_block_empty_2xx_body(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(202, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, b"<html>fallback body</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>fallback body</html>"
+    assert calls == [feeds.WEB_USER_AGENT, feeds.BROWSER_FALLBACK_UA]
+
+
+def test_fetch_page_bytes_raises_when_both_uas_blocked(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(403, b"")],
+    })
+    try:
+        feeds._fetch_page_bytes("https://x.example/page")
+        assert False, "expected requests.HTTPError"
+    except _requests_module.HTTPError:
+        pass
+
+
+def test_fetch_page_bytes_retries_429_then_succeeds_same_ua(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    sleeps = []
+    monkeypatch.setattr(feeds, "_retry_sleep", sleeps.append)
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(429, b""), _FakeUAResponse(200, b"<html>ok</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>ok</html>"
+    # bounded retry: exactly one retry (429 then 200), fallback UA never touched
+    assert calls == [feeds.WEB_USER_AGENT, feeds.WEB_USER_AGENT]
+    assert sleeps == [feeds._RETRY_BACKOFF_SECONDS]
+
+
+def _robots_ua_get_factory(monkeypatch, plan):
+    return _ua_get_factory(monkeypatch, plan)
+
+
+def test_robots_allowed_true_via_fallback_after_identifying_ua_403(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _robots_ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, "User-agent: *\nDisallow:")],
+    })
+    assert feeds._robots_allowed("https://x.example/feed.rss") is True
+
+
+def test_robots_allowed_false_via_fallback_real_disallow_honored(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _robots_ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, "User-agent: *\nDisallow: /")],
+    })
+    assert feeds._robots_allowed("https://x.example/feed.rss") is False
+
+
+def test_robots_allowed_false_when_both_uas_403(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _robots_ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(403, b"")],
+    })
+    assert feeds._robots_allowed("https://x.example/feed.rss") is False
 
 
 def test_html_to_text_preserves_less_than_greater_than_comparisons():

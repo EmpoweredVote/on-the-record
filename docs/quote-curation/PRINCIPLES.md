@@ -134,24 +134,41 @@ dropped or re-sourced entirely.
 
 ## Differentiation
 
-Among quotes that already pass the responsiveness gate, the strongest one is not simply the one
-that states the most agreeable goal — it is the one that shows **how** the candidate would
-actually pursue it: the mechanism, the approach, the means. "Who wouldn't want safe, affordable
-housing?" tells a voter nothing they can use to distinguish one candidate from another; a
-candidate explaining what policy lever they would pull to get there does. Differentiation is
-what makes a ranking meaningful rather than a popularity contest over shared values everyone
-already holds.
+Among quotes that already pass the responsiveness gate, a rankable stance is the one that shows
+**how** the candidate would actually pursue a goal — the concrete, contestable **policy lever**: the
+specific instrument they would use. Build shelters; enforce the encampment ordinance; expand
+treatment and services; appoint a chief committed to a stated aim; create a named program; mandate
+acceptance of a specific document; triple housing construction — each names a *means* a plausible
+opponent could choose differently, and it is that choice a citizen is ranking. "Who wouldn't want
+safe, affordable housing?" gives a voter nothing to distinguish one candidate from another — and
+neither does the same goal restated as a number. Differentiation is what makes a ranking a comparison
+of *approaches* rather than a popularity contest over shared values everyone already holds.
 
-This is a preference for the strongest available quote, not a second gate stacked on top of
-responsiveness: a quote that states a genuinely contested, directional goal — one a plausible
-opponent in the race would actually disagree with — is still a valid, rankable position even
-without naming a specific mechanism, because the contest itself is the differentiation. The
-defect this principle names (`non-differentiating-goal`) requires both conditions at once: the
-goal must be one no candidate in the race would plausibly contest, *and* the quote must name no
-approach or means to get there. Do not use this principle to reject a quote you merely find thin
-or underspecified; use it to prefer a mechanism-bearing quote when one is available, and to flag
-the rare case where a quote clears every other gate but still amounts to nothing more than
-agreeing that a good outcome would be good.
+Three things resemble a mechanism but are not, and do not on their own make a quote rankable:
+
+- a **goal** — the agreeable end-state ("reduce homelessness", "make housing affordable") essentially
+  every candidate shares;
+- a **target or metric** — a number or deadline bolted onto the goal ("cut encampments 50% by 2028");
+  it quantifies the end but still names no means;
+- a **vague direction** — a gesture at action with no instrument ("direct our dollars to programs
+  that work", "deliver immediate treatment", "work with the county", "put an end to the
+  finger-pointing").
+
+The defect this principle names (`non-differentiating-goal`) is therefore simply: **the quote names
+no concrete policy lever.** A quote that offers only a goal, a target, or a vague direction fails it —
+being *contested* or *specific about the outcome* does not rescue it, because the contest a ranking
+needs is a contest over the *means*, and none is on offer. Such a quote is not rankable on its own:
+**flag it for human judgment, and surface it only if a curator affirms it carries a real,
+distinguishing position.** Prefer, and go looking for, a lever-bearing quote first; but a blanket
+gate would erase legitimate, plainly-worded stances and shrink coverage, so the human — not the rule —
+makes the final call on a mechanism-less quote.
+
+A corollary for selection and extraction: the lever usually sits in the sentence *next to* the goal,
+so keep them together. "We must build much more housing. That includes housing at all income levels —
+deed-restricted affordable, market-rate, social housing, and shelters." states the mechanism in the
+second sentence; a quote that keeps only the first has thrown the differentiation away. Prefer the
+coherent two-to-three-sentence passage that carries the goal *and* its lever over the atomized goal
+alone.
 
 ## Responsiveness and absence
 

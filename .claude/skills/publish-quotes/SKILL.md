@@ -39,8 +39,10 @@ Two distinct jobs, do them in order:
       answers, or leave the candidate absent. Don't rank an off-question quote for distinctiveness.
       A candidate who only spoke in record/attacks (no forward position) is **absent** — don't
       launder record into a pseudo-position. See `docs/quote-curation/PRINCIPLES.md#responsiveness-and-absence`.
-      Among on-question candidates, prefer the quote that shows *how* the candidate would act, not
-      just an agreeable goal no one would contest (`docs/quote-curation/PRINCIPLES.md#differentiation`).
+      Among on-question candidates, pick the quote that names a concrete, contestable **policy lever**
+      (the means/instrument), not just a goal, a target/metric, or a vague direction; keep the lever
+      sentence with the goal (prefer the coherent 2–3 sentence passage, don't atomize)
+      (`docs/quote-curation/PRINCIPLES.md#differentiation`).
       Responsiveness is judged against the topic's **ranking question** — the per-race override if
       one exists, else the Compass question (`docs/quote-curation/PRINCIPLES.md#ranking-question` "the two questions").
 - [ ] **Confirm the ranking question for this race-topic.** Check whether the Compass
