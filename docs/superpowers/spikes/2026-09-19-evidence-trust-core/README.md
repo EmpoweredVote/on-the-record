@@ -149,8 +149,15 @@ acceptance of consular IDs/passports/ITINs. This is the differentiation bar Chri
 Bass yielded 0 green this pass (her homelessness statements are rhetorical/goal-ish → correctly
 flagged by the HOW gate; plus run-to-run extraction variance). **Green arc across the session: 1
 (judge broken) → 4 (judge fix) → 8 (UA fallback) → 0 (HOW gate on, tag_agree over-strict) → 5
-(tag_agree judgment) — the last being on-bar, mechanism-bearing quotes.** Human re-label + precision
-pending.
+(tag_agree judgment) — the last being on-bar, mechanism-bearing quotes.**
+
+**Human gold (run 5): precision 0.80** (`gold.json`). Chris confirmed 4 of the 5 greens — appoint an
+LAPD chief, ensure LAPD doesn't cooperate with ICE + audit, the Immigrant Economic Opportunity Hub,
+and the consular-ID/passport/ITIN mandate — and rejected one ("Expand and fully staff the Office of
+Immigrant Affairs" — names an institution but thin on what it would concretely do). Up from 0.375 at
+run 3: the calibration (extractor granularity + HOW gate + tag-judgment) moved the greens onto Chris's
+differentiation bar. Residual refinement: the judge still slightly over-credits an institutional/
+"expand the office" lever that lacks concrete detail.
 
 ### Earlier baseline — calibrated judge + browser-UA fallback, 2026-09-20
 
