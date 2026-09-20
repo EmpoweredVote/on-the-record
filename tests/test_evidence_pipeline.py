@@ -103,3 +103,14 @@ def test_run_candidate_aggregates_across_sources():
     assert len(items) == 2
     statuses = {it.status for it in items}
     assert Status.GREEN.value in statuses and Status.DROPPED.value in statuses
+
+def test_fetcher_that_raises_is_treated_as_dead_not_crash():
+    def boom(url):
+        raise RuntimeError("403 Forbidden")
+    items, leads = run_source(politician_id="p1",
+        source_url="https://www.ontheissues.org/x", cited_via=None,
+        providers=_providers("{}", "{}", "{}"), fetcher=boom,
+        candidate_name="Karen Bass", batch_id="b1")
+    assert leads == []
+    assert len(items) == 1 and items[0].status == Status.DROPPED.value
+    assert "dead" in items[0].status_reasons

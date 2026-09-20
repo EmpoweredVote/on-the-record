@@ -39,7 +39,10 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
         return [], [Lead(politician_id, "", "", f"video: {source_url}",
                          source_url, source_url)]
 
-    text = fetcher(source_url) or ""
+    try:
+        text = fetcher(source_url) or ""
+    except Exception:
+        text = ""
     if not text:
         return [_dropped(politician_id, source_url, cited_via, "dead")], []
 
