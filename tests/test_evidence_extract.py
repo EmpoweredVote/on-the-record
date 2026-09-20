@@ -23,3 +23,19 @@ def test_extract_quotes_calls_provider_and_parses():
     out = extract_quotes("...source text...", candidate_name="Karen Bass", provider=p)
     assert out[0].is_primary_venue is True
     assert "Karen Bass" in p.prompts[0]
+
+def test_parse_extract_returns_empty_on_malformed_shapes():
+    assert parse_extract("[]") == []
+    assert parse_extract("null") == []
+    assert parse_extract("not json at all") == []
+    assert parse_extract('{"quotes": ["just a string", 123]}') == []
+
+def test_extract_quotes_passes_zero_temperature_and_system():
+    class RecordingProvider:
+        def __init__(self, resp): self.resp = resp; self.kw = None
+        def complete(self, prompt, *, max_tokens, temperature, system=None):
+            self.kw = {"max_tokens": max_tokens, "temperature": temperature, "system": system}
+            return self.resp
+    p = RecordingProvider(PAYLOAD)
+    extract_quotes("...source...", candidate_name="X", provider=p)
+    assert p.kw["temperature"] == 0.0 and p.kw["system"]

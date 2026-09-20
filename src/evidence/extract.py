@@ -41,8 +41,11 @@ def parse_extract(raw: str) -> list:
         data = json.loads(payload)
     except json.JSONDecodeError:
         return []
+    items = data.get("quotes", []) if isinstance(data, dict) else []
     out = []
-    for q in data.get("quotes", []):
+    for q in items:
+        if not isinstance(q, dict):
+            continue
         if not (q.get("text") or "").strip():
             continue
         out.append(QuoteCandidate(
