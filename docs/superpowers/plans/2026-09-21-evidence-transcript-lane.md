@@ -566,6 +566,77 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
+### Task 8: Definitional primary/own-words for transcripts (recover false "not primary" flags)
+
+**Files:**
+- Modify: `src/evidence/pipeline.py` (`_evaluate_quote`, `run_transcript_source`)
+- Test: `tests/test_evidence_pipeline.py`
+
+**Why:** the trimmed cross-check window can't tell the source is the candidate's own event, so it answers `primary=false` on their own speech and false-flags ~half the greens (offline sim: Bass green 10→28, Raman 6→25). For a transcript, own-words and primary are true by construction. Keep the cross-check for `in_context` + `tag`; take own-words/primary as definitional.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_evidence_pipeline.py
+def test_transcript_definitional_primary_greens_despite_crosscheck_primary_false():
+    turn = "We will build 40,000 units by cutting permit timelines."
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=f"Karen Bass: {turn}", segments=[(20.0, turn)])
+    extract = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
+        "is_own_words":True,"is_primary_venue":True}]})
+    # cross-checker says NOT primary and NOT own_words (the window-starved failure), but in_context/tag ok
+    cross = json.dumps({"own_words":False,"in_context":True,"primary":False,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    items,_ = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert items[0].status == Status.GREEN.value          # definitional primary/own_words override
+    assert items[0].gates.primary is True and items[0].gates.own_words is True
+    assert items[0].gates.in_context is True              # crosscheck's in_context still used
+```
+
+- [ ] **Step 2: Run to verify fail**
+
+Run: `~/Documents/GitHub/on-the-record/.venv/bin/python -m pytest tests/test_evidence_pipeline.py -k definitional -v`
+Expected: FAIL (currently uses cc.primary=False → flagged).
+
+- [ ] **Step 3: Implement**
+
+Add `definitional_primary=False` to `_evaluate_quote`; when set, override own-words/primary to True (keep the cross-check's in_context/tag):
+
+```python
+def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
+                    deep_link, source_type, providers, candidate_name, prov,
+                    crosscheck_text=None, definitional_primary=False) -> "EvidenceItem":
+    if not verbatim_ok(cand.text, source_text):
+        ...  # unchanged verbatim-fail branch
+    cc = crosscheck(cand, crosscheck_text if crosscheck_text is not None else source_text,
+                    candidate_name=candidate_name, provider=providers.crosschecker)
+    own_words = True if definitional_primary else cc.own_words
+    primary = True if definitional_primary else cc.primary
+    gates = GateResults(verbatim=True, own_words=own_words, in_context=cc.in_context,
+        primary=primary, tag_agree=cc.tag_agree, judge_tag_ok=js.tag_ok, ...)  # rest unchanged
+    ...
+```
+
+In `run_transcript_source`, pass `definitional_primary=True` into `_evaluate_quote`. `run_source` (web lane) does not pass it → unchanged.
+
+- [ ] **Step 4: Run the pipeline tests**
+
+Run: `~/Documents/GitHub/on-the-record/.venv/bin/python -m pytest tests/test_evidence_pipeline.py -v` then `tests/ -k evidence -q`
+Expected: PASS (web-lane tests unchanged; new definitional test passes).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/evidence/pipeline.py tests/test_evidence_pipeline.py
+git commit -m "fix(evidence): own-words/primary are definitional for transcripts (recover false not-primary flags)
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage:** transcript source read (Task 1) ✓; transcript pipeline path with PRIMARY + verbatim gate + mechanism (Tasks 2–3) ✓; click-to-seek deep link (Task 3 `_deep_link`) ✓; question-as-context via full speaker-labeled transcript fed to the own-words extractor (Task 1 `full_text` + Task 3) ✓; runner `--source` (Task 4) ✓; artifact-based validation (Task 5) ✓; no schema/ev-accounts change ✓; shared evaluation (no fork) via the Task 2 refactor ✓.
