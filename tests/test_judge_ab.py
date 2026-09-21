@@ -1,6 +1,7 @@
 import json
 
 from scripts.judge_ab import (
+    _parse_ok,
     mechanism_separation,
     human_agreement,
     parse_error_rate,
@@ -119,6 +120,30 @@ def test_parse_error_rate_counts_false():
 
 def test_parse_error_rate_empty_is_zero():
     assert parse_error_rate([]) == 0.0
+
+
+# --- _parse_ok ---
+
+def test_parse_ok_false_when_all_four_fields_are_worst_default():
+    scores = JudgeScores(tag_ok=0.0, context_sufficient=0.0, dispute_risk=1.0,
+                          mechanism=0.0, notes="")
+    assert _parse_ok(scores) is False
+
+
+def test_parse_ok_true_for_genuinely_bad_but_validly_parsed_reply():
+    # Off-topic, no lever, high dispute risk -- but ample context, so only
+    # 3 of the 4 worst-default values match. A real parse failure sets ALL
+    # FOUR (see judge.parse_judge's fallback), so this must NOT be flagged
+    # as a parse error even though it's a legitimately bad quote.
+    scores = JudgeScores(tag_ok=0.0, context_sufficient=0.9, dispute_risk=1.0,
+                          mechanism=0.0, notes="")
+    assert _parse_ok(scores) is True
+
+
+def test_parse_ok_true_for_normal_scores():
+    scores = JudgeScores(tag_ok=0.9, context_sufficient=0.9, dispute_risk=0.1,
+                          mechanism=0.9, notes="")
+    assert _parse_ok(scores) is True
 
 
 # --- inter_judge_agreement / divergent_ids ---

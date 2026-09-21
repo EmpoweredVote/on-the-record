@@ -173,11 +173,19 @@ def load_gold(conn) -> list:
 
 def _parse_ok(scores) -> bool:
     """False exactly when judge()'s parser fell back to its all-worst
-    default payload (tag_ok==0, mechanism==0, dispute_risk==1) — i.e. the
-    LLM's reply didn't parse as the expected JSON (see judge.parse_judge).
-    Jev arms are typed Score answers, not free-text JSON, so they can't
-    hit this path and always report True."""
-    return not (scores.tag_ok == 0.0 and scores.mechanism == 0.0 and scores.dispute_risk == 1.0)
+    default payload (tag_ok==0, context_sufficient==0, mechanism==0,
+    dispute_risk==1) — i.e. the LLM's reply didn't parse as the expected
+    JSON (see judge.parse_judge). All four fields must match the fallback;
+    a genuinely bad-but-parsed reply (e.g. off-topic with ample context)
+    can share three of the four worst-case values without being a parse
+    failure. Jev arms are typed Score answers, not free-text JSON, so they
+    can't hit this path and always report True."""
+    return not (
+        scores.tag_ok == 0.0
+        and scores.context_sufficient == 0.0
+        and scores.mechanism == 0.0
+        and scores.dispute_risk == 1.0
+    )
 
 
 def make_provider_arm(provider_name: str):
