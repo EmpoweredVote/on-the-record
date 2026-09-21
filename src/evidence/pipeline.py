@@ -27,15 +27,16 @@ def _dropped(pid, url, cited_via, reason) -> EvidenceItem:
 
 
 def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
-                    deep_link, source_type, providers, candidate_name, prov) -> "EvidenceItem":
+                    deep_link, source_type, providers, candidate_name, prov,
+                    crosscheck_text=None) -> "EvidenceItem":
     if not verbatim_ok(cand.text, source_text):
         return EvidenceItem(politician_id=politician_id, issue=cand.issue,
             evidence_type="quote", verbatim_text=cand.text, source_url=source_url,
             cited_via=cited_via, context=cand.context, deep_link=deep_link,
             source_type=source_type, gates=GateResults(verbatim=False),
             status=Status.DROPPED.value, status_reasons=["verbatim-fail"], provenance=prov)
-    cc = crosscheck(cand, source_text, candidate_name=candidate_name,
-                    provider=providers.crosschecker)
+    cc = crosscheck(cand, crosscheck_text if crosscheck_text is not None else source_text,
+                    candidate_name=candidate_name, provider=providers.crosschecker)
     js = judge_quote(cand, provider=providers.judge)
     gates = GateResults(verbatim=True, own_words=cc.own_words, in_context=cc.in_context,
         primary=cc.primary, tag_agree=cc.tag_agree, judge_tag_ok=js.tag_ok,
@@ -104,6 +105,18 @@ def _deep_link(source, quote_text: str) -> str:
     return base
 
 
+def _local_window(full_text: str, quote_text: str, radius: int = 800) -> str:
+    """A small slice of full_text around the quote, for the independent
+    cross-check — avoids re-sending the whole (often 60K+ char) transcript
+    per quote. Falls back to the first 2*radius chars if the quote's head
+    can't be located verbatim (e.g. the extractor lightly reworded it)."""
+    head = (quote_text or "").strip()[:40]
+    i = full_text.find(head) if head else -1
+    if i < 0:
+        return full_text[:2 * radius]
+    return full_text[max(0, i - radius): i + len(quote_text) + radius]
+
+
 def run_transcript_source(source, *, politician_id, providers, candidate_name, batch_id):
     prov = {"extractor": getattr(providers.extractor, "model", "extractor"),
             "crosschecker": getattr(providers.crosschecker, "model", "crosschecker"),
@@ -114,7 +127,8 @@ def run_transcript_source(source, *, politician_id, providers, candidate_name, b
         items.append(_evaluate_quote(cand, source.full_text, politician_id=politician_id,
             source_url=source.source_url, cited_via=source.meeting_id,
             deep_link=_deep_link(source, cand.text), source_type=SourceType.PRIMARY.value,
-            providers=providers, candidate_name=candidate_name, prov=prov))
+            providers=providers, candidate_name=candidate_name, prov=prov,
+            crosscheck_text=_local_window(source.full_text, cand.text)))
     return items, []
 
 

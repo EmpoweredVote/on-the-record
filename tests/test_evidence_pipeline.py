@@ -4,8 +4,9 @@ from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
 class FP:
-    def __init__(self, r): self._r=list(r)
+    def __init__(self, r): self._r=list(r); self.prompts=[]
     def complete(self, prompt, *, max_tokens, temperature, system=None):
+        self.prompts.append(prompt)
         return self._r.pop(0)
 
 SRC = "On her site Bass wrote: We will build 30,000 units of housing this term."
@@ -209,3 +210,30 @@ def test_transcript_reworded_quote_drops_verbatim_fail():
     items, leads = run_transcript_source(_tsrc(), politician_id="p1",
         providers=_providers(extract, "{}", "{}"), candidate_name="Karen Bass", batch_id="b1")
     assert items[0].status == Status.DROPPED.value and "verbatim-fail" in items[0].status_reasons
+
+def test_transcript_crosscheck_sees_trimmed_window_not_full_text():
+    # full_text is deliberately > extract_quotes' 12000-char chunk_size, so
+    # extraction runs over 2 windows (this repo now extracts per-window —
+    # see chunk_text in src/evidence/extract.py); the quote falls only in
+    # the second window (verified empirically), so the FP extractor is
+    # queued with an empty-quotes reply for the first window and the real
+    # one for the second. That's orthogonal to what this test targets: the
+    # crosschecker must see only a small local window, not the full text.
+    turn = "We will build 40,000 units by cutting permit timelines."
+    big = ("UNRELATED FILLER. " * 900) + f"Karen Bass: {turn} " + ("MORE FILLER. " * 150)
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=big, segments=[(20.0, turn)])
+    extract_empty = json.dumps({"quotes": []})
+    extract_real = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
+        "is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    prov = Providers(extractor=FP([extract_empty, extract_real]),
+                     crosschecker=FP([cross]), judge=FP([jud]))
+    items, _ = run_transcript_source(src, politician_id="p1", providers=prov,
+                                     candidate_name="Karen Bass", batch_id="b1")
+    # the crosschecker prompt it saw must contain the quote but be far smaller than full_text
+    seen = prov.crosschecker.prompts[0]
+    assert turn in seen and len(seen) < 4000 and len(seen) < len(big) // 5
+    assert items[0].status == Status.GREEN.value
