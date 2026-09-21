@@ -89,14 +89,18 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
 
 
 def _deep_link(source, quote_text: str) -> str:
-    """Point at the transcript segment the quote starts in: <video_url>#t=<seconds>.
+    """Point at the transcript segment the quote starts in.
+    YouTube URLs get a `t=<seconds>s` query param (using `&` when the base
+    already has a `?`, else `?`); other URLs get a `#t=<seconds>` fragment.
     Falls back to the video/source URL with no timestamp when no segment matches."""
     base = source.video_url or source.source_url or ""
     head = (quote_text or "").strip()[:40]
     for start, text in source.segments:
         if head and head in text:
-            sep = "&t=" if ("youtube.com" in base or "youtu.be" in base) else "#t="
-            return f"{base}{sep}{int(start)}{'s' if 'youtu' in base else ''}"
+            if "youtube.com" in base or "youtu.be" in base:
+                sep = "&" if "?" in base else "?"
+                return f"{base}{sep}t={int(start)}s"
+            return f"{base}#t={int(start)}"
     return base
 
 

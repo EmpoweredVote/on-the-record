@@ -153,14 +153,17 @@ def test_fetcher_that_raises_is_treated_as_dead_not_crash():
     assert "dead" in items[0].status_reasons
 
 
-def _tsrc():
+def _tsrc(video_url="https://youtu.be/x"):
     turn = "We will build 40,000 units by cutting permit timelines."
     full = f"Moderator: What will you do on housing?\nKaren Bass: {turn}"
     return TranscriptSource(meeting_id="m1", source_url="https://site/m1",
-        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        video_url=video_url, title="Debate", event_kind="debate",
         full_text=full, segments=[(20.0, turn)])
 
 def test_transcript_quote_is_green_primary_with_timestamp_deeplink():
+    # Bare youtu.be URL has no existing query string, so the deep link must
+    # start the query with "?", not blindly append "&t=..." (which would
+    # produce an invalid, non-seeking URL like "youtu.be/x&t=20s").
     turn = "We will build 40,000 units by cutting permit timelines."
     extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
         "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
@@ -170,7 +173,35 @@ def test_transcript_quote_is_green_primary_with_timestamp_deeplink():
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
     assert len(items) == 1 and items[0].status == Status.GREEN.value
     assert items[0].source_type == SourceType.PRIMARY.value
-    assert items[0].deep_link.startswith("https://youtu.be/x") and "20" in items[0].deep_link
+    assert items[0].deep_link == "https://youtu.be/x?t=20s"
+
+def test_transcript_deeplink_uses_ampersand_when_youtube_url_already_has_query():
+    # youtube.com/watch?v=... already has a "?", so the timestamp param must
+    # be joined with "&", not a second "?".
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    src = _tsrc(video_url="https://www.youtube.com/watch?v=abc")
+    items, leads = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].deep_link == "https://www.youtube.com/watch?v=abc&t=20s"
+
+def test_transcript_deeplink_uses_fragment_for_non_youtube_base():
+    # A non-YouTube base (e.g. a meeting page) has no seek query param, so
+    # the deep link must use a "#t=" fragment instead.
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    src = _tsrc(video_url="https://site/m1/watch")
+    items, leads = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].deep_link == "https://site/m1/watch#t=20"
 
 def test_transcript_reworded_quote_drops_verbatim_fail():
     extract = json.dumps({"quotes": [{"text":"As mayor she plans to construct homes.",
