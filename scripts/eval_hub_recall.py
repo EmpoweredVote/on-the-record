@@ -16,6 +16,22 @@ source); T = the filled target set (exists == "yes"):
   * overall recall (context)      = found+verified / all T
   * retrieval-only recall (debug) = retrieved by Tavily / T   (pre-classify)
 
+How to read the numbers:
+  - The headline denominator is tiny today — only filled sources sitting on a
+    registered scoped_search DOMAIN hub (currently ~2, both Ballotpedia). At n=2
+    the headline is coarse (0.00 / 0.50 / 1.00), so read the per-race table,
+    overall, and retrieval-only next to it. The denominator grows on its own as
+    domain hubs are added to the registry (the snapshot, or --hubs db).
+  - "addressable" counts DOMAIN hubs only. A local-type query hub (no fixed
+    domain) can still surface a source — it shows up in retrieval/overall — but
+    is deliberately not counted as addressable (a query is not a guaranteed
+    domain).
+  - Between-run Tavily variance is high, and --runs averages only WITHIN one
+    invocation (a bad search window can zero a whole run, so the per-run spread
+    understates day-to-day variance). For a real judgment: --runs 5, compare
+    before/after in the SAME session, and scope with --races to the sources you
+    are testing.
+
 Usage (repo root; keys from .env.local):
   .venv/bin/python scripts/eval_hub_recall.py [--races SLUG ...] [--runs N]
       [--budget N] [--no-classify] [--hubs snapshot|db] [--print-hubs] [--env-file PATH]
