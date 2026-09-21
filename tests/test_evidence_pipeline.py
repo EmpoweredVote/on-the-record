@@ -1,10 +1,12 @@
 import json
-from src.evidence.pipeline import Providers, run_source, run_candidate
+from src.evidence.pipeline import Providers, run_source, run_candidate, run_transcript_source
+from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
 class FP:
-    def __init__(self, r): self._r=list(r)
+    def __init__(self, r): self._r=list(r); self.prompts=[]
     def complete(self, prompt, *, max_tokens, temperature, system=None):
+        self.prompts.append(prompt)
         return self._r.pop(0)
 
 SRC = "On her site Bass wrote: We will build 30,000 units of housing this term."
@@ -150,3 +152,105 @@ def test_fetcher_that_raises_is_treated_as_dead_not_crash():
     assert leads == []
     assert len(items) == 1 and items[0].status == Status.DROPPED.value
     assert "dead" in items[0].status_reasons
+
+
+def _tsrc(video_url="https://youtu.be/x"):
+    turn = "We will build 40,000 units by cutting permit timelines."
+    full = f"Moderator: What will you do on housing?\nKaren Bass: {turn}"
+    return TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url=video_url, title="Debate", event_kind="debate",
+        full_text=full, segments=[(20.0, turn)])
+
+def test_transcript_quote_is_green_primary_with_timestamp_deeplink():
+    # Bare youtu.be URL has no existing query string, so the deep link must
+    # start the query with "?", not blindly append "&t=..." (which would
+    # produce an invalid, non-seeking URL like "youtu.be/x&t=20s").
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    items, leads = run_transcript_source(_tsrc(), politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].source_type == SourceType.PRIMARY.value
+    assert items[0].deep_link == "https://youtu.be/x?t=20s"
+
+def test_transcript_deeplink_uses_ampersand_when_youtube_url_already_has_query():
+    # youtube.com/watch?v=... already has a "?", so the timestamp param must
+    # be joined with "&", not a second "?".
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    src = _tsrc(video_url="https://www.youtube.com/watch?v=abc")
+    items, leads = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].deep_link == "https://www.youtube.com/watch?v=abc&t=20s"
+
+def test_transcript_deeplink_uses_fragment_for_non_youtube_base():
+    # A non-YouTube base (e.g. a meeting page) has no seek query param, so
+    # the deep link must use a "#t=" fragment instead.
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    src = _tsrc(video_url="https://site/m1/watch")
+    items, leads = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].deep_link == "https://site/m1/watch#t=20"
+
+def test_transcript_reworded_quote_drops_verbatim_fail():
+    extract = json.dumps({"quotes": [{"text":"As mayor she plans to construct homes.",
+        "context":"x","issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    items, leads = run_transcript_source(_tsrc(), politician_id="p1",
+        providers=_providers(extract, "{}", "{}"), candidate_name="Karen Bass", batch_id="b1")
+    assert items[0].status == Status.DROPPED.value and "verbatim-fail" in items[0].status_reasons
+
+def test_transcript_crosscheck_sees_trimmed_window_not_full_text():
+    # full_text is deliberately > extract_quotes' 12000-char chunk_size, so
+    # extraction runs over 2 windows (this repo now extracts per-window —
+    # see chunk_text in src/evidence/extract.py); the quote falls only in
+    # the second window (verified empirically), so the FP extractor is
+    # queued with an empty-quotes reply for the first window and the real
+    # one for the second. That's orthogonal to what this test targets: the
+    # crosschecker must see only a small local window, not the full text.
+    turn = "We will build 40,000 units by cutting permit timelines."
+    big = ("UNRELATED FILLER. " * 900) + f"Karen Bass: {turn} " + ("MORE FILLER. " * 150)
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=big, segments=[(20.0, turn)])
+    extract_empty = json.dumps({"quotes": []})
+    extract_real = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
+        "is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    prov = Providers(extractor=FP([extract_empty, extract_real]),
+                     crosschecker=FP([cross]), judge=FP([jud]))
+    items, _ = run_transcript_source(src, politician_id="p1", providers=prov,
+                                     candidate_name="Karen Bass", batch_id="b1")
+    # the crosschecker prompt it saw must contain the quote but be far smaller than full_text
+    seen = prov.crosschecker.prompts[0]
+    assert turn in seen and len(seen) < 4000 and len(seen) < len(big) // 5
+    assert items[0].status == Status.GREEN.value
+
+
+def test_transcript_definitional_primary_greens_despite_crosscheck_primary_false():
+    turn = "We will build 40,000 units by cutting permit timelines."
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=f"Karen Bass: {turn}", segments=[(20.0, turn)])
+    extract = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
+        "is_own_words":True,"is_primary_venue":True}]})
+    # cross-checker says NOT primary and NOT own_words (the window-starved failure), but in_context/tag ok
+    cross = json.dumps({"own_words":False,"in_context":True,"primary":False,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    items,_ = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert items[0].status == Status.GREEN.value          # definitional primary/own_words override
+    assert items[0].gates.primary is True and items[0].gates.own_words is True
+    assert items[0].gates.in_context is True              # crosscheck's in_context still used

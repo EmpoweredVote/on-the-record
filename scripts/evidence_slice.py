@@ -50,6 +50,8 @@ def build_parser():
                     help="Use the Playwright rendered-fetch fallback (default: on)")
     ap.add_argument("--no-render", dest="render", action="store_false",
                     help="Disable the rendered-fetch fallback")
+    ap.add_argument("--source", choices=["web", "transcripts", "both"], default="both",
+                    help="Which source lane(s) to run (default: both)")
     return ap
 
 
@@ -68,15 +70,18 @@ def main(argv=None):
 
     all_items, all_leads = [], []
     for cand in roster:
-        sources = data.fetch_cited_sources(conn, cand["politician_id"])
+        sources = (data.fetch_cited_sources(conn, cand["politician_id"])
+                   if args.source in ("web", "both") else [])
         if args.limit:
             sources = sources[:args.limit]
+        tsrc = (data.fetch_transcript_sources(conn, cand["politician_id"])
+                if args.source in ("transcripts", "both") else [])
         items, leads = pipeline.run_candidate(
             politician_id=cand["politician_id"], candidate_name=cand["name"],
             sources=sources, providers=providers, fetcher=fetcher,
-            batch_id="evidence-slice-la-mayor")
+            batch_id="evidence-slice-la-mayor", transcript_sources=tsrc)
         print(f"{cand['name']}: {len(items)} items, {len(leads)} leads "
-              f"from {len(sources)} sources")
+              f"from {len(sources)} web sources, {len(tsrc)} transcript sources")
         all_items += items
         all_leads += leads
 
