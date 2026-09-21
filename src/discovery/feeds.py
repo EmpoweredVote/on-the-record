@@ -489,7 +489,26 @@ def _page_text_from_bytes(url: str, max_chars: int) -> str:
     return _extract_body_text(raw.decode("utf-8", errors="replace"), max_chars)
 
 
-def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> str:
+_RENDER_MIN_CHARS = 200  # a page shorter than this is treated as empty/blocked
+
+
+def _render_page_text(url: str, max_chars: int, *, renderer=None) -> str:
+    """Render `url` via `renderer` (default: real Playwright, added in a later
+    task) and run the shared body extraction. Returns '' on any renderer
+    failure -- the caller then keeps the plain result. The default is
+    resolved lazily (only when `renderer` is falsy) so this module imports
+    fine before the real renderer exists, as long as every caller injects
+    `renderer` -- which every current caller and test does."""
+    render = renderer or _fetch_rendered
+    try:
+        html_str = render(url)
+    except Exception:
+        return ""
+    return _extract_body_text(html_str, max_chars) if html_str else ""
+
+
+def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep,
+                    render_fallback: bool = False, renderer=None) -> str:
     """Article-page text for the stage-2 page peek (web analog of the
     captions peek). Robots-gated and paced like every other web-lane fetch;
     returns '' when disallowed OR when the Content-Type isn't text/html,
@@ -501,12 +520,28 @@ def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> 
     in an <aside>/<template> rail (a normal station template shape) hijack
     the peek — stripping block chrome first removes the teaser along with
     its wrapper before slicing ever sees it. _html_to_text re-running the
-    strips on the chosen slice is idempotent."""
+    strips on the chosen slice is idempotent.
+
+    render_fallback (opt-in, default False) tries a rendered fetch when the
+    plain fetch raises or returns fewer than _RENDER_MIN_CHARS chars —
+    a JS-only page reads as empty/near-empty over plain HTTP. The rendered
+    text is used only if it's longer than the plain result, so a renderer
+    hiccup never regresses a page the plain fetch already handled. The
+    robots guard above runs first and short-circuits both tiers."""
     if not _robots_allowed(url):
         return ""
     origin = _origin(url)
     _polite_pause(origin, crawl_delay=_crawl_delay_for(origin), sleep_fn=sleep_fn)
-    return _page_text_from_bytes(url, max_chars)
+    if not render_fallback:
+        return _page_text_from_bytes(url, max_chars)  # unchanged default (may raise)
+    try:
+        plain = _page_text_from_bytes(url, max_chars)
+    except Exception:
+        plain = ""
+    if len(plain) >= _RENDER_MIN_CHARS:
+        return plain
+    rendered = _render_page_text(url, max_chars, renderer=renderer)
+    return rendered if len(rendered) > len(plain) else plain
 
 
 def fetch_outlet_items(outlet: Outlet, *, sleep_fn=time.sleep) -> list:
