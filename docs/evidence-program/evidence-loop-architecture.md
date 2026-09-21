@@ -112,12 +112,18 @@ extraction-quality / own-words (#250). ev-accounts: `inform.evidence_items` migr
 + the review surface (#569). Live data: LA Mayor — Raman (reviewed) + Bass (13→4 green after the
 own-words fix; 108 flagged), 2-candidate comparability.
 
+**Transcripts → evidence: SHIPPED** (this branch) — the evidence pipeline now reads a candidate's
+ingested `meetings.*` turns (own-words by construction, click-to-seek deep links), with two cost
+levers (candidate-turns-only input; cross-check trimmed to the quote's local window) and definitional
+own-words/primary for transcripts. Offline-validated green: Bass 28, Raman 25 (from 8 meetings each).
+
 **Next, in order of leverage:**
-1. **Transcripts → evidence** (this branch's slice) — unlock the best own-words source.
-2. **Leads → discovery** (parallel session) — close the chase-the-primary loop.
-3. **Auto-handle flagged** — stop surfacing the flagged bucket for manual review (Nithya flagged
+1. **Leads → discovery** (parallel session; handoff note ready) — close the chase-the-primary loop.
+2. **Auto-handle flagged** — stop surfacing the flagged bucket for manual review (Nithya flagged
    precision 0.00; Bass 108 flagged) so the steward reviews green, not noise.
-4. **Editorializing step** — condense accepted evidence to display quotes per the curation rules.
+3. **Editorializing step** — condense accepted evidence to display quotes per the curation rules.
+4. **Speed + reliability:** run the pipeline's LLM calls concurrently (I/O-bound; ~5–10× wall-clock,
+   no cost/accuracy change); A/B **Jev** for the judge cog (faster structured calls, 0% parse errors).
 5. **Derive read-rank + compass as views**; then **votes/actions** as evidence types.
 
 Program memory: `evidence-sources-and-evidence-program` (indexed in `MEMORY.md`).
