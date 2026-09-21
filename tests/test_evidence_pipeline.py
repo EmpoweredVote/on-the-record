@@ -237,3 +237,20 @@ def test_transcript_crosscheck_sees_trimmed_window_not_full_text():
     seen = prov.crosschecker.prompts[0]
     assert turn in seen and len(seen) < 4000 and len(seen) < len(big) // 5
     assert items[0].status == Status.GREEN.value
+
+
+def test_transcript_definitional_primary_greens_despite_crosscheck_primary_false():
+    turn = "We will build 40,000 units by cutting permit timelines."
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=f"Karen Bass: {turn}", segments=[(20.0, turn)])
+    extract = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
+        "is_own_words":True,"is_primary_venue":True}]})
+    # cross-checker says NOT primary and NOT own_words (the window-starved failure), but in_context/tag ok
+    cross = json.dumps({"own_words":False,"in_context":True,"primary":False,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    items,_ = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert items[0].status == Status.GREEN.value          # definitional primary/own_words override
+    assert items[0].gates.primary is True and items[0].gates.own_words is True
+    assert items[0].gates.in_context is True              # crosscheck's in_context still used

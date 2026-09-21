@@ -28,7 +28,7 @@ def _dropped(pid, url, cited_via, reason) -> EvidenceItem:
 
 def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
                     deep_link, source_type, providers, candidate_name, prov,
-                    crosscheck_text=None) -> "EvidenceItem":
+                    crosscheck_text=None, definitional_primary=False) -> "EvidenceItem":
     if not verbatim_ok(cand.text, source_text):
         return EvidenceItem(politician_id=politician_id, issue=cand.issue,
             evidence_type="quote", verbatim_text=cand.text, source_url=source_url,
@@ -38,8 +38,15 @@ def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
     cc = crosscheck(cand, crosscheck_text if crosscheck_text is not None else source_text,
                     candidate_name=candidate_name, provider=providers.crosschecker)
     js = judge_quote(cand, provider=providers.judge)
-    gates = GateResults(verbatim=True, own_words=cc.own_words, in_context=cc.in_context,
-        primary=cc.primary, tag_agree=cc.tag_agree, judge_tag_ok=js.tag_ok,
+    # For a transcript, own-words and primary are true by construction (the
+    # candidate is speaking at their own event) — the trimmed cross-check
+    # window can't reliably tell that, so it must not be allowed to veto
+    # either gate here. in_context and tag_agree still come from the
+    # cross-check, since those aren't definitional.
+    own_words = True if definitional_primary else cc.own_words
+    primary = True if definitional_primary else cc.primary
+    gates = GateResults(verbatim=True, own_words=own_words, in_context=cc.in_context,
+        primary=primary, tag_agree=cc.tag_agree, judge_tag_ok=js.tag_ok,
         judge_context_sufficient=js.context_sufficient, judge_dispute_risk=js.dispute_risk,
         judge_mechanism=js.mechanism)
     status, reasons = decide(gates, source_type)
@@ -128,7 +135,8 @@ def run_transcript_source(source, *, politician_id, providers, candidate_name, b
             source_url=source.source_url, cited_via=source.meeting_id,
             deep_link=_deep_link(source, cand.text), source_type=SourceType.PRIMARY.value,
             providers=providers, candidate_name=candidate_name, prov=prov,
-            crosscheck_text=_local_window(source.full_text, cand.text)))
+            crosscheck_text=_local_window(source.full_text, cand.text),
+            definitional_primary=True))
     return items, []
 
 
