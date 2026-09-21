@@ -3,6 +3,36 @@ import json
 import re
 from .models import QuoteCandidate
 
+
+def _split_point(text: str, target: int, floor: int) -> int:
+    """Index just after a natural boundary at or before `target` but not before
+    `floor`; falls back to `target` when none is found (so a run with no
+    boundary still splits)."""
+    for sep in ("\n\n", "\n", ". ", " "):
+        i = text.rfind(sep, floor, target)
+        if i != -1:
+            return i + len(sep)
+    return target
+
+
+def chunk_text(text: str, size: int = 12000, overlap: int = 2000) -> list:
+    """Split `text` into overlapping windows of about `size` chars, preferring
+    to cut on a paragraph/sentence/space boundary. Overlap keeps a quote that
+    straddles a cut whole in an adjacent window. Empty text -> no windows."""
+    text = text or ""
+    if len(text) <= size:
+        return [text] if text else []
+    windows, start, n = [], 0, len(text)
+    while start < n:
+        target = min(start + size, n)
+        end = target if target >= n else _split_point(text, target, start + size // 2)
+        windows.append(text[start:end])
+        if end >= n:
+            break
+        start = max(end - overlap, start + 1)
+    return windows
+
+
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 
 _SYSTEM = ("You extract a politician's own VERBATIM sentences that state a view "
@@ -40,7 +70,48 @@ SOURCE:
 
 
 def build_extract_prompt(text: str, candidate_name: str) -> str:
-    return _INSTRUCTIONS.format(name=candidate_name, text=text[:60000])
+    return _INSTRUCTIONS.format(name=candidate_name, text=text)
+
+
+def _iter_json_objects(payload: str):
+    """Yield each complete top-level object inside the `quotes` array, stopping
+    at the first incomplete one. Lets a truncated reply still surrender the
+    quotes it did finish."""
+    key = payload.find('"quotes"')
+    lb = payload.find("[", key) if key != -1 else payload.find("[")
+    if lb == -1:
+        return
+    dec = json.JSONDecoder()
+    i, n = lb + 1, len(payload)
+    while i < n:
+        j = payload.find("{", i)
+        if j == -1:
+            break
+        try:
+            obj, end = dec.raw_decode(payload, j)
+        except json.JSONDecodeError:
+            break
+        if isinstance(obj, dict):
+            yield obj
+        i = end
+
+
+def _to_candidate(q):
+    if not isinstance(q, dict):
+        return None
+    text = q.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    ctx = q.get("context"); iss = q.get("issue")
+    return QuoteCandidate(
+        text=text.strip(),
+        context=ctx.strip() if isinstance(ctx, str) else "",
+        issue=iss.strip().lower() if isinstance(iss, str) else "",
+        date=q.get("date"), setting=q.get("setting"),
+        is_own_words=bool(q.get("is_own_words", True)),
+        is_primary_venue=bool(q.get("is_primary_venue", True)),
+        reported_event=q.get("reported_event"),
+        primary_handle=q.get("primary_handle"))
 
 
 def parse_extract(raw: str) -> list:
@@ -48,30 +119,38 @@ def parse_extract(raw: str) -> list:
     payload = m.group(1) if m else (raw or "")
     try:
         data = json.loads(payload)
+        items = data.get("quotes", []) if isinstance(data, dict) else []
     except json.JSONDecodeError:
-        return []
-    items = data.get("quotes", []) if isinstance(data, dict) else []
+        items = list(_iter_json_objects(payload))  # salvage a truncated reply
     out = []
     for q in items:
-        if not isinstance(q, dict):
-            continue
-        text = q.get("text")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        ctx = q.get("context"); iss = q.get("issue")
-        out.append(QuoteCandidate(
-            text=text.strip(),
-            context=ctx.strip() if isinstance(ctx, str) else "",
-            issue=iss.strip().lower() if isinstance(iss, str) else "",
-            date=q.get("date"), setting=q.get("setting"),
-            is_own_words=bool(q.get("is_own_words", True)),
-            is_primary_venue=bool(q.get("is_primary_venue", True)),
-            reported_event=q.get("reported_event"),
-            primary_handle=q.get("primary_handle")))
+        c = _to_candidate(q)
+        if c is not None:
+            out.append(c)
     return out
 
 
-def extract_quotes(text, *, candidate_name, provider, max_tokens=1500) -> list:
-    raw = provider.complete(build_extract_prompt(text, candidate_name),
-                            max_tokens=max_tokens, temperature=0.0, system=_SYSTEM)
-    return parse_extract(raw)
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip().lower()
+
+
+def _dedup(cands: list) -> list:
+    seen, out = set(), []
+    for c in cands:
+        k = _norm(c.text)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    return out
+
+
+def extract_quotes(text, *, candidate_name, provider, max_tokens=3000,
+                   chunk_size=12000, overlap=2000) -> list:
+    cands = []
+    for window in chunk_text(text, chunk_size, overlap):
+        raw = provider.complete(build_extract_prompt(window, candidate_name),
+                                max_tokens=max_tokens, temperature=0.0,
+                                system=_SYSTEM)
+        cands.extend(parse_extract(raw))
+    return _dedup(cands)

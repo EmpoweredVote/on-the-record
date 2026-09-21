@@ -1,5 +1,5 @@
 import json
-from src.evidence.extract import parse_extract, extract_quotes, build_extract_prompt
+from src.evidence.extract import parse_extract, extract_quotes, build_extract_prompt, chunk_text
 
 class FakeProvider:
     def __init__(self, responses): self._r = list(responses); self.prompts = []
@@ -69,3 +69,92 @@ def test_parse_extract_handles_multi_sentence_quote_text():
     assert "much more housing" in out[0].text
     assert "deed-restricted affordable" in out[0].text
     assert "homeless shelters" in out[0].text
+
+
+def test_chunk_text_short_returns_single_window():
+    assert chunk_text("hello", size=100) == ["hello"]
+    assert chunk_text("", size=100) == []
+
+def test_chunk_text_windows_cover_all_text_with_overlap():
+    text = "".join(f"word{i} " for i in range(4000))  # ~ >12000 chars
+    windows = chunk_text(text, size=3000, overlap=500)
+    assert len(windows) > 1
+    assert all(len(w) <= 3000 for w in windows)
+    # every character position appears in at least one window (no gaps)
+    covered = 0
+    for w in windows:
+        start = text.index(w, max(0, covered - len(w)))
+        assert start <= covered  # windows are contiguous/overlapping, no gap
+        covered = max(covered, start + len(w))
+    assert covered == len(text)
+
+def test_chunk_text_prefers_paragraph_boundary():
+    left = "a" * 2900
+    right = "b" * 2900
+    text = left + "\n\n" + right
+    windows = chunk_text(text, size=3000, overlap=200)
+    # the first window ends at the blank-line boundary, not mid-run
+    assert windows[0].endswith("\n\n") or windows[0] == left + "\n\n"
+
+
+def test_parse_extract_normal_json():
+    raw = '{"quotes":[{"text":"I will build 10000 homes.","issue":"housing"}]}'
+    out = parse_extract(raw)
+    assert len(out) == 1 and out[0].text == "I will build 10000 homes."
+
+def test_parse_extract_salvages_truncated_reply():
+    # Two complete objects, then a third cut off mid-string (the Bass failure).
+    raw = ('{"quotes":['
+           '{"text":"A: declare a state of emergency.","issue":"homelessness"},'
+           '{"text":"B: end all street encampments.","issue":"homelessness"},'
+           '{"text":"C: appoint and empower one indiv')
+    out = parse_extract(raw)
+    assert [c.text for c in out] == [
+        "A: declare a state of emergency.",
+        "B: end all street encampments.",
+    ]
+
+def test_parse_extract_junk_returns_empty():
+    assert parse_extract("not json at all") == []
+    assert parse_extract("") == []
+
+
+class _FakeProvider:
+    """Returns a canned reply per call; records the prompts it saw."""
+    def __init__(self, replies):
+        self._replies = list(replies)
+        self.prompts = []
+    def complete(self, prompt, *, max_tokens, temperature, system=None):
+        self.prompts.append(prompt)
+        return self._replies.pop(0) if self._replies else '{"quotes":[]}'
+
+def test_extract_quotes_calls_provider_per_window_and_merges():
+    text = "P" * 3000 + "\n\n" + "Q" * 3000  # forces >1 window at size=3000
+    prov = _FakeProvider([
+        '{"quotes":[{"text":"from window one","issue":"a"}]}',
+        '{"quotes":[{"text":"from window two","issue":"b"}]}',
+    ])
+    out = extract_quotes(text, candidate_name="X", provider=prov,
+                         chunk_size=3000, overlap=200)
+    assert len(prov.prompts) >= 2
+    assert {c.text for c in out} == {"from window one", "from window two"}
+
+def test_extract_quotes_dedups_overlap_duplicates():
+    text = "P" * 3000 + "\n\n" + "Q" * 3000
+    dup = '{"quotes":[{"text":"Same quote, verbatim.","issue":"a"}]}'
+    prov = _FakeProvider([dup, dup])
+    out = extract_quotes(text, candidate_name="X", provider=prov,
+                         chunk_size=3000, overlap=200)
+    assert len(out) == 1
+
+def test_extract_quotes_reads_past_60k():
+    # content only in the tail (past the old 60000-char cap) must be reached
+    text = ("filler. " * 9000) + "TAILMARKER"   # ~72000 chars
+    seen = {}
+    class P:
+        def complete(self, prompt, **kw):
+            seen["tail_in_some_prompt"] = seen.get("tail_in_some_prompt") or ("TAILMARKER" in prompt)
+            return '{"quotes":[]}'
+    extract_quotes(text, candidate_name="X", provider=P(),
+                   chunk_size=20000, overlap=1000)
+    assert seen["tail_in_some_prompt"] is True

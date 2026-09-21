@@ -9,6 +9,10 @@ writes artifacts (no DB writes). Keys from the main-checkout .env.local or
 
   ~/Documents/GitHub/on-the-record/.venv/bin/python scripts/evidence_slice.py \
       [--race ID] [--limit N] [--gold path.json]
+
+Rendered fallback needs Playwright + a browser:
+`pip install playwright && python -m playwright install chromium`
+(pass --no-render to skip it).
 """
 from __future__ import annotations
 import argparse
@@ -42,6 +46,10 @@ def build_parser():
     ap.add_argument("--out", default=str(SPIKE_DIR))
     ap.add_argument("--gold", default=None)
     ap.add_argument("--max-chars", type=int, default=200000)
+    ap.add_argument("--render", dest="render", action="store_true", default=True,
+                    help="Use the Playwright rendered-fetch fallback (default: on)")
+    ap.add_argument("--no-render", dest="render", action="store_false",
+                    help="Disable the rendered-fetch fallback")
     return ap
 
 
@@ -55,7 +63,8 @@ def main(argv=None):
     if args.candidate:
         roster = [r for r in roster if r["politician_id"] == args.candidate]
 
-    fetcher = functools.partial(fetch_page_text, max_chars=args.max_chars)
+    fetcher = functools.partial(fetch_page_text, max_chars=args.max_chars,
+                                render_fallback=args.render)
 
     all_items, all_leads = [], []
     for cand in roster:
