@@ -25,3 +25,4 @@ python-multipart>=0.0.9
 httpx>=0.27
 pdfplumber>=0.11
 playwright>=1.63
+typesafe-sdk>=0.7.1
