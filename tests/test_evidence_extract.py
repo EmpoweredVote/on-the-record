@@ -117,3 +117,44 @@ def test_parse_extract_salvages_truncated_reply():
 def test_parse_extract_junk_returns_empty():
     assert parse_extract("not json at all") == []
     assert parse_extract("") == []
+
+
+class _FakeProvider:
+    """Returns a canned reply per call; records the prompts it saw."""
+    def __init__(self, replies):
+        self._replies = list(replies)
+        self.prompts = []
+    def complete(self, prompt, *, max_tokens, temperature, system=None):
+        self.prompts.append(prompt)
+        return self._replies.pop(0) if self._replies else '{"quotes":[]}'
+
+def test_extract_quotes_calls_provider_per_window_and_merges():
+    text = "P" * 3000 + "\n\n" + "Q" * 3000  # forces >1 window at size=3000
+    prov = _FakeProvider([
+        '{"quotes":[{"text":"from window one","issue":"a"}]}',
+        '{"quotes":[{"text":"from window two","issue":"b"}]}',
+    ])
+    out = extract_quotes(text, candidate_name="X", provider=prov,
+                         chunk_size=3000, overlap=200)
+    assert len(prov.prompts) >= 2
+    assert {c.text for c in out} == {"from window one", "from window two"}
+
+def test_extract_quotes_dedups_overlap_duplicates():
+    text = "P" * 3000 + "\n\n" + "Q" * 3000
+    dup = '{"quotes":[{"text":"Same quote, verbatim.","issue":"a"}]}'
+    prov = _FakeProvider([dup, dup])
+    out = extract_quotes(text, candidate_name="X", provider=prov,
+                         chunk_size=3000, overlap=200)
+    assert len(out) == 1
+
+def test_extract_quotes_reads_past_60k():
+    # content only in the tail (past the old 60000-char cap) must be reached
+    text = ("filler. " * 9000) + "TAILMARKER"   # ~72000 chars
+    seen = {}
+    class P:
+        def complete(self, prompt, **kw):
+            seen["tail_in_some_prompt"] = seen.get("tail_in_some_prompt") or ("TAILMARKER" in prompt)
+            return '{"quotes":[]}'
+    extract_quotes(text, candidate_name="X", provider=P(),
+                   chunk_size=20000, overlap=1000)
+    assert seen["tail_in_some_prompt"] is True

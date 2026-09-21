@@ -70,7 +70,7 @@ SOURCE:
 
 
 def build_extract_prompt(text: str, candidate_name: str) -> str:
-    return _INSTRUCTIONS.format(name=candidate_name, text=text[:60000])
+    return _INSTRUCTIONS.format(name=candidate_name, text=text)
 
 
 def _iter_json_objects(payload: str):
@@ -130,7 +130,27 @@ def parse_extract(raw: str) -> list:
     return out
 
 
-def extract_quotes(text, *, candidate_name, provider, max_tokens=1500) -> list:
-    raw = provider.complete(build_extract_prompt(text, candidate_name),
-                            max_tokens=max_tokens, temperature=0.0, system=_SYSTEM)
-    return parse_extract(raw)
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip().lower()
+
+
+def _dedup(cands: list) -> list:
+    seen, out = set(), []
+    for c in cands:
+        k = _norm(c.text)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    return out
+
+
+def extract_quotes(text, *, candidate_name, provider, max_tokens=3000,
+                   chunk_size=12000, overlap=2000) -> list:
+    cands = []
+    for window in chunk_text(text, chunk_size, overlap):
+        raw = provider.complete(build_extract_prompt(window, candidate_name),
+                                max_tokens=max_tokens, temperature=0.0,
+                                system=_SYSTEM)
+        cands.extend(parse_extract(raw))
+    return _dedup(cands)
