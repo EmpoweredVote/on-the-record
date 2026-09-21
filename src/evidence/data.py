@@ -75,12 +75,12 @@ def fetch_transcript_sources(conn, politician_id) -> list:
     ordered (start_time, text) segments for timestamp lookup."""
     cur = conn.cursor()
     cur.execute(
-        "SELECT DISTINCT m.id, sp.display_name, m.source_url, m.video_url, m.title, m.event_kind "
+        "SELECT DISTINCT m.id, m.title, m.source_url, m.video_url, m.event_kind "
         "FROM meetings.speakers sp JOIN meetings.meetings m ON m.id = sp.meeting_id "
         "WHERE sp.politician_id = %s ORDER BY m.id", (politician_id,))
     meetings = cur.fetchall()
     out = []
-    for mid, _display_name, source_url, video_url, title, event_kind in meetings:
+    for mid, title, source_url, video_url, event_kind in meetings:
         cur2 = conn.cursor()
         cur2.execute(
             "SELECT segment_index, start_time, speaker_name, text "
