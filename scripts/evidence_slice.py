@@ -52,6 +52,8 @@ def build_parser():
                     help="Disable the rendered-fetch fallback")
     ap.add_argument("--source", choices=["web", "transcripts", "both"], default="both",
                     help="Which source lane(s) to run (default: both)")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="Max concurrent per-quote LLM calls (default: EVIDENCE_MAX_WORKERS or 6)")
     return ap
 
 
@@ -79,7 +81,8 @@ def main(argv=None):
         items, leads = pipeline.run_candidate(
             politician_id=cand["politician_id"], candidate_name=cand["name"],
             sources=sources, providers=providers, fetcher=fetcher,
-            batch_id="evidence-slice-la-mayor", transcript_sources=tsrc)
+            batch_id="evidence-slice-la-mayor", transcript_sources=tsrc,
+            max_workers=args.workers)
         print(f"{cand['name']}: {len(items)} items, {len(leads)} leads "
               f"from {len(sources)} web sources, {len(tsrc)} transcript sources")
         all_items += items
