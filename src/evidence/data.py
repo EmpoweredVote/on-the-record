@@ -69,9 +69,9 @@ class TranscriptSource:
 
 
 def fetch_transcript_sources(conn, politician_id) -> list:
-    """Assemble one TranscriptSource per meeting where this politician is a linked
-    speaker: the full speaker-labeled transcript (so the own-words extractor can
-    pull only their statements, with the eliciting question as context), plus the
+    """One TranscriptSource per meeting where this politician is a linked speaker:
+    the candidate's OWN turns, each preceded by its eliciting (immediately prior,
+    different-speaker) turn for context — not every speaker — plus the candidate's
     ordered (start_time, text) segments for timestamp lookup."""
     cur = conn.cursor()
     cur.execute(
@@ -81,16 +81,21 @@ def fetch_transcript_sources(conn, politician_id) -> list:
     meetings = cur.fetchall()
     out = []
     for mid, title, source_url, video_url, event_kind in meetings:
-        cur2 = conn.cursor()
-        cur2.execute(
-            "SELECT segment_index, start_time, speaker_name, text "
+        cur.execute("SELECT id FROM meetings.speakers WHERE meeting_id = %s AND politician_id = %s",
+                    (mid, politician_id))
+        cand_ids = {r[0] for r in cur.fetchall()}
+        cur.execute(
+            "SELECT segment_index, start_time, speaker_id, speaker_name, text "
             "FROM meetings.segments WHERE meeting_id = %s ORDER BY segment_index", (mid,))
-        rows = cur2.fetchall()
+        rows = cur.fetchall()
         lines, segs = [], []
-        for _idx, start, speaker, text in rows:
+        for i, (_idx, start, sid, speaker, text) in enumerate(rows):
             text = (text or "").strip()
-            if not text:
+            if not text or sid not in cand_ids:
                 continue
+            prev = rows[i - 1] if i > 0 else None
+            if prev is not None and prev[2] not in cand_ids and (prev[4] or "").strip():
+                lines.append(f"{prev[3] or 'Speaker'}: {(prev[4] or '').strip()}")  # eliciting question
             lines.append(f"{speaker or 'Speaker'}: {text}")
             segs.append((float(start) if start is not None else 0.0, text))
         out.append(TranscriptSource(
