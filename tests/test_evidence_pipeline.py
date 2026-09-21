@@ -1,14 +1,23 @@
 import json
+import threading
 import time
 from src.evidence.pipeline import Providers, run_source, run_candidate, run_transcript_source, _concurrent_map
 from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
 class FP:
-    def __init__(self, r): self._r=list(r); self.prompts=[]
+    def __init__(self, r): self._r=list(r); self.prompts=[]; self._lock=threading.Lock()
     def complete(self, prompt, *, max_tokens, temperature, system=None):
-        self.prompts.append(prompt)
-        return self._r.pop(0)
+        with self._lock:
+            self.prompts.append(prompt)
+            return self._r.pop(0)
+
+class RoleFP:
+    """Returns a fixed reply regardless of call order — keyed by nothing, safe under threads."""
+    def __init__(self, reply): self._reply=reply; self.prompts=[]; self._lock=threading.Lock()
+    def complete(self, prompt, *, max_tokens, temperature, system=None):
+        with self._lock: self.prompts.append(prompt)
+        return self._reply
 
 SRC = "On her site Bass wrote: We will build 30,000 units of housing this term."
 
@@ -276,3 +285,53 @@ def test_concurrent_map_sequential_fastpath():
     def fn(x): calls.append(x); return x
     assert _concurrent_map(fn, [7], max_workers=8) == [7]      # single item → no pool
     assert _concurrent_map(fn, [1,2], max_workers=1) == [1,2]  # workers<=1 → sequential
+
+
+def _role_providers(extract, cross, jud):
+    return Providers(extractor=FP([extract]), crosschecker=RoleFP(cross), judge=RoleFP(jud))
+
+def _two_quote_extract():
+    return json.dumps({"quotes":[
+        {"text":"We will build 40,000 units by cutting permit timelines.","context":"h","issue":"housing",
+         "is_own_words":True,"is_primary_venue":True},
+        {"text":"We will hire 250 civilian staff to free up officers.","context":"p","issue":"policing",
+         "is_own_words":True,"is_primary_venue":True}]})
+
+# Source text must contain BOTH quotes verbatim (normalized) so the verbatim
+# gate passes for each — the two quotes stand in for the two windows a real
+# multi-topic source page would carry.
+_TWO_QUOTE_SRC = ("Bass campaign site: We will build 40,000 units by cutting permit "
+                  "timelines. Policy page: We will hire 250 civilian staff to free "
+                  "up officers.")
+
+def test_run_source_identical_workers_1_vs_4():
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    def run(w):
+        items, leads = run_source(politician_id="p1", source_url="https://karenbass.com/x",
+            cited_via=None, providers=_role_providers(_two_quote_extract(), cross, jud),
+            fetcher=lambda u: _TWO_QUOTE_SRC, candidate_name="Karen Bass", batch_id="b1", max_workers=w)
+        return [(i.issue, i.status) for i in items]
+    assert run(1) == run(4)
+    assert len(run(4)) == 2 and all(s==Status.GREEN.value for _,s in run(4))
+
+
+def _two_quote_tsrc():
+    q1 = "We will build 40,000 units by cutting permit timelines."
+    q2 = "We will hire 250 civilian staff to free up officers."
+    full = (f"Moderator: What will you do on housing?\nKaren Bass: {q1}\n"
+            f"Moderator: And on policing?\nKaren Bass: {q2}")
+    return TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=full, segments=[(20.0, q1), (140.0, q2)])
+
+def test_run_transcript_source_identical_workers_1_vs_4():
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    def run(w):
+        items, leads = run_transcript_source(_two_quote_tsrc(), politician_id="p1",
+            providers=_role_providers(_two_quote_extract(), cross, jud),
+            candidate_name="Karen Bass", batch_id="b1", max_workers=w)
+        return [(i.issue, i.status) for i in items]
+    assert run(1) == run(4)
+    assert len(run(4)) == 2 and all(s==Status.GREEN.value for _,s in run(4))
