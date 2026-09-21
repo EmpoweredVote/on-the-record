@@ -1,5 +1,5 @@
 import json
-from src.evidence.extract import parse_extract, extract_quotes, build_extract_prompt
+from src.evidence.extract import parse_extract, extract_quotes, build_extract_prompt, chunk_text
 
 class FakeProvider:
     def __init__(self, responses): self._r = list(responses); self.prompts = []
@@ -69,3 +69,29 @@ def test_parse_extract_handles_multi_sentence_quote_text():
     assert "much more housing" in out[0].text
     assert "deed-restricted affordable" in out[0].text
     assert "homeless shelters" in out[0].text
+
+
+def test_chunk_text_short_returns_single_window():
+    assert chunk_text("hello", size=100) == ["hello"]
+    assert chunk_text("", size=100) == []
+
+def test_chunk_text_windows_cover_all_text_with_overlap():
+    text = "".join(f"word{i} " for i in range(4000))  # ~ >12000 chars
+    windows = chunk_text(text, size=3000, overlap=500)
+    assert len(windows) > 1
+    assert all(len(w) <= 3000 for w in windows)
+    # every character position appears in at least one window (no gaps)
+    covered = 0
+    for w in windows:
+        start = text.index(w, max(0, covered - len(w)))
+        assert start <= covered  # windows are contiguous/overlapping, no gap
+        covered = max(covered, start + len(w))
+    assert covered == len(text)
+
+def test_chunk_text_prefers_paragraph_boundary():
+    left = "a" * 2900
+    right = "b" * 2900
+    text = left + "\n\n" + right
+    windows = chunk_text(text, size=3000, overlap=200)
+    # the first window ends at the blank-line boundary, not mid-run
+    assert windows[0].endswith("\n\n") or windows[0] == left + "\n\n"

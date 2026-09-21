@@ -3,6 +3,36 @@ import json
 import re
 from .models import QuoteCandidate
 
+
+def _split_point(text: str, target: int, floor: int) -> int:
+    """Index just after a natural boundary at or before `target` but not before
+    `floor`; falls back to `target` when none is found (so a run with no
+    boundary still splits)."""
+    for sep in ("\n\n", "\n", ". ", " "):
+        i = text.rfind(sep, floor, target)
+        if i != -1:
+            return i + len(sep)
+    return target
+
+
+def chunk_text(text: str, size: int = 12000, overlap: int = 2000) -> list:
+    """Split `text` into overlapping windows of about `size` chars, preferring
+    to cut on a paragraph/sentence/space boundary. Overlap keeps a quote that
+    straddles a cut whole in an adjacent window. Empty text -> no windows."""
+    text = text or ""
+    if len(text) <= size:
+        return [text] if text else []
+    windows, start, n = [], 0, len(text)
+    while start < n:
+        target = min(start + size, n)
+        end = target if target >= n else _split_point(text, target, start + size // 2)
+        windows.append(text[start:end])
+        if end >= n:
+            break
+        start = max(end - overlap, start + 1)
+    return windows
+
+
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 
 _SYSTEM = ("You extract a politician's own VERBATIM sentences that state a view "
