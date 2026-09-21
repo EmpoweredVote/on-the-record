@@ -88,8 +88,34 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
     return items, leads
 
 
+def _deep_link(source, quote_text: str) -> str:
+    """Point at the transcript segment the quote starts in: <video_url>#t=<seconds>.
+    Falls back to the video/source URL with no timestamp when no segment matches."""
+    base = source.video_url or source.source_url or ""
+    head = (quote_text or "").strip()[:40]
+    for start, text in source.segments:
+        if head and head in text:
+            sep = "&t=" if ("youtube.com" in base or "youtu.be" in base) else "#t="
+            return f"{base}{sep}{int(start)}{'s' if 'youtu' in base else ''}"
+    return base
+
+
+def run_transcript_source(source, *, politician_id, providers, candidate_name, batch_id):
+    prov = {"extractor": getattr(providers.extractor, "model", "extractor"),
+            "crosschecker": getattr(providers.crosschecker, "model", "crosschecker"),
+            "judge": getattr(providers.judge, "model", "judge"), "batch": batch_id}
+    items = []
+    for cand in extract_quotes(source.full_text, candidate_name=candidate_name,
+                               provider=providers.extractor):
+        items.append(_evaluate_quote(cand, source.full_text, politician_id=politician_id,
+            source_url=source.source_url, cited_via=source.meeting_id,
+            deep_link=_deep_link(source, cand.text), source_type=SourceType.PRIMARY.value,
+            providers=providers, candidate_name=candidate_name, prov=prov))
+    return items, []
+
+
 def run_candidate(*, politician_id, candidate_name, sources, providers, fetcher,
-                  batch_id):
+                  batch_id, transcript_sources=None):
     all_items, all_leads = [], []
     for source_url, cited_via in sources:
         items, leads = run_source(politician_id=politician_id, source_url=source_url,
@@ -97,4 +123,9 @@ def run_candidate(*, politician_id, candidate_name, sources, providers, fetcher,
             candidate_name=candidate_name, batch_id=batch_id)
         all_items += items
         all_leads += leads
+    for ts in (transcript_sources or []):
+        it, ld = run_transcript_source(ts, politician_id=politician_id,
+            providers=providers, candidate_name=candidate_name, batch_id=batch_id)
+        all_items += it
+        all_leads += ld
     return all_items, all_leads

@@ -1,5 +1,6 @@
 import json
-from src.evidence.pipeline import Providers, run_source, run_candidate
+from src.evidence.pipeline import Providers, run_source, run_candidate, run_transcript_source
+from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
 class FP:
@@ -150,3 +151,30 @@ def test_fetcher_that_raises_is_treated_as_dead_not_crash():
     assert leads == []
     assert len(items) == 1 and items[0].status == Status.DROPPED.value
     assert "dead" in items[0].status_reasons
+
+
+def _tsrc():
+    turn = "We will build 40,000 units by cutting permit timelines."
+    full = f"Moderator: What will you do on housing?\nKaren Bass: {turn}"
+    return TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=full, segments=[(20.0, turn)])
+
+def test_transcript_quote_is_green_primary_with_timestamp_deeplink():
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    items, leads = run_transcript_source(_tsrc(), politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].source_type == SourceType.PRIMARY.value
+    assert items[0].deep_link.startswith("https://youtu.be/x") and "20" in items[0].deep_link
+
+def test_transcript_reworded_quote_drops_verbatim_fail():
+    extract = json.dumps({"quotes": [{"text":"As mayor she plans to construct homes.",
+        "context":"x","issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    items, leads = run_transcript_source(_tsrc(), politician_id="p1",
+        providers=_providers(extract, "{}", "{}"), candidate_name="Karen Bass", batch_id="b1")
+    assert items[0].status == Status.DROPPED.value and "verbatim-fail" in items[0].status_reasons
