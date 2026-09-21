@@ -113,6 +113,25 @@ that several deep links resolve to the right timestamp. Chris decides whether to
 - Live (gated, artifacts): Bass + Raman transcript runs yield green own-words evidence with working
   click-to-seek deep links, mechanism-gated.
 
+## Cost amendment (2026-09-21, after the Bass base-case run)
+
+The base design (feed the whole interleaved transcript; cross-check every quote against
+`source_text[:60000]`) cost ~$1–2 per candidate and ~50 min for Bass alone: 209 items → 170
+non-dropped, each re-sending up to 60K chars of transcript to the cross-checker (~10M chars). Two
+changes bring it to cents with no loss of the trust model (Chris's call: keep the independent check,
+trim its input):
+
+1. **Extractor input = the candidate's own turns only, each preceded by its eliciting (immediately
+   prior, different-speaker) turn for context** — not every speaker. `fetch_transcript_sources` filters
+   segments to the candidate's `speaker_id`(s) (from `meetings.speakers` for that meeting+politician)
+   and includes the one preceding turn as the question. `segments` (for timestamps) becomes the
+   candidate's turns only. Cuts extractor input ~2× on debates, much more on council meetings.
+2. **Trim the cross-check's input to the quote's local window** (~±800 chars around the quote in
+   `full_text`), not the whole transcript. Keeps the independent second-model check (own-words /
+   in-context / tag) but sends ~1–2K instead of 60K. `_evaluate_quote` gains an optional
+   `crosscheck_text` (verbatim still checks the full source; cross-check uses the window); the web lane
+   passes nothing and is unchanged.
+
 ## Execution notes
 
 - Run with the MAIN checkout `.venv/bin/python`; `OPENROUTER_API_KEY` exported; `--env-file

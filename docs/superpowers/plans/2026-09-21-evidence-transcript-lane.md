@@ -375,6 +375,197 @@ From each `evidence_items.json`: green/flagged/dropped counts, that greens are g
 
 ---
 
+### Task 6: Cost — feed only the candidate's turns (+ eliciting question)
+
+**Files:**
+- Modify: `src/evidence/data.py` (`fetch_transcript_sources`)
+- Test: `tests/test_evidence_data.py`
+
+**Why:** the base version feeds every speaker's turns to the extractor; the candidate is only ~50% of a debate and far less of a council meeting. Feed only their turns, each preceded by its eliciting (immediately prior, different-speaker) turn for context.
+
+- [ ] **Step 1: Update the existing transcript test + add an exclusion test**
+
+The mock now needs `speaker_id` on segment rows and a candidate-speaker-ids query. Update the fixture so segments carry `speaker_id`, the candidate's speaker id is known, and assert: (a) the candidate's turn is in `full_text`, (b) its immediately-preceding moderator turn is in `full_text` (question context), (c) a NON-adjacent other-speaker turn is NOT in `full_text`, (d) `segments` contains only the candidate's turns.
+
+```python
+# tests/test_evidence_data.py  — replace the transcript-assembly test body to match the new mock shape
+class _Cur2:
+    """Returns speaker-id rows for the speakers-in-meeting query, else segment rows."""
+    def __init__(self, meetings, cand_ids, segments):
+        self._meetings, self._cand_ids, self._segments, self._last = meetings, cand_ids, segments, None
+    def execute(self, sql, params=None):
+        s = sql.lower()
+        if "from meetings.speakers" in s and "meetings.meetings" in s: self._last = "meetings"
+        elif "from meetings.speakers" in s: self._last = "cand_ids"
+        else: self._last = "segments"
+    def fetchall(self):
+        return {"meetings": self._meetings, "cand_ids": self._cand_ids, "segments": self._segments}[self._last]
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+class _Conn2:
+    def __init__(self, m, c, s): self._m, self._c, self._s = m, c, s
+    def cursor(self, *a, **k): return _Cur2(self._m, self._c, self._s)
+
+def test_fetch_transcript_sources_candidate_turns_plus_question_only():
+    from src.evidence.data import fetch_transcript_sources
+    meetings = [("m1", "Debate", "https://site/m1", "https://youtu.be/x", "debate")]
+    cand_ids = [(10,)]  # candidate's speaker id in this meeting
+    segments = [  # (segment_index, start_time, speaker_id, speaker_name, text)
+        (0, 12.0, 99, "Moderator", "What will you do on housing?"),
+        (1, 20.0, 10, "Karen Bass", "We will build 40,000 units by cutting permit timelines."),
+        (2, 40.0, 88, "Opponent",  "I disagree with that approach entirely."),
+    ]
+    s = fetch_transcript_sources(_Conn2(meetings, cand_ids, segments), "p1")[0]
+    assert "Karen Bass: We will build 40,000 units" in s.full_text     # candidate turn
+    assert "Moderator: What will you do on housing?" in s.full_text    # eliciting question kept
+    assert "Opponent" not in s.full_text                               # other speaker dropped
+    assert s.segments == [(20.0, "We will build 40,000 units by cutting permit timelines.")]
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `~/Documents/GitHub/on-the-record/.venv/bin/python -m pytest tests/test_evidence_data.py -k transcript -v`
+Expected: FAIL (current code includes all speakers + no speaker_id).
+
+- [ ] **Step 3: Implement**
+
+```python
+def fetch_transcript_sources(conn, politician_id) -> list:
+    """One TranscriptSource per meeting where this politician is a linked speaker:
+    the candidate's OWN turns, each preceded by its eliciting (immediately prior,
+    different-speaker) turn for context — not every speaker — plus the candidate's
+    ordered (start_time, text) segments for timestamp lookup."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT m.id, m.title, m.source_url, m.video_url, m.event_kind "
+        "FROM meetings.speakers sp JOIN meetings.meetings m ON m.id = sp.meeting_id "
+        "WHERE sp.politician_id = %s ORDER BY m.id", (politician_id,))
+    meetings = cur.fetchall()
+    out = []
+    for mid, title, source_url, video_url, event_kind in meetings:
+        cur.execute("SELECT id FROM meetings.speakers WHERE meeting_id = %s AND politician_id = %s",
+                    (mid, politician_id))
+        cand_ids = {r[0] for r in cur.fetchall()}
+        cur.execute(
+            "SELECT segment_index, start_time, speaker_id, speaker_name, text "
+            "FROM meetings.segments WHERE meeting_id = %s ORDER BY segment_index", (mid,))
+        rows = cur.fetchall()
+        lines, segs = [], []
+        for i, (_idx, start, sid, speaker, text) in enumerate(rows):
+            text = (text or "").strip()
+            if not text or sid not in cand_ids:
+                continue
+            prev = rows[i - 1] if i > 0 else None
+            if prev is not None and prev[2] not in cand_ids and (prev[4] or "").strip():
+                lines.append(f"{prev[3] or 'Speaker'}: {(prev[4] or '').strip()}")  # eliciting question
+            lines.append(f"{speaker or 'Speaker'}: {text}")
+            segs.append((float(start) if start is not None else 0.0, text))
+        out.append(TranscriptSource(
+            meeting_id=str(mid), source_url=source_url or "", video_url=video_url,
+            title=title, event_kind=event_kind, full_text="\n".join(lines), segments=segs))
+    return out
+```
+
+(The `_Cur2` mock maps the three queries by keyword; the real DB returns real cursors. The split-speaker dedup regression test from the fix round still holds — the meetings query is unchanged.)
+
+- [ ] **Step 4: Run to verify pass**
+
+Run: `~/Documents/GitHub/on-the-record/.venv/bin/python -m pytest tests/test_evidence_data.py -v` then `tests/ -k evidence -q`
+Expected: PASS (including the split-speaker dedup regression test).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/evidence/data.py tests/test_evidence_data.py
+git commit -m "perf(evidence): transcript lane feeds only the candidate's turns + eliciting question
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 7: Cost — trim the cross-check's input to the quote's local window
+
+**Files:**
+- Modify: `src/evidence/pipeline.py`
+- Test: `tests/test_evidence_pipeline.py`
+
+**Why:** the cross-check re-sends up to 60K chars of transcript per quote (170 quotes → ~10M chars for Bass). Keep the independent check but feed it only a local window around the quote.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+# tests/test_evidence_pipeline.py
+def test_transcript_crosscheck_sees_trimmed_window_not_full_text():
+    turn = "We will build 40,000 units by cutting permit timelines."
+    big = ("UNRELATED FILLER. " * 5000) + f"Karen Bass: {turn} " + ("MORE FILLER. " * 5000)
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="https://youtu.be/x", title="Debate", event_kind="debate",
+        full_text=big, segments=[(20.0, turn)])
+    extract = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
+        "is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    prov = _providers(extract, cross, jud)
+    items, _ = run_transcript_source(src, politician_id="p1", providers=prov,
+                                     candidate_name="Karen Bass", batch_id="b1")
+    # the crosschecker prompt it saw must contain the quote but be far smaller than full_text
+    seen = prov.crosschecker.prompts[0]
+    assert turn in seen and len(seen) < 4000 and len(seen) < len(big) // 5
+    assert items[0].status == Status.GREEN.value
+```
+
+(Give the test file's `FP` fake provider a `self.prompts=[]` that records each `prompt` if it doesn't already, and make `_providers` expose `.crosschecker`. If `FP` already records prompts, reuse it.)
+
+- [ ] **Step 2: Run to verify fail**
+
+Run: `~/Documents/GitHub/on-the-record/.venv/bin/python -m pytest tests/test_evidence_pipeline.py -k trimmed -v`
+Expected: FAIL (crosscheck currently gets full_text).
+
+- [ ] **Step 3: Implement**
+
+Add `crosscheck_text=None` to `_evaluate_quote` and use it for the cross-check only (verbatim still uses `source_text`):
+
+```python
+def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
+                    deep_link, source_type, providers, candidate_name, prov,
+                    crosscheck_text=None) -> "EvidenceItem":
+    if not verbatim_ok(cand.text, source_text):
+        ...  # unchanged verbatim-fail branch
+    cc = crosscheck(cand, crosscheck_text if crosscheck_text is not None else source_text,
+                    candidate_name=candidate_name, provider=providers.crosschecker)
+    ...  # unchanged remainder
+```
+
+Add a local-window helper and use it in `run_transcript_source`:
+
+```python
+def _local_window(full_text: str, quote_text: str, radius: int = 800) -> str:
+    head = (quote_text or "").strip()[:40]
+    i = full_text.find(head) if head else -1
+    if i < 0:
+        return full_text[:2 * radius]
+    return full_text[max(0, i - radius): i + len(quote_text) + radius]
+```
+
+In `run_transcript_source`, pass `crosscheck_text=_local_window(source.full_text, cand.text)` into `_evaluate_quote`. `run_source` is unchanged (passes no `crosscheck_text`, so the web lane still cross-checks against the full page).
+
+- [ ] **Step 4: Run the pipeline tests**
+
+Run: `~/Documents/GitHub/on-the-record/.venv/bin/python -m pytest tests/test_evidence_pipeline.py -v` then `tests/ -k evidence -q`
+Expected: PASS (existing web-lane tests unchanged; new trim test passes).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/evidence/pipeline.py tests/test_evidence_pipeline.py
+git commit -m "perf(evidence): cross-check transcripts against the quote's local window, not 60K
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage:** transcript source read (Task 1) ✓; transcript pipeline path with PRIMARY + verbatim gate + mechanism (Tasks 2–3) ✓; click-to-seek deep link (Task 3 `_deep_link`) ✓; question-as-context via full speaker-labeled transcript fed to the own-words extractor (Task 1 `full_text` + Task 3) ✓; runner `--source` (Task 4) ✓; artifact-based validation (Task 5) ✓; no schema/ev-accounts change ✓; shared evaluation (no fork) via the Task 2 refactor ✓.
