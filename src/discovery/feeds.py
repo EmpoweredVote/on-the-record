@@ -492,6 +492,21 @@ def _page_text_from_bytes(url: str, max_chars: int) -> str:
 _RENDER_MIN_CHARS = 200  # a page shorter than this is treated as empty/blocked
 
 
+def _fetch_rendered(url: str, *, timeout_ms: int = 30000) -> str:
+    """Headless-Chromium render for pages that block the plain fetch. Lazy-imports
+    Playwright so it is only required when the rendered tier actually runs.
+    Returns the fully rendered HTML (the shared _extract_body_text scrubs it)."""
+    from playwright.sync_api import sync_playwright  # lazy: optional dependency
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            return page.content()
+        finally:
+            browser.close()
+
+
 def _render_page_text(url: str, max_chars: int, *, renderer=None) -> str:
     """Render `url` via `renderer` (default: real Playwright, added in a later
     task) and run the shared body extraction. Returns '' on any renderer
