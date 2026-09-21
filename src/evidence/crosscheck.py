@@ -13,7 +13,9 @@ CONTEXT SHOWN: {context}
 PROPOSED ISSUE TAG: {issue}
 
 Read the SOURCE below independently and judge:
-- own_words: are these {name}'s own words in the SOURCE (not the author/interviewer)?
+- own_words: are these literally {name}'s OWN words in the SOURCE — FIRST PERSON (I/we/my/our/us),
+  or a sentence directly quoted from {name}? A third-person description of {name} ("{name} will…",
+  "the Mayor has…", "she believes…") is NOT own words: answer false.
 - in_context: does the SOURCE support this meaning (not cut to distort)?
 - primary: is the SOURCE {name}'s own venue or an outlet's own interview with them
   (true), versus reporting on a separate event (false)?

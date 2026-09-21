@@ -19,3 +19,15 @@ def test_ellipsis_tolerant_runs_must_be_in_order():
 
 def test_non_substring_fails():
     assert not verbatim_ok("We will build affordable homes for everyone", SRC)
+
+def test_verbatim_ok_contiguous_full_passage_passes():
+    page = ("Intro. When I'm mayor, we will build 40,000 units by cutting permit timelines "
+            "and converting motels to housing. Later text.")
+    quote = ("When I'm mayor, we will build 40,000 units by cutting permit timelines "
+             "and converting motels to housing.")
+    assert verbatim_ok(quote, page) is True
+
+def test_verbatim_ok_reworded_quote_fails():
+    page = "When I'm mayor, we will build 40,000 units by cutting permit timelines."
+    reworded = "As mayor she plans to construct 40,000 homes by streamlining permits."
+    assert verbatim_ok(reworded, page) is False

@@ -52,7 +52,7 @@ def test_build_extract_prompt_instructs_multi_sentence_mechanism_inclusive_extra
     prompt = build_extract_prompt("Some source text.", "Alice")
     assert "CONTIGUOUS" in prompt
     assert "mechanism" in prompt
-    assert "1 to 3 sentences" in prompt
+    assert "as many sentences as the complete stance takes" in prompt
     assert "HOW" in prompt
     assert "Alice" in prompt
 
@@ -158,3 +158,29 @@ def test_extract_quotes_reads_past_60k():
     extract_quotes(text, candidate_name="X", provider=P(),
                    chunk_size=20000, overlap=1000)
     assert seen["tail_in_some_prompt"] is True
+
+
+def test_parse_extract_keeps_full_passage_and_paragraph_context():
+    long_text = ("When I'm mayor, we will build 40,000 units of housing by cutting permit "
+                 "timelines, converting motels to housing, and funding bridge loans. We will "
+                 "not let vouchers go unused.")
+    ctx = ("At the forum she was asked about housing. " + long_text + " She took questions after.")
+    raw = json.dumps({"quotes": [{"text": long_text, "context": ctx, "issue": "housing",
+                                  "is_own_words": True, "is_primary_venue": True}]})
+    out = parse_extract(raw)
+    assert len(out) == 1
+    assert out[0].text == long_text            # full passage kept intact, not trimmed
+    assert out[0].context == ctx               # fuller paragraph context round-trips
+
+def test_parse_extract_two_quotes_from_one_passage():
+    raw = json.dumps({"quotes": [
+        {"text": "We will build 40,000 units.", "issue": "housing", "is_own_words": True},
+        {"text": "We will hire 250 more officers.", "issue": "policing", "is_own_words": True}]})
+    out = parse_extract(raw)
+    assert [c.issue for c in out] == ["housing", "policing"]
+
+def test_parse_extract_carries_is_own_words_false():
+    raw = json.dumps({"quotes": [{"text": "Bass will expand shelters.", "issue": "homelessness",
+                                  "is_own_words": False}]})
+    out = parse_extract(raw)
+    assert out[0].is_own_words is False

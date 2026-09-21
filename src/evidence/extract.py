@@ -35,34 +35,39 @@ def chunk_text(text: str, size: int = 12000, overlap: int = 2000) -> list:
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 
-_SYSTEM = ("You extract a politician's own VERBATIM sentences that state a view "
-           "on an issue. Never paraphrase. Respond with ONLY the requested JSON.")
+_SYSTEM = ("You extract a politician's OWN verbatim words — first person, or sentences "
+           "directly quoted from them — that state a view on an issue. Never paraphrase, "
+           "reword, or trim. Respond with ONLY the requested JSON.")
 
-_INSTRUCTIONS = """From the SOURCE below, extract sentences spoken or written by {name}
-that state a forward-looking view on a policy issue. Rules:
-- VERBATIM only — copy the exact words from the SOURCE; never summarize or reword.
-- Capture the candidate's COMPLETE stance on ONE issue as a coherent, CONTIGUOUS
-  passage — usually 1 to 3 sentences. When the candidate states HOW they would act
-  (a specific policy mechanism or lever: e.g. build shelters, enforce encampment
-  laws, expand services, triple housing construction) in sentences ADJACENT to the
-  goal, INCLUDE those sentences in `text`. Do NOT reduce the quote to the bare goal
-  and leave the mechanism behind in the surrounding text.
-- Keep `text` VERBATIM and CONTIGUOUS — one unbroken run of the SOURCE, or adjacent
-  sentences from it; never stitch together non-adjacent passages, and keep ONE
-  stance per quote (do not merge unrelated claims). Trim only filler; mark a
-  substantive internal cut with … .
+_INSTRUCTIONS = """From the SOURCE below, extract statements by {name} that express a view on a
+policy issue. Rules:
+- VERBATIM only — copy the exact words from the SOURCE; never summarize, reword, or paraphrase.
+- OWN WORDS ONLY. Extract a statement only if it is in {name}'s own voice — FIRST PERSON
+  (I, we, my, our, us) — OR a sentence directly quoted from {name} (in quotation marks, or
+  attributed like "…," {name} said). A THIRD-PERSON description of {name} ("{name} will…",
+  "the Mayor has…", "she believes…") is NOT {name}'s words: set is_own_words false for it.
+- If the SOURCE is written about {name} in the third person but DIRECTLY QUOTES {name}, extract
+  the QUOTED sentence(s) as `text` (that is own words) — not the surrounding paraphrase.
+- Capture the FULL coherent CONTIGUOUS passage for ONE stance. Where {name} states HOW they would
+  act (the mechanism/lever: e.g. build shelters, enforce encampment laws, expand services), include
+  the adjacent sentences that carry it. Capture as many sentences as the complete stance takes.
+  Do NOT trim, shorten, cut, abbreviate, or add "…" — copy the unbroken run of the SOURCE as-is.
+  (Condensing to the essence is a separate later step; here, capture faithfully and in full.)
+- Keep `text` CONTIGUOUS — one unbroken run of the SOURCE; never stitch together non-adjacent
+  passages, and keep ONE stance per quote. A passage that covers two distinct stances becomes TWO
+  separate quotes.
 - issue = a short lowercase topic label (e.g. "housing", "homelessness", "policing").
-- is_own_words: true only if these are {name}'s own words (not the author's or an
-  interviewer's).
-- is_primary_venue: true if the SOURCE is {name}'s own venue (their site/official
-  page/op-ed) or an outlet's OWN interview/Q&A with them; false if the SOURCE is
-  reporting on a separate event where {name} spoke.
-- If is_primary_venue is false and the SOURCE names a spoken event ({name} said X at
-  a debate/town-hall/interview/podcast), set reported_event to "<event>, <date>" and,
-  if the SOURCE links the primary (e.g. a YouTube URL), set primary_handle to it.
-Return JSON: {{"quotes": [{{"text","context","issue","date","setting",
-"is_own_words","is_primary_venue","reported_event","primary_handle"}}]}}.
-context = the surrounding passage from the SOURCE (enough to vet the quote).
+- is_own_words: apply the OWN WORDS rule above.
+- is_primary_venue: true if the SOURCE is {name}'s own venue (their site/official page/op-ed) or an
+  outlet's OWN interview/Q&A with them; false if the SOURCE is reporting on a separate event where
+  {name} spoke.
+- If is_primary_venue is false and the SOURCE names a spoken event ({name} said X at a
+  debate/town-hall/interview/podcast), set reported_event to "<event>, <date>" and, if the SOURCE
+  links the primary (e.g. a YouTube URL), set primary_handle to it.
+Return JSON: {{"quotes": [{{"text","context","issue","date","setting","is_own_words",
+"is_primary_venue","reported_event","primary_handle"}}]}}.
+context = the surrounding paragraph(s) from the SOURCE — enough that a reader can see the full
+setting of the quote and vet it.
 
 SOURCE:
 {text}
