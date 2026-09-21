@@ -73,31 +73,60 @@ def build_extract_prompt(text: str, candidate_name: str) -> str:
     return _INSTRUCTIONS.format(name=candidate_name, text=text[:60000])
 
 
+def _iter_json_objects(payload: str):
+    """Yield each complete top-level object inside the `quotes` array, stopping
+    at the first incomplete one. Lets a truncated reply still surrender the
+    quotes it did finish."""
+    key = payload.find('"quotes"')
+    lb = payload.find("[", key) if key != -1 else payload.find("[")
+    if lb == -1:
+        return
+    dec = json.JSONDecoder()
+    i, n = lb + 1, len(payload)
+    while i < n:
+        j = payload.find("{", i)
+        if j == -1:
+            break
+        try:
+            obj, end = dec.raw_decode(payload, j)
+        except json.JSONDecodeError:
+            break
+        if isinstance(obj, dict):
+            yield obj
+        i = end
+
+
+def _to_candidate(q):
+    if not isinstance(q, dict):
+        return None
+    text = q.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    ctx = q.get("context"); iss = q.get("issue")
+    return QuoteCandidate(
+        text=text.strip(),
+        context=ctx.strip() if isinstance(ctx, str) else "",
+        issue=iss.strip().lower() if isinstance(iss, str) else "",
+        date=q.get("date"), setting=q.get("setting"),
+        is_own_words=bool(q.get("is_own_words", True)),
+        is_primary_venue=bool(q.get("is_primary_venue", True)),
+        reported_event=q.get("reported_event"),
+        primary_handle=q.get("primary_handle"))
+
+
 def parse_extract(raw: str) -> list:
     m = _FENCE.search(raw or "")
     payload = m.group(1) if m else (raw or "")
     try:
         data = json.loads(payload)
+        items = data.get("quotes", []) if isinstance(data, dict) else []
     except json.JSONDecodeError:
-        return []
-    items = data.get("quotes", []) if isinstance(data, dict) else []
+        items = list(_iter_json_objects(payload))  # salvage a truncated reply
     out = []
     for q in items:
-        if not isinstance(q, dict):
-            continue
-        text = q.get("text")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        ctx = q.get("context"); iss = q.get("issue")
-        out.append(QuoteCandidate(
-            text=text.strip(),
-            context=ctx.strip() if isinstance(ctx, str) else "",
-            issue=iss.strip().lower() if isinstance(iss, str) else "",
-            date=q.get("date"), setting=q.get("setting"),
-            is_own_words=bool(q.get("is_own_words", True)),
-            is_primary_venue=bool(q.get("is_primary_venue", True)),
-            reported_event=q.get("reported_event"),
-            primary_handle=q.get("primary_handle")))
+        c = _to_candidate(q)
+        if c is not None:
+            out.append(c)
     return out
 
 

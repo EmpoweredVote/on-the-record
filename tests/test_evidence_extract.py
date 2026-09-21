@@ -95,3 +95,25 @@ def test_chunk_text_prefers_paragraph_boundary():
     windows = chunk_text(text, size=3000, overlap=200)
     # the first window ends at the blank-line boundary, not mid-run
     assert windows[0].endswith("\n\n") or windows[0] == left + "\n\n"
+
+
+def test_parse_extract_normal_json():
+    raw = '{"quotes":[{"text":"I will build 10000 homes.","issue":"housing"}]}'
+    out = parse_extract(raw)
+    assert len(out) == 1 and out[0].text == "I will build 10000 homes."
+
+def test_parse_extract_salvages_truncated_reply():
+    # Two complete objects, then a third cut off mid-string (the Bass failure).
+    raw = ('{"quotes":['
+           '{"text":"A: declare a state of emergency.","issue":"homelessness"},'
+           '{"text":"B: end all street encampments.","issue":"homelessness"},'
+           '{"text":"C: appoint and empower one indiv')
+    out = parse_extract(raw)
+    assert [c.text for c in out] == [
+        "A: declare a state of emergency.",
+        "B: end all street encampments.",
+    ]
+
+def test_parse_extract_junk_returns_empty():
+    assert parse_extract("not json at all") == []
+    assert parse_extract("") == []
