@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from .models import (SourceType, Status, GateResults, EvidenceItem, Lead)
 from .triage import classify_domain
@@ -8,6 +10,21 @@ from .crosscheck import crosscheck
 from .judge import judge as judge_quote
 from .leads import to_lead
 from .disposition import decide
+
+_DEFAULT_WORKERS = int(os.environ.get("EVIDENCE_MAX_WORKERS", "6"))
+
+
+def _concurrent_map(fn, items, max_workers=None) -> list:
+    """Map fn over items with a bounded thread pool, returning results in INPUT
+    order (ThreadPoolExecutor.map preserves order). Falls back to a sequential
+    list comprehension for a single item or workers<=1, so unit tests and the
+    common single-quote source stay pool-free and deterministic."""
+    items = list(items)
+    workers = max_workers or _DEFAULT_WORKERS
+    if workers <= 1 or len(items) <= 1:
+        return [fn(x) for x in items]
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(fn, items))
 
 
 @dataclass
@@ -57,8 +74,7 @@ def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
 
 
 def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
-               candidate_name, batch_id):
-    items, leads = [], []
+               candidate_name, batch_id, max_workers=None):
     domain_type = classify_domain(source_url)
 
     if domain_type in (SourceType.SCORECARD_QUIZ,):
@@ -83,16 +99,17 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
     source_type = (SourceType.POINTER.value if domain_type is SourceType.POINTER
                    else SourceType.PRIMARY.value)
 
-    for cand in extract_quotes(text, candidate_name=candidate_name,
-                               provider=providers.extractor):
-        if (not cand.is_primary_venue) or cand.reported_event:
-            leads.append(to_lead(cand, politician_id=politician_id,
-                                 secondary_url=source_url))
-            continue
-        items.append(_evaluate_quote(cand, text, politician_id=politician_id,
-            source_url=source_url, cited_via=cited_via, deep_link=source_url,
-            source_type=source_type, providers=providers, candidate_name=candidate_name,
-            prov=prov))
+    cands = list(extract_quotes(text, candidate_name=candidate_name,
+                                provider=providers.extractor))
+    def _is_lead(c): return (not c.is_primary_venue) or c.reported_event
+    leads = [to_lead(c, politician_id=politician_id, secondary_url=source_url)
+             for c in cands if _is_lead(c)]
+    to_eval = [c for c in cands if not _is_lead(c)]
+    items = _concurrent_map(
+        lambda c: _evaluate_quote(c, text, politician_id=politician_id, source_url=source_url,
+            cited_via=cited_via, deep_link=source_url, source_type=source_type,
+            providers=providers, candidate_name=candidate_name, prov=prov),
+        to_eval, max_workers=max_workers)
     return items, leads
 
 
@@ -124,34 +141,36 @@ def _local_window(full_text: str, quote_text: str, radius: int = 800) -> str:
     return full_text[max(0, i - radius): i + len(quote_text) + radius]
 
 
-def run_transcript_source(source, *, politician_id, providers, candidate_name, batch_id):
+def run_transcript_source(source, *, politician_id, providers, candidate_name, batch_id,
+                          max_workers=None):
     prov = {"extractor": getattr(providers.extractor, "model", "extractor"),
             "crosschecker": getattr(providers.crosschecker, "model", "crosschecker"),
             "judge": getattr(providers.judge, "model", "judge"), "batch": batch_id}
-    items = []
-    for cand in extract_quotes(source.full_text, candidate_name=candidate_name,
-                               provider=providers.extractor):
-        items.append(_evaluate_quote(cand, source.full_text, politician_id=politician_id,
+    cands = list(extract_quotes(source.full_text, candidate_name=candidate_name,
+                                provider=providers.extractor))
+    items = _concurrent_map(
+        lambda c: _evaluate_quote(c, source.full_text, politician_id=politician_id,
             source_url=source.source_url, cited_via=source.meeting_id,
-            deep_link=_deep_link(source, cand.text), source_type=SourceType.PRIMARY.value,
+            deep_link=_deep_link(source, c.text), source_type=SourceType.PRIMARY.value,
             providers=providers, candidate_name=candidate_name, prov=prov,
-            crosscheck_text=_local_window(source.full_text, cand.text),
-            definitional_primary=True))
+            crosscheck_text=_local_window(source.full_text, c.text), definitional_primary=True),
+        cands, max_workers=max_workers)
     return items, []
 
 
 def run_candidate(*, politician_id, candidate_name, sources, providers, fetcher,
-                  batch_id, transcript_sources=None):
+                  batch_id, transcript_sources=None, max_workers=None):
     all_items, all_leads = [], []
     for source_url, cited_via in sources:
         items, leads = run_source(politician_id=politician_id, source_url=source_url,
             cited_via=cited_via, providers=providers, fetcher=fetcher,
-            candidate_name=candidate_name, batch_id=batch_id)
+            candidate_name=candidate_name, batch_id=batch_id, max_workers=max_workers)
         all_items += items
         all_leads += leads
     for ts in (transcript_sources or []):
         it, ld = run_transcript_source(ts, politician_id=politician_id,
-            providers=providers, candidate_name=candidate_name, batch_id=batch_id)
+            providers=providers, candidate_name=candidate_name, batch_id=batch_id,
+            max_workers=max_workers)
         all_items += it
         all_leads += ld
     return all_items, all_leads
