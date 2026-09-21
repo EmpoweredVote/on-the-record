@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import pathlib
 import re
+from dataclasses import dataclass
 
 _DEFAULT_ENV = pathlib.Path.home() / "Documents/GitHub/ev-accounts/backend/.env"
 
@@ -54,3 +55,45 @@ def load_topic_keys(conn) -> set:
     cur = conn.cursor()
     cur.execute("SELECT lower(topic_key) FROM inform.compass_topics")
     return {r[0] for r in cur.fetchall()}
+
+
+@dataclass
+class TranscriptSource:
+    meeting_id: str
+    source_url: str
+    video_url: str | None
+    title: str | None
+    event_kind: str | None
+    full_text: str
+    segments: list  # list[(start_time_seconds: float, text: str)] in order
+
+
+def fetch_transcript_sources(conn, politician_id) -> list:
+    """Assemble one TranscriptSource per meeting where this politician is a linked
+    speaker: the full speaker-labeled transcript (so the own-words extractor can
+    pull only their statements, with the eliciting question as context), plus the
+    ordered (start_time, text) segments for timestamp lookup."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT m.id, sp.display_name, m.source_url, m.video_url, m.title, m.event_kind "
+        "FROM meetings.speakers sp JOIN meetings.meetings m ON m.id = sp.meeting_id "
+        "WHERE sp.politician_id = %s ORDER BY m.id", (politician_id,))
+    meetings = cur.fetchall()
+    out = []
+    for mid, _display_name, source_url, video_url, title, event_kind in meetings:
+        cur2 = conn.cursor()
+        cur2.execute(
+            "SELECT segment_index, start_time, speaker_name, text "
+            "FROM meetings.segments WHERE meeting_id = %s ORDER BY segment_index", (mid,))
+        rows = cur2.fetchall()
+        lines, segs = [], []
+        for _idx, start, speaker, text in rows:
+            text = (text or "").strip()
+            if not text:
+                continue
+            lines.append(f"{speaker or 'Speaker'}: {text}")
+            segs.append((float(start) if start is not None else 0.0, text))
+        out.append(TranscriptSource(
+            meeting_id=str(mid), source_url=source_url or "", video_url=video_url,
+            title=title, event_kind=event_kind, full_text="\n".join(lines), segments=segs))
+    return out
