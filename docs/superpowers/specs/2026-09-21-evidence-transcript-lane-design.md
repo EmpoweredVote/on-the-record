@@ -138,3 +138,7 @@ trim its input):
   <ev-accounts>/backend/.env` for the read-only DB. Models: extractor `haiku-or`, crosschecker
   `gemini-flash`, judge `deepseek` (OpenRouter).
 - Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+
+### Cost-amendment follow-up (2026-09-21): definitional primary/own-words
+
+Trimming the cross-check to a local window broke its `primary`/`own_words` judgment: from a ~1.6K window it cannot tell the source is the candidate's own event, so it answered `primary=false` on their own speech and false-flagged ~half the greens (offline sim: Bass green 10→28, Raman 6→25 once corrected). Fix: for transcript sources, `own_words` and `primary` are **definitional TRUE** (their own words at the event); the cross-check still judges `in_context` + `tag` on the window, and the judge still gates mechanism. `_evaluate_quote` gains a `definitional_primary` flag; `run_transcript_source` sets it. The web lane is unchanged. Green counts are validated by the offline sim over the real cross-check/judge outputs, so no extra LLM run is required to confirm.
