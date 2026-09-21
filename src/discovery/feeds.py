@@ -462,6 +462,33 @@ def _candidate_connection_window(text: str, *, prefix: int = 300) -> "str | None
     return text[start:]
 
 
+def _extract_body_text(html_str: str, max_chars: int) -> str:
+    """Block-clean the HTML, take the longest <article>/<main> slice (whole
+    page if none is long enough), scrub to text, shift to a Ballotpedia
+    Candidate Connection answer window when present, then truncate. Lifted from
+    fetch_page_text so the plain and rendered tiers share one extraction."""
+    cleaned = _BLOCK_RE.sub(" ", _COMMENT_RE.sub(" ", html_str))
+    match = max(_ARTICLE_OR_MAIN_RE.finditer(cleaned),
+                key=lambda m: len(m.group(0)), default=None)
+    slice_ = match.group(0) if match and len(match.group(0)) >= 200 else cleaned
+    # Extract the whole slice first, then, on a Ballotpedia Candidate Connection
+    # page, shift the peek to the answers section (which sits past max_chars) so
+    # the candidate's own words reach the classifier; every other page keeps the
+    # ordinary top-of-page peek. _html_to_text's max_chars is a final truncation,
+    # so full[:max_chars] is byte-identical to the old capped extraction.
+    full = _html_to_text(slice_)
+    window = _candidate_connection_window(full)
+    return (window if window is not None else full)[:max_chars]
+
+
+def _page_text_from_bytes(url: str, max_chars: int) -> str:
+    content_type, raw = _fetch_page_bytes(url)
+    ctype = content_type.split(";")[0].strip().lower()
+    if not ctype.startswith(_PAGE_TEXT_CONTENT_TYPES):
+        return ""
+    return _extract_body_text(raw.decode("utf-8", errors="replace"), max_chars)
+
+
 def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> str:
     """Article-page text for the stage-2 page peek (web analog of the
     captions peek). Robots-gated and paced like every other web-lane fetch;
@@ -479,23 +506,7 @@ def fetch_page_text(url: str, max_chars: int = 6000, *, sleep_fn=time.sleep) -> 
         return ""
     origin = _origin(url)
     _polite_pause(origin, crawl_delay=_crawl_delay_for(origin), sleep_fn=sleep_fn)
-    content_type, raw = _fetch_page_bytes(url)
-    ctype = content_type.split(";")[0].strip().lower()
-    if not ctype.startswith(_PAGE_TEXT_CONTENT_TYPES):
-        return ""
-    html_str = raw.decode("utf-8", errors="replace")
-    cleaned = _BLOCK_RE.sub(" ", _COMMENT_RE.sub(" ", html_str))
-    match = max(_ARTICLE_OR_MAIN_RE.finditer(cleaned),
-                key=lambda m: len(m.group(0)), default=None)
-    slice_ = match.group(0) if match and len(match.group(0)) >= 200 else cleaned
-    # Extract the whole slice first, then, on a Ballotpedia Candidate Connection
-    # page, shift the peek to the answers section (which sits past max_chars) so
-    # the candidate's own words reach the classifier; every other page keeps the
-    # ordinary top-of-page peek. _html_to_text's max_chars is a final truncation,
-    # so full[:max_chars] is byte-identical to the old capped extraction.
-    full = _html_to_text(slice_)
-    window = _candidate_connection_window(full)
-    return (window if window is not None else full)[:max_chars]
+    return _page_text_from_bytes(url, max_chars)
 
 
 def fetch_outlet_items(outlet: Outlet, *, sleep_fn=time.sleep) -> list:
