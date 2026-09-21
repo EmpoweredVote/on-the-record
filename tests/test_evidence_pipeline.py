@@ -1,5 +1,6 @@
 import json
-from src.evidence.pipeline import Providers, run_source, run_candidate, run_transcript_source
+import time
+from src.evidence.pipeline import Providers, run_source, run_candidate, run_transcript_source, _concurrent_map
 from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
@@ -254,3 +255,24 @@ def test_transcript_definitional_primary_greens_despite_crosscheck_primary_false
     assert items[0].status == Status.GREEN.value          # definitional primary/own_words override
     assert items[0].gates.primary is True and items[0].gates.own_words is True
     assert items[0].gates.in_context is True              # crosscheck's in_context still used
+
+
+def test_concurrent_map_preserves_input_order():
+    # later items finish sooner; ex.map must still return in input order
+    def fn(n): time.sleep((5 - n) * 0.02); return n
+    assert _concurrent_map(fn, [0,1,2,3,4], max_workers=4) == [0,1,2,3,4]
+
+def test_concurrent_map_runs_every_item():
+    seen = []
+    import threading; lock = threading.Lock()
+    def fn(x):
+        with lock: seen.append(x)
+        return x * 2
+    out = _concurrent_map(fn, [1,2,3], max_workers=3)
+    assert out == [2,4,6] and sorted(seen) == [1,2,3]
+
+def test_concurrent_map_sequential_fastpath():
+    calls = []
+    def fn(x): calls.append(x); return x
+    assert _concurrent_map(fn, [7], max_workers=8) == [7]      # single item → no pool
+    assert _concurrent_map(fn, [1,2], max_workers=1) == [1,2]  # workers<=1 → sequential

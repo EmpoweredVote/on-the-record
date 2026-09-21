@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from .models import (SourceType, Status, GateResults, EvidenceItem, Lead)
 from .triage import classify_domain
@@ -8,6 +10,21 @@ from .crosscheck import crosscheck
 from .judge import judge as judge_quote
 from .leads import to_lead
 from .disposition import decide
+
+_DEFAULT_WORKERS = int(os.environ.get("EVIDENCE_MAX_WORKERS", "6"))
+
+
+def _concurrent_map(fn, items, max_workers=None) -> list:
+    """Map fn over items with a bounded thread pool, returning results in INPUT
+    order (ThreadPoolExecutor.map preserves order). Falls back to a sequential
+    list comprehension for a single item or workers<=1, so unit tests and the
+    common single-quote source stay pool-free and deterministic."""
+    items = list(items)
+    workers = max_workers or _DEFAULT_WORKERS
+    if workers <= 1 or len(items) <= 1:
+        return [fn(x) for x in items]
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(fn, items))
 
 
 @dataclass
