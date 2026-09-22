@@ -54,3 +54,17 @@ def test_mechanism_at_min_does_not_flag():
 def test_mechanism_none_does_not_flag():
     status, reasons = decide(_full(judge_mechanism=None), SourceType.PRIMARY)
     assert status == Status.GREEN.value and "judge:no-mechanism" not in reasons
+
+def test_record_recitation_flags_even_with_high_mechanism():
+    # a record names concrete actions (high mechanism) but is not forward → flag, not green
+    status, reasons = decide(_full(judge_mechanism=0.95, judge_forward_looking=0.2), SourceType.PRIMARY)
+    assert status == Status.FLAGGED.value and "judge:record-not-forward" in reasons
+
+def test_forward_stance_greens():
+    status, reasons = decide(_full(judge_forward_looking=0.9), SourceType.PRIMARY)
+    assert status == Status.GREEN.value and reasons == []
+
+def test_forward_gate_inert_when_none():
+    # judge_forward_looking absent (None) → gate does not fire (backward compatible)
+    status, reasons = decide(_full(judge_forward_looking=None), SourceType.PRIMARY)
+    assert status == Status.GREEN.value and "judge:record-not-forward" not in reasons

@@ -5,6 +5,7 @@ TAG_MIN = 0.7
 CONTEXT_MIN = 0.7
 DISPUTE_MAX = 0.3
 MECHANISM_MIN = 0.7
+FORWARD_MIN = 0.5
 
 _DROP_TYPES = {SourceType.SCORECARD_QUIZ.value, SourceType.DEAD.value}
 
@@ -34,4 +35,6 @@ def decide(gates: GateResults, source_type) -> tuple[str, list]:
         reasons.append("judge:dispute-risk")
     if gates.judge_mechanism is not None and gates.judge_mechanism < MECHANISM_MIN:
         reasons.append("judge:no-mechanism")
+    if gates.judge_forward_looking is not None and gates.judge_forward_looking < FORWARD_MIN:
+        reasons.append("judge:record-not-forward")
     return (Status.FLAGGED.value, reasons) if reasons else (Status.GREEN.value, [])

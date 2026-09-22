@@ -31,6 +31,7 @@ class GateResults:
     judge_context_sufficient: Optional[float] = None
     judge_dispute_risk: Optional[float] = None
     judge_mechanism: Optional[float] = None
+    judge_forward_looking: Optional[float] = None
 
 
 @dataclass
@@ -62,6 +63,7 @@ class JudgeScores:
     context_sufficient: float
     dispute_risk: float
     mechanism: float
+    forward_looking: float = 1.0
     notes: str = ""
 
 
