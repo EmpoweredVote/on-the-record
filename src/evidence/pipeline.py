@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from .models import (SourceType, Status, GateResults, EvidenceItem, Lead)
@@ -12,6 +13,7 @@ from .leads import to_lead
 from .disposition import decide
 
 _DEFAULT_WORKERS = int(os.environ.get("EVIDENCE_MAX_WORKERS", "6"))
+_BARE_YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 
 
 def _concurrent_map(fn, items, max_workers=None) -> list:
@@ -115,10 +117,14 @@ def run_source(*, politician_id, source_url, cited_via, providers, fetcher,
 
 def _deep_link(source, quote_text: str) -> str:
     """Point at the transcript segment the quote starts in.
+    A bare YouTube video id (how meetings.meetings.video_url stores YouTube
+    playback — see publish.resolve_playback) is first expanded to a watch URL.
     YouTube URLs get a `t=<seconds>s` query param (using `&` when the base
     already has a `?`, else `?`); other URLs get a `#t=<seconds>` fragment.
     Falls back to the video/source URL with no timestamp when no segment matches."""
     base = source.video_url or source.source_url or ""
+    if _BARE_YOUTUBE_ID.fullmatch(base):
+        base = f"https://www.youtube.com/watch?v={base}"
     head = (quote_text or "").strip()[:40]
     for start, text in source.segments:
         if head and head in text:

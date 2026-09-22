@@ -1,7 +1,8 @@
 import json
 import threading
 import time
-from src.evidence.pipeline import Providers, run_source, run_candidate, run_transcript_source, _concurrent_map
+from src.evidence.pipeline import (Providers, run_source, run_candidate, run_transcript_source,
+                                   _concurrent_map, _deep_link)
 from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
@@ -213,6 +214,28 @@ def test_transcript_deeplink_uses_fragment_for_non_youtube_base():
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
     assert len(items) == 1 and items[0].status == Status.GREEN.value
     assert items[0].deep_link == "https://site/m1/watch#t=20"
+
+def test_transcript_deeplink_expands_bare_youtube_id_with_timestamp():
+    # meetings.meetings.video_url holds a BARE YouTube id for playback_kind
+    # 'youtube' (publish.resolve_playback), not a URL — it must become a watch
+    # URL before the timestamp is added, not "-ynsUtI-By8#t=20".
+    turn = "We will build 40,000 units by cutting permit timelines."
+    extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
+        "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    src = _tsrc(video_url="-ynsUtI-By8")
+    items, leads = run_transcript_source(src, politician_id="p1",
+        providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.GREEN.value
+    assert items[0].deep_link == "https://www.youtube.com/watch?v=-ynsUtI-By8&t=20s"
+
+def test_transcript_deeplink_bare_youtube_id_without_matching_segment_is_watch_url():
+    # No segment contains the quote, so no timestamp — but the fallback must
+    # still be a real watch URL, not the bare id.
+    src = _tsrc(video_url="r1EvtOp10Uk")
+    assert _deep_link(src, "Words she never said in any segment.") == \
+        "https://www.youtube.com/watch?v=r1EvtOp10Uk"
 
 def test_transcript_reworded_quote_drops_verbatim_fail():
     extract = json.dumps({"quotes": [{"text":"As mayor she plans to construct homes.",
