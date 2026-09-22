@@ -10,8 +10,11 @@ _CONTEXT = ["context too thin to vet the quote", "enough context to vet the quot
 _DISPUTE = ["clearly the speaker's own on-record position",
             "some ambiguity about attribution or context",
             "easily disownable / high out-of-context risk"]
+_FORWARD = ["a recitation of past record or accomplishment — what the candidate already did",
+            "a forward-looking stance or proposal — what the candidate would do or believes should happen"]
 _LEVELS = {"mechanism": _MECHANISM, "tag_ok": _TAG,
-           "context_sufficient": _CONTEXT, "dispute_risk": _DISPUTE}
+           "context_sufficient": _CONTEXT, "dispute_risk": _DISPUTE,
+           "forward_looking": _FORWARD}
 
 
 def build_questions() -> dict:
@@ -21,6 +24,7 @@ def build_questions() -> dict:
         "tag_ok": "Is the ISSUE tag defensible for this quote?",
         "context_sufficient": "Is there enough context to vet the quote?",
         "dispute_risk": "How easily could the speaker disown this as out-of-context or never said?",
+        "forward_looking": "Is this a forward-looking stance/proposal, or a recitation of past record?",
     }
     return {k: Score(instructions=q[k], criteria=_LEVELS[k]) for k in q}
 
@@ -42,4 +46,5 @@ def judge_jev(cand, *, client=None) -> JudgeScores:
         context_sufficient=_norm(a["context_sufficient"], _CONTEXT),
         dispute_risk=_norm(a["dispute_risk"], _DISPUTE),
         mechanism=_norm(a["mechanism"], _MECHANISM),
+        forward_looking=_norm(a["forward_looking"], _FORWARD),
         notes=json.dumps({"confidence": conf}))
