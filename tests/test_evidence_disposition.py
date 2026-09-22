@@ -68,3 +68,10 @@ def test_forward_gate_inert_when_none():
     # judge_forward_looking absent (None) → gate does not fire (backward compatible)
     status, reasons = decide(_full(judge_forward_looking=None), SourceType.PRIMARY)
     assert status == Status.GREEN.value and "judge:record-not-forward" not in reasons
+
+def test_forward_gate_boundary_at_min():
+    # exactly FORWARD_MIN (0.5) must NOT flag (strict <); just below must flag
+    status_at, reasons_at = decide(_full(judge_forward_looking=0.5), SourceType.PRIMARY)
+    assert status_at == Status.GREEN.value and "judge:record-not-forward" not in reasons_at
+    status_below, reasons_below = decide(_full(judge_forward_looking=0.49), SourceType.PRIMARY)
+    assert status_below == Status.FLAGGED.value and "judge:record-not-forward" in reasons_below
