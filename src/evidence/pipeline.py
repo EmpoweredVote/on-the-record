@@ -67,7 +67,7 @@ def _evaluate_quote(cand, source_text, *, politician_id, source_url, cited_via,
     gates = GateResults(verbatim=True, own_words=own_words, in_context=cc.in_context,
         primary=primary, tag_agree=cc.tag_agree, judge_tag_ok=js.tag_ok,
         judge_context_sufficient=js.context_sufficient, judge_dispute_risk=js.dispute_risk,
-        judge_mechanism=js.mechanism)
+        judge_mechanism=js.mechanism, judge_forward_looking=js.forward_looking)
     status, reasons = decide(gates, source_type)
     return EvidenceItem(politician_id=politician_id, issue=cand.issue, evidence_type="quote",
         verbatim_text=cand.text, source_url=source_url, cited_via=cited_via,

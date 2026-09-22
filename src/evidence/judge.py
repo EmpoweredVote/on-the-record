@@ -24,7 +24,12 @@ CONTEXT: {context}
   ("reduce homelessness — no one disagrees"), a TARGET/METRIC ("cut encampments 50%
   by 2028"), or a VAGUE direction ("direct dollars to what works", "deliver immediate
   treatment", "work with the County") names no concrete lever — score near 0.
-Return JSON: {{"tag_ok","context_sufficient","dispute_risk","mechanism","notes"}}.
+- forward_looking: is this a FORWARD-LOOKING stance — what the candidate WOULD do or believes SHOULD
+  happen ("I will…", "we should…", "as mayor I would…") — score near 1? Or a recitation of PAST RECORD
+  / accomplishment — what they already DID ("I did…", "we have…", "on day one I declared…", "we've
+  moved thousands off the streets", a stat of results) — score near 0? Judge the DOMINANT orientation;
+  a forward proposal that mentions past action in passing is still forward.
+Return JSON: {{"tag_ok","context_sufficient","dispute_risk","mechanism","forward_looking","notes"}}.
 """
 
 
@@ -53,6 +58,7 @@ def parse_judge(raw: str) -> JudgeScores:
         context_sufficient=_clamp(d.get("context_sufficient"), 0.0),
         dispute_risk=_clamp(d.get("dispute_risk"), 1.0),
         mechanism=_clamp(d.get("mechanism"), 0.0),
+        forward_looking=_clamp(d.get("forward_looking"), 0.0),
         notes=(d.get("notes") or ""),
     )
 

@@ -61,3 +61,13 @@ def test_parse_judge_non_dict_json_uses_worst_defaults():
             s.tag_ok == 0.0 and s.context_sufficient == 0.0 and s.dispute_risk == 1.0
             and s.mechanism == 0.0
         )
+
+
+def test_parse_judge_reads_forward_looking():
+    js = parse_judge(json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,
+                                 "mechanism":0.9,"forward_looking":0.2,"notes":""}))
+    assert js.forward_looking == 0.2
+
+def test_parse_judge_forward_looking_worst_default_on_failure():
+    js = parse_judge("not json")          # total parse failure → worst defaults
+    assert js.forward_looking == 0.0       # record → contributes to flagging, like the others

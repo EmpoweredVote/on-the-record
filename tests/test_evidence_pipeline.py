@@ -32,7 +32,7 @@ def test_primary_quote_that_passes_is_green():
         "primary_handle":None}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,
                         "tag_ok":True,"issue":"housing","notes":""})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     items, leads = run_source(politician_id="p1",
         source_url="https://karenbass.com/housing", cited_via=None,
         providers=_providers(extract, cross, jud), fetcher=lambda u: SRC,
@@ -68,7 +68,7 @@ def test_quote_with_indefensible_tag_is_flagged_tag_agree():
         "primary_handle":None}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,
                         "tag_ok":False,"issue":"housing","notes":"off-topic tag"})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     items, leads = run_source(politician_id="p1",
         source_url="https://karenbass.com/housing", cited_via=None,
         providers=_providers(extract, cross, jud), fetcher=lambda u: SRC,
@@ -144,7 +144,7 @@ def test_run_candidate_aggregates_across_sources():
         "primary_handle": None}]})
     cross = json.dumps({"own_words": True, "in_context": True, "primary": True,
                         "tag_ok": True, "issue": "housing", "notes": ""})
-    jud = json.dumps({"tag_ok": 0.9, "context_sufficient": 0.9, "dispute_risk": 0.1, "mechanism": 0.9})
+    jud = json.dumps({"tag_ok": 0.9, "context_sufficient": 0.9, "dispute_risk": 0.1, "mechanism": 0.9, "forward_looking": 0.9})
     providers = Providers(extractor=FP([extract]), crosschecker=FP([cross]), judge=FP([jud]))
     items, leads = run_candidate(politician_id="p1", candidate_name="Karen Bass",
         sources=[("https://karenbass.com/housing", None), ("https://lcv.org/x", None)],
@@ -180,7 +180,7 @@ def test_transcript_quote_is_green_primary_with_timestamp_deeplink():
     extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
         "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     items, leads = run_transcript_source(_tsrc(), politician_id="p1",
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
     assert len(items) == 1 and items[0].status == Status.GREEN.value
@@ -194,7 +194,7 @@ def test_transcript_deeplink_uses_ampersand_when_youtube_url_already_has_query()
     extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
         "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     src = _tsrc(video_url="https://www.youtube.com/watch?v=abc")
     items, leads = run_transcript_source(src, politician_id="p1",
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
@@ -208,7 +208,7 @@ def test_transcript_deeplink_uses_fragment_for_non_youtube_base():
     extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
         "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     src = _tsrc(video_url="https://site/m1/watch")
     items, leads = run_transcript_source(src, politician_id="p1",
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
@@ -261,7 +261,7 @@ def test_transcript_crosscheck_sees_trimmed_window_not_full_text():
     extract_real = json.dumps({"quotes":[{"text":turn,"context":"housing","issue":"housing",
         "is_own_words":True,"is_primary_venue":True}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     prov = Providers(extractor=FP([extract_empty, extract_real]),
                      crosschecker=FP([cross]), judge=FP([jud]))
     items, _ = run_transcript_source(src, politician_id="p1", providers=prov,
@@ -281,7 +281,7 @@ def test_transcript_definitional_primary_greens_despite_crosscheck_primary_false
         "is_own_words":True,"is_primary_venue":True}]})
     # cross-checker says NOT primary and NOT own_words (the window-starved failure), but in_context/tag ok
     cross = json.dumps({"own_words":False,"in_context":True,"primary":False,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     items,_ = run_transcript_source(src, politician_id="p1",
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
     assert items[0].status == Status.GREEN.value          # definitional primary/own_words override
@@ -329,7 +329,7 @@ _TWO_QUOTE_SRC = ("Bass campaign site: We will build 40,000 units by cutting per
 
 def test_run_source_identical_workers_1_vs_4():
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     def run(w):
         items, leads = run_source(politician_id="p1", source_url="https://karenbass.com/x",
             cited_via=None, providers=_role_providers(_two_quote_extract(), cross, jud),
@@ -350,7 +350,7 @@ def _two_quote_tsrc():
 
 def test_run_transcript_source_identical_workers_1_vs_4():
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     def run(w):
         items, leads = run_transcript_source(_two_quote_tsrc(), politician_id="p1",
             providers=_role_providers(_two_quote_extract(), cross, jud),
@@ -358,3 +358,22 @@ def test_run_transcript_source_identical_workers_1_vs_4():
         return [(i.issue, i.status) for i in items]
     assert run(1) == run(4)
     assert len(run(4)) == 2 and all(s==Status.GREEN.value for _,s in run(4))
+
+
+def test_primary_quote_reciting_record_is_flagged_not_forward():
+    # high tag/context/mechanism, low dispute — but the judge scores forward_looking
+    # low (a past-record recitation, not a forward stance), so the item must FLAG.
+    extract = json.dumps({"quotes": [{"text":"We will build 30,000 units of housing",
+        "context": SRC, "issue":"housing","date":"2026","setting":"campaign site",
+        "is_own_words":True,"is_primary_venue":True,"reported_event":None,
+        "primary_handle":None}]})
+    cross = json.dumps({"own_words":True,"in_context":True,"primary":True,
+                        "tag_ok":True,"issue":"housing","notes":""})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,
+                      "mechanism":0.9,"forward_looking":0.1})
+    items, leads = run_source(politician_id="p1",
+        source_url="https://karenbass.com/housing", cited_via=None,
+        providers=_providers(extract, cross, jud), fetcher=lambda u: SRC,
+        candidate_name="Karen Bass", batch_id="b1")
+    assert len(items) == 1 and items[0].status == Status.FLAGGED.value
+    assert "judge:record-not-forward" in items[0].status_reasons
