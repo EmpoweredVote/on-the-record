@@ -51,6 +51,18 @@ python run_local.py --input "https://www.youtube.com/watch?v=..." \
 
 See [docs/pipeline.md](docs/pipeline.md) for prerequisites (Hugging Face token, pyannote model terms), roster-guided speaker identification, the review workflow, and re-running stages.
 
+### Open the processing GUI
+
+Double-click **`start-gui.command`** (macOS) or **`start-gui.bat`** (Windows) in
+the repo folder. Either one starts the local server and opens
+<http://127.0.0.1:8000> once it is answering; press Ctrl-C in the window to stop
+it. Both are thin wrappers — the logic lives in `gui/__main__.py`, so from a
+shell the equivalent is:
+
+```bash
+.venv/bin/python -m gui          # add --open to launch a browser too
+```
+
 ### Publish it to the site
 
 ```bash
@@ -122,6 +134,8 @@ web/                Next.js site
 docs/pipeline.md    Pipeline operator guide
 docs/web-roadmap.md Where this is going: people pages, cross-meeting
                     search, appearances on politician profiles
+docs/runbooks/      Operator runbooks: meeting day, source discovery,
+                    calibrating a heuristic gate
 bench/              Diarization model benchmark harness (Modal)
 tests/              pytest suite
 ```

@@ -53,11 +53,13 @@ export default function MeetingView({
   segments,
   outline = [],
   votes = [],
+  actionBar,
 }: {
   meeting: Meeting;
   segments: Segment[];
   outline?: SummarySection[];
   votes?: Vote[];
+  actionBar?: React.ReactNode;
 }) {
   const adapterRef = useRef<PlayerAdapter | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -216,7 +218,8 @@ export default function MeetingView({
   );
 
   return (
-    <div className="meetingLayout">
+    <div className={actionBar ? "meetingLayout meetingLayout--withActionBar" : "meetingLayout"}>
+      {actionBar ? <div className="adminActionBar">{actionBar}</div> : null}
       <div className="mediaPane">
         {player ?? (
           <div className="noPlayer">

@@ -60,6 +60,18 @@ Set "relevant" to true ONLY for original sources of the candidates' own words �
 i.e. when original_vs_clip is "original". News packages ABOUT candidates, campaign
 ads, and highlight/clip compilations are relevant=false even when the candidate
 appears or is quoted in them.
+Current cycle & contest: the tracked race is {race_label}; its cycle year is the year in
+that label, and its candidates are the Tracked candidates listed above. Apply two rules:
+- WRONG CONTEST — if the item's words or answers are from a person NOT in the Tracked
+  candidates list, or are about a different race/contest, set "relevant" to false — EVEN IF
+  the page carries that person's own substantive, first-person answers. Someone's own words
+  about a different race are not a source for THIS race.
+- PRIOR-CYCLE OWN ANSWERS — for a tracked candidate's OWN answers to the same standardized
+  questions, compare the content's cycle year to the race's cycle year. Set "prior_cycle"
+  true ONLY when the content's year is EARLIER than the race's year, and put that earlier
+  year in "source_cycle_year". If the years are the SAME year (or no earlier year is
+  evident), "prior_cycle" is false — a same year survey is the current cycle. Prior-cycle
+  own answers stay comparable, so keep "relevant" true (flagged for review, not rejected).
 If a captions or article-page excerpt is provided, judge DISCOURSE SHAPE: sustained
 first-person policy speech and moderator/Q&A signatures suggest an original event;
 third-person anchor narration with soundbites suggests a news package. Do not guess
@@ -79,6 +91,7 @@ Respond with JSON only:
   "event_kind": "debate|forum|news_clip|press_conference|podcast|community_meeting|questionnaire|other",
   "source_tier": 1-4, "original_vs_clip": "original|clip",
   "route": "ingest|quote_source",
+  "prior_cycle": true/false, "source_cycle_year": "YYYY or null",
   "why": "one sentence citing your strongest evidence"}}"""
 
 
@@ -122,6 +135,8 @@ def parse_verdict(text: str) -> Verdict:
         tier = None
     ovc = data.get("original_vs_clip")
     route = data.get("route")
+    scy = data.get("source_cycle_year")
+    source_cycle_year = str(scy) if scy not in (None, "", "null") else None
     return Verdict(
         relevant=bool(data.get("relevant")),
         confidence=confidence,
@@ -131,6 +146,8 @@ def parse_verdict(text: str) -> Verdict:
         original_vs_clip=ovc if ovc in ("original", "clip") else None,
         route=route if route in ALLOWED_ROUTES else "ingest",
         why=str(data.get("why") or ""),
+        prior_cycle=bool(data.get("prior_cycle")),
+        source_cycle_year=source_cycle_year,
     )
 
 
@@ -168,8 +185,19 @@ def classify_item(provider, item: RawItem, *, race_label: str, roster_names: lis
         max_tokens=config.DISCOVERY_CLASSIFY_MAX_TOKENS, temperature=0.0, system=_SYSTEM)
     verdict = parse_verdict(text)
     low, high = config.DISCOVERY_CAPTIONS_BAND
+    in_band = low <= verdict.confidence < high
+    # A metadata-only REJECT of a web page is unreliable for the "candidate's
+    # own words" test: a questionnaire / Ballotpedia Candidate Connection page
+    # reads as third-person election boilerplate in its title and search
+    # snippet, but the candidate's own answers live deep in the page body —
+    # exactly what the peek surfaces. So re-check a rejected web page with the
+    # page text even when the first pass was confident (out of the mid band).
+    # YouTube captions keep the mid-band-only trigger, and a first-pass ACCEPT
+    # already stands — so the only added cost is one peek per rejected web page.
+    reject_web_page = (not verdict.relevant
+                       and not source_key(item.url).startswith("youtube:"))
     if (peek_fetcher is not None and verdict.rejected_reason is None
-            and low <= verdict.confidence < high):
+            and (in_band or reject_web_page)):
         excerpt = peek_fetcher(item.url)
         if excerpt:
             text2 = provider.complete(

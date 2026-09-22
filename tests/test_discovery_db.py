@@ -43,6 +43,59 @@ def test_insert_discovered_returns_false_on_conflict():
     assert db.insert_discovered(cur, _minimal_row()) is False
 
 
+def test_insert_discovered_persists_original_vs_clip():
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    row["original_vs_clip"] = "clip"
+    db.insert_discovered(cur, row)
+    sql, params = cur.executed[0]
+    assert "original_vs_clip" in sql.lower()
+    # Column sits immediately after event_kind_guess in both the column list
+    # and the params tuple (index 12 = event_kind_guess, 13 = original_vs_clip).
+    assert params[13] == "clip"
+
+
+def test_insert_discovered_original_vs_clip_defaults_to_none_when_omitted():
+    """Existing callers/fixtures that don't set the key must still work —
+    insert_discovered must use row.get(...), not row[...]."""
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    row["source_tier_guess"] = 7  # distinct sentinel: proves the slot actually shifted
+    assert "original_vs_clip" not in row
+    db.insert_discovered(cur, row)  # must not raise KeyError
+    sql, params = cur.executed[0]
+    assert "original_vs_clip" in sql.lower()
+    assert params[13] is None
+    assert params[14] == 7  # source_tier_guess, now one slot right of original_vs_clip
+
+
+def test_insert_discovered_binds_prior_cycle_and_cycle_year():
+    """Slice 2B flag-vs-guard: the prior_cycle flag + cycle year are persisted
+    (appended after status, so existing param positions are unshifted)."""
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    row["prior_cycle"] = True
+    row["source_cycle_year"] = "2020"
+    db.insert_discovered(cur, row)
+    sql, params = cur.executed[0]
+    assert "prior_cycle" in sql.lower() and "source_cycle_year" in sql.lower()
+    assert params[13] is None          # original_vs_clip still at 13 (columns appended, not inserted)
+    assert params[-2] is True          # prior_cycle
+    assert params[-1] == "2020"        # source_cycle_year
+
+
+def test_insert_discovered_prior_cycle_defaults_when_omitted():
+    """Back-compat: callers/fixtures that don't set the keys still work —
+    prior_cycle lands False, source_cycle_year None (row.get, not row[])."""
+    cur = _FakeCursor(rows=[("new-id",)])
+    row = _minimal_row()
+    assert "prior_cycle" not in row and "source_cycle_year" not in row
+    db.insert_discovered(cur, row)     # must not raise KeyError
+    _, params = cur.executed[0]
+    assert params[-2] is False
+    assert params[-1] is None
+
+
 def _minimal_row():
     return {"source_key": "k", "url": "u", "title": None, "description_snippet": None,
             "channel_name": None, "channel_id": None, "channel_url": None,
@@ -53,14 +106,23 @@ def _minimal_row():
 
 
 def test_fetch_tracked_candidates_filters_active_pipeline_races():
-    cur = _FakeCursor(rows=[("p1", "r1", "Maria Delgado", "TX Senate (general)", "2026-11-03")])
+    cur = _FakeCursor(rows=[("p1", "r1", "Maria Delgado", "TX Senate (general)",
+                             "2026-11-03", "TX", "U.S. Senate Texas",
+                             "United States Federal Government")])
     tracked = db.fetch_tracked_candidates(cur)
     sql, _ = cur.executed[0]
     assert "readrank_race_pipeline" in sql
     assert "'needs_quotes','quotes_staged','published'" in sql.replace(" ", "")
     assert "order by" in sql.lower()
+    assert "elections" in sql.lower()
+    assert "state" in sql.lower()
+    assert "governments" in sql.lower()          # office->chamber->government chain joined
+    assert "position_name" in sql.lower()
     assert tracked[0].full_name == "Maria Delgado"
     assert tracked[0].race_label == "TX Senate (general)"
+    assert tracked[0].state == "TX"
+    assert tracked[0].position_name == "U.S. Senate Texas"
+    assert tracked[0].government_name == "United States Federal Government"
 
 
 def test_alarm_races_excludes_races_with_approved_sources():
@@ -151,3 +213,48 @@ def test_finish_run_truncates_failures_text_but_not_count():
     _, params = cur.executed[0]
     assert params[8] == 2                 # count stays authoritative
     assert len(params[9]) == 4000         # text truncated
+
+
+def test_connect_enables_tcp_keepalives(monkeypatch):
+    """The long-lived discovery connection must ship libpq keepalives, or the
+    Supabase pooler reaps it mid-run (see db.connect docstring)."""
+    captured = {}
+
+    def fake_connect(dsn, **kwargs):
+        captured["dsn"] = dsn
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@host:5432/db")
+    monkeypatch.setattr(db.psycopg2, "connect", fake_connect)
+
+    db.connect()
+
+    kw = captured["kwargs"]
+    assert kw.get("keepalives") == 1
+    assert kw.get("keepalives_idle", 10_000) <= 60      # well under the ~350s NLB reap
+    assert "keepalives_interval" in kw and "keepalives_count" in kw
+
+
+class _RowcountCursor:
+    def __init__(self, rowcount=0):
+        self.rowcount = rowcount
+        self.executed = []
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+
+def test_apply_tier3_defer_targets_low_value_search_found_and_returns_count():
+    cur = _RowcountCursor(rowcount=970)
+    n = db.apply_tier3_defer(cur)
+    assert n == 970
+    sql = cur.executed[0][0]
+    assert "update essentials.discovered_sources" in sql.lower()
+    assert "'deferred'" in sql
+    assert "status = 'pending'" in sql.lower()          # only touches the queue
+    assert "source_tier_guess >= 3" in sql.lower()      # tier-3 tail
+    assert "outlet_id is null" in sql.lower()            # search-found only; watchlisted kept
+    assert "not exists" in sql.lower()                   # every-candidate-has-a-better-source guard
+    assert "cardinality(d.matched_politician_ids) > 0" in sql.lower()  # skip items naming nobody
+    assert "b.source_tier_guess in (1, 2)" in sql.lower()  # "better source" means tier 1-2 only

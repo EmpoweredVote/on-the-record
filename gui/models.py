@@ -67,6 +67,11 @@ class MeetingSummary:
     # Live-site status from the DB: True = live, False = queried but not live,
     # None = not checked (no DB configured) so no badge is shown.
     is_live: Optional[bool] = None
+    # prod's meetings.meetings.speaker_count. None = not published, or no DB.
+    # Shown only when it disagrees with the local count: an orphan speaker row
+    # (a label the transcript no longer has) inflates prod's, and nothing else
+    # in the GUI compares the two.
+    live_speaker_count: Optional[int] = None
     # Slice 3: library context. All optional so older/partial meetings still build.
     event_orgs: list = field(default_factory=list)
     body_slug: Optional[str] = None
@@ -105,7 +110,15 @@ class MeetingSummary:
 
     @property
     def speakers_label(self) -> str:
-        return str(self.speaker_count) if self.speaker_count is not None else "—"
+        local = "—" if self.speaker_count is None else str(self.speaker_count)
+        # Any disagreement means prod is out of date, so none is special-cased:
+        # too high is usually an orphan speaker row, too low a publish that
+        # predates later review, and an unknown local count is the
+        # not-judgeable case where prod's number is the only one there is.
+        if (self.live_speaker_count is not None
+                and self.live_speaker_count != self.speaker_count):
+            return f"{local} (live: {self.live_speaker_count})"
+        return local
 
     @property
     def duration_label(self) -> str:
@@ -149,9 +162,11 @@ class MeetingSummary:
     @property
     def status_key(self) -> str:
         """Coarse lifecycle bucket for the library Status filter:
-        'live' | 'ready' | 'needs-review' | 'processing'."""
+        'live' | 'failed' | 'ready' | 'needs-review' | 'processing'."""
         if self.is_live:
             return "live"
+        if self.review_status == "failed":
+            return "failed"
         if self.review_status == "pass":
             return "ready"
         if self.completed_stage >= 4:
@@ -242,6 +257,40 @@ class SpeakerCard:
     @property
     def has_local_person(self) -> bool:
         return bool(self.local_slug)
+
+    # Reader-facing wording for each identity_kind. Separate from the kind token
+    # so the template never has to spell a status out and the two can't drift.
+    _IDENTITY_PILLS = {
+        "roster": "roster",
+        "local": "local",
+        "unidentified": "unidentified",
+        "non_speaker": "not a speaker",
+        "none": "no identity",
+    }
+
+    @property
+    def identity_kind(self) -> str:
+        """'roster' | 'local' | 'unidentified' | 'non_speaker' | 'none'.
+
+        Which of the four identity outcomes is currently in force, as one token
+        the picker can switch on. Precedence is exactly src/review.identity_label's
+        — status beats links, politician_* beats local_slug — so the picker can
+        never disagree with what publish will store. Derived, never stored.
+        """
+        if self.speaker_status == "non_speaker":
+            return "non_speaker"
+        if self.speaker_status == "unidentified":
+            return "unidentified"
+        if self.politician_id or self.politician_slug:
+            return "roster"
+        if self.local_slug:
+            return "local"
+        return "none"
+
+    @property
+    def identity_pill(self) -> str:
+        """Short label for the identity pill in the card head."""
+        return self._IDENTITY_PILLS[self.identity_kind]
 
     @property
     def is_confirmed(self) -> bool:

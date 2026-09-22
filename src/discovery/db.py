@@ -23,7 +23,19 @@ def _require_db_url() -> str:
 
 
 def connect():
-    return psycopg2.connect(_require_db_url(), sslmode="require")
+    # TCP keepalives: a discovery run holds one connection for 10+ minutes and
+    # goes idle for long stretches (yt-dlp caption pulls, LLM latency, feed
+    # HTTP). Against the Supabase session pooler an idle socket is silently
+    # reaped by an intermediary (AWS NLB idle timeout defaults to 350s), which
+    # libpq only notices on the next query -- surfacing as "server closed the
+    # connection unexpectedly" mid-run. keepalives_idle (30s) keeps the socket
+    # warm well under that window; the reconnect path in the engine covers any
+    # drop that still slips through.
+    return psycopg2.connect(
+        _require_db_url(), sslmode="require",
+        keepalives=1, keepalives_idle=30,
+        keepalives_interval=10, keepalives_count=5,
+    )
 
 
 def fetch_active_outlets(cur) -> list:
@@ -37,9 +49,15 @@ def fetch_active_outlets(cur) -> list:
 def fetch_tracked_candidates(cur) -> list:
     cur.execute("""
         select rc.politician_id::text, rc.race_id::text, rc.full_name,
-               p.race_label, p.election_date::text
+               p.race_label, p.election_date::text, e.state,
+               r.position_name, g.name
         from essentials.race_candidates rc
         join essentials.readrank_race_pipeline p on p.race_id = rc.race_id
+        left join essentials.races r on r.id = rc.race_id
+        left join essentials.elections e on e.id = r.election_id
+        left join essentials.offices o on o.id = r.office_id
+        left join essentials.chambers ch on ch.id = o.chamber_id
+        left join essentials.governments g on g.id = ch.government_id
         where p.status in ('needs_quotes','quotes_staged','published')
           and p.election_date >= current_date
           and coalesce(rc.candidate_status, 'active') not in ('withdrawn','removed')
@@ -47,7 +65,8 @@ def fetch_tracked_candidates(cur) -> list:
         order by rc.race_id, rc.full_name
     """)
     return [TrackedCandidate(politician_id=r[0], race_id=r[1], full_name=r[2],
-                             race_label=r[3], election_date=r[4])
+                             race_label=r[3], election_date=r[4], state=r[5],
+                             position_name=r[6], government_name=r[7])
             for r in cur.fetchall()]
 
 
@@ -63,15 +82,24 @@ def existing_source_keys(cur) -> set:
 
 
 def insert_discovered(cur, row: dict) -> bool:
-    """Idempotent on source_key. Returns True when a row was inserted."""
+    """Idempotent on source_key. Returns True when a row was inserted.
+
+    original_vs_clip, prior_cycle, and source_cycle_year are read via .get()
+    (not []) so existing callers/test fixtures that don't set the keys still
+    work — they land NULL/false, same as any row the classifier couldn't judge.
+    prior_cycle + source_cycle_year (Slice 2B flag-vs-guard) are appended AFTER
+    status so existing positional param expectations are unshifted. 🔴 Needs the
+    1876 migration applied first (the columns must exist)."""
     cur.execute("""
         insert into essentials.discovered_sources
           (source_key, url, title, description_snippet, channel_name, channel_id,
            channel_url, outlet_id, duration_seconds, published_at,
-           matched_politician_ids, race_id, event_kind_guess, source_tier_guess,
-           route, confidence, why, discovered_via, status)
+           matched_politician_ids, race_id, event_kind_guess, original_vs_clip,
+           source_tier_guess, route, confidence, why, discovered_via, status,
+           prior_cycle, source_cycle_year)
         values (%s, %s, %s, %s, %s, %s, %s, %s::uuid, %s, %s,
-                %s::uuid[], %s::uuid, %s, %s, %s, %s, %s, %s, %s)
+                %s::uuid[], %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s)
         on conflict (source_key) do nothing
         returning id
     """, (
@@ -79,8 +107,10 @@ def insert_discovered(cur, row: dict) -> bool:
         row["channel_name"], row["channel_id"], row["channel_url"], row["outlet_id"],
         row["duration_seconds"], row["published_at"],
         row["matched_politician_ids"], row["race_id"], row["event_kind_guess"],
+        row.get("original_vs_clip"),
         row["source_tier_guess"], row["route"], row["confidence"], row["why"],
         row["discovered_via"], row["status"],
+        row.get("prior_cycle", False), row.get("source_cycle_year"),
     ))
     return cur.fetchone() is not None
 
@@ -152,3 +182,32 @@ def record_alarms(cur, race_ids: "list[str]") -> None:
             values (%s::uuid, now())
             on conflict (race_id) do update set last_alarm_at = now()
         """, (race_id,))
+
+
+def apply_tier3_defer(cur) -> int:
+    """Move low-value tier-3+ items OUT of the human queue into 'deferred'.
+
+    An item defers only when ALL hold: it is still pending; its tier is 3 or
+    worse; it was search-found (outlet_id IS NULL — watchlisted/trusted shows
+    are always kept); and EVERY candidate it names already has a stronger,
+    non-deferred tier-1/2 source. A candidate whose only speech is this item is
+    never deferred. 'deferred' is not counted by the zero-source alarm, so a
+    starved race still surfaces and a person can restore the item. Returns the
+    number of rows moved. Caller commits."""
+    cur.execute("""
+        update essentials.discovered_sources d
+        set status = 'deferred',
+            status_reason = 'auto-deferred: every matched candidate has a stronger (tier 1-2) source'
+        where d.status = 'pending'
+          and d.source_tier_guess >= 3
+          and d.outlet_id is null
+          and cardinality(d.matched_politician_ids) > 0
+          and not exists (
+            select 1 from unnest(d.matched_politician_ids) as pid
+            where not exists (
+              select 1 from essentials.discovered_sources b
+              where b.source_tier_guess in (1, 2)
+                and b.status in ('pending', 'approved', 'ingested')
+                and pid = any(b.matched_politician_ids)))
+    """)
+    return cur.rowcount

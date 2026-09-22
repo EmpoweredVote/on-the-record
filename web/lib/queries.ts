@@ -25,7 +25,7 @@ function base(): string {
 const FETCH_INIT: RequestInit = { cache: "no-store" };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapMeeting(m: any): Meeting {
+export function mapMeeting(m: any): Meeting {
   return {
     meeting_id: m.id,
     slug: m.slug ?? null,
@@ -66,7 +66,7 @@ function mapMeeting(m: any): Meeting {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSummary(s: any): MeetingSummary {
+export function mapSummary(s: any): MeetingSummary {
   return {
     executive_summary: s.executiveSummary ?? "",
     highlights: s.highlights ?? s.keyDecisions ?? [],
@@ -96,7 +96,7 @@ function mapTopicEntry(t: any): TopicListEntry {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSegment(s: any): Segment {
+export function mapSegment(s: any): Segment {
   return {
     meeting_id: s.meetingId,
     segment_id: s.segmentIndex,
@@ -287,7 +287,7 @@ export async function fetchMeetings(): Promise<Meeting[]> {
   const res = await fetch(`${base()}/api/meetings`, FETCH_INIT);
   if (!res.ok) throw new Error(`meetings fetch failed: ${res.status}`);
   const data = await res.json();
-  return (data as unknown[]).map(mapMeeting);
+  return (data as unknown[]).map(mapMeeting).filter((m) => m.status === "published");
 }
 
 export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
@@ -295,7 +295,8 @@ export async function fetchMeeting(meetingId: string): Promise<Meeting | null> {
   const res = await fetch(`${base()}/api/meetings/${meetingId}`, FETCH_INIT);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`meeting fetch failed: ${res.status}`);
-  return mapMeeting(await res.json());
+  const meeting = mapMeeting(await res.json());
+  return meeting.status === "published" ? meeting : null;
 }
 
 // ev-accounts paginates the transcript at 200 segments/page

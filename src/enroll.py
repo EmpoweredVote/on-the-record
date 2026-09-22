@@ -143,17 +143,27 @@ def _name_to_slug(name: str) -> str:
 def resolve_enrollment_key(
     display_name: str,
     roster: Optional["Roster"] = None,
+    *,
+    allow_fuzzy: bool = True,
 ) -> tuple[str, Optional[str], Optional[str]]:
     """Return (profile_key, politician_slug, politician_id).
 
     If display_name matches a roster member (via correct_speaker_name),
     key = 'essentials:<politician_id>', identity fields from roster.
     Otherwise: key = _name_to_slug(display_name), both identity fields None.
+
+    allow_fuzzy is passed through to correct_speaker_name. Callers whose name is
+    already authoritative (a human rename) pass False: this lookup is the SECOND
+    fuzzy hop on that path, and left on it would attach a wrong politician_id to
+    a correctly-spelled name — a worse failure than the wrong name, because the
+    card then shows the right name and the curator has no cue that publish will
+    attribute this person's words to a councilmember. Pipeline callers, whose
+    input is an ASR/LLM guess, keep the default.
     """
     if roster is not None:
         from .roster import correct_speaker_name
 
-        corrected = correct_speaker_name(display_name, roster)
+        corrected = correct_speaker_name(display_name, roster, allow_fuzzy=allow_fuzzy)
         for member in roster.members:
             if corrected == member.name:
                 if member.politician_id:

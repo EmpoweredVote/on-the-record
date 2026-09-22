@@ -20,7 +20,7 @@ class RawItem:
     duration_seconds: Optional[int] = None
     published_at: Optional[str] = None  # ISO date or datetime string
     outlet_id: Optional[str] = None     # set for watchlist finds
-    via: str = "watchlist"              # 'watchlist' | 'search' | 'agent'
+    via: str = "watchlist"              # 'watchlist' | 'search' | 'agent' | 'hub'
 
 
 @dataclass
@@ -39,6 +39,9 @@ class TrackedCandidate:
     full_name: str
     race_label: str
     election_date: Optional[str] = None  # ISO date
+    state: Optional[str] = None  # 2-letter, UPPERCASE (via races -> elections join)
+    position_name: Optional[str] = None   # races.position_name (level classifier input)
+    government_name: Optional[str] = None  # governments.name (locality source; see locality.py)
 
 
 @dataclass
@@ -59,4 +62,6 @@ class Verdict:
     original_vs_clip: Optional[str] = None  # 'original' | 'clip'
     route: str = "ingest"
     why: str = ""
+    prior_cycle: bool = False               # this candidate's OWN answers, but from an earlier cycle
+    source_cycle_year: Optional[str] = None  # the cycle year of the content, when known
     rejected_reason: Optional[str] = None   # set when the reply wasn't parseable

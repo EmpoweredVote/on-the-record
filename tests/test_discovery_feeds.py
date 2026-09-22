@@ -210,6 +210,91 @@ def test_fetch_page_text_rejects_non_html_content_type(monkeypatch):
     assert text == ""
 
 
+def test_fetch_page_text_surfaces_candidate_connection_answers_past_the_peek_cap(monkeypatch):
+    """A completed Ballotpedia Candidate Connection page carries the candidate's
+    own answers deep in the page (well past the ~6 KB peek). The peek must jump
+    to that Q&A section, not stop at the top-of-page bio — otherwise the
+    classifier judges a real questionnaire source from the bio alone and
+    auto-filters it (the LA-Mayor / CA-34 finding, 2026-09-18)."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    bio = "Jane Doe was born in Springfield and served on the city council. " * 200  # ~13 KB, pushes the Q&A past 6 KB
+    answer = ("What areas of public policy are you personally passionate about? "
+              "I am deeply passionate about housing affordability and homelessness, "
+              "which I treat as a life-and-death emergency.")
+    html = (
+        "<article>"
+        "<p>Jane Doe completed Ballotpedia's Candidate Connection survey in 2026. "
+        "Click here to read the survey answers.</p>"
+        f"<p>{bio}</p>"
+        # Real pages repeat the completion sentence as the answers-section lead-in.
+        "<div class='panel panel-default'><p>Jane Doe completed Ballotpedia's "
+        f"Candidate Connection survey in 2026. {answer}</p></div>"
+        "</article>"
+    ).encode("utf-8")
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("text/html; charset=utf-8", html))
+
+    text = fetch_page_text("https://ballotpedia.org/Jane_Doe", max_chars=6000,
+                           sleep_fn=lambda s: None)
+
+    # The candidate's own words are surfaced despite sitting past the 6 KB cap...
+    assert "I am deeply passionate about housing affordability" in text
+    # ...and the peek stays within its size budget.
+    assert len(text) <= 6000
+
+
+def test_fetch_page_text_without_candidate_connection_returns_top_of_page(monkeypatch):
+    """A page with no Candidate Connection questions is unchanged: the peek is
+    the top of the page, not shifted anywhere."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    html = ("<article><p>TOP OF PAGE. </p><p>" + ("filler word " * 2000) + "</p></article>").encode("utf-8")
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("text/html", html))
+    text = fetch_page_text("https://news.example/story", max_chars=40, sleep_fn=lambda s: None)
+    assert text.startswith("TOP OF PAGE")
+
+
+def test_fetch_page_text_candidate_connection_window_carries_the_cycle_year(monkeypatch):
+    """The peek must include the cycle the answers belong to, so the classifier
+    can tell a current-cycle answer from a prior one (flag-vs-guard). The window
+    anchors on the 'completed ... Candidate Connection survey in <year>' sentence
+    that introduces the Q&A, not just the first question — so the year rides in."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    bio = "Jane Doe was born in Springfield and served on the city council. " * 200
+    completed = "Jane Doe completed Ballotpedia's Candidate Connection survey in 2024."
+    # A long first answer sits between the completion sentence and the first
+    # standardized question (as on real pages), so a mere question-minus-prefix
+    # window would miss the year -- the anchor must be the completion sentence.
+    first_answer = "My accomplishments in office include the following initiatives. " * 40
+    answer = ("What areas of public policy are you personally passionate about? "
+              "I am deeply passionate about housing affordability.")
+    html = (
+        "<article>"
+        "<p>Jane Doe completed Ballotpedia's Candidate Connection survey in 2026. "
+        "Click here to read the survey answers.</p>"
+        f"<p>{bio}</p>"
+        f"<div class='panel panel-default'><p>{completed} {first_answer} {answer}</p></div>"
+        "</article>"
+    ).encode("utf-8")
+    monkeypatch.setattr(feeds, "_robots_allowed", lambda url: True)
+    monkeypatch.setattr(feeds, "_fetch_page_bytes",
+                        lambda url: ("text/html; charset=utf-8", html))
+
+    text = fetch_page_text("https://ballotpedia.org/Jane_Doe", max_chars=6000,
+                           sleep_fn=lambda s: None)
+
+    # The window starts at the completion sentence, so the cycle year (2024) and
+    # the answer both ride into the peek.
+    assert "completed Ballotpedia's Candidate Connection survey in 2024" in text
+    assert "I am deeply passionate about housing affordability" in text
+    assert len(text) <= 6000
+
+
 def test_fetch_page_bytes_caps_body_size(monkeypatch):
     feeds._robots_cache.clear()
     feeds._last_fetch_at.clear()
@@ -217,6 +302,7 @@ def test_fetch_page_bytes_caps_body_size(monkeypatch):
     closed = []
 
     class _FakeResp:
+        status_code = 200
         headers = {"Content-Type": "text/html"}
 
         def __enter__(self):
@@ -240,6 +326,210 @@ def test_fetch_page_bytes_caps_body_size(monkeypatch):
     assert content_type == "text/html"
     assert len(body) == 1000
     assert closed == [True]   # capped early-exit must still close the response
+
+
+def test_fetch_page_bytes_uses_browser_compatible_identifying_user_agent(monkeypatch):
+    """CloudFront-fronted civic sites (Ballotpedia, e.g.) soft-block a bare bot
+    User-Agent: CouncilScribeBot/1.0 got HTTP 202 with an empty body, which
+    starved the stage-2 page peek and made the classifier auto-filter real
+    Candidate Connection pages. The web-lane UA must be browser-COMPATIBLE
+    (Mozilla/5.0 prefix, so those pages return 200) while STILL identifying the
+    crawler and its contact URL; robots matching keeps the bot token."""
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size=8192):
+            yield b"<html></html>"
+
+    def fake_get(url, **kwargs):
+        captured["headers"] = kwargs.get("headers", {})
+        return _FakeResp()
+
+    monkeypatch.setattr(feeds.requests, "get", fake_get)
+    feeds._fetch_page_bytes("https://ballotpedia.org/Some_Candidate")
+
+    ua = captured["headers"].get("User-Agent", "")
+    assert ua.startswith("Mozilla/5.0"), (
+        f"web-lane UA must be browser-compatible to clear CloudFront soft-blocks, got {ua!r}")
+    assert "CouncilScribeBot" in ua      # still identifies the crawler
+    assert "empowered.vote" in ua        # still carries the contact URL
+    assert feeds.UA_TOKEN == "CouncilScribeBot"   # robots matching unchanged
+
+
+# --- UA fallback + 429 retry (src/discovery/feeds.py) -----------------------
+#
+# Several civic sites (mayor.lacity.gov, cd4.lacity.gov, ...) sit behind a WAF
+# that soft-blocks our identifying UA (WEB_USER_AGENT, "CouncilScribeBot"
+# token) with a 403 -- or a 202 with an empty body -- on BOTH the page and its
+# robots.txt, even though the real robots.txt (fetched with a plain browser
+# UA) permits crawling. These tests cover the fix: try the identifying UA
+# FIRST always, fall back to BROWSER_FALLBACK_UA only when blocked, and retry
+# transient 429s with a short backoff before giving up on a UA.
+
+import requests as _requests_module
+
+
+class _FakeUAResponse:
+    """Minimal requests.Response stand-in covering both call shapes used by
+    feeds.py: the streamed context-manager GET in _fetch_page_bytes, and the
+    plain (non-streamed) GET in _fetch_robots_text."""
+
+    def __init__(self, status_code=200, body=b"", content_type="text/html"):
+        self.status_code = status_code
+        self._body = body if isinstance(body, bytes) else body.encode("utf-8")
+        self.headers = {"Content-Type": content_type}
+
+    @property
+    def text(self):
+        return self._body.decode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise _requests_module.HTTPError(f"{self.status_code} error for url", response=self)
+
+    def iter_content(self, chunk_size=8192):
+        if self._body:
+            yield self._body
+
+
+def _ua_get_factory(monkeypatch, plan, calls=None):
+    """plan: {ua_string: [_FakeUAResponse, ...]} -- responses are consumed in
+    order per UA; once a UA's queue is down to one entry, that entry repeats
+    for any further calls (so a test doesn't have to pre-count retries).
+    calls (if given) records each request's User-Agent header, in order."""
+    if calls is None:
+        calls = []
+    queues = {ua: list(resps) for ua, resps in plan.items()}
+
+    def fake_get(url, **kwargs):
+        ua = kwargs.get("headers", {}).get("User-Agent", "")
+        calls.append(ua)
+        if ua not in queues:
+            raise AssertionError(f"unexpected User-Agent requested: {ua!r}")
+        queue = queues[ua]
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(feeds.requests, "get", fake_get)
+    return calls
+
+
+def test_fetch_page_bytes_identifying_ua_200_never_tries_fallback(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(200, b"<html>hi</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>hi</html>"
+    assert content_type == "text/html"
+    assert calls == [feeds.WEB_USER_AGENT]   # fallback UA never requested
+
+
+def test_fetch_page_bytes_falls_back_on_403(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, b"<html>fallback body</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>fallback body</html>"
+    assert calls == [feeds.WEB_USER_AGENT, feeds.BROWSER_FALLBACK_UA]  # identifying tried first
+
+
+def test_fetch_page_bytes_falls_back_on_soft_block_empty_2xx_body(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(202, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, b"<html>fallback body</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>fallback body</html>"
+    assert calls == [feeds.WEB_USER_AGENT, feeds.BROWSER_FALLBACK_UA]
+
+
+def test_fetch_page_bytes_raises_when_both_uas_blocked(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(403, b"")],
+    })
+    try:
+        feeds._fetch_page_bytes("https://x.example/page")
+        assert False, "expected requests.HTTPError"
+    except _requests_module.HTTPError:
+        pass
+
+
+def test_fetch_page_bytes_retries_429_then_succeeds_same_ua(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    sleeps = []
+    monkeypatch.setattr(feeds, "_retry_sleep", sleeps.append)
+    calls = _ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(429, b""), _FakeUAResponse(200, b"<html>ok</html>")],
+    })
+    content_type, body = feeds._fetch_page_bytes("https://x.example/page")
+    assert body == b"<html>ok</html>"
+    # bounded retry: exactly one retry (429 then 200), fallback UA never touched
+    assert calls == [feeds.WEB_USER_AGENT, feeds.WEB_USER_AGENT]
+    assert sleeps == [feeds._RETRY_BACKOFF_SECONDS]
+
+
+def _robots_ua_get_factory(monkeypatch, plan):
+    return _ua_get_factory(monkeypatch, plan)
+
+
+def test_robots_allowed_true_via_fallback_after_identifying_ua_403(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _robots_ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, "User-agent: *\nDisallow:")],
+    })
+    assert feeds._robots_allowed("https://x.example/feed.rss") is True
+
+
+def test_robots_allowed_false_via_fallback_real_disallow_honored(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _robots_ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(200, "User-agent: *\nDisallow: /")],
+    })
+    assert feeds._robots_allowed("https://x.example/feed.rss") is False
+
+
+def test_robots_allowed_false_when_both_uas_403(monkeypatch):
+    feeds._robots_cache.clear()
+    feeds._last_fetch_at.clear()
+    _robots_ua_get_factory(monkeypatch, {
+        feeds.WEB_USER_AGENT: [_FakeUAResponse(403, b"")],
+        feeds.BROWSER_FALLBACK_UA: [_FakeUAResponse(403, b"")],
+    })
+    assert feeds._robots_allowed("https://x.example/feed.rss") is False
 
 
 def test_html_to_text_preserves_less_than_greater_than_comparisons():

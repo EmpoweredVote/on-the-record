@@ -45,6 +45,19 @@ from src.event_kinds import EVENT_KINDS, INTERVIEW_KINDS, validate_event_kind
 from src.crec_identify import parse_crec_arg
 from src.house_cdn import resolve_session
 
+#: Diarizer backends Stage 2.5's centroid merge must never run against.
+#: `api`/`vibevoice` produce their own well-separated clustering; `api-recluster`
+#: exists SPECIFICALLY to carry a hand-repaired clustering forward unchanged —
+#: running the same merge-by-similarity over it risks silently re-merging the
+#: very people that repair pulled apart, while keeping the "+recluster"
+#: provenance stamp as if nothing had touched it.
+_MERGE_UNSUPPORTED_DIARIZERS = ("api", "vibevoice", "api-recluster")
+
+
+def _merge_stage_skipped(diarizer: str) -> bool:
+    """True when Stage 2.5's centroid merge must not run for this backend."""
+    return diarizer in _MERGE_UNSUPPORTED_DIARIZERS
+
 
 def _resolve_chunk_minutes(args, event_kind) -> int:
     """Chunk size for this run, after the meeting-kind gate.
@@ -104,11 +117,71 @@ def should_run_llm(skip_llm: bool, crec_request, event_kind=None) -> bool:
 def _validate_diarizer_compute(args) -> None:
     if args.diarizer == "vibevoice" and args.compute != "modal":
         raise ValueError("--diarizer vibevoice requires --compute modal")
+    if args.diarizer == "api-recluster":
+        _validate_recluster_provenance(args)
+
+
+def _recluster_meeting_id(args) -> str | None:
+    """Best-effort meeting id for an `api-recluster` run, before the normal
+    --resume / metadata-resolve dance has run (this validation happens first,
+    at argparse time). `api-recluster` only ever makes sense against an
+    already-existing meeting, so --resume or an explicit --meeting-id is what
+    every real invocation supplies; a date+meeting-type pair is included too
+    since that is how a fresh id would otherwise be spelled."""
+    meeting_id = getattr(args, "resume", None) or getattr(args, "meeting_id", None)
+    if meeting_id:
+        return meeting_id
+    date = getattr(args, "date", None)
+    meeting_type = getattr(args, "meeting_type", None)
+    if date and meeting_type:
+        return f"{date}-{meeting_type.lower().replace(' ', '-')}"
+    return None
+
+
+def _validate_recluster_provenance(args) -> None:
+    """Refuse `--diarizer api-recluster` unless diarization is already on disk.
+
+    `api-recluster` is provenance-only (see its --diarizer help text): it
+    stamps `diarization_model = "pyannote/ai-precision-2+recluster"` without
+    ever running Precision-2 itself, on the assumption that diarization.json/
+    embeddings.json were already hand-replaced by an offline re-clustering. If
+    they are not there, the Stage 2 diarizer dispatch falls through to plain
+    OSS pyannote 3.1 and the run still stamps the recluster provenance string
+    — a false claim about how the shipped labels were produced, exactly the
+    error this value exists to prevent.
+    """
+    meeting_id = _recluster_meeting_id(args)
+    if not meeting_id:
+        raise ValueError(
+            "--diarizer api-recluster requires an existing meeting "
+            "(--resume MEETING_ID, or --meeting-id/--date+--meeting-type "
+            "naming one) with diarization.json and embeddings.json already "
+            "on disk — it replaces clustering only, never runs diarization "
+            "from scratch."
+        )
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    missing = [
+        name for name in ("diarization.json", "embeddings.json")
+        if not (meeting_dir / name).exists()
+    ]
+    if missing:
+        raise ValueError(
+            f"--diarizer api-recluster requires diarization.json and "
+            f"embeddings.json to already exist for meeting {meeting_id!r} "
+            f"(missing {', '.join(missing)} under {meeting_dir}). "
+            "api-recluster is provenance-only: it never runs diarization "
+            "from scratch."
+        )
 
 
 def _diarization_model_name(diarizer: str) -> str:
     if diarizer == "api":
         return "pyannote/ai-precision-2"
+    if diarizer == "api-recluster":
+        # Precision-2's segmentation kept, its clustering replaced by a
+        # per-turn re-clustering. Distinct from "api" because the labels this
+        # meeting ships did NOT come out of Precision-2.
+        return "pyannote/ai-precision-2+recluster"
     if diarizer == "vibevoice":
         from src.vibevoice import VIBEVOICE_MODEL_ID, VIBEVOICE_MODEL_REVISION
 
@@ -779,6 +852,51 @@ def _expand_house_floor(args) -> None:
     args._house_source = source
 
 
+def _route_after_gate(args, gate_report, *, interactive: bool, publish_anyway: bool) -> str:
+    """Decide what run_pipeline does after the confidence gate.
+
+    Returns one of:
+    - 'draft': --publish-as-draft is set (and --no-publish is not) → publish as a
+      not-live draft regardless of the gate verdict. This is ranked ABOVE
+      'review_queue' on purpose: a non-'pass' verdict must still become a draft
+      for low-coverage floor sessions, not be dropped. Reordering these two checks
+      reintroduces the bug the live de-risk run caught, so the precedence is
+      asserted in the tests. An explicit --no-publish suppresses the draft.
+    - 'review_queue': a non-'pass' verdict on a non-interactive, non-forced run →
+      skip summary/enrollment/publish and queue for human review.
+    - 'continue': proceed with summary/enrollment/publish.
+    """
+    if getattr(args, "publish_as_draft", False) and not getattr(args, "no_publish", False):
+        return "draft"
+    if gate_report["verdict"] != "pass" and not interactive and not publish_anyway:
+        return "review_queue"
+    return "continue"
+
+
+def _publish_meeting_as_draft(meeting, meeting_dir, state, gate_report) -> None:
+    """Publish a meeting as a not-live draft (status='draft'), storing the gate
+    verdict + coverage on it for later review.
+
+    For unattended floor automation (--publish-as-draft): the draft is published
+    regardless of the gate verdict, and summary + voice enrollment are skipped.
+    Raises on publish failure so the caller (the run_local subprocess) exits
+    non-zero and floor_dispatch counts the session as failed.
+    """
+    from src.publish import publish_meeting
+    meeting.processing_metadata.gate_verdict = gate_report["verdict"]
+    meeting.processing_metadata.gate_coverage = gate_report["effective_coverage"]
+    _attach_thumbnail(meeting, meeting_dir)
+    try:
+        result = publish_meeting(meeting, state.body_slug, status="draft")
+        print(f"  Published as DRAFT: {result.segments} segments, "
+              f"{result.speakers} speakers "
+              f"(gate={gate_report['verdict']}, "
+              f"coverage={gate_report['effective_coverage']:.0%})")
+    except Exception as e:
+        print(f"  ERROR: draft publish failed: {e}")
+        raise
+
+
 def run_pipeline(args: argparse.Namespace) -> None:
     """Execute the full 6-stage pipeline."""
     _expand_house_floor(args)
@@ -1182,7 +1300,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # ======================================================================
     # Stage 2.5: Auto-merge fragmented speakers (opt-in via --merge)
     # ======================================================================
-    if args.merge and getattr(args, "diarizer", "oss") in ("api", "vibevoice"):
+    if args.merge and _merge_stage_skipped(getattr(args, "diarizer", "oss")):
         backend = getattr(args, "diarizer", "oss")
         print(
             f"  ! --merge requested with --diarizer {backend}: skipping merge stage. "
@@ -1656,7 +1774,20 @@ def run_pipeline(args: argparse.Namespace) -> None:
     gate_report = _apply_gate(meeting, meeting_dir, state)
     _interactive = sys.stdin.isatty()
     _publish_anyway = getattr(args, "publish_anyway", False)
-    if gate_report["verdict"] != "pass" and not _interactive and not _publish_anyway:
+    _route = _route_after_gate(
+        args, gate_report, interactive=_interactive, publish_anyway=_publish_anyway
+    )
+
+    # 'draft' (floor automation, --publish-as-draft): publish as a not-live draft
+    # regardless of the gate verdict, storing the verdict for later review, then
+    # stop (summary + voice enrollment are skipped). _route_after_gate ranks
+    # 'draft' ABOVE 'review_queue' on purpose — that precedence is what keeps
+    # low-coverage floor sessions queued as drafts instead of silently dropped.
+    if _route == "draft":
+        _publish_meeting_as_draft(meeting, meeting_dir, state, gate_report)
+        return
+
+    if _route == "review_queue":
         print()
         print("=" * 60)
         print(f"QUEUED FOR REVIEW — verdict: {gate_report['verdict']}")
@@ -1920,6 +2051,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
             print(f"    {fmt}: {path}")
 
     if getattr(args, "publish", False):
+        # NB: --publish-as-draft is handled earlier as a terminal path right after
+        # the gate (see _publish_meeting_as_draft), so it never reaches here.
         if not _may_publish(state.review_status, getattr(args, "publish_anyway", False)):
             print(f"  Not publishing — gate verdict is "
                   f"'{state.review_status}'. Review and re-run, or pass "
@@ -2242,6 +2375,58 @@ def _published_meeting_slugs() -> set[str]:
             return {r[0] for r in cur.fetchall()}
     finally:
         conn.close()
+
+
+def _list_draft_meetings(*, connect=None) -> list[dict]:
+    """Draft meetings with their stored gate verdict, newest first."""
+    import psycopg2
+    from src.publish import _require_db_url
+    connect = connect or psycopg2.connect
+    conn = connect(_require_db_url())
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT slug, date, meeting_type, segment_count, speaker_count,
+                       processing_metadata
+                  FROM meetings.meetings
+                 WHERE status = 'draft'
+                 ORDER BY date DESC
+                """
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    out = []
+    for slug, date, mtype, segs, spks, pmeta in rows:
+        pmeta = pmeta or {}
+        out.append({
+            "slug": slug, "date": str(date), "meeting_type": mtype,
+            "segment_count": segs, "speaker_count": spks,
+            "gate_verdict": pmeta.get("gate_verdict"),
+            "gate_coverage": pmeta.get("gate_coverage"),
+        })
+    return out
+
+
+def _promote_meeting(slug: str, *, connect=None) -> bool:
+    """Flip one draft meeting to published (goes live via the API). Returns True if flipped."""
+    import psycopg2
+    from src.publish import _require_db_url
+    connect = connect or psycopg2.connect
+    conn = connect(_require_db_url())
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE meetings.meetings SET status = 'published', updated_at = NOW() "
+                    "WHERE slug = %s AND status = 'draft'",
+                    (slug,),
+                )
+                flipped = (getattr(cur, "rowcount", 0) or 0) > 0
+    finally:
+        conn.close()
+    return flipped
 
 
 def _republish_all(args) -> None:
@@ -3229,8 +3414,10 @@ def _interactive_speaker_review(
                     changes.append({"label": label, "old_name": res.old_name, "new_name": res.new_name})
                     print(f"  Confirmed: {label} -> {res.new_name}")
                     _prompt_link_politician(mappings, label, res.new_name)
-                    # Offer local person creation when essentials link was skipped or unavailable.
-                    _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
+                    # Offer local person creation when essentials link was skipped
+                    # or unavailable. The ORIGINAL hint name, not res.new_name — it
+                    # seeds default_local_slug; see the second call site below.
+                    _prompt_create_local_person(mappings, label, top_hint[0], event_kind=event_kind)
                     break
                 elif choice.lower() == "u":
                     lbl = input("    Optional label (Enter for 'Unidentified Speaker'): ").strip()
@@ -3256,9 +3443,22 @@ def _interactive_speaker_review(
                         if add_alias(None, res.new_name, res.alias_suggestion, body_slug=body_slug):
                             target_label = body_slug or "council_roster.json"
                             print(f"  Auto-added alias: '{res.alias_suggestion}' -> '{res.new_name}' ({target_label})")
+                    # res.new_name (the roster-CORRECTED name) is right for the
+                    # essentials search seed — it no-ops when already linked, and
+                    # the canonical spelling is the better query.
                     _prompt_link_politician(mappings, label, res.new_name)
-                    # Offer local person creation when essentials link was skipped or unavailable.
-                    _prompt_create_local_person(mappings, label, res.new_name, event_kind=event_kind)
+                    # But the local-person prompt gets the name the curator TYPED.
+                    # This argument feeds default_local_slug only — the public NAME
+                    # comes from mapping.speaker_name, which rename_speaker above
+                    # now leaves verbatim. Still the typed name: local_slug is a
+                    # persistent public identifier that publish._upsert_local_people
+                    # writes, a local person is by definition NOT on the roster, and
+                    # a default of "councilmember-piedmont-smith" for a member of
+                    # the public is one Enter-press from being accepted. Reachable
+                    # when the curator declines the essentials link at the prompt
+                    # above (which clears the politician_* fields that would
+                    # otherwise no-op this call) after typing an exact roster alias.
+                    _prompt_create_local_person(mappings, label, choice, event_kind=event_kind)
                     break
         finally:
             _stop_player(current_player)
@@ -3795,14 +3995,21 @@ Environment Variables:
                              "and embeddings have known NaN issues. See bench/diagnose_merge.py.")
     parser.add_argument("--use-vtt", action="store_true",
                         help="Use VTT subtitles instead of Whisper (auto-detected if captions.vtt exists)")
-    parser.add_argument("--diarizer", choices=["oss", "api", "vibevoice"], default="oss",
+    parser.add_argument("--diarizer", choices=["oss", "api", "vibevoice", "api-recluster"],
+                        default="oss",
                         help="Diarization backend. 'oss' uses local pyannote 3.1 "
                              "(default, free, ~50min/3hr meeting on L4). 'api' uses "
                              "pyannote.ai Precision-2 (cleaner segmentation, ~3min "
                              "for the same meeting, ~$0.45 per audio hour). "
                              "Requires PYANNOTE_AI_KEY in env. 'vibevoice' uses "
                              "Microsoft VibeVoice-ASR on Modal and requires "
-                             "--compute modal. "
+                             "--compute modal. 'api-recluster' is not a diarization "
+                             "backend to run from scratch: it is provenance-only, for "
+                             "--redo transcribe on a meeting whose diarization.json/"
+                             "embeddings.json were already hand-replaced by an offline "
+                             "re-clustering of Precision-2's turns (see "
+                             "bench/diagnose_merge.py-style recluster workflows). "
+                             "Requires diarization to already be complete on disk. "
                              "Recommended per bench/FINDINGS.md.")
     parser.add_argument("--compute", choices=["local", "modal"], default="local",
                         help="Compute backend for GPU-intensive stages (diarization "
@@ -3844,6 +4051,11 @@ Environment Variables:
                         help="After the pipeline completes, publish the meeting to Supabase for the web site")
     parser.add_argument("--no-publish", action="store_true",
                         help="Skip publishing even when resuming (overrides the auto-publish default on --resume)")
+    parser.add_argument("--publish-as-draft", action="store_true",
+                        help="Publish the meeting as a not-live draft "
+                             "(status='draft'); bypasses the confidence gate and "
+                             "captures the gate verdict for later review. Used by "
+                             "the weekly floor automation.")
     parser.add_argument("--publish-anyway", action="store_true",
                         help="Force publishing even when the confidence gate "
                              "verdict is 'review' or 'failed' (human override)")
@@ -3924,6 +4136,10 @@ Environment Variables:
                         help="Resume an interrupted batch run (skip already-completed meetings)")
     parser.add_argument("--review-queue", action="store_true",
                         help="List meetings awaiting review (grouped by gate verdict) and exit")
+    parser.add_argument("--list-drafts", action="store_true",
+                        help="List meetings queued as drafts (from the floor automation).")
+    parser.add_argument("--promote", metavar="SLUG", default=None,
+                        help="Flip one draft meeting to published (go live).")
     parser.add_argument(
         "--body",
         type=str,
@@ -3960,6 +4176,14 @@ def main():
 
     args = parser.parse_args()
 
+    # A --publish-as-draft run publishes via the terminal draft path in
+    # run_pipeline (see _route_after_gate), which does not depend on args.publish.
+    # This line is kept only so the normal publish gate is consistent for such a
+    # run; both it and the router honor --no-publish, which always suppresses
+    # publishing.
+    if getattr(args, "publish_as_draft", False) and not getattr(args, "no_publish", False):
+        args.publish = True
+
     if args.repair_transcript:
         cli_argv = sys.argv[1:]
         repair_conflict_map = {
@@ -3985,6 +4209,7 @@ def main():
             "--fix-profiles": _option_supplied(cli_argv, "--fix-profiles"),
             "--fix-transcripts": _option_supplied(cli_argv, "--fix-transcripts"),
             "--publish": _option_supplied(cli_argv, "--publish"),
+            "--publish-as-draft": _option_supplied(cli_argv, "--publish-as-draft"),
             "--publish-meeting": _option_supplied(cli_argv, "--publish-meeting"),
             "--align-agenda": _option_supplied(cli_argv, "--align-agenda"),
             "--reconcile-memo": _option_supplied(cli_argv, "--reconcile-memo"),
@@ -4004,6 +4229,8 @@ def main():
             "--redo": _option_supplied(cli_argv, "--redo"),
             "--title": _option_supplied(cli_argv, "--title"),
             "--event-kind": _option_supplied(cli_argv, "--event-kind"),
+            "--list-drafts": _option_supplied(cli_argv, "--list-drafts"),
+            "--promote": _option_supplied(cli_argv, "--promote"),
         }
         repair_conflicts = [
             flag
@@ -4049,6 +4276,25 @@ def main():
 
     if args.review_queue:
         _review_queue()
+        return
+
+    if getattr(args, "list_drafts", False):
+        drafts = _list_draft_meetings()
+        if not drafts:
+            print("No draft meetings.")
+            return
+        for d in drafts:
+            cov = f"{d['gate_coverage']:.0%}" if d["gate_coverage"] is not None else "—"
+            print(f"  {d['slug']:<34} {d['meeting_type']:<14} "
+                  f"gate={d['gate_verdict'] or '—':<7} coverage={cov:<5} "
+                  f"speakers={d['speaker_count']} segments={d['segment_count']}")
+        return
+
+    if getattr(args, "promote", None):
+        if _promote_meeting(args.promote):
+            print(f"Promoted {args.promote} → published (live via the API).")
+        else:
+            print(f"No draft meeting with slug {args.promote!r} (already live or missing).")
         return
 
     if args.list_profiles:

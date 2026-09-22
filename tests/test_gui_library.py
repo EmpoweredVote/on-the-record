@@ -79,6 +79,20 @@ def test_meeting_summary_status_key():
     assert s(completed_stage=7, review_status="review").status_key == "needs-review"
 
 
+def test_status_key_failed_bucket():
+    from gui.models import MeetingSummary
+    def s(**kw):
+        base = dict(meeting_id="m", title=None, city=None, meeting_type=None, date=None,
+                    event_kind=None, completed_stage=4)
+        base.update(kw); return MeetingSummary(**base)
+    assert s(review_status="failed").status_key == "failed"
+    # live still wins over a stale failed verdict
+    assert s(review_status="failed", is_live=True).status_key == "live"
+    # unchanged buckets
+    assert s(review_status="pass").status_key == "ready"
+    assert s(completed_stage=2).status_key == "processing"
+
+
 import json
 
 from gui.library import scan_meetings
@@ -282,8 +296,8 @@ def test_scan_meetings_reads_named_speaker_count_and_duration(tagged_meeting_dir
     (mdir / "transcript_named.json").write_text(json.dumps({
         "title": "Council",
         "duration_seconds": 10325.26,
-        "speakers": [{"speaker_label": "SPEAKER_00"}, {"speaker_label": "SPEAKER_01"},
-                     {"speaker_label": "SPEAKER_02"}],
+        # Meeting.to_dict() writes speakers as a dict keyed by speaker_label.
+        "speakers": {"SPEAKER_00": {}, "SPEAKER_01": {}, "SPEAKER_02": {}},
     }))
     # gate fields come from state.
     state = mdir / "pipeline_state.json"
@@ -387,7 +401,7 @@ def test_library_route_renders_enrichment_columns(tagged_meeting_dir, tmp_meetin
     mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
     (mdir / "transcript_named.json").write_text(json.dumps({
         "title": "Council", "duration_seconds": 10325.26,
-        "speakers": [{"speaker_label": "A"}, {"speaker_label": "B"}, {"speaker_label": "C"}],
+        "speakers": {"A": {}, "B": {}, "C": {}},
     }))
     (mdir / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff\xe0j")
     state = mdir / "pipeline_state.json"
@@ -473,7 +487,8 @@ def test_library_route_shows_live_badge(tagged_meeting_dir, tmp_meetings_dir, mo
     tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
     tagged_meeting_dir("x", meeting_id="2026-03-04-council", completed_stage=7)
     import gui.publish_api as pub
-    monkeypatch.setattr(pub, "live_published_slugs", lambda: {"2026-02-04-council"})
+    monkeypatch.setattr(pub, "live_meeting_speaker_counts",
+                        lambda: {"2026-02-04-council": None})
     body = TestClient(create_app()).get("/").text
     assert "Live" in body and "Not live" in body
     assert "Exported" in body            # stage 7 no longer mislabeled "Published"
@@ -482,7 +497,7 @@ def test_library_route_shows_live_badge(tagged_meeting_dir, tmp_meetings_dir, mo
 def test_library_route_no_live_badge_without_db(tagged_meeting_dir, tmp_meetings_dir, monkeypatch):
     tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
     import gui.publish_api as pub
-    monkeypatch.setattr(pub, "live_published_slugs", lambda: None)  # DB not configured
+    monkeypatch.setattr(pub, "live_meeting_speaker_counts", lambda: None)  # DB not configured
     body = TestClient(create_app()).get("/").text
     assert "live-badge" not in body      # no Live/Not-live badge rendered (only the "—" placeholder)
 
@@ -532,6 +547,15 @@ def test_library_js_filters_by_search_kind_status(tmp_meetings_dir):
     js = Path("gui/static/library.js").read_text()
     assert "lib-search" in js and "lib-kind" in js and "lib-status" in js
     assert "data-search" in js
+
+
+def test_library_js_has_sort_daterange_chips_rowclick():
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "data-sort" in js                       # column sorting
+    assert "lib-date-from" in js and "lib-date-to" in js   # date range
+    assert "data-chip" in js                        # quick chips
+    assert "data-meeting-id" in js and ("location" in js or "href" in js)  # row click nav
 
 
 def test_processed_label_relative():
@@ -590,3 +614,172 @@ def test_library_js_polls_batch_status(tmp_meetings_dir):
     from pathlib import Path
     js = Path("gui/static/library.js").read_text()
     assert "/batch/status" in js and "status-cell" in js
+
+
+# --- prod speaker_count beside the local one: an orphan row inflates prod's ---
+
+def test_speakers_label_is_just_the_local_count_when_prod_agrees():
+    from gui.models import MeetingSummary
+    s = MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                       date=None, event_kind=None, completed_stage=7,
+                       speaker_count=6, live_speaker_count=6)
+    assert s.speakers_label == "6"
+
+
+def test_speakers_label_shows_prods_count_when_it_is_higher():
+    # The orphan symptom: prod says 7 because a merged-away label still has a
+    # meetings.speakers row. Invisible until the two counts sit side by side.
+    from gui.models import MeetingSummary
+    s = MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                       date=None, event_kind=None, completed_stage=7,
+                       speaker_count=6, live_speaker_count=7)
+    assert s.speakers_label == "6 (live: 7)"
+
+
+def test_speakers_label_shows_a_lower_prod_count_too():
+    # Drift in either direction means prod is out of date; do not special-case
+    # only the inflating one.
+    from gui.models import MeetingSummary
+    s = MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                       date=None, event_kind=None, completed_stage=7,
+                       speaker_count=6, live_speaker_count=4)
+    assert s.speakers_label == "6 (live: 4)"
+
+
+def test_speakers_label_ignores_an_unknown_prod_count():
+    # None = not published, or no DB. Neither is drift.
+    from gui.models import MeetingSummary
+    s = MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                       date=None, event_kind=None, completed_stage=7,
+                       speaker_count=6, live_speaker_count=None)
+    assert s.speakers_label == "6"
+
+
+def test_library_route_shows_the_live_speaker_count_when_it_differs(
+    tagged_meeting_dir, tmp_meetings_dir, monkeypatch
+):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "live_meeting_speaker_counts",
+                        lambda: {"2026-02-04-council": 99})
+    body = TestClient(create_app()).get("/").text
+    assert "live: 99" in body
+    assert "Live" in body            # the live badge still derives from the same query
+
+
+def test_library_route_without_a_db_shows_no_live_speaker_count(
+    tagged_meeting_dir, tmp_meetings_dir, monkeypatch
+):
+    tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=7)
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "live_meeting_speaker_counts", lambda: None)
+    body = TestClient(create_app()).get("/").text
+    assert "live:" not in body
+    assert "live-badge" not in body
+
+
+def test_live_published_slugs_still_returns_a_set_of_slugs(monkeypatch):
+    # Kept as the published touchpoint; it now derives from the count query.
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "live_meeting_speaker_counts", lambda: {"a": 3, "b": None})
+    assert pub.live_published_slugs() == {"a", "b"}
+
+
+def test_live_published_slugs_still_reports_unknown_as_none(monkeypatch):
+    import gui.publish_api as pub
+    monkeypatch.setattr(pub, "live_meeting_speaker_counts", lambda: None)
+    assert pub.live_published_slugs() is None
+
+
+def test_speakers_label_shows_prods_count_when_there_is_no_local_one():
+    # No local transcript to count, but prod has speakers. That is the
+    # not-judgeable case the orphan audit reports separately, and showing prod's
+    # number is informative rather than misleading — a bare "—" hides it.
+    from gui.models import MeetingSummary
+    s = MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                       date=None, event_kind=None, completed_stage=7,
+                       speaker_count=None, live_speaker_count=7)
+    assert s.speakers_label == "— (live: 7)"
+
+
+def test_speakers_label_is_a_bare_dash_when_neither_count_is_known():
+    from gui.models import MeetingSummary
+    s = MeetingSummary(meeting_id="m", title=None, city=None, meeting_type=None,
+                       date=None, event_kind=None, completed_stage=7,
+                       speaker_count=None, live_speaker_count=None)
+    assert s.speakers_label == "—"
+# --- _speaker_count: transcript_named 'speakers' is a DICT, not a list ---------
+
+from gui.library import _speaker_count
+
+
+def _write_diarization(mdir, labels):
+    (mdir / "diarization.json").write_text(
+        json.dumps([{"speaker_label": l} for l in labels]), encoding="utf-8")
+
+
+def test_speaker_count_prefers_named_speakers_dict(tmp_path):
+    mdir = tmp_path / "m"
+    mdir.mkdir()
+    # Real transcript_named.json keys 'speakers' by label -> dict (src/models.py).
+    named = {"speakers": {"Mayor Thomson": {}, "SPEAKER_01": {}, "Clerk": {}}}
+    _write_diarization(mdir, ["SPEAKER_00", "SPEAKER_01"])  # raw count differs
+
+    assert _speaker_count(mdir, named) == 3  # identified speakers win over raw
+
+
+def test_speaker_count_falls_back_when_named_speakers_absent(tmp_path):
+    mdir = tmp_path / "m"
+    mdir.mkdir()
+    _write_diarization(mdir, ["SPEAKER_00", "SPEAKER_00", "SPEAKER_01"])
+
+    assert _speaker_count(mdir, {"title": "Council"}) == 2  # unique raw labels
+
+
+def test_speaker_count_falls_back_when_named_speakers_empty(tmp_path):
+    mdir = tmp_path / "m"
+    mdir.mkdir()
+    _write_diarization(mdir, ["SPEAKER_00", "SPEAKER_01", "SPEAKER_02"])
+
+    assert _speaker_count(mdir, {"speakers": {}}) == 3  # not 0
+
+
+def test_speaker_count_none_when_neither_source_exists(tmp_path):
+    mdir = tmp_path / "m"
+    mdir.mkdir()
+
+    assert _speaker_count(mdir, None) is None
+    assert _speaker_count(mdir, {"speakers": {}}) is None
+
+
+def test_library_toolbar_and_row_data_enriched(tagged_meeting_dir, tmp_meetings_dir):
+    mdir = tagged_meeting_dir("x", meeting_id="2026-02-04-council", completed_stage=5)
+    import json
+    (mdir / "transcript_named.json").write_text(json.dumps(
+        {"title": "Council", "duration_seconds": 3600, "speakers": {"A": {}, "B": {}}}))
+    st = mdir / "pipeline_state.json"
+    data = json.loads(st.read_text()); data.update({"date": "2026-02-04", "event_kind": "council"})
+    st.write_text(json.dumps(data))
+    from fastapi.testclient import TestClient
+    from gui.app import create_app
+    body = TestClient(create_app()).get("/").text
+    # richer status option
+    assert 'value="failed"' in body
+    # date-range + chips controls
+    assert 'id="lib-date-from"' in body and 'id="lib-date-to"' in body
+    assert 'data-chip="needs-review"' in body and 'data-chip="all"' in body
+    # sortable headers
+    assert 'data-sort="date"' in body and 'data-sort="speakers"' in body
+    # enriched row data
+    assert 'data-date="2026-02-04"' in body
+    assert 'data-speakers="2"' in body
+    assert 'data-length="3600' in body     # duration_seconds (may be float-formatted)
+    assert 'data-name="council"' in body   # display_name lowercased
+
+
+def test_library_js_sets_aria_sort_indicator():
+    from pathlib import Path
+    js = Path("gui/static/library.js").read_text()
+    assert "aria-sort" in js            # active column shows its direction
+    css = Path("gui/static/style.css").read_text()
+    assert 'aria-sort' in css           # a caret rule keys off it

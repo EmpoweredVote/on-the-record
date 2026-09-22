@@ -1,7 +1,28 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback, useSyncExternalStore } from "react";
 import { Header } from "@empoweredvote/ev-ui";
+
+// The dark flag lives on <html> (class or data-theme), where CSS reads it and
+// the toggle below writes it — an external store. Read it with
+// useSyncExternalStore rather than mirroring it into React state from an
+// effect, which is what the MutationObserver used to do.
+const readIsDark = () => {
+  const root = document.documentElement;
+  return root.classList.contains("dark") || root.getAttribute("data-theme") === "dark";
+};
+
+const subscribeIsDark = (onStoreChange: () => void) => {
+  const observer = new MutationObserver(onStoreChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "data-theme"],
+  });
+  return () => observer.disconnect();
+};
+
+// Prerender has no <html> to read, and light is the default ground.
+const getServerSnapshot = () => false;
 
 function DarkToggle({ isDark, onToggle }: { isDark: boolean; onToggle: () => void }) {
   return (
@@ -38,7 +59,9 @@ function DarkToggle({ isDark, onToggle }: { isDark: boolean; onToggle: () => voi
 }
 
 export default function SiteHeader() {
-  const [isDark, setIsDark] = useState(false);
+  // Declared before the initializing effect below, so this subscription's
+  // MutationObserver is attached first and therefore sees that effect's write.
+  const isDark = useSyncExternalStore(subscribeIsDark, readIsDark, getServerSnapshot);
 
   // Publish the sticky header's height so content can stick below it
   // (e.g. .skimBar). The ev-ui Header height varies by breakpoint (~75px
@@ -57,15 +80,12 @@ export default function SiteHeader() {
     return () => ro.disconnect();
   }, []);
 
+  // Initialize: saved preference wins, then fall back to OS. Light must be set
+  // explicitly (not by removing data-theme) — on an OS that prefers dark, the
+  // `:root:not([data-theme="light"])` dark rule would otherwise still match.
+  // Writing to an external system is what an effect is for; the resulting
+  // attribute change comes back through subscribeIsDark above.
   useEffect(() => {
-    const read = () => {
-      const root = document.documentElement;
-      return root.classList.contains("dark") || root.getAttribute("data-theme") === "dark";
-    };
-
-    // Initialize: saved preference wins, then fall back to OS. Light must be set
-    // explicitly (not by removing data-theme) — on an OS that prefers dark, the
-    // `:root:not([data-theme="light"])` dark rule would otherwise still match.
     const saved = localStorage.getItem("theme");
     if (saved === "dark") {
       document.documentElement.setAttribute("data-theme", "dark");
@@ -74,14 +94,6 @@ export default function SiteHeader() {
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       document.documentElement.setAttribute("data-theme", "dark");
     }
-    setIsDark(read());
-
-    const observer = new MutationObserver(() => setIsDark(read()));
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class", "data-theme"],
-    });
-    return () => observer.disconnect();
   }, []);
 
   const toggle = useCallback(() => {

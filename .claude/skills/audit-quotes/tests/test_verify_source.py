@@ -488,6 +488,10 @@ def test_check_source_does_not_fetch_aggregator_sources():
                         fetch_page=boom) is None
     assert check_source(None, _written_row("whatever", "https://www.isidewith.com/c/1"),
                         fetch_page=boom) is None
+    assert check_source(None, _written_row("whatever", "https://www.vote411.org/ballot"),
+                        fetch_page=boom) is None
+    assert check_source(None, _written_row("whatever", "https://api.thevoterguide.org/v1/race"),
+                        fetch_page=boom) is None
 
 def test_check_source_does_not_fetch_non_http_sources():
     def boom(url):

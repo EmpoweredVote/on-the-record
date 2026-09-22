@@ -177,6 +177,28 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     If roster is given, the name is normalized via correct_speaker_name. Returns
     a RenameResult; alias_suggestion is the prior (wrong) name, to offer as an
     alias, or None when there was no prior name or it equals the new name.
+
+    Normalisation runs with allow_fuzzy=False — strategies 1-3 (exact canonical,
+    exact alias, alias-as-word) only. Each of those means "the typed name IS this
+    roster member", so a curator typing "Piedmont Smith" still gets
+    "Councilmember Piedmont-Smith" and its link. Strategy 4's fuzzy surname match
+    is excluded because it produces confident WRONG answers for genuinely
+    different people, and there is no threshold that separates the two: measured
+    against the real production rosters, different real people score 0.615-1.000
+    while genuine unseen ASR typos score 0.667-0.941. The 1.000 is an ordinary
+    member of the public named "Jane Smith" matching the councilmember alias
+    "Piedmont, Smith" (whose extract_surname is "Smith"). Fuzzy matching earns
+    its keep on the PIPELINE path, whose input is an ASR/LLM guess — see
+    correct_mappings, which already disables it for authoritative identities for
+    this same reason. A rename is authoritative by construction: it sets
+    id_method="human_review" below, and its input is a name a human typed while
+    looking at the review card, not a phoneme error.
+
+    This is a public-facing correctness guard, not a nicety.
+    publish._upsert_local_people writes speaker_name as a local person's PUBLIC
+    name, _upsert_speakers writes it as meetings.speakers.display_name, and
+    publish derives a meeting's races from politician_id — so a wrong match here
+    reaches readers on the live site.
     """
     from src.models import SpeakerMapping
 
@@ -186,7 +208,7 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
     final_name = new_name
     if roster is not None:
         from src.roster import correct_speaker_name
-        final_name = correct_speaker_name(new_name, roster)
+        final_name = correct_speaker_name(new_name, roster, allow_fuzzy=False)
 
     mapping.speaker_name = final_name
     mapping.confidence = 1.0
@@ -205,7 +227,13 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
         mapping.local_role = None
         if roster is not None:
             from src.enroll import resolve_enrollment_key
-            _key, pol_slug, pol_id = resolve_enrollment_key(final_name, roster)
+            # allow_fuzzy=False for the same reason as the correction above, and
+            # it must be repeated here: this is a SECOND, independent fuzzy hop.
+            # final_name is already roster-normalised, so an exact/alias match is
+            # all that can legitimately resolve it to a member.
+            _key, pol_slug, pol_id = resolve_enrollment_key(
+                final_name, roster, allow_fuzzy=False,
+            )
             mapping.politician_slug = pol_slug
             mapping.politician_id = pol_id
         else:
@@ -220,6 +248,60 @@ def rename_speaker(mappings, segments, label: str, new_name: str, *, roster=None
 
     alias = old_name if (old_name and old_name != final_name) else None
     return RenameResult(label=label, old_name=old_name, new_name=final_name, alias_suggestion=alias)
+
+
+def rename_preserving_identity(mappings, segments, label: str, new_name: str, *,
+                               roster=None) -> RenameResult:
+    """Rename a speaker WITHOUT disturbing an identity it already holds.
+
+    rename_speaker treats a changed name as authoritative over any prior
+    identity and drops it (see its own comment). That is right for the TERMINAL
+    review, where rename IS the identity flow: run_local renames, then offers
+    _prompt_link_politician / _prompt_create_local_person — and the link offer is
+    only reachable because the link was cleared, since it returns immediately
+    when politician_slug or politician_id is set (run_local.py:2979).
+
+    It is wrong for the GUI review card, which carries a separate, explicit
+    control for every identity outcome. There the Display name box was the only
+    control whose name did not say what it would do: fixing one letter deleted
+    the local person or roster link shown one line above it.
+
+    So the identity is snapshotted and restored verbatim — but only when the
+    speaker HAD one. Two things follow from restoring verbatim rather than
+    re-deriving:
+
+    - The one-identity-per-speaker invariant (ev-accounts migration 623) cannot
+      break. The snapshot was exactly one identity when it was taken, so it is
+      exactly one identity when it is put back; no new code has to re-enforce
+      what link_speaker and assign_local_person enforce.
+    - A rename cannot fail. Re-applying through assign_local_person would
+      re-validate the slug against LOCAL_SLUG_RE and could raise on a slug that
+      is already stored but no longer passes, turning a name edit into a 500.
+
+    When the speaker had NO identity, rename_speaker's result stands untouched,
+    so a roster-derived link for a freshly typed name still attaches.
+
+    For an `unidentified` speaker this also fixes an enrollment bug rather than
+    only preserving one: local_slug there is the synthetic
+    unidentified-<meeting>-<label> handle whose whole purpose is keeping two
+    distinct unknown speakers off one enrollment key. Nulling it dropped
+    resolve_mapping_enrollment back to the name, silently merging unrelated
+    strangers — the collision clear_local_person refuses to cause.
+    """
+    mapping = mappings.get(label)
+    snapshot = None
+    if mapping is not None and (mapping.politician_slug or mapping.politician_id
+                                or mapping.local_slug or mapping.local_role):
+        snapshot = (mapping.politician_slug, mapping.politician_id,
+                    mapping.local_slug, mapping.local_role)
+
+    result = rename_speaker(mappings, segments, label, new_name, roster=roster)
+
+    if snapshot is not None:
+        renamed = mappings[label]
+        (renamed.politician_slug, renamed.politician_id,
+         renamed.local_slug, renamed.local_role) = snapshot
+    return result
 
 
 @dataclass
@@ -419,6 +501,53 @@ def clear_local_person(mappings, label):
         return None
     mapping.local_slug = None
     mapping.local_role = None
+    return mapping
+
+
+def clear_speaker_status(mappings, segments, label):
+    """Drop 'unidentified' / 'non_speaker' so a label can hold a real identity again.
+
+    Returns None (no mutation) when the label is unknown or its status is already
+    clear. A no-op is not success: the GUI route maps None to 404, so an Undo
+    button on a speaker that was never marked cannot report that it acted.
+
+    mark_unidentified and mark_non_speaker are otherwise one-way doors — nothing
+    else in src/ or gui/ ever clears speaker_status — which left a mis-clicked
+    "Not a speaker" unrecoverable and permanently hid the local-person path.
+
+    Three groups of fields go with the mark and must not outlive it:
+
+    - `local_slug` after an 'unidentified' mark is the synthetic
+      unidentified-<meeting>-<label> handle from make_unidentified_slug, whose
+      only job is keeping two distinct unknowns out of one voice-profile
+      enrollment key. It is not a site-local person and must not be presented as
+      one. A 'non_speaker' mark clears local_slug outright, so clearing it again
+      is a harmless no-op — hence no branch on the status value.
+    - `speaker_name` is 'Unidentified Speaker', 'Non-speaker', or a reviewer's
+      display_label FOR THE MARK. It names the status, not a person.
+    - confidence 1.0 / id_method 'human_review' asserted human certainty about
+      the mark. With the mark gone the speaker has no identity, so it returns to
+      needs-review rather than staying falsely confirmed.
+
+    A politician link is deliberately left alone: clearing a stale mark is not an
+    unlink.
+    """
+    mapping = mappings.get(label)
+    if mapping is None or getattr(mapping, "speaker_status", None) is None:
+        return None
+
+    mapping.speaker_status = None
+    mapping.local_slug = None
+    mapping.local_role = None
+    mapping.speaker_name = None
+    mapping.confidence = 0.0
+    mapping.id_method = None
+    mapping.needs_review = True
+
+    for seg in segments:
+        if seg.speaker_label == label:
+            seg.speaker_name = None
+
     return mapping
 
 

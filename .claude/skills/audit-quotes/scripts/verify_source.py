@@ -37,7 +37,7 @@ import re
 import time
 from html.parser import HTMLParser
 
-from scripts.checks import AGGREGATOR_SOURCE, QUIZ_SOURCE
+from scripts.checks import AGGREGATOR_SOURCE, QUIZ_SOURCE, POINTER_ONLY_SOURCE
 from scripts.models import Finding
 
 # A contiguous verbatim run this many words long (or longer) is distinctive enough to treat the
@@ -578,8 +578,8 @@ def _check_written_source(row, base, fetch_page):
     url = (row.get("source_url") or "").strip()
     if not url.lower().startswith(("http://", "https://")):
         return None
-    if AGGREGATOR_SOURCE.search(url) or QUIZ_SOURCE.search(url):
-        return None                                  # invalid-source / unquotable-source own these
+    if AGGREGATOR_SOURCE.search(url) or QUIZ_SOURCE.search(url) or POINTER_ONLY_SOURCE.search(url):
+        return None                                  # invalid-source / unquotable-source / pointer-only-source own these
     runs = verbatim_runs(row.get("quote_text"))
     if not runs:
         return None                                  # nothing verbatim to check

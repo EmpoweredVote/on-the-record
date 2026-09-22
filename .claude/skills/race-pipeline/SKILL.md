@@ -56,9 +56,92 @@ existing rows ("Governor of Ohio"), `office_id` nullable (link only if an obviou
 ### needs_roster → needs_quotes
 The pipeline row's `notes` holds the researched candidate JSON. Verify against the SOS list,
 then insert `essentials.race_candidates` (full_name, first/last, is_incumbent,
-candidate_status 'active', website_url, source like 'manual:pipeline-2026'). Ensure each
-major candidate has an `essentials.politicians` row (quotes attach to politician_id) —
-create minimal rows if missing. Roster is done when every ballot-listed candidate is present.
+candidate_status 'active', website_url, source like 'manual:pipeline-2026').
+
+Each candidate also needs an `essentials.politicians` row, because **quotes attach to
+`politician_id`, not to the roster row**. Read & Rank reaches a quote ONLY through
+`race_candidates.politician_id = quotes.politician_id`.
+
+#### 🔴 SEARCH FIRST. Never mint a person row before looking.
+
+This step has a history. A hand-add session on 2026-07-25 created NEW rows for people who
+already existed, so the race edge landed on the new row while their curated quotes stayed on
+the old one — **permanently invisible on the race page**, because a quote on a row with no
+race edge is unreachable. It took migrations 1554, 1555, 1572 and 1860 to unpick. Do not
+re-create it.
+
+`UNIQUE(external_id)` will NOT save you: a fresh synthetic id never collides with the
+person's real one, so the insert passes and mints a twin. There is no name or slug
+uniqueness anywhere in the schema. The only guard is this search.
+
+```sql
+-- Run for EVERY candidate before creating anyone. LAST NAME ONLY:
+-- name search ILIKEs the whole query as one substring, so '%Tom Tiffany%' returns ZERO
+-- against stored "Thomas P. Tiffany", and there is no nickname aliasing anywhere.
+SELECT p.id, p.full_name, p.external_id, p.party, p.is_active,
+       o.title AS office, o.representing_state AS st,
+       (SELECT count(*) FROM essentials.quotes q WHERE q.politician_id = p.id) AS quotes,
+       (SELECT string_agg(DISTINCT e.state || ':' || r.position_name, '; ')
+          FROM essentials.race_candidates rc
+          JOIN essentials.races r    ON r.id = rc.race_id
+          JOIN essentials.elections e ON e.id = r.election_id
+         WHERE rc.politician_id = p.id) AS races
+FROM essentials.politicians p
+LEFT JOIN essentials.offices o ON o.id = p.office_id
+WHERE lower(p.last_name) = lower('<LAST NAME>')
+ORDER BY p.is_active DESC, p.external_id;
+```
+
+Then decide, per candidate:
+
+| Search result | Action |
+|---|---|
+| A row exists **and is the same human** | **REUSE IT.** Point `race_candidates.politician_id` at that row. Never create a second. |
+| Rows exist but are **a different human** | Create a new row, and say so in `race_candidates.source`. |
+| Nothing | Create a new row. |
+
+**A matching name is not proof of a matching person**, and neither is a mismatched office.
+Both directions have burned us:
+
+- *Same name, different people* — two Andrew Rices (a CT-03 progressive Democrat and a VA
+  Delegate Republican), three Mike Rogers, a Jason Hart in KS and another in Indiana. Check
+  state, office, party and the sources their quotes cite before merging them in your head.
+- *Different office, same person* — a sitting officeholder running for something else is the
+  NORMAL case here, not a red flag. Kris Mayes (AZ AG → AG), David Schweikert (U.S. Rep →
+  Governor), Alexander Kolodin (State Rep → Secretary of State), John Rose (TN U.S. Rep →
+  Governor), Tram Nguyen (MA State Rep → MA-06). Every one of these was minted twice because
+  the office on the existing row did not match the race being built. **Reuse the profile
+  anyway** — the back end then keeps photos, bio and stances current on the one row.
+
+#### Minting conventions, when the search genuinely finds nobody
+
+- Synthetic **negative** `external_id` so the legislative sync's positive ids never collide.
+  The hand-add band is `-66000xxx`; it is hand-authored with **no allocator**, so take
+  `min(external_id)` over that band and go one lower, and land the insert in a migration —
+  `-66000122/-128/-133/-136` were written straight to prod and exist in no migration file.
+- `is_incumbent` **DEFAULTS TO TRUE** — pass it explicitly, `false` for challengers.
+- `race_candidates.candidate_status` CHECK is **{active, filed, withdrawn}** only. There is no
+  'eliminated': primary losers stay `active`.
+
+#### Before you call the roster done
+
+Roster is done when every ballot-listed candidate is present **and** this returns nothing:
+
+```sql
+-- any candidate on this race whose name twins an active row they are not pointed at?
+SELECT rc.full_name, rc.politician_id, p2.id AS possible_twin, p2.external_id,
+       (SELECT count(*) FROM essentials.quotes q WHERE q.politician_id = p2.id) AS twin_quotes
+FROM essentials.race_candidates rc
+JOIN essentials.politicians p  ON p.id  = rc.politician_id
+JOIN essentials.politicians p2 ON p2.is_active AND p2.id <> p.id
+ AND lower(btrim(p2.first_name)) = lower(btrim(p.first_name))
+ AND lower(btrim(p2.last_name))  = lower(btrim(p.last_name))
+WHERE rc.race_id = '<RACE_ID>';
+```
+
+A hit with `twin_quotes > 0` is the exact failure this section exists to prevent: quotes on
+one row, the race edge on another. Resolve it before moving on — reuse the row that holds the
+quotes, or confirm in writing that they are two different people.
 
 ### needs_quotes → quotes_staged
 Per candidate, work DOWN the source hierarchy (QUOTE-CURATION-PRINCIPLES §5, ranked by
@@ -116,6 +199,26 @@ pull verbatim, timestamp-deep-linked quotes later; a video covering several cand
 shared topics is the highest-value ingest. Note in the pipeline row's `notes` that
 discovery rows were filed for this race.
 
+#### VOTE411 as a pointer (interim — no LWV license yet)
+
+VOTE411 candidate-questionnaire answers are the candidate's own words (a tier-2 source
+in principle), but LWV's terms bar reproducing them or fetching them programmatically
+without written permission. Until a license lands, use VOTE411 as a **pointer only**:
+
+- A **human** opens the race's VOTE411 guide in a normal browser. Do NOT delegate this to
+  an agent/subagent and do NOT fetch `vote411.org` or `*.thevoterguide.org` from code.
+- Capture only facts: confirm the ballot line-up (against the SOS list), read each
+  candidate's own campaign URL from the guide's "Website" field into
+  `race_candidates.website_url`, and note which Compass topics they address.
+- **Store no VOTE411 answer text** — not in `notes`, `why`, or `editor_note`.
+- Then source quotes from each candidate's OWN materials (campaign site, press release,
+  their own post/video) per §5, and run publish-quotes → audit-quotes as normal.
+- `vote411.org` / `thevoterguide.org` are never a `source_url` — the `pointer-only-source`
+  audit check enforces this. If a position appears only on VOTE411, the candidate is absent
+  on that topic; never paraphrase the VOTE411 answer to fill the gap.
+
+Design: `docs/superpowers/specs/2026-09-12-vote411-pointer-lane-design.md`.
+
 ### quotes_staged → published
 Run the **publish-quotes** skill on each staged batch (dry-run, user OK, --commit). It
 inserts drafts and auto-runs **audit-quotes** on the new ids.
@@ -131,7 +234,7 @@ a human still selects the live quote per (candidate, topic) in `/admin/readrank-
 - Never mark `blocked`/`skipped` without `status_reason`.
 - Production DB: additive writes only (inserts, status updates). Never delete/overwrite
   quotes, races, or candidates in a pipeline session.
-- All quote sourcing rules live in `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` +
+- All quote sourcing rules live in `docs/quote-curation/PRINCIPLES.md` +
   `.claude/skills/audit-quotes/CHECKS.md` — read both before sourcing.
 - MI Aug 4 / WI+MN Aug 11 primaries outrank everything until they pass.
 

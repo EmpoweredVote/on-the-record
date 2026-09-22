@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+# scripts/evidence_slice.py
+"""Manual ONLINE runner for the evidence trust-core slice (LA Mayor).
+
+Reads the candidates' already-cited compass-research sources, runs the
+extract -> verbatim gate -> independent cross-check -> judge pipeline, and
+writes artifacts (no DB writes). Keys from the main-checkout .env.local or
+--env-file.
+
+  ~/Documents/GitHub/on-the-record/.venv/bin/python scripts/evidence_slice.py \
+      [--race ID] [--limit N] [--gold path.json]
+
+Rendered fallback needs Playwright + a browser:
+`pip install playwright && python -m playwright install chromium`
+(pass --no-render to skip it).
+"""
+from __future__ import annotations
+import argparse
+import functools
+import json
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from src.evidence import data, pipeline, report
+from src.evidence.eval import score
+from src.evidence.pipeline import Providers
+from src.llm_providers import get_provider
+from src.discovery.feeds import fetch_page_text
+
+LA_MAYOR = "9e888818-c50b-4c61-a106-a0839ff2479d"
+SPIKE_DIR = (pathlib.Path(__file__).resolve().parents[1]
+             / "docs/superpowers/spikes/2026-09-19-evidence-trust-core")
+
+
+def build_parser():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--race", default=LA_MAYOR)
+    ap.add_argument("--candidate", default=None)
+    ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--extractor", default="haiku-or")
+    ap.add_argument("--crosschecker", default="gemini-flash")
+    ap.add_argument("--judge", default="deepseek")
+    ap.add_argument("--env-file", default=None)
+    ap.add_argument("--out", default=str(SPIKE_DIR))
+    ap.add_argument("--gold", default=None)
+    ap.add_argument("--max-chars", type=int, default=200000)
+    ap.add_argument("--render", dest="render", action="store_true", default=True,
+                    help="Use the Playwright rendered-fetch fallback (default: on)")
+    ap.add_argument("--no-render", dest="render", action="store_false",
+                    help="Disable the rendered-fetch fallback")
+    ap.add_argument("--source", choices=["web", "transcripts", "both"], default="both",
+                    help="Which source lane(s) to run (default: both)")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="Max concurrent per-quote LLM calls (default: EVIDENCE_MAX_WORKERS or 6)")
+    return ap
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    providers = Providers(extractor=get_provider(args.extractor),
+                          crosschecker=get_provider(args.crosschecker),
+                          judge=get_provider(args.judge))
+    conn = data.connect(args.env_file)
+    roster = data.fetch_roster(conn, args.race)
+    if args.candidate:
+        roster = [r for r in roster if r["politician_id"] == args.candidate]
+
+    fetcher = functools.partial(fetch_page_text, max_chars=args.max_chars,
+                                render_fallback=args.render)
+
+    all_items, all_leads = [], []
+    for cand in roster:
+        sources = (data.fetch_cited_sources(conn, cand["politician_id"])
+                   if args.source in ("web", "both") else [])
+        if args.limit:
+            sources = sources[:args.limit]
+        tsrc = (data.fetch_transcript_sources(conn, cand["politician_id"])
+                if args.source in ("transcripts", "both") else [])
+        items, leads = pipeline.run_candidate(
+            politician_id=cand["politician_id"], candidate_name=cand["name"],
+            sources=sources, providers=providers, fetcher=fetcher,
+            batch_id="evidence-slice-la-mayor", transcript_sources=tsrc,
+            max_workers=args.workers)
+        print(f"{cand['name']}: {len(items)} items, {len(leads)} leads "
+              f"from {len(sources)} web sources, {len(tsrc)} transcript sources")
+        all_items += items
+        all_leads += leads
+
+    gold = json.loads(pathlib.Path(args.gold).read_text()) if args.gold else {}
+    metrics = score(all_items, all_leads, gold)
+
+    out = pathlib.Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "evidence_items.json").write_text(
+        json.dumps([it.to_json() for it in all_items], indent=2))
+    (out / "leads.json").write_text(
+        json.dumps([ld.to_json() for ld in all_leads], indent=2))
+    (out / "eval_report.md").write_text(report.render_report(metrics, "LA Mayor"))
+    (out / "review.html").write_text(
+        report.render_review_html(all_items, all_leads, "LA Mayor"))
+    print(f"\nWrote artifacts to {out}")
+    print(report.render_report(metrics, "LA Mayor"))
+
+
+if __name__ == "__main__":
+    main()

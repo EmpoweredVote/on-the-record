@@ -1,6 +1,6 @@
 # Check catalog for audit-quotes
 
-> **Principles live in** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` — the canonical *why*
+> **Principles live in** `docs/quote-curation/PRINCIPLES.md` — the canonical *why*
 > behind selection, editing, sources, anonymity, the Compass coupling model, and accountability.
 > This file is the audit's *mechanics*: what each check looks for, how severe it is, and how it
 > gets fixed. If the two disagree, the principles doc wins and this file should be updated.
@@ -56,16 +56,17 @@ human to resolve even though the *detection* is mechanical.
 | `trailing-ellipsis` | quote | no trailing ellipsis | low | **mechanical** (auto-fix: regex strip) |
 | `partisan-tell` | quote | no partisan/side tell on blind card | high | guided |
 | `invalid-source` | quote | cite the ORIGINAL source, not an aggregator (ontheissues.org, wikipedia.org) — **re-attribute** | high | decision-required |
+| `pointer-only-source` | quote | VOTE411 / thevoterguide.org answers are permission-gated — a pointer, never a cited source; **source from the candidate's own materials** | high | decision-required |
 | `unquotable-source` | quote | quiz/questionnaire sites (isidewith.com) publish nothing quotable — **delete** | high | decision-required |
 | `scorecard-source` | quote | a scorecard publishes votes and ratings, not utterances — **re-source** | high | decision-required |
 | `stance-label` | quote | a quote must state a position, not name a topic (≤4 words) | medium | decision-required |
 | `multiple-live` | topic | one live quote per candidate per topic | high | decision-required |
 | `not-rankable` | topic | ≥2 candidates to be rankable | medium | decision-required |
 
-### 2.1 The three bad-source classes
+### 2.1 The four bad-source classes
 
-`invalid-source`, `unquotable-source` and `scorecard-source` are deliberately separate checks
-because their remedies differ.
+`invalid-source`, `unquotable-source`, `scorecard-source` and `pointer-only-source` are
+deliberately separate checks because their remedies differ.
 
 - **`invalid-source` — aggregator; an original exists, so re-attribute.** ontheissues.org and
   wikipedia.org restate or paraphrase something the candidate actually said elsewhere. The quote is
@@ -106,6 +107,16 @@ because their remedies differ.
   and wrongly matched **rollcall.com — CQ Roll Call, a news outlet**, which is a perfectly good
   source; there is a regression test for that.
 
+- **`pointer-only-source` — VOTE411 / thevoterguide.org; permission-gated, source elsewhere.**
+  The answers are the candidate's own words, but the League of Women Voters' terms
+  (vote411.org/legal) bar reproducing them without written permission. So VOTE411 is a
+  *pointer*: read it (as a human, in a browser) to learn a candidate's position, then cite
+  the candidate's own material. Unlike `invalid-source`, the fix is NOT "re-attribute" — the
+  answer is usually original to VOTE411 with no other page to point to; if the position lives
+  only on VOTE411, leave the candidate absent, and never paraphrase the VOTE411 answer. This
+  guard lifts if/when a written League data license lands. See
+  `docs/superpowers/specs/2026-09-12-vote411-pointer-lane-design.md`.
+
 **ballotpedia.org is in none of these classes and is not flagged.** It reproduces campaign-site text
 verbatim under an attribution line with a footnote to the original (re-attributable case by case),
 and its Candidate Connection survey answers are candidate-written *for* Ballotpedia — Ballotpedia
@@ -143,8 +154,9 @@ Raising the bar would start flagging good quotes.
 
 **The ambiguous middle is deliberately left to the judgment pass**, which is better equipped for
 it: `source-summary` (§3, high) already covers a platform page rendered as a curator-summarized
-bullet list, and `non-differentiating-goal` (§3, medium) covers an agreeable goal stated with no
-mechanism. `stance-label` is only the mechanical floor beneath them — the cases so short that no
+bullet list, and `non-differentiating-goal` (§3, medium) covers a quote that names no concrete
+policy lever (a goal, target/metric, or vague direction). `stance-label` is only the mechanical
+floor beneath them — the cases so short that no
 reading rescues them.
 
 Source-verification checks (`scripts/verify_source.py`) — also deterministic. **Video sources**
@@ -327,12 +339,12 @@ judge a whole answer set instead, and run in their own later pass (§4.1).
 | `not-forward` | The quote's operative clause is record ("I did X") or an attack, not a forward-looking position ("here's how I'd approach X"). Scaffolding by a little record or a glancing opponent mention is fine — judge the *main assertion*. | high | decision-required |
 | `is-attack` | The operative clause targets a *person* (character, family, fitness) rather than a policy, law, or institution. Policy/institution critique is allowed even when combative (the carve-out). | high | guided (if it can be trimmed down to the surviving position) or decision-required (if the attack is the whole quote) |
 | `off-question` | The quote doesn't genuinely answer the topic's **ranking question** (`stance.question_text` — the per-race override if one exists, else the Compass question) — it touches the subject but engages a different axis, or answers an adjacent question entirely. Comparability is the precondition for a valid ranking; this is a gate, not a preference. | high | decision-required |
-| `question-override` | A per-race ranking-question override (`stance.override_active` is true) has drifted from its Compass topic: it shifts the **axis/dimension** away from `stance.compass_question_text` (should be a Compass fix or re-home, not an override), or it names/leaks a candidate (not blind), or it is not derived from the race's actual question. Axis-invariance is what keeps responsiveness and coupling valid (QUOTE-CURATION-PRINCIPLES §7.3). | high | decision-required |
+| `question-override` | A per-race ranking-question override (`stance.override_active` is true) has drifted from its Compass topic: it shifts the **axis/dimension** away from `stance.compass_question_text` (should be a Compass fix or re-home, not an override), or it names/leaks a candidate (not blind), or it is not derived from the race's actual question. Axis-invariance is what keeps responsiveness and coupling valid (`docs/quote-curation/PRINCIPLES.md#ranking-question`). | high | decision-required |
 | `deid-dishonest` | `deidentified_text` was produced by paraphrasing/summarizing instead of marking (`…`, `[brackets]`), or it still leaks a self-identifying clause ("as governor," "in my district") or a named third person that should have been depersonalized. | high | guided |
 | `note-not-self-contained` | `editor_note` doesn't state how the quote aligns with the candidate's current Compass stance on the topic, or a skeptical reader who hasn't read the principles doc couldn't follow it without outside context. | medium | guided |
 | `source-summary` | A written source of ANY kind, at any level of directness (op-ed, platform page, questionnaire answer) is rendered as a curator-summarized bullet list or paraphrase rather than a verbatim sentence actually written by the candidate. | high | decision-required |
 | `coupling-in-tension` | The quote pulls against the direction of the candidate's synthesized Compass `value` for this topic (as opposed to reinforcing it or elaborating on a different sub-dimension). This doesn't mean the quote is wrong — it means the tension needs resolving before the quote is surfaced next to the value. | medium | decision-required |
-| `non-differentiating-goal` | The quote clears responsiveness but states only an **agreeable goal no candidate in the race would contest** ("who wouldn't want safe streets?") **and names no mechanism/approach/means** — the HOW. Both conditions required: a contested/directional goal without a mechanism is fine and does not trip this. A preference, not a gate. | medium | decision-required |
+| `non-differentiating-goal` | The quote clears responsiveness but **names no concrete, contestable policy lever** — the means/instrument the candidate would use. It offers only a **goal** ("reduce homelessness"), a **target/metric** ("cut encampments 50% by 2028" — quantifies the end, names no means), or a **vague direction** ("direct dollars to what works", "work with the county"). Being contested or specific about the *outcome* does not rescue it — the contest a ranking needs is over the *means*. Not rankable on its own: flag for human judgment; surface only if a curator affirms it carries a real distinguishing position. | medium | decision-required |
 | `source-not-an-answer` | **Provenance = directness of answer, not medium.** Rank the quote: (1) *answered-this-question* — the candidate was asked this question, or its clear equivalent, and this is their answer; (2) *answered-an-adjacent-question* — responsive, but the prompt they were given differed; (3) *curator-extracted* — the position was lifted from material not organised as an answer (stump speech, platform page, op-ed). Flag at level 3 when a more direct answer plausibly exists, or when nothing establishes the candidate was answering anything. A **questionnaire answer is level 1** even though it is written and self-published — identical prompts across candidates make it the most directly comparable source there is. Not a gate: a level-3 quote may be all a candidate has, and that is honest presence. | medium | decision-required |
 | `misleading-verbatim` | The quote is accurately transcribed and genuinely the candidate's words, yet **misleads the reader as presented** — it states as fact something the source context contradicts, or a trim has removed the qualifier that made it true. Verbatim is a floor, not a defence. Judge what a citizen would take away from the blind card against what the full passage supports. | high | decision-required |
 
@@ -467,7 +479,8 @@ each topic has a `quotes` array. Each quote has:
     topic's spectrum (may be null), and `chairs` are the spectrum's labeled anchor points
     (roughly 1-5, from one pole to the other)
 
-## The rules (summarized — the full principles live in QUOTE-CURATION-PRINCIPLES.md)
+<!-- inject:gates:start -->
+## The rules (summarized — the full principles live in docs/quote-curation/PRINCIPLES.md)
 
 - **Forward, not record.** A Read & Rank quote is the candidate reasoning about what
   should be done and why — not a recitation of what they've already done. Judge by the
@@ -524,15 +537,20 @@ each topic has a `quotes` array. Each quote has:
   valid), or in tension (pulls against the synthesized value — needs a flag, not a silent
   pass). Use `stance.chairs` to understand what each end of the spectrum means before
   judging reinforcing vs. in-tension.
-- **Prefer the HOW.** Among quotes that pass the responsiveness gate, prefer the one that
-  shows *how* the candidate would pursue the goal — the mechanism, approach, or means — not
-  merely that the goal is desirable. Flag a quote **only** when BOTH hold: (1) it is
-  *non-differentiating* — no candidate in this race would plausibly disagree with the goal
-  ("who wouldn't want safe, beautiful streets?"), and (2) it is *mechanism-free* — it names no
-  approach or means. A contested/directional goal without a mechanism is fine (it is still
-  rankable contrast). This is a preference, never a gate; do not use it to reject positions you
-  find thin.
+- **Require the lever (the HOW).** A rankable stance names the concrete, contestable **policy
+  lever** — the means/instrument the candidate would use (build shelters, enforce the encampment
+  ordinance, appoint a chief committed to a stated aim, create a named program, mandate acceptance
+  of a document, triple housing construction). Flag `non-differentiating-goal` when the quote names
+  **no** such lever — i.e. it offers only a *goal* ("reduce homelessness"), a *target/metric*
+  ("cut encampments 50% by 2028" — quantifies the end, names no means), or a *vague direction*
+  ("direct dollars to what works", "work with the county"). Being contested or specific about the
+  *outcome* does not rescue it; the contest a ranking needs is over the *means*. This is not an
+  auto-reject: a mechanism-less quote is flagged for human judgment and surfaced only if a curator
+  affirms it carries a real distinguishing position (prefer, and look for, a lever-bearing quote
+  first). Keep the lever with the goal — it usually sits in the adjacent sentence, so prefer the
+  coherent 2–3 sentence passage over the atomized goal.
 
+<!-- inject:gates:end -->
 ## Your task
 
 For every quote in the bundle, apply these judgment checks. Judge **each quote on its own** —
@@ -553,8 +571,9 @@ separate pass that runs after this one:
   sentence (severity high, decision-required)
 - `coupling-in-tension` — quote pulls against the candidate's Compass value (severity
   medium, decision-required)
-- `non-differentiating-goal` — on-question quote states an agreeable goal no one would
-  contest AND names no mechanism/HOW (severity medium, decision-required)
+- `non-differentiating-goal` — on-question quote names no concrete policy lever (only a
+  goal, a target/metric, or a vague direction — no means); flag for human judgment
+  (severity medium, decision-required)
 - `source-not-an-answer` — the quote is curator-extracted (level 3) rather than an answer the
   candidate actually gave, and a more direct answer plausibly exists (severity medium,
   decision-required)
@@ -728,8 +747,8 @@ Per-quote findings:
 ## 5. Portfolio check
 
 Run once per race, after the mechanical and judgment passes for every topic in that race are in
-hand. This is a **skew audit**, not a balancing instruction (principles §8: "process neutrality
-with a skew audit" — never engineer outcome balance).
+hand. This is a **skew audit**, not a balancing instruction
+(`docs/quote-curation/PRINCIPLES.md#process-neutrality` — never engineer outcome balance).
 
 - **Compute per-candidate topic coverage**: for each candidate in the race, the count (and list)
   of topics where they have a live (`readrank_selected`) quote that passed responsiveness, versus
@@ -746,9 +765,10 @@ with a skew audit" — never engineer outcome balance).
     Candidate B is live on 2/9, absent from housing, climate-change, immigration, ..."
   - `suggested_fix`: frame it as **a signal to investigate, not a defect to correct** — the
     skew may be a true reflection of one candidate being more on-record or more articulate
-    (which voters should see, per §8), or it may be an effort gap in the curation pass that
-    should get a second look. Never suggest sourcing a quote *in order to* balance the
-    count; only ever suggest checking effort/coverage was applied evenly.
+    (which voters should see, per `docs/quote-curation/PRINCIPLES.md#process-neutrality`), or
+    it may be an effort gap in the curation pass that should get a second look. Never suggest
+    sourcing a quote *in order to* balance the count; only ever suggest checking
+    effort/coverage was applied evenly.
   - `race_id`: the race id. `topic_key` and `quote_id`/`candidate` are left null — this
     finding is about the race's topic portfolio as a whole, not a single quote or topic.
 - If coverage is roughly comparable across candidates, emit no `coverage-skew` finding for

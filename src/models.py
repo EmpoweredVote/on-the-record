@@ -211,6 +211,8 @@ class ProcessingMetadata:
     source_image_url: Optional[str] = None
     source_description: Optional[str] = None
     source_audio_url: Optional[str] = None
+    gate_verdict: Optional[str] = None
+    gate_coverage: Optional[float] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -233,6 +235,10 @@ class ProcessingMetadata:
             d["source_description"] = self.source_description
         if self.source_audio_url is not None:
             d["source_audio_url"] = self.source_audio_url
+        if self.gate_verdict is not None:
+            d["gate_verdict"] = self.gate_verdict
+        if self.gate_coverage is not None:
+            d["gate_coverage"] = self.gate_coverage
         return d
 
     @classmethod

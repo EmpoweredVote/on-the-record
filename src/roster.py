@@ -168,12 +168,27 @@ def correct_speaker_name(
     Args:
         name: The speaker name to check.
         roster: Loaded council roster.
-        threshold: Minimum similarity ratio for fuzzy matching.
+        threshold: Minimum similarity ratio for fuzzy matching. Raising it is NOT
+            a way to make strategy 4 safe. Measured against the real production
+            rosters, the two populations overlap completely and no threshold
+            separates them:
+
+                genuine unseen ASR typos of a roster surname   0.667 .. 0.941
+                DIFFERENT real people                          0.615 .. 1.000
+
+            The 1.000 is an ordinary member of the public named "Jane Smith"
+            against the real alias "Piedmont, Smith", whose extract_surname is
+            "Smith". Use allow_fuzzy=False, not a higher threshold.
         allow_fuzzy: When False, skip strategy 4 (fuzzy surname matching).
             Fuzzy matching can reassign a name to a *different* member whose
             surname merely resembles it (e.g. "Smithey" -> "…-Smith" at 0.83),
             so callers with an already-authoritative identity (a confident voice
-            or human match) disable it to avoid clobbering a correct name.
+            or human match) disable it to avoid clobbering a correct name. Strategy
+            4 earns its keep only where the input is an ASR/LLM guess — the
+            pipeline. Human-supplied names (review.rename_speaker) pass False; on
+            the per-body roster format refresh_roster.py writes, that costs 0 of 30
+            realistic curator spellings, because those alias lists include the
+            canonical surname and strategies 1-3 cover them.
 
     Returns:
         Canonical name if a match is found, otherwise the original name unchanged.

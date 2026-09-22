@@ -1,7 +1,10 @@
 import datetime as dt
 
+import psycopg2
+
 from src import config
 from src.discovery import db, engine
+from src.discovery.hubs import Hub
 from src.discovery.models import Outlet, RawItem, TrackedCandidate, Verdict
 
 
@@ -35,8 +38,9 @@ NOISE_ITEM = RawItem(url="https://www.youtube.com/watch?v=zzz12345678",
                      duration_seconds=120, outlet_id="o1", via="watchlist")
 
 
-def _patch_db(monkeypatch, inserted):
-    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+def _patch_db(monkeypatch, inserted, tracked=None):
+    monkeypatch.setattr(db, "fetch_tracked_candidates",
+                        lambda cur: list(TRACKED if tracked is None else tracked))
     monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: [OUTLET])
     monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
     monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
@@ -61,7 +65,7 @@ def _run(monkeypatch, inserted, **kwargs):
         '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
         ' "event_kind": "debate", "source_tier": 1, "original_vs_clip": "original",'
         ' "route": "ingest", "why": "long full debate"}'))
-    _patch_db(monkeypatch, inserted)
+    _patch_db(monkeypatch, inserted, tracked=kwargs.pop("tracked", None))
     stats = engine.run_discovery(
         _FakeConn(), provider=provider,
         fetch_feed_items=kwargs.pop("fetch_feed_items", lambda o: [GOOD_ITEM, NOISE_ITEM]),
@@ -83,6 +87,30 @@ def test_watchlist_flow_inserts_pending_row(monkeypatch):
     assert set(row["matched_politician_ids"]) == {"p1", "p2"}
     assert row["source_key"] == "youtube:abc12345678"
     assert stats.inserted_pending == 1 and stats.prefiltered_out == 1
+
+
+def test_process_dict_carries_original_vs_clip(monkeypatch):
+    inserted = []
+    stats, provider = _run(monkeypatch, inserted, skip_sweeps=True)
+    assert inserted[0]["original_vs_clip"] == "original"
+
+
+def test_prior_cycle_item_is_flagged_pending_not_guarded(monkeypatch):
+    """A tracked candidate's own prior-cycle answers are FLAGGED for review
+    (pending), with the cycle marked in `why`, not dropped to auto_filtered."""
+    inserted = []
+    stats, _ = _run(monkeypatch, inserted, skip_sweeps=True, provider=_FakeProvider(
+        '{"relevant": true, "confidence": 0.9, "candidates_present": ["Maria Delgado"],'
+        ' "event_kind": "questionnaire", "source_tier": 2, "original_vs_clip": "original",'
+        ' "route": "quote_source", "prior_cycle": true, "source_cycle_year": "2020",'
+        ' "why": "the candidate\'s own 2020 Candidate Connection answers"}'))
+    assert len(inserted) == 1
+    row = inserted[0]
+    assert row["status"] == "pending"                 # flagged for review, not guarded out
+    assert row["prior_cycle"] is True                 # structured flag persisted...
+    assert row["source_cycle_year"] == "2020"         # ...with its cycle year
+    assert "[PRIOR CYCLE" not in (row["why"] or "")   # structured column replaces the interim why marker
+    assert stats.inserted_pending == 1
 
 
 def test_already_seen_sources_are_skipped_before_classify(monkeypatch):
@@ -555,6 +583,85 @@ def test_web_items_are_not_hydrated(monkeypatch):
     assert inserted and inserted[0]["duration_seconds"] is None
 
 
+# --- Dropped-connection resilience (mid-run pooler reap) --------------------
+
+_TWO_OUTLETS = [
+    Outlet(id="o1", name="KXAN", kind="youtube_channel", feed_url="https://f"),
+    Outlet(id="o2", name="KVUE", kind="youtube_channel", feed_url="https://g"),
+]
+_ONE_ITEM = RawItem(url="https://www.youtube.com/watch?v=drop1234567",
+                    title="Maria Delgado full town hall", description="d",
+                    channel_name="KXAN", duration_seconds=1800,
+                    published_at="2026-08-01", outlet_id="o1", via="watchlist")
+
+
+def _patch_db_two_outlets(monkeypatch, marked, mark_fn):
+    monkeypatch.setattr(db, "fetch_tracked_candidates", lambda cur: list(TRACKED))
+    monkeypatch.setattr(db, "fetch_active_outlets", lambda cur: list(_TWO_OUTLETS))
+    monkeypatch.setattr(db, "fetch_sweep_state", lambda cur: {})
+    monkeypatch.setattr(db, "existing_source_keys", lambda cur: set())
+    monkeypatch.setattr(db, "insert_discovered", lambda cur, row: True)
+    monkeypatch.setattr(db, "mark_outlet_polled", mark_fn)
+    monkeypatch.setattr(db, "record_sweep", lambda cur, rid: None)
+
+
+def test_dropped_connection_reconnects_and_continues(monkeypatch):
+    """A connection reaped mid-run (the Supabase-pooler idle drop) must not
+    kill the whole run: the engine reconnects and the next outlet still lands."""
+    marked = []
+    reconnects = {"n": 0}
+
+    def mark(cur, oid):
+        if oid == "o1" and reconnects["n"] == 0:
+            raise psycopg2.OperationalError("server closed the connection unexpectedly")
+        marked.append(oid)
+
+    _patch_db_two_outlets(monkeypatch, marked, mark)
+
+    def reconnect():
+        reconnects["n"] += 1
+        return _FakeConn()
+
+    stats = engine.run_discovery(
+        _FakeConn(), provider=_FakeProvider(
+            '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+            ' "event_kind":"town_hall","source_tier":1,"original_vs_clip":"original",'
+            ' "route":"ingest","why":"town hall"}'),
+        fetch_feed_items=lambda o: [_ONE_ITEM], ytsearch_fn=lambda q: [],
+        hydrate_fn=lambda it: it, peek_fetcher=None, sleep_fn=lambda s: None,
+        meeting_keys=set(), today=dt.date(2026, 8, 2), skip_sweeps=True,
+        reconnect_fn=reconnect)
+
+    assert reconnects["n"] == 1                       # reconnected exactly once
+    assert marked == ["o2"]                           # o1 dropped, o2 still polled
+    assert any("commit" in f for f in stats.failures) # the drop is recorded, not swallowed
+
+
+def test_dropped_connection_without_reconnect_is_still_nonfatal(monkeypatch):
+    """Even with no reconnect_fn, a dropped commit is a recorded failure, not a
+    crash that loses the run record."""
+    marked = []
+
+    def mark(cur, oid):
+        if oid == "o1":
+            raise psycopg2.OperationalError("server closed the connection unexpectedly")
+        marked.append(oid)
+
+    _patch_db_two_outlets(monkeypatch, marked, mark)
+
+    stats = engine.run_discovery(   # must not raise
+        _FakeConn(), provider=_FakeProvider(
+            '{"relevant": true, "confidence": 0.9, "candidates_present": [],'
+            ' "event_kind":"town_hall","source_tier":1,"original_vs_clip":"original",'
+            ' "route":"ingest","why":"town hall"}'),
+        fetch_feed_items=lambda o: [_ONE_ITEM], ytsearch_fn=lambda q: [],
+        hydrate_fn=lambda it: it, peek_fetcher=None, sleep_fn=lambda s: None,
+        meeting_keys=set(), today=dt.date(2026, 8, 2), skip_sweeps=True)
+
+    assert marked == ["o2"]                           # run continued past the drop
+    assert any("commit" in f for f in stats.failures)
+
+
 def test_hydrated_publish_date_also_recency_filtered(monkeypatch):
     import dataclasses
     inserted = []
@@ -571,3 +678,101 @@ def test_hydrated_publish_date_also_recency_filtered(monkeypatch):
                            hydrate_fn=hydrate, skip_sweeps=True)
     assert stats.recency_filtered == 1
     assert inserted == []
+
+
+# --- Hub lane (Slice 2B Task 4) ---------------------------------------------
+
+_HUB_ITEM = RawItem(url="https://ballotpedia.org/Maria_Delgado",
+                    title="Maria Delgado candidate connection",
+                    description="answers", via="hub")
+
+
+def test_hub_lane_inserts_pending_row_via_existing_path(monkeypatch):
+    inserted = []
+    stats, provider = _run(
+        monkeypatch, inserted, skip_watchlist=True, skip_sweeps=True,
+        load_hubs_fn=lambda cur: [Hub(name="Ballotpedia", scope="global",
+                                      poll_method="scoped_search", domain="ballotpedia.org")],
+        hub_raw_items_fn=lambda applicable, **kw: [_HUB_ITEM])
+    assert len(inserted) == 1
+    row = inserted[0]
+    assert row["status"] == "pending"
+    assert row["discovered_via"] == "hub"
+    assert row["race_id"] == "r1"
+    assert stats.hub_items_examined == 1
+
+
+def test_skip_hubs_flag_skips_the_lane(monkeypatch):
+    inserted = []
+    calls = []
+
+    def boom(applicable, **kw):
+        calls.append(applicable)
+        raise AssertionError("hub_raw_items_fn must not be called when skip_hubs=True")
+
+    stats, provider = _run(
+        monkeypatch, inserted, skip_watchlist=True, skip_sweeps=True, skip_hubs=True,
+        load_hubs_fn=lambda cur: [Hub(name="Ballotpedia", scope="global",
+                                      poll_method="scoped_search", domain="ballotpedia.org")],
+        hub_raw_items_fn=boom)
+    assert calls == []
+    assert inserted == []
+    assert stats.hub_items_examined == 0
+
+
+def test_hub_deps_absent_lane_is_inert(monkeypatch):
+    """Existing callers that don't pass load_hubs_fn/hub_raw_items_fn (as every
+    pre-Task-4 test in this file does) must see zero hub behavior — a plain
+    no-hub run stays valid."""
+    inserted = []
+    stats, provider = _run(monkeypatch, inserted, skip_sweeps=True)
+    assert stats.hub_items_examined == 0
+
+
+def test_hub_registry_load_failure_is_nonfatal(monkeypatch):
+    inserted = []
+
+    def raising_load_hubs(cur):
+        raise RuntimeError("hub registry down")
+
+    stats, provider = _run(
+        monkeypatch, inserted, skip_watchlist=True, skip_sweeps=True,
+        load_hubs_fn=raising_load_hubs,
+        hub_raw_items_fn=lambda applicable, **kw: [])
+    assert any("load_hubs" in f for f in stats.failures)
+    assert stats.hub_items_examined == 0
+    assert inserted == []
+
+
+def test_hub_lane_gates_local_type_and_passes_clean_locality(monkeypatch):
+    fed = TrackedCandidate("pf", "rf", "Jane Fed", "U.S. Representative District 9",
+                           "2026-11-03", state="CA",
+                           position_name="U.S. Representative District 9",
+                           government_name="United States Federal Government")
+    loc = TrackedCandidate("pl", "rl", "Kay Local", "Los Angeles Mayor",
+                           "2026-11-03", state="CA",
+                           position_name="Los Angeles Mayor",
+                           government_name="Los Angeles, California, US")
+
+    hubs = [
+        Hub(name="Ballotpedia", scope="global", poll_method="scoped_search",
+            domain="ballotpedia.org", kind="questionnaire"),
+        Hub(name="Local LWV forum", scope="local_type", poll_method="scoped_search",
+            query_template='"<locality>" League of Women Voters candidate forum <year>'),
+    ]
+    calls = {}
+
+    def capture(applicable, **kw):
+        # key by whether a local_type hub survived the gate for this race
+        calls[kw["locality"]] = [h.name for h in applicable]
+        return []
+
+    inserted = []
+    stats, _ = _run(
+        monkeypatch, inserted, tracked=[fed, loc], skip_watchlist=True, skip_sweeps=True,
+        load_hubs_fn=lambda cur: hubs, hub_raw_items_fn=capture)
+
+    # federal race: locality is None -> local_type excluded
+    assert calls[None] == ["Ballotpedia"]
+    # local race: clean locality "Los Angeles" -> local_type included, ranked last
+    assert calls["Los Angeles"] == ["Ballotpedia", "Local LWV forum"]

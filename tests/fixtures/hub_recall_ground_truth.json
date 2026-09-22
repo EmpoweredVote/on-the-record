@@ -1,0 +1,390 @@
+{
+  "_about": "Hub-lane comparable-source recall ground truth (Slice 2 Phase 4). Derived from the 2026-09-17 spike bakeoff/ground_truth.json: only sources marked exists yes/partial with a URL are kept. accept_urls lists the SAME source at an alternate URL (e.g. a debate carried by two outlets, a live page vs its Wayback copy, or a per-candidate Ballotpedia page). Labels are a 2026-09-17 snapshot; some 'partial' sources were scheduled-not-yet-aired, which is fine for a fixed recall baseline. Regenerate by re-running the generator in docs/superpowers/plans/2026-09-18-slice2-phase4-hub-recall-eval.md Task 2.",
+  "races": [
+    {
+      "race": "az-governor",
+      "state": "AZ",
+      "race_label": "Arizona Governor (AZ, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Katie Hobbs",
+        "Andy Biggs",
+        "Risa Lombardo",
+        "Teri Hourihan"
+      ],
+      "sources": [
+        {
+          "id": "az-governor-s0",
+          "type": "debate",
+          "tier": 1,
+          "tos": "govt",
+          "exists": "partial",
+          "url": "https://www.azcleanelections.gov/arizona-2026-debate-series-updates",
+          "accept_urls": []
+        },
+        {
+          "id": "az-governor-s1",
+          "type": "forum",
+          "tier": 1,
+          "tos": "other",
+          "exists": "yes",
+          "url": "https://ktar.com/arizona-politics-news/election/public-safety-policy-forum",
+          "accept_urls": []
+        },
+        {
+          "id": "az-governor-s2",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "ballotpedia",
+          "exists": "partial",
+          "url": "https://ballotpedia.org/Arizona_gubernatorial_and_lieutenant_gubernatorial_election,_2026",
+          "accept_urls": [
+            "https://ballotpedia.org/Teri_Hourihan"
+          ]
+        },
+        {
+          "id": "az-governor-s3",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "vote411-lwv",
+          "exists": "partial",
+          "url": "https://onyourballot.vote411.org/race-detail.do?id=3725085",
+          "accept_urls": []
+        },
+        {
+          "id": "az-governor-s4",
+          "type": "interview",
+          "tier": 2,
+          "tos": "other",
+          "exists": "partial",
+          "url": "https://news.azpm.org/p/electioncoverage/2026/8/28/230988-one-on-one-with-gov-katie-hobbs-2026-midterm-election-polling/",
+          "accept_urls": []
+        }
+      ]
+    },
+    {
+      "race": "az-house-06",
+      "state": "AZ",
+      "race_label": "U.S. Representative Arizona District 6 (AZ, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Juan Ciscomani",
+        "JoAnna Mendoza",
+        "Jereme Peters"
+      ],
+      "sources": [
+        {
+          "id": "az-house-06-s0",
+          "type": "debate",
+          "tier": 1,
+          "tos": "govt",
+          "exists": "partial",
+          "url": "https://news.azpm.org/s/104029-debate-arizonas-congressional-district-6-juan-ciscomani-vs-joanna-mendoza/",
+          "accept_urls": []
+        },
+        {
+          "id": "az-house-06-s1",
+          "type": "interview",
+          "tier": 2,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "yes",
+          "url": "https://www.tucsonsentinel.com/local/report/040826_mendoza_profile/democrat-joanna-mendoza-hopes-unseat-rep-juan-ciscomani-southern-azs-cd6/",
+          "accept_urls": []
+        },
+        {
+          "id": "az-house-06-s2",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "ballotpedia",
+          "exists": "partial",
+          "url": "https://ballotpedia.org/Juan_Ciscomani",
+          "accept_urls": [
+            "https://ballotpedia.org/JoAnna_Mendoza",
+            "https://ballotpedia.org/Jereme_Peters"
+          ]
+        },
+        {
+          "id": "az-house-06-s3",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "vote411-lwv",
+          "exists": "partial",
+          "url": "https://onyourballot.vote411.org/candidate-detail.do?id=3724992",
+          "accept_urls": []
+        }
+      ]
+    },
+    {
+      "race": "az-mine-inspector",
+      "state": "AZ",
+      "race_label": "Arizona Mine Inspector (AZ, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Les Presmyk",
+        "Brian Matlock"
+      ],
+      "sources": [
+        {
+          "id": "az-mine-inspector-s0",
+          "type": "debate",
+          "tier": 1,
+          "tos": "govt",
+          "exists": "yes",
+          "url": "https://www.youtube.com/watch?v=DWBatUCY0_0",
+          "accept_urls": [
+            "https://news.azpm.org/p/news-articles/2026/8/31/231019-debate-arizona-mine-inspector/"
+          ]
+        }
+      ]
+    },
+    {
+      "race": "la-mayor",
+      "state": "CA",
+      "race_label": "Los Angeles Mayor (CA, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Karen Bass",
+        "Nithya Raman"
+      ],
+      "sources": [
+        {
+          "id": "la-mayor-s0",
+          "type": "debate",
+          "tier": 1,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "yes",
+          "url": "https://www.nbclosangeles.com/news/local/bass-raman-to-face-off-in-first-debate-of-mayoral-runoff/3931316/",
+          "accept_urls": [
+            "https://laist.com/news/politics/bass-and-raman-face-off-in-first-mayoral-debate-ahead-of-the-general-election"
+          ]
+        },
+        {
+          "id": "la-mayor-s1",
+          "type": "forum",
+          "tier": 1,
+          "tos": "other",
+          "exists": "yes",
+          "url": "https://laist.com/news/politics/replay-watch-la-mayor-candidates-environmental-strategy-forum",
+          "accept_urls": []
+        },
+        {
+          "id": "la-mayor-s2",
+          "type": "interview",
+          "tier": 2,
+          "tos": "other",
+          "exists": "yes",
+          "url": "https://laist.com/news/politics/2026-election-california-primary-karen-bass-los-angeles-mayor-transcript",
+          "accept_urls": [
+            "https://laist.com/news/politics/2026-election-california-primary-nithya-raman-los-angeles-mayor-transcript"
+          ]
+        },
+        {
+          "id": "la-mayor-s3",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "ballotpedia",
+          "exists": "yes",
+          "url": "https://ballotpedia.org/Karen_Bass",
+          "accept_urls": [
+            "https://ballotpedia.org/Nithya_Raman"
+          ]
+        },
+        {
+          "id": "la-mayor-s4",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "other",
+          "exists": "yes",
+          "url": "https://laist.com/news/politics/voter-guides/2026-election-california-general-los-angeles-mayor",
+          "accept_urls": []
+        }
+      ]
+    },
+    {
+      "race": "bend-mayor-or",
+      "state": "OR",
+      "race_label": "Bend Mayor (OR, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Melanie Kebler",
+        "Bernadette Strome"
+      ],
+      "sources": [
+        {
+          "id": "bend-mayor-or-s0",
+          "type": "debate",
+          "tier": 1,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "partial",
+          "url": "https://ktvz.com/news/election/2026/09/01/decision-2026-ktvz-news-to-host-debates-town-halls-and-partner-in-candidate-forums-for-midterm-election/",
+          "accept_urls": []
+        },
+        {
+          "id": "bend-mayor-or-s1",
+          "type": "forum",
+          "tier": 1,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "partial",
+          "url": "https://bendbulletin.com/2026/09/14/league-of-women-voters-hosts-candidate-forums/",
+          "accept_urls": []
+        },
+        {
+          "id": "bend-mayor-or-s2",
+          "type": "forum",
+          "tier": 1,
+          "tos": "other",
+          "exists": "partial",
+          "url": "https://cascadebusnews.com/pah-hosts-two-candidate-forums-focused-on-housing-in-bend-and-redmond/",
+          "accept_urls": []
+        },
+        {
+          "id": "bend-mayor-or-s3",
+          "type": "voter_pamphlet",
+          "tier": 3,
+          "tos": "govt",
+          "exists": "yes",
+          "url": "https://www.deschutescounty.gov/DocumentCenter/View/8747/November-3-2026-Voters-Pamphlet",
+          "accept_urls": []
+        }
+      ]
+    },
+    {
+      "race": "austin-cc-d5",
+      "state": "TX",
+      "race_label": "Austin City Council District 5 (TX, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Ryan Alter",
+        "David Weinberg",
+        "Liz Brink",
+        "Farrah Abraham"
+      ],
+      "sources": [
+        {
+          "id": "austin-cc-d5-s0",
+          "type": "forum",
+          "tier": 1,
+          "tos": "govt",
+          "exists": "partial",
+          "url": "https://www.austintexas.gov/communications/news/public-invited-attend-2026-austin-city-council-candidate-panels",
+          "accept_urls": []
+        },
+        {
+          "id": "austin-cc-d5-s1",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "yes",
+          "url": "https://communityimpact.com/southwest-austin-dripping-springs/election/meet-the-candidates-running-for-austin-city-council-district-5/",
+          "accept_urls": []
+        },
+        {
+          "id": "austin-cc-d5-s2",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "vote411-lwv",
+          "exists": "partial",
+          "url": "https://lwvaustin.org/Voters-Guide",
+          "accept_urls": []
+        }
+      ]
+    },
+    {
+      "race": "ut-sboe-14",
+      "state": "UT",
+      "race_label": "Utah State Board of Education District 14 (UT, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Nichole Isom",
+        "Courtnee Justice",
+        "Linda Hanks",
+        "Will Pierce"
+      ],
+      "sources": [
+        {
+          "id": "ut-sboe-14-s0",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "ballotpedia",
+          "exists": "yes",
+          "url": "https://ballotpedia.org/Nichole_Isom",
+          "accept_urls": [
+            "https://ballotpedia.org/Linda_Hanks"
+          ]
+        },
+        {
+          "id": "ut-sboe-14-s1",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "other",
+          "exists": "partial",
+          "url": "https://ivoterguide.com/candidate/92072/race/25429/election/1383",
+          "accept_urls": [
+            "https://ivoterguide.com/candidate/80649/race/25429/election/1383"
+          ]
+        },
+        {
+          "id": "ut-sboe-14-s2",
+          "type": "voter_pamphlet",
+          "tier": 3,
+          "tos": "govt",
+          "exists": "partial",
+          "url": "https://vote.utah.gov/wp-content/uploads/2026/01/USBE-14-Linda-Hanks.pdf",
+          "accept_urls": []
+        }
+      ]
+    },
+    {
+      "race": "princeton-council-tx",
+      "state": "TX",
+      "race_label": "Princeton City Council Seat 4 (TX, 2026)",
+      "year": "2026",
+      "candidates": [
+        "Jaisen Rutledge",
+        "Jan Goria"
+      ],
+      "sources": [
+        {
+          "id": "princeton-council-tx-s0",
+          "type": "forum",
+          "tier": 1,
+          "tos": "govt",
+          "exists": "yes",
+          "url": "https://princetontx.new.swagit.com/videos/389581",
+          "accept_urls": []
+        },
+        {
+          "id": "princeton-council-tx-s1",
+          "type": "forum",
+          "tier": 1,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "yes",
+          "url": "https://web.archive.org/web/20260604152434/https://princetonherald.com/2026/05/30/council-runoff-candidates-meet-in-forum/",
+          "accept_urls": [
+            "https://princetonherald.com/2026/05/30/council-runoff-candidates-meet-in-forum/"
+          ]
+        },
+        {
+          "id": "princeton-council-tx-s2",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "newspaper-or-tv-chain",
+          "exists": "yes",
+          "url": "https://princetonherald.com/2026/04/21/early-voting-for-princeton-city-council-place-4/",
+          "accept_urls": []
+        },
+        {
+          "id": "princeton-council-tx-s3",
+          "type": "questionnaire",
+          "tier": 3,
+          "tos": "ballotpedia",
+          "exists": "partial",
+          "url": "https://ballotpedia.org/Jaisen_Rutledge_(Princeton_City_Council_Seat_4,_Texas,_candidate_2026)",
+          "accept_urls": [
+            "https://ballotpedia.org/Jan_Goria_(Princeton_City_Council_Seat_4,_Texas,_candidate_2026)"
+          ]
+        }
+      ]
+    }
+  ]
+}

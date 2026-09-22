@@ -1,16 +1,14 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Discovery — Council Scribe</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Discovery — Council Scribe{% endblock %}
+{% from "_icons.html" import icon %}
+{% block content %}
 <header class="batch-header">
   <a href="/">&larr; Library</a>
   <strong>Discovery</strong>
   <span class="pill">{{ health.pending_total }} pending</span>
+  {% if health.auto_kept_week %}
+  <a class="pill" href="/discovery?show=auto-kept" title="{{ health.auto_kept_outlets }} outlet(s) — click to review / undo">auto-kept {{ health.auto_kept_week }} this week</a>
+  {% endif %}
   {% if health.stale_outlets %}
   <span class="pill" title="{{ health.stale_outlets|join(', ') }}">
     {{ health.stale_outlets|length }} stale feed(s)</span>
@@ -29,6 +27,16 @@
 
 {% if flash %}<p class="flash">{{ flash }}</p>{% endif %}
 
+<p class="view-toggle">
+  {% if show == 'deferred' %}
+    <a href="/discovery{{ '?state=' ~ state if state else '' }}">&larr; Back to pending</a> · showing <strong>deferred</strong> (low-value, auto-filed)
+  {% elif show == 'auto-kept' %}
+    <a href="/discovery{{ '?state=' ~ state if state else '' }}">&larr; Back to pending</a> · showing <strong>auto-kept</strong> quote sources (auto-approved by a trusted outlet — return any of these to pending below)
+  {% else %}
+    <a href="/discovery?show=deferred">View deferred items &rarr;</a>
+  {% endif %}
+</p>
+
 {% if health.alarms %}
 <section class="flash-pending">
   <strong>Zero-source alarms</strong> — races inside 30 days with no approved sources:
@@ -40,93 +48,295 @@
 </section>
 {% endif %}
 
-{% if outlet_stats %}
-<details>
-  <summary>Outlet evidence ({{ outlet_stats|length }} outlets)</summary>
-  <p><small>Auto-ingest (mode C) qualification bar: ≥10 reviewed · ≥90% approved ·
-  0 identity rejects. Display only — every ingest still goes through this queue.</small></p>
-  <table class="library">
-    <thead>
-      <tr><th>Outlet</th><th>Reviewed</th><th>Approved</th><th>Identity rejects</th><th>Status</th></tr>
-    </thead>
-    <tbody>
-    {% for s in outlet_stats %}
-    {% set qualified = s.reviewed >= 10 and s.identity_rejects == 0 and 10 * s.approved >= 9 * s.reviewed %}
-    <tr>
-      <td>{{ s.name }}</td>
-      <td>{{ s.reviewed }}</td>
-      <td>{{ s.approved }} ({{ (100 * s.approved / s.reviewed) | round(0, 'floor') | int if s.reviewed else 0 }}%)</td>
-      <td>{{ s.identity_rejects }}</td>
-      <td>
-        {% if qualified %}&#10003; qualifies
-        {% elif s.reviewed < 10 %}needs {{ 10 - s.reviewed }} more reviewed
-        {% else %}below bar
-        {% endif %}
-      </td>
-    </tr>
+{% macro row_actions(r, race, state='', show='', lane='') %}
+<div class="row-actions">
+  {% if lane != 'questionnaire' %}
+  <form method="post" action="/discovery/{{ r.id }}/approve-ingest" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
+    {% if r.outlet_ingest_barred %}
+    <button type="submit" class="enroll" disabled title="chain ToS: don't host a transcript — pull a direct quote instead">Approve &rarr; ingest</button>
+    <small class="empty">chain ToS: don't host a transcript — pull a direct quote instead</small>
+    {% else %}
+    <button type="submit" class="enroll">Approve &rarr; ingest</button>
+    {% endif %}
+  </form>
+  {% endif %}
+  <form method="post" action="/discovery/{{ r.id }}/quote-source" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
+    <button type="submit" class="btn btn--primary">Approve &rarr; quote source{% if r.family_count %} (+{{ r.family_count }} more){% endif %}</button>
+  </form>
+  <form method="post" action="/discovery/{{ r.id }}/reject" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
+    <select name="reason">
+      <option value="clip-not-original">clip, not original</option>
+      <option value="stale">stale / old cycle</option>
+      <option value="wrong-person">wrong person</option>
+      <option value="tier-5">tier 5</option>
+      <option value="duplicate">duplicate</option>
+      <option value="other" selected>other</option>
+    </select>
+    {% if r.family_count %}<label><input type="checkbox" name="whole_source" value="1"> apply to all {{ r.family_count + 1 }} from this source</label>{% endif %}
+    <button type="submit" class="delete-btn">Reject</button>
+  </form>
+  {% if r.safe_url %}
+  <a class="pill" href="/new?{{ {'input': r.safe_url,
+      'date': (r.published_at or '')[:10], 'title': r.title or '',
+      'event_kind': r.event_kind_guess or 'news_clip',
+      'race_id': r.race_id or '', 'race_label': r.race_label or (race.position_name if race else '') or '',
+      'event_orgs': r.channel_name or ''}|urlencode }}">Edit first</a>
+  {% endif %}
+  {% if not r.outlet_id and r.channel_id %}
+  <form method="post" action="/discovery/{{ r.id }}/watch-channel" style="margin:0;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
+    <button type="submit" class="btn btn--ghost" title="Add this channel to the watchlist">+ Watch this channel</button>
+  </form>
+  {% endif %}
+  {% if r.hub_domain %}
+  <form method="post" action="/discovery/{{ r.id }}/add-hub" style="display:flex;gap:var(--sp-1);align-items:center;">
+    <input type="hidden" name="state" value="{{ state or '' }}">
+    <input type="hidden" name="show" value="{{ show or '' }}">
+    <select name="scope" title="Hub scope">
+      <option value="state" selected>state</option>
+      <option value="global">global</option>
+    </select>
+    <select name="kind" title="Hub kind">
+      {% for k in ['debate','forum','questionnaire','guide','pamphlet'] %}
+      <option value="{{ k }}"{% if k == r.hub_kind_default %} selected{% endif %}>{{ k }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn--ghost" title="Register {{ r.hub_domain }} as a comparable-source hub for future races in this scope">+ Add {{ r.hub_domain }} as hub</button>
+  </form>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro pending_row(item, race, state='') %}
+{% set r = item.row %}
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-pending-form">
+  {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
+  <div class="disc-item-body">
+    <span class="pill">{{ item.lane | humanize_kind }}</span>
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+      {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
+      {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
+      {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</div>
+    <div class="disc-why">{{ r.why }}</div>
+    {{ row_actions(r, race, state, lane=item.lane) }}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro outlet_groups(groups, race, state='') %}
+  {% if not groups %}
+  <p class="empty">No pending items{% if race %} for this race{% endif %}.</p>
+  {% endif %}
+  {% for group in groups %}
+  <div class="disc-outlet">
+    <div class="disc-outlet-head">
+      <span class="disc-outlet-name">{{ group.name }}
+        {% if group.trusted %}<span class="badge--trusted">trusted</span>{% else %}<span class="badge--unknown">unknown</span>{% endif %}
+      </span>
+      {% if not group.trusted and group.trustable %}
+      <div class="disc-trust">
+        <form method="post" action="/discovery/{{ group.trust_row_id }}/trust" style="margin:0;">
+          <input type="hidden" name="state" value="{{ state or '' }}">
+          <button type="submit" class="btn btn--ghost" title="Auto-approve every future item from {{ group.name }} as a quote source">Trust outlet</button>
+        </form>
+        <p class="disc-trust-note">auto-approves everything this outlet sends</p>
+      </div>
+      {% endif %}
+    </div>
+    {% if group.muted %}
+    <p class="empty"><small>{{ group.muted|length }} auto-kept as quote sources</small></p>
+    {% endif %}
+    {% for item in group.open %}
+      {{ pending_row(item, race, state) }}
     {% endfor %}
-    </tbody>
-  </table>
-  <p><small>{{ outletless_reviewed }} reviewed item(s) have no outlet (search/agent finds) and are excluded.</small></p>
+  </div>
+  {% endfor %}
+{% endmacro %}
+
+{% macro count_chip(n, word, glyph) -%}
+<span class="count-chip{% if not n %} is-zero{% endif %}" title="{{ n }} {{ word }}">{{ icon(glyph) }} {{ n }}</span>
+{%- endmacro %}
+
+{% macro race_block(race, groups_by_race, state='') %}
+{% set groups = groups_by_race.get(race.race_id, []) %}
+<details class="disc-race" id="race-{{ race.race_id }}">
+  <summary>
+    <span class="chevron">{{ icon('chevron') }}</span><span class="race-name">{{ race.position_name or "Unlabeled race" }}</span>
+    <span class="count-chips">
+      {{ count_chip(race.candidates, 'candidates', 'people') }}
+      {{ count_chip(race.quote_sources, 'quote sources', 'quote') }}
+      {{ count_chip(race.ingested, 'ingested', 'mic') }}
+      {{ count_chip(race.pending, 'pending', 'screen') }}
+    </span>
+  </summary>
+  <div class="disc-race-body">{{ outlet_groups(groups, race, state) }}</div>
 </details>
+{% endmacro %}
+
+{% macro bulk_pending_bar(state='') %}
+<form id="bulk-pending-form" method="post" action="/discovery/bulk" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;flex-wrap:wrap;margin:0 0 var(--sp-4);">
+  <input type="hidden" name="state" value="{{ state or '' }}">
+  <label>Reason
+    <select name="reason">
+      <option value="tier-5">tier-5 (low value)</option>
+      <option value="wrong-person">wrong-person</option>
+      <option value="clip-not-original">clip-not-original</option>
+      <option value="other" selected>other</option>
+    </select>
+  </label>
+  <button type="submit" name="action" value="reject">Reject selected</button>
+  <span class="empty"><small>checkboxes below select rows for this bar, across every race/outlet shown</small></span>
+</form>
+{% endmacro %}
+
+{% macro deferred_row(r, state='') %}
+{% set lane = content_lane(r.original_vs_clip, r.event_kind_guess) %}
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-deferred-form">
+  {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
+  <div class="disc-item-body">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
+      {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
+      {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
+      {% if r.prior_cycle %} · <span class="pill" title="A candidate's own answers from an earlier cycle — attribute the quote to this cycle, do not present it as current.">prior cycle {{ r.source_cycle_year or "?" }}</span>{% endif %}
+      · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</div>
+    <div class="disc-why">{{ r.why }}</div>
+    {{ row_actions(r, None, state, 'deferred', lane=lane) }}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro auto_kept_row(r) %}
+<div class="disc-item">
+  <input type="checkbox" name="row_ids" value="{{ r.id }}" form="bulk-autokept-form">
+  {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
+  <div class="disc-item-body">
+    {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}
+    <div class="disc-meta">{{ r.channel_name or "?" }} · {{ (r.published_at or "?")[:10] }}
+      {% if r.event_kind_guess %} · {{ r.event_kind_guess }}{% endif %}</div>
+  </div>
+</div>
+{% endmacro %}
+
+{% if show == 'deferred' %}
+
+{% if not deferred_groups %}
+<p class="empty">No deferred discoveries.</p>
+{% else %}
+<form id="bulk-deferred-form" method="post" action="/discovery/bulk" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;margin:0 0 var(--sp-4);">
+  <input type="hidden" name="show" value="deferred">
+  <input type="hidden" name="state" value="{{ state or '' }}">
+  <button type="submit" name="action" value="restore">Restore selected to pending</button>
+</form>
+{% for label, rows in deferred_groups %}
+<h2 class="disc-section-title">{{ label }} <span class="pill">{{ rows|length }} deferred</span></h2>
+{% for r in rows %}
+  {{ deferred_row(r, state) }}
+{% endfor %}
+{% endfor %}
 {% endif %}
 
-{% if not groups %}<p>No pending discoveries.</p>{% endif %}
+{% elif show == 'auto-kept' %}
 
-{% for label, rows in groups %}
-<h2>{{ label }} <span class="pill">{{ rows|length }} pending</span></h2>
-<table class="library">
-  <tbody>
-  {% for r in rows %}
-  <tr>
-    <td class="name">
-      {% if r.thumb_url %}<img class="thumb" src="{{ r.thumb_url }}" alt="" loading="lazy">{% endif %}
-      <div>
-        {% if r.safe_url %}<a href="{{ r.safe_url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% else %}{{ r.title or r.url }}{% endif %}<br>
-        <small>{{ r.channel_name or "?" }} · {{ r.duration_label }} ·
-          {{ (r.published_at or "?")[:10] }} · {{ r.event_kind_guess or "?" }}
-          {% if r.source_tier_guess %} · tier {{ r.source_tier_guess }}{% endif %}
-          · conf {{ r.confidence_label }} · via {{ r.discovered_via }} · {{ r.route }}</small><br>
-        <small><em>{{ r.why }}</em></small>
-      </div>
-    </td>
-    <td>
-      <form method="post" action="/discovery/{{ r.id }}/approve-ingest">
-        <button type="submit" class="enroll">Approve &rarr; ingest</button>
-      </form>
-      <form method="post" action="/discovery/{{ r.id }}/quote-source">
-        <button type="submit">Approve &rarr; quote source</button>
-      </form>
-      <form method="post" action="/discovery/{{ r.id }}/reject">
-        <select name="reason">
-          <option value="clip-not-original">clip, not original</option>
-          <option value="stale">stale / old cycle</option>
-          <option value="wrong-person">wrong person</option>
-          <option value="tier-5">tier 5</option>
-          <option value="duplicate">duplicate</option>
-          <option value="other" selected>other</option>
-        </select>
-        <button type="submit" class="delete-btn">Reject</button>
-      </form>
-      {% if r.safe_url %}
-      <a class="pill" href="/new?{{ {'input': r.safe_url,
-          'date': (r.published_at or '')[:10], 'title': r.title or '',
-          'event_kind': r.event_kind_guess or 'news_clip',
-          'race_id': r.race_id or '', 'race_label': r.race_label or '',
-          'event_orgs': r.channel_name or ''}|urlencode }}">Edit first</a>
-      {% endif %}
-      {% if not r.outlet_id and r.channel_id %}
-      <form method="post" action="/discovery/{{ r.id }}/watch-channel">
-        <button type="submit" title="Add this channel to the watchlist">
-          + Watch this channel</button>
-      </form>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+{% if not auto_kept_rows %}
+<p class="empty">No auto-kept quote sources.</p>
+{% else %}
+<form id="bulk-autokept-form" method="post" action="/discovery/unapprove-auto" class="bulk-bar" style="display:flex;gap:var(--sp-3);align-items:center;margin:0 0 var(--sp-4);">
+  <input type="hidden" name="state" value="{{ state or '' }}">
+  <button type="submit">Return selected to pending</button>
+</form>
+{% for r in auto_kept_rows %}
+  {{ auto_kept_row(r) }}
 {% endfor %}
+{% endif %}
+
+{% elif not state %}
+<h1>Choose a state</h1>
+{% if not states %}
+<p class="empty">No tracked races yet.</p>
+{% else %}
+<ul class="disc-statelist">
+  {% for s in states %}
+  <li>
+    <a href="/discovery?state={{ s.state }}">{{ s.state | state_name }}</a>
+    <span class="pill">{{ s.pending }} pending</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if unmatched_groups %}
+<section id="unmatched" style="margin-top:var(--sp-6);">
+  <h2 class="disc-section-title">Unmatched <span class="pill">{{ unmatched_count }} pending</span></h2>
+  <p class="empty"><small>These lost their race link — the race was merged or deleted
+    (<code>discovered_sources.race_id</code> is <code>on delete set null</code>).
+    Approve as a quote source, reject, or use Edit first to reattach.</small></p>
+  {{ bulk_pending_bar(state) }}
+  {{ outlet_groups(unmatched_groups, None, state) }}
+</section>
+{% endif %}
+
+{% else %}
+<div class="disc-layout">
+  <nav class="disc-nav">
+    <p><a href="/discovery">&larr; All states</a></p>
+    <h2>{{ state | state_name }}</h2>
+    <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:var(--sp-2);">
+      <li><a href="#statewide">Statewide &amp; federal</a> <span class="pill">{{ statewide_pending }} pending</span></li>
+      {% for loc in localities %}
+      <li>
+        <a href="#loc-{{ loc | anchor_slug }}">{{ loc }}</a>
+        {% if locality_pending[loc] == 0 %}
+        <span class="pill">&#10003; done</span>
+        {% else %}
+        <span class="pill">{{ locality_pending[loc] }} pending</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <div class="disc-main">
+    <div class="disc-legend">
+      <span class="count-chip">{{ icon('people') }} candidates</span>
+      <span class="count-chip">{{ icon('quote') }} quote sources</span>
+      <span class="count-chip">{{ icon('mic') }} ingested</span>
+      <span class="count-chip">{{ icon('screen') }} pending</span>
+    </div>
+    {% if not statewide and not localities %}
+    <p class="empty">No tracked races in {{ state | state_name }} yet.</p>
+    {% else %}
+    {{ bulk_pending_bar(state) }}
+    {% endif %}
+
+    <section id="statewide">
+      <h2 class="disc-section-title">Statewide &amp; federal <small>— tracked once, approved everywhere</small></h2>
+      {% for race in statewide %}
+        {{ race_block(race, race_outlet_groups, state) }}
+      {% endfor %}
+    </section>
+
+    {% for loc, loc_races in localities.items() %}
+    <section id="loc-{{ loc | anchor_slug }}">
+      <h2 class="disc-section-title">{{ loc }}</h2>
+      {% for race in loc_races %}
+        {{ race_block(race, race_outlet_groups, state) }}
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 </main>
-</body>
-</html>
+{% endblock %}

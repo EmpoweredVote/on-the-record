@@ -155,7 +155,19 @@ def persist_review(meeting, meeting_dir: Path, embeddings: dict | None = None) -
 
 def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
     """Rename a speaker (human-authoritative) and persist. Returns False on
-    unsafe/unknown meeting, unknown label, or empty name (caller maps to 404/no-op)."""
+    unsafe/unknown meeting, unknown label, or empty name (caller maps to 404/no-op).
+
+    Uses rename_preserving_identity, NOT rename_speaker: this is the GUI's
+    name-only path. The review card has a separate, explicit control for every
+    identity outcome, so nothing here needs the rename to change one — and
+    dropping the identity meant a curator fixing a typo silently deleted the
+    local person or roster link shown one line above the box. The terminal
+    review, which has no such controls and relies on the clearing to reach its
+    re-link prompt, still calls rename_speaker directly.
+
+    The roster is still passed: it normalises the typed name, and on a speaker
+    with no identity at all it still derives a link from the new name.
+    """
     name = (new_name or "").strip()
     if not name:
         return False
@@ -169,7 +181,8 @@ def apply_rename(meeting_id: str, label: str, new_name: str) -> bool:
         return False
 
     from src import review
-    review.rename_speaker(meeting.speakers, meeting.segments, label, name, roster=roster)
+    review.rename_preserving_identity(meeting.speakers, meeting.segments, label, name,
+                                      roster=roster)
     persist_review(meeting, meeting_dir)
     return True
 
@@ -222,10 +235,58 @@ def _search_politicians_http(q: str, *, limit: int = 10) -> dict:
     return {"results": results, "error": None}
 
 
-def apply_link(meeting_id: str, label: str, politician_slug: str, politician_id: str) -> bool:
+def _reset_and_rename(meeting, label: str, name: str) -> None:
+    """Prepare a label to take a real identity: drop any unidentified/non-speaker
+    mark, then apply an optional reviewer-supplied name.
+
+    The order of these two, and of the caller's assignment after them, is forced
+    and each wrong order loses data silently:
+
+    - clear_speaker_status blanks the placeholder name, so it must run BEFORE the
+      rename, or it erases the name just supplied.
+    - rename_speaker drops any prior identity when the name changes (it treats
+      the old link as belonging to the old name), so it must run BEFORE the
+      caller's link/local-person assignment, or it erases the identity just set.
+
+    Hence: clear status -> rename -> assign. Both steps here no-op when there is
+    nothing to do, so a plain link with no name behaves exactly as before.
+
+    Deliberately calls rename_speaker with roster=None, never the meeting's
+    roster. Both callers below overwrite politician_* right after this returns
+    (link_speaker sets it, assign_local_person clears it), so a roster-derived
+    link here is immediately discarded anyway — the ONLY live effect of passing
+    a roster would be rewriting the curator's typed name onto a roster member.
+    That is wrong in kind for the local-person path, where this name is
+    precisely the curator's declaration "this person is NOT on any roster", and
+    where publish._upsert_local_people writes it as that person's PUBLIC name.
+    So the name stored here must be exactly what the curator picked or typed,
+    never a roster-normalised substitute.
+
+    rename_speaker no longer fuzzy-matches (it normalises with allow_fuzzy=False,
+    so only an exact canonical/alias match can rewrite a name), which removes the
+    silent wrong-person rewrite that first motivated withholding the roster here.
+    Withholding it is still right for the reason above: even a CORRECT
+    normalisation onto a roster member contradicts what these two callers are
+    recording.
+    """
+    from src import review
+
+    review.clear_speaker_status(meeting.speakers, meeting.segments, label)
+    if (name or "").strip():
+        review.rename_speaker(meeting.speakers, meeting.segments, label,
+                              name.strip(), roster=None)
+
+
+def apply_link(meeting_id: str, label: str, politician_slug: str, politician_id: str,
+               name: str = "") -> bool:
     """Link a speaker to an essentials politician/candidate and persist. Accepts a
     slug OR an id (candidates have an id but no slug). False on unsafe/unknown
-    meeting or label, or when BOTH slug and id are empty."""
+    meeting or label, or when BOTH slug and id are empty.
+
+    `name` is optional. The picker sends the display name of the person the
+    reviewer just clicked, so the transcript's speaker_name cannot disagree with
+    the linked person; callers that omit it keep the previous behaviour exactly.
+    """
     slug = (politician_slug or "").strip()
     pid = (politician_id or "").strip()
     if not slug and not pid:
@@ -238,6 +299,7 @@ def apply_link(meeting_id: str, label: str, politician_slug: str, politician_id:
     if label not in known:
         return False
     from src import review
+    _reset_and_rename(meeting, label, name)
     review.link_speaker(meeting.speakers, label, slug or None, pid or None)
     persist_review(meeting, meeting_dir)
     return True
@@ -258,7 +320,8 @@ def apply_unlink(meeting_id: str, label: str) -> bool:
     return True
 
 
-def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: str) -> bool:
+def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: str,
+                            name: str = "") -> bool:
     """Make a speaker a site-local person and persist.
 
     `role_raw` is whatever the reviewer typed or picked; it goes through
@@ -266,6 +329,10 @@ def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: st
     invalid here. Returns False on an unsafe/unknown meeting or label. Raises
     ValueError on a slug that is malformed or already held by another label —
     a distinct failure the route reports as 400 rather than 404.
+
+    `name` is optional but the picker always sends it, because publish writes
+    `speaker_name or slug` as a local person's PUBLIC name: a nameless local
+    person reaches readers as the raw slug.
     """
     ctx = _load_meeting_ctx(meeting_id)
     if ctx is None:
@@ -278,6 +345,7 @@ def apply_make_local_person(meeting_id: str, label: str, slug: str, role_raw: st
     from src.event_kinds import resolve_local_role
 
     role = resolve_local_role(role_raw, meeting.event_kind)
+    _reset_and_rename(meeting, label, name)
     review.assign_local_person(meeting.speakers, label, slug, role)   # may raise ValueError
     persist_review(meeting, meeting_dir)
     return True
@@ -298,6 +366,26 @@ def apply_clear_local_person(meeting_id: str, label: str) -> bool:
     from src import review
 
     if review.clear_local_person(meeting.speakers, label) is None:
+        return False
+    persist_review(meeting, meeting_dir)
+    return True
+
+
+def apply_clear_speaker_status(meeting_id: str, label: str) -> bool:
+    """Undo an unidentified / non-speaker mark and persist. False on an
+    unsafe/unknown meeting or label, and also when review.clear_speaker_status
+    itself no-ops (the speaker was never marked) — a no-op is not success, so an
+    Undo on an unmarked speaker reports 404 rather than a silent success."""
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return False
+    meeting, meeting_dir, _roster = ctx
+    known = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    if label not in known:
+        return False
+    from src import review
+
+    if review.clear_speaker_status(meeting.speakers, meeting.segments, label) is None:
         return False
     persist_review(meeting, meeting_dir)
     return True
@@ -424,6 +512,22 @@ def apply_enroll(meeting_id: str, label: str) -> bool:
     return True
 
 
+def _stale_published_warnings(meeting) -> list[dict]:
+    """Warnings for live speaker rows this transcript has dropped, or [] when
+    prod is clean, unpublished, or unreachable."""
+    from gui import publish_api
+    from src.speaker_orphans import audit_meeting, stale_publish_warnings
+
+    rows = publish_api.published_speaker_rows(meeting.meeting_id)
+    if not rows:                       # None = unknown, [] = nothing published
+        return []
+    audit = audit_meeting(
+        meeting.meeting_id, rows,
+        {"speakers": {k: v.to_dict() for k, v in meeting.speakers.items()}},
+    )
+    return stale_publish_warnings(audit)
+
+
 def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     if not is_safe_meeting_id(meeting_id):
         return None
@@ -460,6 +564,12 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
     # these; the GUI reviewer must too) plus, per card, the peer labels that
     # share its name — a rename onto an existing name is usually a merge-in-waiting.
     warnings = review.enrollment_warnings(meeting.speakers, roster)
+    # Plus the one collision enrollment_warnings structurally cannot see: a
+    # meetings.speakers row for a label this transcript no longer has. Label
+    # surgery rewrites the local artifact and nothing else in the GUI consults
+    # prod, so dropping a label from a LIVE meeting otherwise looks finished
+    # while the stale row keeps serving. Best-effort: None means unknown.
+    warnings.extend(_stale_published_warnings(meeting))
     peer_labels: dict[str, list[str]] = {}
     for labels in review.duplicate_named_speakers(meeting.speakers).values():
         for lbl in labels:

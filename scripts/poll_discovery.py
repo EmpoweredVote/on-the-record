@@ -24,7 +24,8 @@ from gui.env import load_env_local  # noqa: E402
 load_env_local()  # before src.config so CS_DATA_DIR / API keys are visible
 
 from src import config  # noqa: E402
-from src.discovery import db, engine, feeds, search  # noqa: E402
+from src.discovery import db, engine, feeds, search, hubs, hub_search  # noqa: E402
+from src.discovery.autoapprove import auto_approve_pending  # noqa: E402
 from src.llm_providers import get_provider  # noqa: E402
 from src.source_key import source_key  # noqa: E402
 
@@ -76,6 +77,7 @@ def main() -> int:
     ap.add_argument("--race", help="race_id: sweep this race now regardless of cadence")
     ap.add_argument("--skip-watchlist", action="store_true")
     ap.add_argument("--skip-sweeps", action="store_true")
+    ap.add_argument("--skip-hubs", action="store_true")
     ap.add_argument("--classify-cap", type=int, default=None)
     ap.add_argument("--print-alarms", action="store_true")
     ap.add_argument("--trigger", choices=("scheduled", "manual"), default="manual",
@@ -83,6 +85,19 @@ def main() -> int:
     args = ap.parse_args()
 
     conn = db.connect()
+
+    def reconnect():
+        """Hand the engine a fresh connection after a mid-run drop, and keep
+        this scope's `conn` pointing at it so the finalize writes below (and
+        the finally-close) use the live connection, not the dead one."""
+        nonlocal conn
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001 — the old conn is already dead
+            pass
+        conn = db.connect()
+        return conn
+
     try:
         if args.print_alarms:
             rows = db.alarm_races(conn.cursor())
@@ -114,12 +129,17 @@ def main() -> int:
             classify_cap=args.classify_cap,
             skip_watchlist=args.skip_watchlist,
             skip_sweeps=args.skip_sweeps,
+            skip_hubs=args.skip_hubs,
+            load_hubs_fn=hubs.load_hubs,
+            hub_raw_items_fn=hub_search.raw_items_for_race,
+            reconnect_fn=reconnect,
         )
         print(f"DONE examined={stats.examined} queued={stats.inserted_pending} "
               f"auto_filtered={stats.inserted_auto_filtered} "
               f"prefiltered_out={stats.prefiltered_out} "
               f"recency_filtered={stats.recency_filtered} seen={stats.skipped_seen} "
-              f"classified={stats.classified} capped={stats.spend_capped}")
+              f"classified={stats.classified} capped={stats.spend_capped} "
+              f"hub_examined={stats.hub_items_examined}")
         alarms = db.alarm_races(conn.cursor())
         for alarm in alarms:
             print(f"ALARM {alarm[2]} {alarm[1]} — no approved sources")
@@ -131,6 +151,28 @@ def main() -> int:
             conn.commit()
             db.record_alarms(cur, [a[0] for a in alarms])
             conn.commit()
+        # Defer low-value tier-3 items whose candidates already have a stronger
+        # source, so they leave the human queue (reversible; alarm-safe).
+        if not args.dry_run:
+            cur = conn.cursor()
+            deferred = db.apply_tier3_defer(cur)
+            conn.commit()
+            print(f"DEFERRED {deferred} low-value items")
+        # Auto-approve trusted outlets' pending news-clip rows as quote
+        # sources, once this run's own inserts have landed (last step, so a
+        # failure here can't poison anything that still needed this
+        # connection). Best-effort: the ev-accounts migration adding
+        # source_outlets.trusted / discovered_sources.original_vs_clip may
+        # not be applied yet, so a schema mismatch must warn and continue,
+        # never abort an otherwise-successful poll.
+        if not args.dry_run:
+            try:
+                cur = conn.cursor()
+                n_auto = auto_approve_pending(cur)
+                conn.commit()
+                print(f"auto-kept {n_auto} trusted news-clip rows")
+            except Exception as exc:  # noqa: BLE001 — best-effort sweep, never fatal to the poll
+                print(f"WARNING auto-approve sweep failed: {exc}", file=sys.stderr)
         if stats.failures:
             print(f"{len(stats.failures)} failure(s)", file=sys.stderr)
             return 1

@@ -1,0 +1,433 @@
+[
+  {
+    "race": "az-governor",
+    "level": "statewide",
+    "state": "AZ",
+    "candidates": ["Katie Hobbs", "Andy Biggs", "Risa Lombardo", "Teri Hourihan"],
+    "sources": [
+      {
+        "type": "debate",
+        "tier": 1,
+        "exists": "partial",
+        "url": "https://www.azcleanelections.gov/arizona-2026-debate-series-updates",
+        "medium": "video",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "CCEC general-election debate scheduled 2026-10-06; Hobbs (incumbent/frontrunner) declined to participate (2nd cycle running), so only Biggs/Hourihan/Lombardo confirmed; not yet aired as of 2026-09-17."
+      },
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "yes",
+        "url": "https://ktar.com/arizona-politics-news/election/public-safety-policy-forum",
+        "medium": "video",
+        "neutral": false,
+        "tos": "other",
+        "notes": "Arizona Police Association public-safety forum aired 2026-08-25; Hobbs+Biggs answered the same 6 questions back-to-back (not sharing a stage); only 2 of 4 candidates; moderator was a commercial-radio journalist and host was a professional association, not a general civic org, so flagged not fully neutral."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://ballotpedia.org/Arizona_gubernatorial_and_lieutenant_gubernatorial_election,_2026",
+        "medium": "written",
+        "neutral": true,
+        "tos": "ballotpedia",
+        "notes": "Only Teri Hourihan completed Ballotpedia's Candidate Connection survey; Hobbs, Biggs, and Lombardo have not."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://onyourballot.vote411.org/race-detail.do?id=3725085",
+        "medium": "written",
+        "neutral": true,
+        "tos": "vote411-lwv",
+        "notes": "Page returns HTTP 403 to fetchers; search-engine snippets suggest a filled guide exists (water conservation, schools/ESA, affordability) but this is secondhand and unconfirmed."
+      },
+      {
+        "type": "interview",
+        "tier": 2,
+        "exists": "partial",
+        "url": "https://news.azpm.org/p/electioncoverage/2026/8/28/230988-one-on-one-with-gov-katie-hobbs-2026-midterm-election-polling/",
+        "medium": "video",
+        "neutral": true,
+        "tos": "other",
+        "notes": "AZPM one-on-one interview, Hobbs only; Biggs reportedly declined an equivalent invite. One-sided, not comparable across candidates."
+      }
+    ],
+    "hubs": [
+      "Citizens Clean Elections Commission (azcleanelections.gov)",
+      "Arizona Media Association / Arizona Local News Foundation",
+      "League of Women Voters of Arizona / VOTE411.org",
+      "KJZZ",
+      "AZPM",
+      "Arizona PBS / Cronkite News",
+      "KTAR"
+    ]
+  },
+  {
+    "race": "az-house-06",
+    "level": "federal",
+    "state": "AZ",
+    "candidates": ["Juan Ciscomani", "JoAnna Mendoza", "Jereme Peters"],
+    "sources": [
+      {
+        "type": "debate",
+        "tier": 1,
+        "exists": "partial",
+        "url": "https://news.azpm.org/s/104029-debate-arizonas-congressional-district-6-juan-ciscomani-vs-joanna-mendoza/",
+        "medium": "video",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "CCEC/Arizona Media Association CD6 debate, Sep 10 2026, Ciscomani vs Mendoza only; also carried by KJZZ, azfamily, KOLD, FOX10, KVOA, AZ Luminaria. Libertarian Jereme Peters was NOT included."
+      },
+      {
+        "type": "interview",
+        "tier": 2,
+        "exists": "yes",
+        "url": "https://www.tucsonsentinel.com/local/report/040826_mendoza_profile/democrat-joanna-mendoza-hopes-unseat-rep-juan-ciscomani-southern-azs-cd6/",
+        "medium": "written",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "Tucson Sentinel journalist profile of Mendoza with direct quotes; not a full interview transcript, and one-sided (no equivalent Ciscomani piece found), so not cleanly comparable across candidates."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://ballotpedia.org/Juan_Ciscomani",
+        "medium": "written",
+        "neutral": true,
+        "tos": "ballotpedia",
+        "notes": "Candidate Connection pages exist for Ciscomani, Mendoza (https://ballotpedia.org/JoAnna_Mendoza), and Peters (https://ballotpedia.org/Jereme_Peters); none has completed the survey this cycle."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://onyourballot.vote411.org/candidate-detail.do?id=3724992",
+        "medium": "written",
+        "neutral": true,
+        "tos": "vote411-lwv",
+        "notes": "Page exists and is indexed for this exact race per search snippet; direct fetch/browser both returned HTTP 403, so fill status could not be confirmed. Recorded as partial out of caution."
+      }
+    ],
+    "hubs": [
+      "Citizens Clean Elections Commission + Arizona Media Association",
+      "League of Women Voters of Southern Arizona / VOTE411.org",
+      "Arizona Daily Star / Tucson.com",
+      "Tucson Sentinel",
+      "Tucson Metro Chamber of Commerce",
+      "AZPM",
+      "KJZZ"
+    ]
+  },
+  {
+    "race": "az-mine-inspector",
+    "level": "statewide (obscure/down-ballot)",
+    "state": "AZ",
+    "candidates": ["Les Presmyk", "Brian Matlock"],
+    "sources": [
+      {
+        "type": "debate",
+        "tier": 1,
+        "exists": "yes",
+        "url": "https://www.youtube.com/watch?v=DWBatUCY0_0",
+        "medium": "video",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "CCEC/Arizona Media Association debate aired 2026-08-31; both candidates participated; corroborated by AZPM (https://news.azpm.org/p/news-articles/2026/8/31/231019-debate-arizona-mine-inspector/), KJZZ, AZ Capitol Times, and FOX10. The strongest, cleanest source in the whole eval set."
+      }
+    ],
+    "hubs": [
+      "Citizens Clean Elections Commission",
+      "Arizona Media Association / Arizona Local News Foundation",
+      "KJZZ",
+      "AZPM",
+      "Ballotpedia",
+      "League of Women Voters / VOTE411"
+    ]
+  },
+  {
+    "race": "la-mayor",
+    "level": "big-city local",
+    "state": "CA",
+    "candidates": ["Karen Bass", "Nithya Raman"],
+    "sources": [
+      {
+        "type": "debate",
+        "tier": 1,
+        "exists": "yes",
+        "url": "https://www.nbclosangeles.com/news/local/bass-raman-to-face-off-in-first-debate-of-mayoral-runoff/3931316/",
+        "medium": "video",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "Sherman Oaks Neighborhood Council / Sherman Oaks-Encino Chamber of Commerce debate, Aug 19 2026; also covered/livestreamed at https://laist.com/news/politics/bass-and-raman-face-off-in-first-mayoral-debate-ahead-of-the-general-election. Both candidates, 90 minutes, same questions."
+      },
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "yes",
+        "url": "https://laist.com/news/politics/replay-watch-la-mayor-candidates-environmental-strategy-forum",
+        "medium": "video",
+        "neutral": false,
+        "tos": "other",
+        "notes": "Sep 3 2026 environmental-strategy forum at LA Trade Tech, organized by an issue-advocacy coalition (LA League of Conservation Voters, Sierra Club, SCOPE-LA, etc.). Same questions to both candidates but an advocacy host, not a neutral civic one."
+      },
+      {
+        "type": "interview",
+        "tier": 2,
+        "exists": "yes",
+        "url": "https://laist.com/news/politics/2026-election-california-primary-karen-bass-los-angeles-mayor-transcript",
+        "medium": "written",
+        "neutral": true,
+        "tos": "other",
+        "notes": "LAist/AirTalk (Larry Mantle) long-form candidate interview, full written transcript; matching Raman transcript at https://laist.com/news/politics/2026-election-california-primary-nithya-raman-los-angeles-mayor-transcript. Same interviewer/venue/series for both candidates -- the strongest interview-tier match in the eval set."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "yes",
+        "url": "https://ballotpedia.org/Karen_Bass",
+        "medium": "written",
+        "neutral": true,
+        "tos": "ballotpedia",
+        "notes": "Both Bass and Raman (https://ballotpedia.org/Nithya_Raman) completed the Candidate Connection survey in 2026 -- full multi-question responses in their own words."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "yes",
+        "url": "https://laist.com/news/politics/voter-guides/2026-election-california-general-los-angeles-mayor",
+        "medium": "written",
+        "neutral": true,
+        "tos": "other",
+        "notes": "LAist general-election voter guide; both candidates answer the same questions (top priorities, homelessness, Olympics, immigration, reasons for running) in their own words."
+      }
+    ],
+    "hubs": [
+      "League of Women Voters of Greater Los Angeles",
+      "League of Women Voters of Los Angeles County",
+      "VOTE411.org",
+      "Voter's Edge California (LWV CA / MapLight)",
+      "LAist / KPCC",
+      "Sherman Oaks Neighborhood Council / Chamber of Commerce",
+      "Los Angeles City Ethics Commission"
+    ]
+  },
+  {
+    "race": "bend-mayor-or",
+    "level": "small-city local",
+    "state": "OR",
+    "candidates": ["Melanie Kebler", "Bernadette Strome"],
+    "sources": [
+      {
+        "type": "debate",
+        "tier": 1,
+        "exists": "partial",
+        "url": "https://ktvz.com/news/election/2026/09/01/decision-2026-ktvz-news-to-host-debates-town-halls-and-partner-in-candidate-forums-for-midterm-election/",
+        "medium": "video",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "KTVZ 'Decision 2026' debate, scheduled Sept 24 2026, names Kebler+Strome as confirmed; not yet aired as of research date."
+      },
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "partial",
+        "url": "https://bendbulletin.com/2026/09/14/league-of-women-voters-hosts-candidate-forums/",
+        "medium": "video",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "League of Women Voters of Deschutes County forum, scheduled Oct 5 2026, joint with HD53 state-rep candidates; open to all certified candidates; not yet held as of research date."
+      },
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "partial",
+        "url": "https://cascadebusnews.com/pah-hosts-two-candidate-forums-focused-on-housing-in-bend-and-redmond/",
+        "medium": "video",
+        "neutral": true,
+        "tos": "other",
+        "notes": "Partners for Affordable Housing forum, scheduled Sept 22 2026, names Kebler+Strome specifically; nonpartisan but housing-focused questions; not yet held as of research date."
+      },
+      {
+        "type": "voter_pamphlet",
+        "tier": 3,
+        "exists": "yes",
+        "url": "https://www.deschutescounty.gov/DocumentCenter/View/8747/November-3-2026-Voters-Pamphlet",
+        "medium": "written",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "Deschutes County official Voters' Pamphlet, p.9-43: full side-by-side statements from both Kebler and Strome in their own words (bio, occupation, platform, endorsements). Strongest verified source for this race."
+      }
+    ],
+    "hubs": [
+      "League of Women Voters of Deschutes County",
+      "KTVZ (NewsChannel 21)",
+      "Central Oregon Daily",
+      "Bend Chamber of Commerce",
+      "Partners for Affordable Housing",
+      "Bend Bulletin",
+      "The Source Weekly",
+      "KBND",
+      "Deschutes County Clerk's Office"
+    ]
+  },
+  {
+    "race": "austin-cc-d5",
+    "level": "mid-city local",
+    "state": "TX",
+    "candidates": ["Ryan Alter", "David Weinberg", "Liz Brink", "Farrah Abraham"],
+    "sources": [
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "partial",
+        "url": "https://www.austintexas.gov/communications/news/public-invited-attend-2026-austin-city-council-candidate-panels",
+        "medium": "video",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "City of Austin + Ethics Review Commission + LWV Austin Area 'Council Candidate Panel,' District 5, held evening of Sept 17 2026, aired on ATXN.TV (Eng/Spanish) + KAZI FM 88.7; all candidates invited; not yet confirmed-archived at research time."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "yes",
+        "url": "https://communityimpact.com/southwest-austin-dripping-springs/election/meet-the-candidates-running-for-austin-city-council-district-5/",
+        "medium": "written",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "All 4 candidates (Weinberg, Brink, Abraham, Alter) answer the same 4 questions in their own words; published Sept 11 2026, updated Sept 15 to add Abraham. Strongest verified source for this race."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://lwvaustin.org/Voters-Guide",
+        "medium": "written",
+        "neutral": true,
+        "tos": "vote411-lwv",
+        "notes": "VOTE411-powered LWV Austin Area Voters Guide; framework/integration is real but the 2026 general-election candidate content was not yet live as of research date (early voting starts Oct 19)."
+      }
+    ],
+    "hubs": [
+      "League of Women Voters Austin Area",
+      "City of Austin Communications & Engagement + Ethics Review Commission",
+      "Austin Chambers of Commerce coalition",
+      "Community Impact Newspaper",
+      "Austin Monitor",
+      "The Austin Bulldog",
+      "Austin Chronicle",
+      "KVUE",
+      "KXAN",
+      "KUT",
+      "ATXN.TV / KAZI FM 88.7",
+      "Friends of Austin Neighborhoods"
+    ]
+  },
+  {
+    "race": "ut-sboe-14",
+    "level": "state board",
+    "state": "UT",
+    "candidates": ["Nichole Isom", "Courtnee Justice", "Linda Hanks", "Will Pierce"],
+    "sources": [
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "yes",
+        "url": "https://ballotpedia.org/Nichole_Isom",
+        "medium": "written",
+        "neutral": true,
+        "tos": "ballotpedia",
+        "notes": "Isom completed Ballotpedia's Candidate Connection survey in 2026 (full bio/3-key-messages/policy-passions answers). Hanks (https://ballotpedia.org/Linda_Hanks), Justice, and Pierce all have live pages but have not completed it. Best single verified source for this race."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://ivoterguide.com/candidate/92072/race/25429/election/1383",
+        "medium": "written",
+        "neutral": false,
+        "tos": "other",
+        "notes": "iVoterGuide questionnaire, same format across candidates (Isom + Hanks at https://ivoterguide.com/candidate/80649/race/25429/election/1383); explicitly labeled 'Conservative'/advocacy-flavored; every item shows 'Did not answer' for both candidates checked."
+      },
+      {
+        "type": "voter_pamphlet",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://vote.utah.gov/wp-content/uploads/2026/01/USBE-14-Linda-Hanks.pdf",
+        "medium": "written",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "Official USBE candidate-statement PDF for Hanks; file confirmed real (HTTP 200) but is a scanned image with no extractable text layer, so wording/comparability to other candidates' equivalents is unconfirmed."
+      }
+    ],
+    "hubs": [
+      "Utah Education Debate Coalition (Utah Assoc. of Public Charter Schools)",
+      "Ballotpedia",
+      "iVoterGuide.com",
+      "Utah Parents United",
+      "KUER",
+      "Salt Lake Tribune",
+      "League of Women Voters of Utah / VOTE411",
+      "Local rural papers (Emery County Progress, Richfield Reaper, Sanpete Messenger)"
+    ]
+  },
+  {
+    "race": "princeton-council-tx",
+    "level": "tiny town",
+    "state": "TX",
+    "candidates": ["Jaisen Rutledge", "Jan Goria"],
+    "sources": [
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "yes",
+        "url": "https://princetontx.new.swagit.com/videos/389581",
+        "medium": "video",
+        "neutral": true,
+        "tos": "govt",
+        "notes": "Runoff candidate forum, Princeton-Lowry Crossing Chamber of Commerce, moderated by LWV of Collin County, May 30 2026; both finalists answered the same live questions (public safety, transparency, community identity). Strongest source in this race."
+      },
+      {
+        "type": "forum",
+        "tier": 1,
+        "exists": "yes",
+        "url": "https://web.archive.org/web/20260604152434/https://princetonherald.com/2026/05/30/council-runoff-candidates-meet-in-forum/",
+        "medium": "written",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "Princeton Herald news write-up of the same forum with direct attributed quotes from both candidates; live URL now 404s, this Wayback copy is verified. Secondary account of the same event above, not an independent one."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "yes",
+        "url": "https://princetonherald.com/2026/04/21/early-voting-for-princeton-city-council-place-4/",
+        "medium": "written",
+        "neutral": true,
+        "tos": "newspaper-or-tv-chain",
+        "notes": "Princeton Herald Q&A covering all 4 first-round candidates (Goria, Abdulkareem, Ramani, Rutledge) responding to the same questions in their own words; predates the runoff but covers both finalists."
+      },
+      {
+        "type": "questionnaire",
+        "tier": 3,
+        "exists": "partial",
+        "url": "https://ballotpedia.org/Jaisen_Rutledge_(Princeton_City_Council_Seat_4,_Texas,_candidate_2026)",
+        "medium": "written",
+        "neutral": true,
+        "tos": "ballotpedia",
+        "notes": "Candidate Connection stub exists for both Rutledge and Goria (https://ballotpedia.org/Jan_Goria_(Princeton_City_Council_Seat_4,_Texas,_candidate_2026)); neither completed the survey."
+      }
+    ],
+    "hubs": [
+      "Princeton-Lowry Crossing Chamber of Commerce",
+      "League of Women Voters of Collin County",
+      "Princeton Herald",
+      "KERA News",
+      "Community Impact"
+    ]
+  }
+]

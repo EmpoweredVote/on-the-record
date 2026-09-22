@@ -3,8 +3,9 @@ prompt change (spec 2026-08-05-source-tier-recalibration). Cursor- and
 provider-injected so it composes in one transaction (house pattern, db.py).
 
 Updates ONLY the classifier-guess fields (source_tier_guess,
-event_kind_guess, confidence, why) — never status, route, or provenance.
-Metadata-only: the fetch-time captions/page peek is not re-run."""
+event_kind_guess, confidence, why, original_vs_clip) — never status, route,
+or provenance. Metadata-only: the fetch-time captions/page peek is not
+re-run."""
 from __future__ import annotations
 
 from src.discovery.classify import classify_item
@@ -52,8 +53,8 @@ def reclassify_row(cur, provider, row) -> tuple:
     cur.execute("""
         update essentials.discovered_sources
         set source_tier_guess = %s, event_kind_guess = %s,
-            confidence = %s, why = %s
+            confidence = %s, why = %s, original_vs_clip = %s
         where id = %s::uuid
     """, (verdict.source_tier_guess, verdict.event_kind_guess,
-          verdict.confidence, verdict.why, row_id))
+          verdict.confidence, verdict.why, verdict.original_vs_clip, row_id))
     return old_tier, verdict.source_tier_guess

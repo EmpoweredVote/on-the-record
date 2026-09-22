@@ -6,7 +6,7 @@ description: Audit curated quotes in essentials.quotes (ev-accounts DB) against 
 # Audit Quotes
 
 Audit already-curated quotes in `essentials.quotes` (the **ev-accounts** DB) against
-`essentials/docs/QUOTE-CURATION-PRINCIPLES.md`. By default the audit sweeps **all live quotes
+`docs/quote-curation/PRINCIPLES.md`. By default the audit sweeps **all live quotes
 across all races** — narrower scopes (a candidate, a topic, explicit ids) are opt-in. It runs a
 free mechanical pass, fans out a **per-quote** judgment pass per race, then a **per-set**
 comparability pass over that race's questions, runs a portfolio (coverage-skew) pass, and renders
@@ -18,7 +18,7 @@ what's already there.
 
 ## Workflow
 
-- [ ] **Read principles + catalog first.** `essentials/docs/QUOTE-CURATION-PRINCIPLES.md` (the
+- [ ] **Read principles + catalog first.** `docs/quote-curation/PRINCIPLES.md` (the
       *why*) and this skill's [CHECKS.md](CHECKS.md) (the *mechanics* — findings schema, the
       mechanical checks, the eleven per-quote judgment checks and the two per-set ones, both
       judgment-agent prompt templates, and the portfolio instructions). If the two ever disagree,

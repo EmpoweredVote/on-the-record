@@ -10,6 +10,7 @@ EVENT_KINDS = (
     "news_clip",
     "press_conference",
     "podcast",
+    "questionnaire",
     "other",
 )
 
@@ -31,13 +32,19 @@ def validate_event_kind(value: str) -> str:
 _CIVIC_ROLES = ("public_comment", "staff", "official", "presenter")
 _CAMPAIGN_ROLES = ("candidate", "moderator", "panelist")
 
+# Interview/host-guest formats: the local people tagged are usually the show's
+# own on-air staff (anchor/host/correspondent) or a non-roster guest, not
+# campaign roles. Default is "host" (the recurring on-air person).
+_INTERVIEW_ROLES = ("host", "anchor", "guest", "correspondent", "interviewee")
+
 LOCAL_ROLE_SETS = {
     "council": _CIVIC_ROLES,
     "school_board": _CIVIC_ROLES,
     "community_meeting": _CIVIC_ROLES,
     "floor": _CIVIC_ROLES,
     "press_conference": ("official", "staff", "presenter", "public_comment"),
-    "podcast": _CAMPAIGN_ROLES,
+    "news_clip": _INTERVIEW_ROLES,
+    "podcast": _INTERVIEW_ROLES,
     "forum": _CAMPAIGN_ROLES,
     "debate": _CAMPAIGN_ROLES,
 }

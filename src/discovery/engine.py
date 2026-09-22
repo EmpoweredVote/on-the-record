@@ -17,6 +17,8 @@ import psycopg2
 from src import config
 from src.discovery import db
 from src.discovery.classify import classify_item
+from src.discovery.hubs import hubs_for_race, rank_hubs
+from src.discovery.locality import local_query_locality
 from src.discovery.prefilter import is_stale, normalize, prefilter_item
 from src.discovery.search import queries_for_candidate
 from src.source_key import source_key
@@ -32,6 +34,7 @@ class RunStats:
     inserted_pending: int = 0
     inserted_auto_filtered: int = 0
     spend_capped: int = 0
+    hub_items_examined: int = 0
     failures: list = field(default_factory=list)
 
 
@@ -67,9 +70,39 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                   peek_fetcher, sleep_fn, meeting_keys: set, today: dt.date,
                   dry_run: bool = False, race_filter: "str | None" = None,
                   classify_cap: "int | None" = None,
-                  skip_watchlist: bool = False, skip_sweeps: bool = False) -> RunStats:
+                  skip_watchlist: bool = False, skip_sweeps: bool = False,
+                  skip_hubs: bool = False, load_hubs_fn=None, hub_raw_items_fn=None,
+                  reconnect_fn=None) -> RunStats:
     stats = RunStats()
     cur = conn.cursor()
+
+    def commit_unit(pre_commit, *, label):
+        """Run pre_commit() then commit this unit (one outlet, one swept race).
+        A dropped connection here must not kill the whole run: record it, and if
+        a reconnect_fn was injected, rebuild conn+cur so the next unit starts
+        clean. The current unit's uncommitted rows are lost -- consistent with
+        the one-commit-per-unit durability contract in this module's docstring.
+        Returns True only when the commit actually landed."""
+        nonlocal conn, cur
+        try:
+            pre_commit()
+            conn.commit()
+            return True
+        except psycopg2.Error as exc:
+            stats.failures.append(f"{label} commit: {exc}")
+            print(f"FAILED {label} commit: {exc}", file=sys.stderr)
+            if reconnect_fn is None:
+                return False
+            try:
+                conn = reconnect_fn()
+                cur = conn.cursor()
+                print(f"RECONNECTED after dropped connection ({label})",
+                      file=sys.stderr)
+            except Exception as re_exc:  # noqa: BLE001 — loud, still non-fatal
+                stats.failures.append(f"reconnect: {re_exc}")
+                print(f"FAILED reconnect: {re_exc}", file=sys.stderr)
+            return False
+
     tracked = db.fetch_tracked_candidates(cur)
     by_race: dict = {}
     by_norm_name: dict = {}
@@ -141,6 +174,9 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
         pending = (verdict.rejected_reason is None and verdict.relevant
                    and verdict.confidence >= config.DISCOVERY_CONFIDENCE_FLOOR)
         status = "pending" if pending else "auto_filtered"
+        # Flag-not-guard (2026-09-18): a tracked candidate's own prior-cycle answers
+        # stay pending (relevant) and carry the structured prior_cycle + cycle year
+        # so the review UI can label + rank them; the interim `why` marker is gone.
         matched_ids = sorted({t.politician_id for t in matched})
         db.insert_discovered(cur, {
             "source_key": key, "url": item.url, "title": item.title,
@@ -151,10 +187,13 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             "published_at": item.published_at,
             "matched_politician_ids": matched_ids, "race_id": race_id,
             "event_kind_guess": verdict.event_kind_guess,
+            "original_vs_clip": verdict.original_vs_clip,
             "source_tier_guess": verdict.source_tier_guess,
             "route": verdict.route, "confidence": verdict.confidence,
             "why": verdict.why or verdict.rejected_reason,
             "discovered_via": item.via, "status": status,
+            "prior_cycle": verdict.prior_cycle,
+            "source_cycle_year": verdict.source_cycle_year,
         })
         seen.add(key)
         if status == "pending":
@@ -190,8 +229,59 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
             for item in items:
                 process_safe(item, all_names, None)
             if not dry_run:
-                db.mark_outlet_polled(cur, outlet.id)
-                conn.commit()
+                commit_unit(lambda: db.mark_outlet_polled(cur, outlet.id),
+                            label=f"outlet {outlet.name}")
+
+    # Hub lane (Slice 2B): comparable-source hubs (debate/forum registries,
+    # voter-guide sites) checked per race via scoped search. Runs BEFORE the
+    # sweep phase and does NOT call record_sweep -- it piggybacks on the
+    # sweep cadence (sweep_due against the pre-run snapshot below). Sweeps
+    # call record_sweep as they go, so a hub phase running AFTER them would
+    # read a freshly-updated last_swept_at and see every race as not-due.
+    # Running first means the hub phase reads the same pre-run cadence
+    # sweeps do, keeping --skip-hubs and --skip-sweeps independent.
+    if not skip_hubs and load_hubs_fn is not None and hub_raw_items_fn is not None:
+        try:
+            all_hubs = load_hubs_fn(cur)
+        except Exception as exc:            # loud, non-fatal — a hub-registry read failure never aborts the run
+            stats.failures.append(f"load_hubs: {exc}")
+            print(f"FAILED load_hubs: {exc}", file=sys.stderr)
+            all_hubs = []
+        if all_hubs:
+            hub_state = db.fetch_sweep_state(cur)     # pre-run snapshot (hub phase runs before sweeps record)
+            for race_id, cands in by_race.items():
+                if race_filter and race_id != race_filter:
+                    continue
+                if not race_filter and not sweep_due(cands[0].election_date, hub_state.get(race_id), today):
+                    continue
+                if not dry_run and stats.classified >= cap:
+                    print("SPEND CAP: deferring remaining hub lanes to next run")
+                    break
+                locality = local_query_locality(cands[0].position_name,
+                                                 cands[0].government_name)
+                applicable = rank_hubs(hubs_for_race(
+                    all_hubs, state=cands[0].state, locality=locality))
+                if not applicable:
+                    continue
+                year = (cands[0].election_date or "")[:4]
+                try:
+                    items = hub_raw_items_fn(
+                        applicable,
+                        candidates=[c.full_name for c in cands],
+                        locality=locality,                       # None for federal/statewide
+                        year=year,
+                        budget=config.DISCOVERY_HUB_BUDGET,
+                        local_type_budget=config.DISCOVERY_HUB_LOCAL_TYPE_BUDGET,
+                    )
+                except Exception as exc:    # per-race, loud, non-fatal
+                    stats.failures.append(f"hub race {race_id}: {exc}")
+                    print(f"FAILED hub race {race_id}: {exc}", file=sys.stderr)
+                    items = []
+                for it in items:
+                    stats.hub_items_examined += 1
+                    process_safe(it, [c.full_name for c in cands], race_id)
+                if not dry_run:
+                    commit_unit(lambda: None, label=f"hub race {race_id}")
 
     if not skip_sweeps:
         state = db.fetch_sweep_state(cur)
@@ -246,10 +336,12 @@ def run_discovery(conn, *, provider, fetch_feed_items, ytsearch_fn, hydrate_fn,
                 # the cap/failure made us skip. But the rows already
                 # inserted this race are paid for -- commit them regardless,
                 # or they die at the caller's conn.close().
-                if (stats.spend_capped == capped_before
-                        and len(stats.failures) == failures_before):
-                    db.record_sweep(cur, race_id)
-                conn.commit()
+                record_ok = (stats.spend_capped == capped_before
+                             and len(stats.failures) == failures_before)
+                commit_unit(
+                    (lambda rid=race_id: db.record_sweep(cur, rid))
+                    if record_ok else (lambda: None),
+                    label=f"race {race_id}")
         if race_filter and race_filter not in by_race:
             stats.failures.append(f"race filter {race_filter}: not a tracked race")
             print(f"FAILED race filter {race_filter}: not a tracked race", file=sys.stderr)
