@@ -223,7 +223,7 @@ def test_transcript_deeplink_expands_bare_youtube_id_with_timestamp():
     extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
         "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     src = _tsrc(video_url="-ynsUtI-By8")
     items, leads = run_transcript_source(src, politician_id="p1",
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
