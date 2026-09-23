@@ -2,7 +2,7 @@ import json
 import threading
 import time
 from src.evidence.pipeline import (Providers, run_source, run_candidate, run_transcript_source,
-                                   _concurrent_map, _deep_link)
+                                   _concurrent_map, _deep_link, _local_window)
 from src.evidence.data import TranscriptSource
 from src.evidence.models import Status, SourceType
 
@@ -316,6 +316,49 @@ def test_transcript_crosscheck_sees_trimmed_window_not_full_text():
     seen = prov.crosschecker.prompts[0]
     assert turn in seen and len(seen) < 4000 and len(seen) < len(big) // 5
     assert items[0].status == Status.GREEN.value
+
+
+def _deep_full_text(turn):
+    # The turn sits far past the first 2*radius chars, so a window taken from
+    # the start of full_text cannot contain it.
+    return (("Moderator: Unrelated question. " * 200) + f"Karen Bass: {turn}\n"
+            + ("Moderator: More filler. " * 100))
+
+def test_local_window_finds_head_capitalized_by_extractor():
+    # 2026-09-23 LA Mayor re-run: the quote starts mid-sentence ("So what I
+    # would do…") and the extractor capitalized its first word. The exact
+    # find missed, and the cross-checker was shown full_text[:1600] instead.
+    turn = ("We have the problem that we do now. So what I would do in a next term "
+            "is basically to end all of the major encampments that you see.")
+    full = _deep_full_text(turn)
+    win = _local_window(full, "What I would do in a next term is basically to end all "
+                              "of the major encampments that you see.")
+    assert "So what I would do in a next term is basically to end all" in win
+    assert win != full[:1600] and len(win) < 2500
+
+def test_local_window_finds_head_differing_in_punctuation_and_spacing():
+    # Curly apostrophes, an em dash and a line break in the transcript; the
+    # quote has straight apostrophes, a hyphen and single spaces.
+    turn = "Well, we’re going to cut permit times\nin half — that’s the plan."
+    full = _deep_full_text(turn)
+    win = _local_window(full, "We're going to cut permit times in half - that's the plan.")
+    assert turn in win and len(win) < 2500
+
+def test_local_window_finds_quote_that_opens_with_an_ellipsis():
+    turn = "Look, we will build 40,000 units by cutting permit timelines."
+    full = _deep_full_text(turn)
+    win = _local_window(full, "…we will build 40,000 units by cutting permit timelines.")
+    assert turn in win and len(win) < 2500
+
+def test_local_window_prefers_exact_head_over_earlier_normalized_match():
+    # Mirrors _deep_link: a repeated sentence resolves to the occurrence whose
+    # casing the quote was copied from, not the first case-insensitive one.
+    early = "So let's get real about how we actually deliver public safety outcomes."
+    late = "Let's get real about how we actually deliver public safety outcomes."
+    full = (("Moderator: Filler. " * 50) + f"Karen Bass: {early}\n"
+            + ("Moderator: Filler. " * 300) + f"Karen Bass: {late}\n")
+    win = _local_window(full, late, radius=100)
+    assert f"Karen Bass: {late}" in win and early not in win
 
 
 def test_transcript_definitional_primary_greens_despite_crosscheck_primary_false():

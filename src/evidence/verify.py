@@ -18,6 +18,26 @@ def quote_runs(quote: str) -> list:
     return [p for p in (seg.strip() for seg in normalize(quote).split("...")) if p]
 
 
+def find_raw(hay: str, run: str) -> int:
+    """Index in the RAW hay where a normalized run (e.g. a quote_runs item)
+    first matches normalize(hay), or -1. normalize changes lengths (NFKC,
+    whitespace collapse, "…"→"..."), so the normalized hit is mapped back by
+    bisecting on raw prefixes: len(normalize(hay[:k])) never shrinks as k
+    grows, and the first raw char whose prefix covers the hit is its start.
+    Using normalize itself keeps this in step with verbatim_ok's rules."""
+    j = normalize(hay).find(run) if run else -1
+    if j < 0:
+        return -1
+    lo, hi = 0, len(hay)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if len(normalize(hay[:mid + 1])) > j:
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+
 def verbatim_ok(quote: str, source_text: str) -> bool:
     parts = quote_runs(quote)
     if not parts:
