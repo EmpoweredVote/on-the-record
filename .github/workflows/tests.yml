@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  # Supersede stale runs on a PR branch, but let every push to main finish so
+  # each merge gets its own verdict.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Deliberately NO secrets / env. tests/conftest.py clears DATABASE_URL and
+    # RENDER_DEPLOY_HOOK_URL for every test, and the `live_db` tests skip unless
+    # DATABASE_URL was exported before pytest started — so here they skip. There
+    # is no .env.local in CI for run_local.py's import-time loader to pick up.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install ffmpeg
+        # test_cleanup / test_thumbnail exercise real ffmpeg and skip without it.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          # The suite needs torch (run_local.run_pipeline imports it) and
+          # pyannote.metrics (DER tests), so the full requirements.txt stays. But
+          # nothing here touches a GPU: install CPU-only torch/torchaudio FIRST so
+          # requirements.txt sees them satisfied instead of pulling PyPI's
+          # ~2.5 GB of CUDA wheels (which would also bloat the pip cache).
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          # Same pin as house-floor-weekly.yml; not in requirements.txt.
+          # test_vibevoice_gpu_sweep importorskips it.
+          pip install 'modal==1.5.0'
+
+      - name: Run tests
+        run: python -m pytest -q -p no:cacheprovider
