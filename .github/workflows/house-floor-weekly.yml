@@ -11,6 +11,9 @@ on:
       max_sessions:
         description: "Max sessions to process this run"
         default: "12"
+      max_runtime_minutes:
+        description: "Stop starting new sessions past this many minutes"
+        default: "240"
 
 concurrency:
   group: house-floor-weekly
@@ -19,7 +22,14 @@ concurrency:
 jobs:
   process:
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    # 2026-09-19 real run: a single 13h day alone took ~4h (240min) to process,
+    # and the job hit this timeout mid-way through the NEXT session and was
+    # cancelled. --max-runtime-minutes (below) stops new sessions from
+    # STARTING once the budget is spent, so a normal run now exits cleanly
+    # instead of being killed; 350 (vs the 360 hosted-runner hard cap) is
+    # margin for one long session already in flight when the budget check
+    # fires, plus the always-run artifact-staging/upload steps after it.
+    timeout-minutes: 350
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       GOVINFO_API_KEY: ${{ secrets.GOVINFO_API_KEY }}
@@ -58,10 +68,12 @@ jobs:
         env:
           LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '14' }}
           MAX_SESSIONS: ${{ github.event.inputs.max_sessions || '12' }}
+          MAX_RUNTIME_MINUTES: ${{ github.event.inputs.max_runtime_minutes || '240' }}
         run: |
           python -m src.floor_dispatch \
             --lookback-days "$LOOKBACK_DAYS" \
-            --max-sessions "$MAX_SESSIONS"
+            --max-sessions "$MAX_SESSIONS" \
+            --max-runtime-minutes "$MAX_RUNTIME_MINUTES"
 
       - name: Stage floor session artifacts (JSON only)
         if: always()
