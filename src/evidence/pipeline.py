@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from .models import (SourceType, Status, GateResults, EvidenceItem, Lead)
 from .triage import classify_domain
-from .verify import normalize, quote_runs, verbatim_ok
+from .verify import find_raw, normalize, quote_runs, verbatim_ok
 from .extract import extract_quotes
 from .crosscheck import crosscheck
 from .judge import judge as judge_quote
@@ -148,10 +148,18 @@ def _deep_link(source, quote_text: str) -> str:
 def _local_window(full_text: str, quote_text: str, radius: int = 800) -> str:
     """A small slice of full_text around the quote, for the independent
     cross-check — avoids re-sending the whole (often 60K+ char) transcript
-    per quote. Falls back to the first 2*radius chars if the quote's head
-    can't be located verbatim (e.g. the extractor lightly reworded it)."""
+    per quote. The window is sliced from the RAW full_text, so the checker
+    sees real casing, line breaks and "Name: " speaker prefixes. The exact
+    40-char head is tried first (as in _deep_link, so a repeated sentence
+    resolves to the turn whose casing it was copied from); failing that, the
+    first ellipsis run is found with the verbatim gate's normalization and
+    mapped back to its raw offset, so every gate-passing quote is located.
+    Falls back to the first 2*radius chars only if neither matches."""
     head = (quote_text or "").strip()[:40]
     i = full_text.find(head) if head else -1
+    if i < 0:
+        runs = quote_runs(quote_text)
+        i = find_raw(full_text, runs[0]) if runs else -1
     if i < 0:
         return full_text[:2 * radius]
     return full_text[max(0, i - radius): i + len(quote_text) + radius]
