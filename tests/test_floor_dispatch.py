@@ -184,13 +184,23 @@ def test_main_reports_deferred_sessions_in_output(monkeypatch, capsys):
     assert "Done: 1 ok, 0 failed, 1 deferred." in out
 
 
-def test_main_failed_dispatch_still_counted_when_budget_stops_early(monkeypatch):
-    # A failure before the budget trips must still fail the run (existing
-    # behavior); deferral is separate from failure.
+def test_main_failed_dispatch_still_counted_when_budget_stops_early(monkeypatch, capsys):
+    # A failure BEFORE the budget trips must still fail the run, even though
+    # later sessions get deferred — deferral and failure are independent.
     monkeypatch.setattr(fd, "existing_meeting_slugs", lambda: set())
-    monkeypatch.setattr(fd, "discover_sessions", lambda **kw: ["2026-09-05", "2026-09-04"])
-    monkeypatch.setattr(fd, "dispatch", lambda date, **kw: 1)
+    monkeypatch.setattr(
+        fd, "discover_sessions",
+        lambda **kw: ["2026-09-05", "2026-09-04", "2026-09-03"],
+    )
+    monkeypatch.setattr(fd, "dispatch", lambda date, **kw: 1 if date == "2026-09-05" else 0)
 
-    code = fd.main([])
+    times = iter([
+        _dt.datetime(2026, 9, 20, 0, 0),   # start
+        _dt.datetime(2026, 9, 20, 0, 0),   # check before session 1 (0min, OK; fails)
+        _dt.datetime(2026, 9, 20, 5, 1),   # check before session 2 (301 > 300, stop)
+    ])
+    code = fd.main(["--max-runtime-minutes", "300"], clock=lambda: next(times))
 
-    assert code == 1
+    assert code == 1  # the failure wins, even though 2 sessions were also deferred
+    out = capsys.readouterr().out
+    assert "Done: 0 ok, 1 failed, 2 deferred." in out
