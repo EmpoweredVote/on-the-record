@@ -223,7 +223,7 @@ def test_transcript_deeplink_expands_bare_youtube_id_with_timestamp():
     extract = json.dumps({"quotes": [{"text": turn, "context": "housing question",
         "issue":"housing","is_own_words":True,"is_primary_venue":True}]})
     cross = json.dumps({"own_words":True,"in_context":True,"primary":True,"tag_ok":True})
-    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9})
+    jud = json.dumps({"tag_ok":0.9,"context_sufficient":0.9,"dispute_risk":0.1,"mechanism":0.9,"forward_looking":0.9})
     src = _tsrc(video_url="-ynsUtI-By8")
     items, leads = run_transcript_source(src, politician_id="p1",
         providers=_providers(extract, cross, jud), candidate_name="Karen Bass", batch_id="b1")
@@ -236,6 +236,52 @@ def test_transcript_deeplink_bare_youtube_id_without_matching_segment_is_watch_u
     src = _tsrc(video_url="r1EvtOp10Uk")
     assert _deep_link(src, "Words she never said in any segment.") == \
         "https://www.youtube.com/watch?v=r1EvtOp10Uk"
+
+def test_transcript_deeplink_matches_head_capitalized_by_extractor():
+    # 2026-09-23 LA Mayor re-run: the quote starts mid-sentence ("So what I
+    # would do…") and the extractor capitalized its first word. verbatim_ok
+    # is case-insensitive, so the quote passed the gate — the deep link must
+    # match with the same normalization and still carry the timestamp.
+    turn = ("We have the problem that we do now. So what I would do in a next term "
+            "is basically to end all of the major encampments that you see.")
+    src = TranscriptSource(meeting_id="m1", source_url="https://site/m1",
+        video_url="Tks6PkKj6cU", title="Interview", event_kind="interview",
+        full_text=f"Karen Bass: {turn}", segments=[(3.0, "Earlier answer."), (456.652, turn)])
+    assert _deep_link(src, "What I would do in a next term is basically to end all "
+                           "of the major encampments that you see.") == \
+        "https://www.youtube.com/watch?v=Tks6PkKj6cU&t=456s"
+
+def test_transcript_deeplink_prefers_exact_head_over_earlier_normalized_match():
+    # 2026-09-23 Raman debate: she said the sentence mid-answer at 2960s
+    # ("So let's get real…") and again as a standalone line at 5401s. The
+    # quote's exact casing matches the 5401s turn; normalization must only
+    # fill a missing timestamp, never move one an exact match already found.
+    src = _tsrc(video_url="https://www.youtube.com/watch?v=abc")
+    src.segments = [(2960.145, "The force is shrinking. So let's get real about how we "
+                               "actually deliver public safety outcomes. I'm gonna work."),
+                    (5401.025, "Let's get real about how we actually deliver public safety outcomes.")]
+    assert _deep_link(src, "Let's get real about how we actually deliver public safety outcomes.") == \
+        "https://www.youtube.com/watch?v=abc&t=5401s"
+
+def test_transcript_deeplink_matches_head_differing_in_punctuation_and_spacing():
+    # Curly apostrophe + dash + a line break in the segment; straight
+    # apostrophe, hyphen and single spaces in the quote — equal once normalized.
+    turn = "Well, we’re going to cut permit times\nin half — that’s the plan."
+    src = _tsrc(video_url="https://www.youtube.com/watch?v=abc")
+    src.segments = [(20.0, "Opening remarks."), (95.5, turn)]
+    assert _deep_link(src, "We're going to cut permit times in half - that's the plan.") == \
+        "https://www.youtube.com/watch?v=abc&t=95s"
+
+def test_transcript_deeplink_uses_first_ellipsis_run_as_head():
+    # verbatim_ok treats "…"/"..." as a gap between runs, so a quote that
+    # opens with an elision must be located by its first run, not by a head
+    # that still contains the ellipsis.
+    src = _tsrc(video_url="https://www.youtube.com/watch?v=abc")
+    src.segments = [(20.0, "Opening remarks."), (61.0, "Look, we will build 40,000 units.")]
+    assert _deep_link(src, "…we will build 40,000 units.") == \
+        "https://www.youtube.com/watch?v=abc&t=61s"
+    assert _deep_link(src, "We will... 40,000 units.") == \
+        "https://www.youtube.com/watch?v=abc&t=61s"
 
 def test_transcript_reworded_quote_drops_verbatim_fail():
     extract = json.dumps({"quotes": [{"text":"As mayor she plans to construct homes.",

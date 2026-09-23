@@ -1,4 +1,4 @@
-from src.evidence.verify import normalize, verbatim_ok
+from src.evidence.verify import normalize, quote_runs, verbatim_ok
 
 SRC = ("Mayor Bass said, “We will build 30,000 units of housing, "
        "and we will do it with union labor,” during the forum.")
@@ -31,3 +31,7 @@ def test_verbatim_ok_reworded_quote_fails():
     page = "When I'm mayor, we will build 40,000 units by cutting permit timelines."
     reworded = "As mayor she plans to construct 40,000 homes by streamlining permits."
     assert verbatim_ok(reworded, page) is False
+
+def test_quote_runs_are_normalized_ellipsis_separated_pieces():
+    assert quote_runs("…We’ll build  housing... and parks …") == ["we'll build housing", "and parks"]
+    assert quote_runs(" ... ") == []

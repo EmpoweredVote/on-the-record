@@ -13,9 +13,13 @@ def normalize(s: str) -> str:
     return _WS.sub(" ", s).strip().lower()
 
 
+def quote_runs(quote: str) -> list:
+    """The normalized, ellipsis-separated runs a quote must match, in order."""
+    return [p for p in (seg.strip() for seg in normalize(quote).split("...")) if p]
+
+
 def verbatim_ok(quote: str, source_text: str) -> bool:
-    q = normalize(quote)
-    parts = [p for p in (seg.strip() for seg in q.split("...")) if p]
+    parts = quote_runs(quote)
     if not parts:
         return False
     hay = normalize(source_text)
