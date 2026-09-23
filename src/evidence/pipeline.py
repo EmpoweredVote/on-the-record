@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from .models import (SourceType, Status, GateResults, EvidenceItem, Lead)
 from .triage import classify_domain
-from .verify import verbatim_ok
+from .verify import normalize, quote_runs, verbatim_ok
 from .extract import extract_quotes
 from .crosscheck import crosscheck
 from .judge import judge as judge_quote
@@ -121,18 +121,28 @@ def _deep_link(source, quote_text: str) -> str:
     playback — see publish.resolve_playback) is first expanded to a watch URL.
     YouTube URLs get a `t=<seconds>s` query param (using `&` when the base
     already has a `?`, else `?`); other URLs get a `#t=<seconds>` fragment.
+    The first segment holding the quote's exact 40-char head wins; failing
+    that, the head (first ellipsis run) is matched with the verbatim gate's
+    normalization, so a quote that passes verbatim_ok is not denied a
+    timestamp over case/punctuation/spacing (e.g. the extractor capitalizing a
+    quote that starts mid-sentence). Exact goes first because a candidate can
+    repeat a sentence, and the exact casing picks the turn it was taken from.
     Falls back to the video/source URL with no timestamp when no segment matches."""
     base = source.video_url or source.source_url or ""
     if _BARE_YOUTUBE_ID.fullmatch(base):
         base = f"https://www.youtube.com/watch?v={base}"
-    head = (quote_text or "").strip()[:40]
-    for start, text in source.segments:
-        if head and head in text:
-            if "youtube.com" in base or "youtu.be" in base:
-                sep = "&" if "?" in base else "?"
-                return f"{base}{sep}t={int(start)}s"
-            return f"{base}#t={int(start)}"
-    return base
+    raw = (quote_text or "").strip()[:40]
+    runs = quote_runs(quote_text)
+    head = runs[0][:40] if runs else ""
+    start = next((s for s, t in source.segments if raw and raw in t), None)
+    if start is None:
+        start = next((s for s, t in source.segments if head and head in normalize(t)), None)
+    if start is None:
+        return base
+    if "youtube.com" in base or "youtu.be" in base:
+        sep = "&" if "?" in base else "?"
+        return f"{base}{sep}t={int(start)}s"
+    return f"{base}#t={int(start)}"
 
 
 def _local_window(full_text: str, quote_text: str, radius: int = 800) -> str:
