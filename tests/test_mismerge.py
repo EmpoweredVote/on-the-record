@@ -411,9 +411,17 @@ def test_assess_candidate_uses_the_calibrated_merge_bands():
     from src.mismerge import assess_candidate
 
     raw, candidate = _merged_pair()
+    # Probe just either side of each threshold, never ON it: the similarity is
+    # rebuilt through arccos/cos and a unit-normalisation, and whether that lands
+    # one ULP above or below the exact threshold depends on the platform's libm
+    # (macOS rounds 0.42 down to "mismatch"; the Linux CI runner rounds it up to
+    # "uncertain").
+    eps = 1e-6
     for similarity, expected in (
-        (review.MERGE_SIM_MISMATCH, "mismatch"),
-        (review.MERGE_SIM_CONFIDENT, "match"),
+        (review.MERGE_SIM_MISMATCH - eps, "mismatch"),
+        (review.MERGE_SIM_MISMATCH + eps, "uncertain"),
+        (review.MERGE_SIM_CONFIDENT - eps, "uncertain"),
+        (review.MERGE_SIM_CONFIDENT + eps, "match"),
     ):
         angle = np.arccos(similarity)
         embed_fn = lambda start, end, angle=angle: np.array(
