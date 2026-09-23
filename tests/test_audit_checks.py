@@ -1,20 +1,17 @@
 import importlib.util
-import sys
-from pathlib import Path
 
-_SKILL_ROOT = Path(__file__).resolve().parents[1] / ".claude/skills/audit-quotes"
-# checks.py does `from scripts.models import Finding`, so the skill root has to be importable.
-# The repo root also holds a `scripts/` dir, but it has no __init__.py, so it is only a namespace
-# portion — the skill's regular package wins the lookup regardless of ordering.
-if str(_SKILL_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SKILL_ROOT))
+from tests._audit_skill import SKILL_ROOT as _SKILL_ROOT, audit_skill_imports
 
-_SPEC_PATH = _SKILL_ROOT / "scripts/db.py"
-_spec = importlib.util.spec_from_file_location("audit_db2", _SPEC_PATH)
-audit_db = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(audit_db)
+# checks.py does `from scripts.models import Finding`, so `scripts` has to be the skill's package
+# while it loads — and must stop being it afterwards, or the repo's own `scripts.*` modules become
+# unimportable for the rest of the run. See tests/_audit_skill.py.
+with audit_skill_imports():
+    _SPEC_PATH = _SKILL_ROOT / "scripts/db.py"
+    _spec = importlib.util.spec_from_file_location("audit_db2", _SPEC_PATH)
+    audit_db = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(audit_db)
 
-from scripts import checks as audit_checks  # noqa: E402
+    from scripts import checks as audit_checks
 
 
 def test_scope_sql_selects_question_columns():
