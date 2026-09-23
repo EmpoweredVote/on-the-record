@@ -36,6 +36,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Install Python deps
+        id: deps
         run: |
           python -m pip install --upgrade pip
           # The suite needs torch (run_local.run_pipeline imports it) and
@@ -51,3 +52,19 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q -p no:cacheprovider
+
+      # pytest.ini's `testpaths = tests` never collects the skill suites, and
+      # each needs its OWN pytest run: every one of these test dirs has an
+      # __init__.py, so pytest names them all package `tests`, and the second
+      # one loaded in a run fails to import. `!cancelled()` so a red step above
+      # cannot hide a skill suite's own result. audit-quotes holds
+      # test_fixture_parity.py, the on-the-record half of the shared
+      # docs/quote-curation/fixtures parity pair (ev-accounts' research-stances
+      # checker is the other half).
+      - name: Run audit-quotes skill tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python -m pytest .claude/skills/audit-quotes/tests -q -p no:cacheprovider
+
+      - name: Run _shared skill tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python -m pytest .claude/skills/_shared/tests -q -p no:cacheprovider
