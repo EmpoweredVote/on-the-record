@@ -90,7 +90,11 @@ def _default_since(lookback_days: int) -> str:
     return (_dt.date.today() - _dt.timedelta(days=lookback_days)).strftime("%Y-%m-%d")
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(
+    argv: Optional[list[str]] = None,
+    *,
+    clock: Callable[[], "_dt.datetime"] = _dt.datetime.now,
+) -> int:
     parser = argparse.ArgumentParser(description="Weekly House-floor discovery + dispatch")
     parser.add_argument("--since", default=None,
                         help="Only sessions on/after this YYYY-MM-DD "
@@ -98,6 +102,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--lookback-days", type=int, default=10)
     parser.add_argument("--max-sessions", type=int, default=6,
                         help="Cap the number of sessions dispatched per run.")
+    parser.add_argument("--max-runtime-minutes", type=int, default=None,
+                        help="Stop STARTING new sessions once elapsed wall-clock "
+                             "exceeds this many minutes (a session already running "
+                             "still finishes). Leaves headroom under the job's own "
+                             "timeout; undispatched sessions are picked up next run "
+                             "(DB dedup — nothing is lost). Default: no limit.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print the plan; do not dispatch.")
     args = parser.parse_args(argv)
@@ -120,14 +130,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.dry_run or not sessions:
         return 0
 
+    start = clock()
     failures = 0
+    dispatched = 0
     for date in sessions:
+        if args.max_runtime_minutes is not None:
+            elapsed_min = (clock() - start).total_seconds() / 60.0
+            if elapsed_min > args.max_runtime_minutes:
+                remaining = sessions[dispatched:]
+                print(f"\nStopping: {elapsed_min:.0f}min elapsed > "
+                      f"--max-runtime-minutes {args.max_runtime_minutes}. "
+                      f"{len(remaining)} session(s) deferred to next run: "
+                      f"{', '.join(remaining)}")
+                break
         print(f"\n=== Dispatching {date} ===")
         code = dispatch(date)
+        dispatched += 1
         if code != 0:
             failures += 1
             print(f"  FAILED ({date}) exit={code}")
-    print(f"\nDone: {len(sessions) - failures} ok, {failures} failed.")
+    print(f"\nDone: {dispatched - failures} ok, {failures} failed, "
+          f"{len(sessions) - dispatched} deferred.")
     return 1 if failures else 0
 
 

@@ -1,3 +1,4 @@
+import datetime as _dt
 from pathlib import Path
 
 from src import govinfo
@@ -126,3 +127,70 @@ def test_dispatch_returns_nonzero_runner_code():
     def fake_runner(argv, **kwargs):
         return Result()
     assert fd.dispatch("2026-09-04", runner=fake_runner) == 3
+
+
+# --- main(): --max-runtime-minutes stops STARTING new sessions, defers the rest ---
+# Regression for a real run (2026-09-19) that got cancelled by the job's own
+# 330-min timeout mid-session, after a 13h day alone took ~4h to process. A
+# self-imposed budget turns that into a clean partial run instead.
+
+def test_main_stops_dispatching_past_runtime_budget_defers_rest(monkeypatch):
+    monkeypatch.setattr(fd, "existing_meeting_slugs", lambda: set())
+    monkeypatch.setattr(
+        fd, "discover_sessions",
+        lambda **kw: ["2026-09-05", "2026-09-04", "2026-09-03"],
+    )
+    dispatched = []
+    monkeypatch.setattr(fd, "dispatch", lambda date, **kw: dispatched.append(date) or 0)
+
+    times = iter([
+        _dt.datetime(2026, 9, 20, 0, 0),   # start
+        _dt.datetime(2026, 9, 20, 0, 0),   # check before session 1: 0min elapsed, OK
+        _dt.datetime(2026, 9, 20, 5, 1),   # check before session 2: 301min > 300, stop
+    ])
+    code = fd.main(["--max-runtime-minutes", "300"], clock=lambda: next(times))
+
+    assert dispatched == ["2026-09-05"]
+    assert code == 0  # deferring is not a failure
+
+
+def test_main_without_budget_dispatches_everything(monkeypatch):
+    monkeypatch.setattr(fd, "existing_meeting_slugs", lambda: set())
+    monkeypatch.setattr(fd, "discover_sessions", lambda **kw: ["2026-09-05", "2026-09-04"])
+    dispatched = []
+    monkeypatch.setattr(fd, "dispatch", lambda date, **kw: dispatched.append(date) or 0)
+
+    code = fd.main([])
+
+    assert dispatched == ["2026-09-05", "2026-09-04"]
+    assert code == 0
+
+
+def test_main_reports_deferred_sessions_in_output(monkeypatch, capsys):
+    monkeypatch.setattr(fd, "existing_meeting_slugs", lambda: set())
+    monkeypatch.setattr(fd, "discover_sessions", lambda **kw: ["2026-09-05", "2026-09-04"])
+    monkeypatch.setattr(fd, "dispatch", lambda date, **kw: 0)
+
+    times = iter([
+        _dt.datetime(2026, 9, 20, 0, 0),
+        _dt.datetime(2026, 9, 20, 0, 0),
+        _dt.datetime(2026, 9, 20, 10, 0),
+    ])
+    fd.main(["--max-runtime-minutes", "5"], clock=lambda: next(times))
+
+    out = capsys.readouterr().out
+    assert "deferred to next run" in out
+    assert "2026-09-04" in out
+    assert "Done: 1 ok, 0 failed, 1 deferred." in out
+
+
+def test_main_failed_dispatch_still_counted_when_budget_stops_early(monkeypatch):
+    # A failure before the budget trips must still fail the run (existing
+    # behavior); deferral is separate from failure.
+    monkeypatch.setattr(fd, "existing_meeting_slugs", lambda: set())
+    monkeypatch.setattr(fd, "discover_sessions", lambda **kw: ["2026-09-05", "2026-09-04"])
+    monkeypatch.setattr(fd, "dispatch", lambda date, **kw: 1)
+
+    code = fd.main([])
+
+    assert code == 1
