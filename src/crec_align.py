@@ -74,6 +74,29 @@ def _overlap(a: set, b: set) -> float:
     return len(a & b) / min(len(a), len(b))
 
 
+def _mass(tokens: set, weights: Optional[dict]) -> float:
+    """Total weight of a token set (1.0 per token when unweighted)."""
+    w = weights or {}
+    return sum(w.get(t, 1.0) for t in tokens)
+
+
+def _weighted_ratio(
+    a: set, b: set, a_mass: float, b_mass: float, weights: Optional[dict] = None
+) -> tuple[float, float]:
+    """(overlap coefficient, intersection mass), given each side's precomputed
+    total mass. Used by `_align`'s O(m·n) DP, where `d_tokens[i]`/`c_tokens[j]`'s
+    mass is the same across every column/row it's compared against — computing
+    it once per token set (O(m+n)) instead of once per DP cell (O(m·n)) avoids
+    resumming the same set's weights hundreds of times over."""
+    if not a or not b:
+        return 0.0, 0.0
+    w = weights or {}
+    inter_mass = sum(w.get(t, 1.0) for t in (a & b))
+    denom = min(a_mass, b_mass)
+    ratio = inter_mass / denom if denom > 0 else 0.0
+    return ratio, inter_mass
+
+
 def _weighted_overlap(a: set, b: set, weights: Optional[dict] = None) -> tuple[float, float]:
     """(overlap coefficient, intersection mass) using per-token `weights`.
 
@@ -85,15 +108,7 @@ def _weighted_overlap(a: set, b: set, weights: Optional[dict] = None) -> tuple[f
     single-common-word match use the mass alongside the ratio (see
     `_MIN_MATCH_MASS`).
     """
-    if not a or not b:
-        return 0.0, 0.0
-    w = weights or {}
-    inter_mass = sum(w.get(t, 1.0) for t in (a & b))
-    a_mass = sum(w.get(t, 1.0) for t in a)
-    b_mass = sum(w.get(t, 1.0) for t in b)
-    denom = min(a_mass, b_mass)
-    ratio = inter_mass / denom if denom > 0 else 0.0
-    return ratio, inter_mass
+    return _weighted_ratio(a, b, _mass(a, weights), _mass(b, weights), weights)
 
 
 @dataclass
@@ -136,20 +151,31 @@ def _align(
     """
     m, n = len(d_tokens), len(c_tokens)
 
+    # Each token set's mass depends only on its own index, not on the (i, j)
+    # pairing — precompute once (O(m+n)) rather than resumming the same set's
+    # weights on every one of the O(m·n) DP cells it's compared against.
+    d_mass = [_mass(t, weights) for t in d_tokens]
+    c_mass = [_mass(t, weights) for t in c_tokens]
+
     def score(i: int, j: int) -> float:
-        ratio, mass = _weighted_overlap(d_tokens[i], c_tokens[j], weights)
+        ratio, mass = _weighted_ratio(d_tokens[i], c_tokens[j], d_mass[i], c_mass[j], weights)
         return ratio if mass >= min_mass else 0.0
 
     dp = [[0.0] * (n + 1) for _ in range(m + 1)]
+    # Cache each cell's score computed during the forward fill so the
+    # backtrack walk below reads it back instead of recomputing it.
+    score_grid = [[0.0] * n for _ in range(m)]
     for i in range(1, m + 1):
         for j in range(1, n + 1):
-            diag = dp[i - 1][j - 1] + score(i - 1, j - 1)
+            s = score(i - 1, j - 1)
+            score_grid[i - 1][j - 1] = s
+            diag = dp[i - 1][j - 1] + s
             dp[i][j] = max(dp[i - 1][j], dp[i][j - 1], diag)
 
     pairs: list[tuple[int, int]] = []
     i, j = m, n
     while i > 0 and j > 0:
-        sim = score(i - 1, j - 1)
+        sim = score_grid[i - 1][j - 1]
         diag = dp[i - 1][j - 1] + sim
         if diag >= dp[i - 1][j] and diag >= dp[i][j - 1]:
             if sim > _MATCH_FLOOR:

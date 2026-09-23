@@ -127,7 +127,9 @@ def test_weighted_overlap_single_common_token_has_low_mass_despite_ratio_1():
     rare_ratio, rare_mass = _weighted_overlap({"caponegro"}, {"caponegro"}, weights)
     assert common_ratio == rare_ratio == 1.0
     assert common_mass < rare_mass
-    assert common_mass < _MIN_MATCH_MASS <= rare_mass or rare_mass > common_mass
+    # the mass floor must actually sit between them -- this is what lets the
+    # gate keep the rare match and drop the common one, not just "rare > common"
+    assert common_mass < _MIN_MATCH_MASS <= rare_mass
 
 
 def test_align_rejects_boilerplate_match_but_keeps_distinctive_one():
