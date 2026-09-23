@@ -19,5 +19,10 @@ def test_fixtures_cover_every_quote_check():
     cases = json.loads(FIX.read_text())
     seen = {cid for c in cases for cid in c["expect"]}
     required = {"note-missing","note-section-ref","note-too-long","deid-missing","trailing-ellipsis",
-                "partisan-tell","source-tier-4","invalid-source","unquotable-source","scorecard-source","stance-label"}
+                "partisan-tell","invalid-source","unquotable-source","scorecard-source",
+                "pointer-only-source","stance-label"}
     assert required <= seen, f"fixtures miss: {required - seen}"
+    # `required` is a hand-kept list, so also demand that every function in QUOTE_CHECKS fires on
+    # at least one case: a check added to QUOTE_CHECKS without a fixture fails here, not silently.
+    idle = [chk.__name__ for chk in QUOTE_CHECKS if not any(chk(c["row"]) for c in cases)]
+    assert not idle, f"no fixture case exercises: {idle}"
