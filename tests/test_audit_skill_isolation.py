@@ -9,7 +9,7 @@ with ModuleNotFoundError — but only in a full-suite run, never when a file ran
 import importlib
 import sys
 
-from tests._audit_skill import SKILL_ROOT
+from tests._audit_skill import SKILL_ROOT, audit_skill_imports
 
 
 def test_audit_skill_tests_leave_repo_scripts_importable():
@@ -22,3 +22,19 @@ def test_audit_skill_tests_leave_repo_scripts_importable():
     importlib.import_module("scripts.evidence_slice")
     importlib.import_module("scripts.judge_ab")
     importlib.import_module("scripts.commit_evidence")
+
+
+def test_audit_skill_loads_when_repo_scripts_is_bound_first():
+    """The other order: a repo `scripts.*` import that runs first must not hide the skill's package.
+
+    Once the repo's namespace `scripts` is in sys.modules, a plain import resolves `scripts.checks`
+    against it and fails, so the skill tests would break whenever a repo-scripts test loads first.
+    """
+    importlib.import_module("scripts.evidence_slice")
+    repo_scripts = sys.modules["scripts"]
+
+    with audit_skill_imports():
+        checks = importlib.import_module("scripts.checks")
+
+    assert checks.__file__.startswith(str(SKILL_ROOT))
+    assert sys.modules["scripts"] is repo_scripts
