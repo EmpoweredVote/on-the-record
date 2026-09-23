@@ -9,6 +9,7 @@ identity only — never touches timestamps/words (ADR-0001). Pure; no network.
 """
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -25,6 +26,23 @@ will would shall should can could may might must do does did have has had not
 # A backtracked diagonal only counts as a real match above this overlap floor.
 _MATCH_FLOOR = 0.1
 
+# A day dominated by one-minute speeches repeats the presiding officer's
+# recognition boilerplate ("the gentleman from Texas is recognized", "without
+# objection...") dozens of times. Those phrases clear _MATCH_FLOOR against many
+# unrelated CREC turns because a handful of common procedural words dominate a
+# short turn's content-token set — a real House day produced degenerate
+# single-shared-word "matches" that scored overlap 1.0 by pure coincidence
+# (e.g. a one-word diarized turn "like" landing on an unrelated member's
+# speech that happened to also contain "like"). A match below this absolute
+# weighted-token-mass floor is treated as a non-match regardless of its ratio:
+# a bare overlap COEFFICIENT is scale-invariant when the smaller side is a
+# single token (weighting that token doesn't change a ratio of weight/itself),
+# so a mass floor is the only thing that can reject it. Calibrated against
+# real House floor sessions (2026-09-02, 2026-09-03, 2026-09-16): raises
+# confident member resolutions on all three (no session regressed) while
+# eliminating the observed single-token false matches.
+_MIN_MATCH_MASS = 4.0
+
 
 def _content_tokens(text: str) -> set[str]:
     """Lowercased content-word set: drop punctuation, stopwords, tokens < 3 chars."""
@@ -32,11 +50,65 @@ def _content_tokens(text: str) -> set[str]:
     return {t for t in toks if len(t) >= 3 and t not in _STOPWORDS}
 
 
+def _idf_weights(token_sets: list[set]) -> dict[str, float]:
+    """Inverse-document-frequency weight per content token across all turns.
+
+    A token that recurs in nearly every turn — recognition/procedural
+    boilerplate like "gentleman", "recognized", "yield", "minute" on a
+    one-minute-speech day — carries almost no identifying signal and gets a
+    weight near 1.0. A token unique to one or two turns (a name, a bill
+    detail) gets a much larger weight. Data-driven: no hardcoded word list,
+    so it adapts to whatever vocabulary actually repeats in a given session.
+    """
+    df = Counter()
+    for toks in token_sets:
+        df.update(toks)
+    n = len(token_sets)
+    return {tok: math.log((n + 1) / (count + 1)) + 1.0 for tok, count in df.items()}
+
+
 def _overlap(a: set, b: set) -> float:
     """Overlap coefficient: |a∩b| / min(|a|,|b|); 0.0 if either side is empty."""
     if not a or not b:
         return 0.0
     return len(a & b) / min(len(a), len(b))
+
+
+def _mass(tokens: set, weights: Optional[dict]) -> float:
+    """Total weight of a token set (1.0 per token when unweighted)."""
+    w = weights or {}
+    return sum(w.get(t, 1.0) for t in tokens)
+
+
+def _weighted_ratio(
+    a: set, b: set, a_mass: float, b_mass: float, weights: Optional[dict] = None
+) -> tuple[float, float]:
+    """(overlap coefficient, intersection mass), given each side's precomputed
+    total mass. Used by `_align`'s O(m·n) DP, where `d_tokens[i]`/`c_tokens[j]`'s
+    mass is the same across every column/row it's compared against — computing
+    it once per token set (O(m+n)) instead of once per DP cell (O(m·n)) avoids
+    resumming the same set's weights hundreds of times over."""
+    if not a or not b:
+        return 0.0, 0.0
+    w = weights or {}
+    inter_mass = sum(w.get(t, 1.0) for t in (a & b))
+    denom = min(a_mass, b_mass)
+    ratio = inter_mass / denom if denom > 0 else 0.0
+    return ratio, inter_mass
+
+
+def _weighted_overlap(a: set, b: set, weights: Optional[dict] = None) -> tuple[float, float]:
+    """(overlap coefficient, intersection mass) using per-token `weights`.
+
+    Absent `weights` (or a token missing from it), a token's weight is 1.0 —
+    i.e. this reduces exactly to `_overlap`'s ratio, with mass equal to the
+    plain intersection size. The ratio alone is scale-invariant whenever the
+    smaller side is a single token (that token's weight cancels between
+    numerator and denominator), so callers that need to reject a coincidental
+    single-common-word match use the mass alongside the ratio (see
+    `_MIN_MATCH_MASS`).
+    """
+    return _weighted_ratio(a, b, _mass(a, weights), _mass(b, weights), weights)
 
 
 @dataclass
@@ -62,24 +134,48 @@ def _build_diarized_turns(segments) -> list[DiarizedTurn]:
     return turns
 
 
-def _align(d_tokens: list[set], c_tokens: list[set]) -> list[tuple[int, int]]:
+def _align(
+    d_tokens: list[set],
+    c_tokens: list[set],
+    weights: Optional[dict] = None,
+    min_mass: float = 0.0,
+) -> list[tuple[int, int]]:
     """Monotonic LCS-style alignment of two token-set sequences.
 
     Maximizes total matched overlap, order-preserving and non-crossing, with free
     gaps on both sides. Returns matched (d_index, c_index) pairs whose overlap
-    exceeds `_MATCH_FLOOR`.
+    exceeds `_MATCH_FLOOR` AND whose weighted intersection mass reaches
+    `min_mass` (default 0.0, i.e. no mass requirement — unweighted callers get
+    the original behavior). `weights` defaults every token to 1.0 (see
+    `_weighted_overlap`).
     """
     m, n = len(d_tokens), len(c_tokens)
+
+    # Each token set's mass depends only on its own index, not on the (i, j)
+    # pairing — precompute once (O(m+n)) rather than resumming the same set's
+    # weights on every one of the O(m·n) DP cells it's compared against.
+    d_mass = [_mass(t, weights) for t in d_tokens]
+    c_mass = [_mass(t, weights) for t in c_tokens]
+
+    def score(i: int, j: int) -> float:
+        ratio, mass = _weighted_ratio(d_tokens[i], c_tokens[j], d_mass[i], c_mass[j], weights)
+        return ratio if mass >= min_mass else 0.0
+
     dp = [[0.0] * (n + 1) for _ in range(m + 1)]
+    # Cache each cell's score computed during the forward fill so the
+    # backtrack walk below reads it back instead of recomputing it.
+    score_grid = [[0.0] * n for _ in range(m)]
     for i in range(1, m + 1):
         for j in range(1, n + 1):
-            diag = dp[i - 1][j - 1] + _overlap(d_tokens[i - 1], c_tokens[j - 1])
+            s = score(i - 1, j - 1)
+            score_grid[i - 1][j - 1] = s
+            diag = dp[i - 1][j - 1] + s
             dp[i][j] = max(dp[i - 1][j], dp[i][j - 1], diag)
 
     pairs: list[tuple[int, int]] = []
     i, j = m, n
     while i > 0 and j > 0:
-        sim = _overlap(d_tokens[i - 1], c_tokens[j - 1])
+        sim = score_grid[i - 1][j - 1]
         diag = dp[i - 1][j - 1] + sim
         if diag >= dp[i - 1][j] and diag >= dp[i][j - 1]:
             if sim > _MATCH_FLOOR:
@@ -199,11 +295,16 @@ def align_crec_to_diarization(
     d_tokens = [_content_tokens(t.text) for t in d_turns]
     c_tokens = [_content_tokens(ct.text) for ct, _ in annotated_turns]
 
-    pairs = _align(d_tokens, c_tokens)
+    # IDF weights down-rank recurring floor-procedure vocabulary (see
+    # _MIN_MATCH_MASS) so it can't manufacture a confident match out of
+    # boilerplate common to many turns.
+    weights = _idf_weights(d_tokens + c_tokens)
+    pairs = _align(d_tokens, c_tokens, weights, min_mass=_MIN_MATCH_MASS)
     matches = []
     for d_idx, c_idx in pairs:
         label = d_turns[d_idx].speaker_label
         resolved = annotated_turns[c_idx][1]
-        matches.append((label, resolved, _overlap(d_tokens[d_idx], c_tokens[c_idx])))
+        ratio, _mass = _weighted_overlap(d_tokens[d_idx], c_tokens[c_idx], weights)
+        matches.append((label, resolved, ratio))
 
     return _aggregate(d_turns, matches, min_confidence)

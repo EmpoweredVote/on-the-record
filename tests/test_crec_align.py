@@ -87,6 +87,76 @@ def test_align_empty():
 
 
 # add to tests/test_crec_align.py
+from src.crec_align import _idf_weights, _weighted_overlap, _MIN_MATCH_MASS
+
+
+def test_idf_weights_downweights_tokens_common_across_turns():
+    # "recognized" appears in every turn (procedural boilerplate); "caponegro"
+    # appears in exactly one. The rare token must weigh strictly more.
+    token_sets = [
+        {"recognized", "texas"},
+        {"recognized", "virginia"},
+        {"recognized", "maryland"},
+        {"recognized", "caponegro", "commander"},
+    ]
+    weights = _idf_weights(token_sets)
+    assert weights["caponegro"] > weights["recognized"]
+    # a token in every set still gets a positive (not zero/negative) weight
+    assert weights["recognized"] > 0
+
+
+def test_weighted_overlap_defaults_to_plain_overlap_when_no_weights():
+    ratio, mass = _weighted_overlap({"a", "b", "c"}, {"a", "b"})
+    assert ratio == 1.0          # matches _overlap's containment case
+    assert mass == 2.0           # unweighted mass == intersection size
+
+
+def test_weighted_overlap_empty_side_is_zero():
+    assert _weighted_overlap(set(), {"a"}) == (0.0, 0.0)
+    assert _weighted_overlap({"a"}, set()) == (0.0, 0.0)
+
+
+def test_weighted_overlap_single_common_token_has_low_mass_despite_ratio_1():
+    # A single-token diarized turn coincidentally sharing one very common
+    # (low-weight) word with an unrelated CREC turn scores ratio 1.0 no matter
+    # how that token is weighted -- the same weight cancels in numerator and
+    # denominator. Only the ABSOLUTE mass distinguishes this from a genuine
+    # single-word-but-distinctive match.
+    weights = {"like": 1.2, "caponegro": 8.0}
+    common_ratio, common_mass = _weighted_overlap({"like"}, {"like"}, weights)
+    rare_ratio, rare_mass = _weighted_overlap({"caponegro"}, {"caponegro"}, weights)
+    assert common_ratio == rare_ratio == 1.0
+    assert common_mass < rare_mass
+    # the mass floor must actually sit between them -- this is what lets the
+    # gate keep the rare match and drop the common one, not just "rare > common"
+    assert common_mass < _MIN_MATCH_MASS <= rare_mass
+
+
+def test_align_rejects_boilerplate_match_but_keeps_distinctive_one():
+    # Real 2026-09-16 House-floor shape: a one-word presiding-officer fragment
+    # ("like", left over after the recognition boilerplate is stripped of
+    # stopwords) coincidentally shares its one token with an unrelated
+    # member's speech elsewhere -- ratio 1.0, but almost no real content. A
+    # true one-minute speech shares several turn-specific words with its own
+    # CREC turn. Weighted+mass-gated alignment must keep the real match and
+    # drop the coincidental one, even though unweighted overlap scores both
+    # as perfect 1.0 matches.
+    d_tokens = [{"like"}, {"caponegro", "commander", "recognize", "rise"}]
+    c_tokens = [{"like", "unrelated", "speech", "content"}, {"caponegro", "commander", "recognize", "rise"}]
+    weights = _idf_weights(d_tokens + c_tokens)
+    pairs = _align(d_tokens, c_tokens, weights, min_mass=_MIN_MATCH_MASS)
+    assert pairs == [(1, 1)]   # only the distinctive turn matched; "like" rejected
+
+
+def test_align_mass_floor_defaults_to_zero_and_preserves_old_behavior():
+    # Calling _align with no weights/min_mass (as every pre-existing caller
+    # does) must behave exactly as before: a single shared token still counts.
+    d = [{"apple"}]
+    c = [{"apple"}]
+    assert _align(d, c) == [(0, 0)]
+
+
+# add to tests/test_crec_align.py
 from src.crec_align import LabelResolution, _confidence, _aggregate
 from src.congress_roster import CongressMember
 from src.crec_normalize import ResolvedSpeaker
