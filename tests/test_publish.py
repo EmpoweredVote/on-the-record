@@ -614,6 +614,56 @@ def test_publish_meeting_clean_names_reach_db_stage(monkeypatch):
         publish.publish_meeting(_speaker_meeting(speakers))
 
 
+def test_publish_meeting_allows_crec_duplicate_named_speakers(monkeypatch):
+    """A member who spoke under two diarized labels — both resolved from the
+    Congressional Record — is a legitimate diarization split (identify.py's
+    _dedupe_identities already keeps both), not a mis-identification. publish
+    must not refuse this the way it refuses an ordinary name collision."""
+    import src.publish as publish
+
+    def sentinel():
+        raise RuntimeError("reached-db-stage")
+
+    monkeypatch.setattr(publish, "_require_db_url", sentinel)
+    speakers = {
+        "SPEAKER_48": SpeakerMapping(
+            "SPEAKER_48", "Rep. Brian Mast", confidence=0.97,
+            id_method="congressional_record",
+        ),
+        "SPEAKER_54": SpeakerMapping(
+            "SPEAKER_54", "Rep. Brian Mast", confidence=0.94,
+            id_method="congressional_record",
+        ),
+    }
+    with pytest.raises(RuntimeError, match="reached-db-stage"):
+        publish.publish_meeting(_speaker_meeting(speakers))
+
+
+def test_publish_meeting_still_refuses_mixed_crec_and_non_crec_duplicate(monkeypatch):
+    """A non-CREC label (voice/LLM guess) colliding with a CREC-resolved label
+    is exactly the mis-ID identify.py's dedupe guards against — not a floor
+    diarization split. The CREC carve-out must not swallow this case."""
+    import src.publish as publish
+
+    class NoDB:
+        def connect(self, *a, **k):
+            raise AssertionError("psycopg2.connect must not be reached")
+
+    monkeypatch.setattr(publish, "psycopg2", NoDB())
+    speakers = {
+        "SPEAKER_48": SpeakerMapping(
+            "SPEAKER_48", "Rep. Brian Mast", confidence=0.97,
+            id_method="congressional_record",
+        ),
+        "SPEAKER_54": SpeakerMapping(
+            "SPEAKER_54", "Rep. Brian Mast", confidence=0.6,
+            id_method="llm",
+        ),
+    }
+    with pytest.raises(ValueError, match="Cannot publish"):
+        publish.publish_meeting(_speaker_meeting(speakers))
+
+
 def test_publish_meeting_duplicate_check_ignores_placeholder_statuses(monkeypatch):
     """Two 'Unidentified Speaker' or 'Non-speaker' rows are a valid published
     state — placeholder names are not identities and must not block publish."""

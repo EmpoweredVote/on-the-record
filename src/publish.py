@@ -1268,8 +1268,23 @@ def publish_meeting(
     # published state (identify's dedupe guard enforces this, but a review
     # rename can re-create it — and downstream, memo reconciliation drops the
     # member's votes as "ambiguous"). Refuse before any DB work.
+    #
+    # Exception: identify.py's _dedupe_identities intentionally keeps multiple
+    # CREC-resolved labels for the same member (a diarization split of one
+    # talkative member, e.g. a floor manager giving several floor speeches) —
+    # only a non-CREC label colliding with a CREC one is treated as a mis-ID.
+    # This guard must not contradict that: drop any group where every label
+    # was resolved via the Congressional Record before deciding whether to raise.
     from .review import duplicate_named_speakers
     dups = duplicate_named_speakers(meeting.speakers)
+    dups = {
+        name: labels
+        for name, labels in dups.items()
+        if any(
+            meeting.speakers[label].id_method != "congressional_record"
+            for label in labels
+        )
+    }
     if dups:
         parts = [
             f"{len(labels)} speakers named {meeting.speakers[labels[0]].speaker_name!r} ({', '.join(labels)})"
