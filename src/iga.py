@@ -21,6 +21,7 @@ Parsing is pure; the only network primitive is ``fetch``.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -42,6 +43,22 @@ _STREAM_RE = re.compile(
     r"|(?P<floor>senate|house))/media/(?P<media>[^/]+)/[^/]+/(?P<stem>[^/]+)\.m3u8$",
     re.I,
 )
+# EV-owned CloudFront in front of iga.in.gov/video/* that adds the CORS header
+# IGA's own CDN drops on cached GETs (ev-cto decision 0026). The site's hls.js
+# player cannot read IGA streams directly outside Safari.
+MEDIA_PROXY_BASE = os.environ.get("IGA_MEDIA_PROXY_BASE", "https://media.empowered.vote").rstrip("/")
+
+
+def proxied_playback_url(url: str) -> str:
+    """The media proxy URL for an IGA /video/ stream; any other URL unchanged."""
+    if not is_iga_url(url):
+        return url
+    parsed = urlparse(url)
+    if not parsed.path.startswith("/video/") or not MEDIA_PROXY_BASE:
+        return url
+    return MEDIA_PROXY_BASE + parsed.path
+
+
 _MONTHS = ("Jan.", "Feb.", "Mar.", "Apr.", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec.")
 
 

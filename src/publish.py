@@ -94,7 +94,9 @@ def resolve_playback(audio_source: str) -> tuple[Optional[str], Optional[str]]:
         return "audio", source
 
     if path.endswith(".m3u8"):
-        return "hls", source
+        from .iga import proxied_playback_url
+
+        return "hls", proxied_playback_url(source)
 
     return None, None
 

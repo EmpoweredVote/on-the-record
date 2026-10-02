@@ -181,3 +181,24 @@ def test_build_roster_reports_unmatched():
     assert len(response["members"]) == 13
     assert [m.legislator.last_name for m in matches if not m.politician_id] == ["Walker"]
     assert all(m["title"] == "Senator" for m in response["members"])
+
+
+# --- playback via the EV media proxy ----------------------------------------
+
+def test_iga_stream_playback_goes_through_media_proxy():
+    from src.publish import resolve_playback
+
+    kind, url = resolve_playback(MASTER)
+    assert kind == "hls"
+    assert url == ("https://media.empowered.vote/video/124/2026/committees/senate/standing/"
+                   "committee_judiciary_4200/media/e3d3d7a6-b420-40b5-896d-46771d09861f/"
+                   "Judiciary_1_14_2026_1.mp4/Judiciary_1_14_2026_1.m3u8")
+
+
+def test_non_iga_hls_playback_unchanged():
+    from src.publish import resolve_playback
+
+    other = "https://clerk.house.gov/cdn/session/manifest.m3u8"
+    assert resolve_playback(other) == ("hls", other)
+    assert iga.proxied_playback_url("https://iga.in.gov/session/2026/video/senate") == \
+        "https://iga.in.gov/session/2026/video/senate"
