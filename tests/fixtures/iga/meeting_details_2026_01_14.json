@@ -1,0 +1,222 @@
+{
+ "agenda": [
+  {
+   "name": "SB0285.01.INTR",
+   "base_name": "SB0285",
+   "label": "SB 285",
+   "url": "/legislative/2026/bills/senate/285",
+   "description": "Housing matters.",
+   "chamber": "senate",
+   "dead": false,
+   "authors": [
+    {
+     "id": "7215c273-c413-4581-970b-c8d5bff857a0",
+     "lpid": "legislator_cyndi_carrasco_1",
+     "chamber": "senate",
+     "honorific": "Senator",
+     "first_name": "Cyndi",
+     "last_name": "Carrasco",
+     "url": "/legislative/2026/legislators/legislator_cyndi_carrasco_1"
+    },
+    {
+     "id": "b836f1c6-a080-4f56-a8a7-9851814b4d18",
+     "lpid": "legislator_eric_koch_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Eric",
+     "last_name": "Koch",
+     "url": "/legislative/2026/legislators/legislator_eric_koch_1"
+    }
+   ],
+   "sponsors": [],
+   "conferees": [],
+   "status": "DO PASS AMEND",
+   "voted_on": "01/14/2026, 15:14:02",
+   "votes": [
+    {
+     "committee_motion_id": "73404596-dd59-4875-ba7c-56d139dacced",
+     "vote": "YEA",
+     "numvote": 8
+    },
+    {
+     "committee_motion_id": "73404596-dd59-4875-ba7c-56d139dacced",
+     "vote": "NAY",
+     "numvote": 2
+    },
+    {
+     "committee_motion_id": "73404596-dd59-4875-ba7c-56d139dacced",
+     "vote": "NOT_VOTING",
+     "numvote": 1
+    }
+   ],
+   "notes": "",
+   "is_ccr": false
+  },
+  {
+   "name": "SB0052.01.INTR",
+   "base_name": "SB0052",
+   "label": "SB 52",
+   "url": "/legislative/2026/bills/senate/52",
+   "description": "Grandparent visitation.",
+   "chamber": "senate",
+   "dead": false,
+   "authors": [
+    {
+     "id": "aff69694-741d-4244-9ba1-a884f31f5218",
+     "lpid": "legislator_brett_clark_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Brett",
+     "last_name": "Clark",
+     "url": "/legislative/2026/legislators/legislator_brett_clark_1"
+    },
+    {
+     "id": "2c9823c3-107c-42d6-8441-0e2a8082fcef",
+     "lpid": "legislator_kyle_walker_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Kyle",
+     "last_name": "Walker",
+     "url": "/legislative/2026/legislators/legislator_kyle_walker_1"
+    }
+   ],
+   "sponsors": [],
+   "conferees": [],
+   "status": "DO PASS AMEND",
+   "voted_on": "01/14/2026, 15:16:03",
+   "votes": [
+    {
+     "committee_motion_id": "6f5b5732-88d1-4c18-bb6a-cb9a401a0feb",
+     "vote": "YEA",
+     "numvote": 9
+    },
+    {
+     "committee_motion_id": "6f5b5732-88d1-4c18-bb6a-cb9a401a0feb",
+     "vote": "NOT_VOTING",
+     "numvote": 2
+    }
+   ],
+   "notes": "Amend and Vote Only",
+   "is_ccr": false
+  },
+  {
+   "name": "SB0291.01.INTR",
+   "base_name": "SB0291",
+   "label": "SB 291",
+   "url": "/legislative/2026/bills/senate/291",
+   "description": "Court security.",
+   "chamber": "senate",
+   "dead": false,
+   "authors": [
+    {
+     "id": "599d2f6e-30c5-45cf-93cf-a81a64484c08",
+     "lpid": "legislator_scott_baldwin_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Scott",
+     "last_name": "Baldwin",
+     "url": "/legislative/2026/legislators/legislator_scott_baldwin_1"
+    },
+    {
+     "id": "7215c273-c413-4581-970b-c8d5bff857a0",
+     "lpid": "legislator_cyndi_carrasco_1",
+     "chamber": "senate",
+     "honorific": "Senator",
+     "first_name": "Cyndi",
+     "last_name": "Carrasco",
+     "url": "/legislative/2026/legislators/legislator_cyndi_carrasco_1"
+    },
+    {
+     "id": "b836f1c6-a080-4f56-a8a7-9851814b4d18",
+     "lpid": "legislator_eric_koch_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Eric",
+     "last_name": "Koch",
+     "url": "/legislative/2026/legislators/legislator_eric_koch_1"
+    }
+   ],
+   "sponsors": [],
+   "conferees": [],
+   "status": "DO PASS",
+   "voted_on": "01/14/2026, 15:24:16",
+   "votes": [
+    {
+     "committee_motion_id": "af5b9640-a369-4b86-a84a-ffeb1ead8d2f",
+     "vote": "YEA",
+     "numvote": 10
+    },
+    {
+     "committee_motion_id": "af5b9640-a369-4b86-a84a-ffeb1ead8d2f",
+     "vote": "NOT_VOTING",
+     "numvote": 1
+    }
+   ],
+   "notes": "",
+   "is_ccr": false
+  },
+  {
+   "name": "SB0256.01.INTR",
+   "base_name": "SB0256",
+   "label": "SB 256",
+   "url": "/legislative/2026/bills/senate/256",
+   "description": "Political activity of agents of hostile nations.",
+   "chamber": "senate",
+   "dead": false,
+   "authors": [
+    {
+     "id": "be920f9f-a6e1-4c2d-9f93-686e1c989de0",
+     "lpid": "legislator_chris_garten_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Chris",
+     "last_name": "Garten",
+     "url": "/legislative/2026/legislators/legislator_chris_garten_1"
+    },
+    {
+     "id": "b836f1c6-a080-4f56-a8a7-9851814b4d18",
+     "lpid": "legislator_eric_koch_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Eric",
+     "last_name": "Koch",
+     "url": "/legislative/2026/legislators/legislator_eric_koch_1"
+    },
+    {
+     "id": "f22e5d3b-335b-4003-9570-cee20b34fba1",
+     "lpid": "legislator_aaron_freeman_1",
+     "chamber": null,
+     "honorific": "Senator",
+     "first_name": "Aaron",
+     "last_name": "Freeman",
+     "url": "/legislative/2026/legislators/legislator_aaron_freeman_1"
+    }
+   ],
+   "sponsors": [],
+   "conferees": [],
+   "status": "DO PASS",
+   "voted_on": "01/14/2026, 13:37:27",
+   "votes": [
+    {
+     "committee_motion_id": "5b41f846-c618-462c-bc4b-63fc97f42bc6",
+     "vote": "YEA",
+     "numvote": 8
+    },
+    {
+     "committee_motion_id": "5b41f846-c618-462c-bc4b-63fc97f42bc6",
+     "vote": "NAY",
+     "numvote": 2
+    },
+    {
+     "committee_motion_id": "5b41f846-c618-462c-bc4b-63fc97f42bc6",
+     "vote": "NOT_VOTING",
+     "numvote": 1
+    }
+   ],
+   "notes": "",
+   "is_ccr": false
+  }
+ ],
+ "minutes": null,
+ "additional_documents": []
+}

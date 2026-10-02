@@ -616,6 +616,11 @@ def create_app() -> FastAPI:
         # Looked up at call time so tests can monkeypatch resolve.resolve_source.
         try:
             resolved = resolve.resolve_source(url) if url else None
+        except resolve.SourceSelectionRequired as exc:
+            # A listing page (e.g. an IGA committee's video page): let the form
+            # offer the recordings; picking one swaps in its own URL.
+            return JSONResponse({"date": None, "title": None, "event_org": None,
+                                 "choices": exc.choices})
         except Exception:
             resolved = None
         if resolved is not None:

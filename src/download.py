@@ -35,6 +35,14 @@ def _is_ytdlp_url(url: str) -> bool:
 is_ytdlp_url = _is_ytdlp_url
 
 
+# Some media hosts (iga.in.gov) return their HTML app shell instead of the
+# playlist unless the request looks like a real browser.
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+)
+
+
 def is_hls_url(url: str) -> bool:
     """A raw HLS manifest (…/manifest.m3u8). Extract audio with ffmpeg, not requests."""
     return url.split("?", 1)[0].lower().endswith(".m3u8")
@@ -47,7 +55,8 @@ def download_audio_via_ffmpeg(url: str, output_path: str) -> str:
     wav path (extension forced to .wav)."""
     out = str(Path(output_path).with_suffix(".wav"))
     Path(out).parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["ffmpeg", "-y", "-i", url, "-vn", "-ac", "1", "-ar", "16000", out]
+    cmd = ["ffmpeg", "-y", "-user_agent", BROWSER_USER_AGENT, "-i", url,
+           "-vn", "-ac", "1", "-ar", "16000", out]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0 or not Path(out).exists():
         raise RuntimeError(f"ffmpeg HLS extraction failed ({result.returncode}): {result.stderr[-500:]}")

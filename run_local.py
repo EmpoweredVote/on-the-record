@@ -1433,6 +1433,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # Stage 3: Transcription (Whisper or VTT alignment)
     # ======================================================================
     print("=" * 60)
+    # Source-provided captions (e.g. IGA live CART) are opt-in only: they are
+    # condensed, not verbatim, so they replace Whisper only with --use-vtt.
+    source_vtt = meeting_dir / "source_captions.vtt"
+    if args.use_vtt and not vtt_path.exists() and source_vtt.exists():
+        vtt_path = source_vtt
     use_vtt = args.use_vtt or (vtt_path.exists() and not state.is_complete(PipelineStage.TRANSCRIBED))
     if use_vtt and vtt_path.exists():
         print("STAGE 3: VTT Alignment (skipping Whisper)")
@@ -1465,7 +1470,17 @@ def run_pipeline(args: argparse.Namespace) -> None:
         print(f"  Aligning VTT captions from {vtt_path.name}...")
         # Captions are downloaded for the full source; rebase to clip-local time
         # so a clipped meeting's diarized segments get the right text.
-        segments = align_vtt_to_segments(vtt_path, segments, clip_offset=clip_start or 0.0)
+        # Roster name tokens let all-caps CART captions keep proper-noun casing.
+        _roster = None
+        try:
+            _roster = _resolve_roster(effective_body_slug, state.roster_choice)
+        except Exception:
+            pass
+        _names = sorted({tok for m in (_roster.members if _roster else [])
+                         for alias in [m.name, *m.aliases] for tok in alias.split()
+                         if len(tok) >= 3 and tok.isalpha()})
+        segments = align_vtt_to_segments(vtt_path, segments, clip_offset=clip_start or 0.0,
+                                         proper_nouns=_names)
         elapsed = time.time() - t0
 
         meeting.processing_metadata.transcription_model = "vtt_alignment"
@@ -3994,7 +4009,8 @@ Environment Variables:
                              "pyannote 3.1 doesn't fragment Bloomington audio in practice, "
                              "and embeddings have known NaN issues. See bench/diagnose_merge.py.")
     parser.add_argument("--use-vtt", action="store_true",
-                        help="Use VTT subtitles instead of Whisper (auto-detected if captions.vtt exists)")
+                        help="Use VTT subtitles instead of Whisper (auto-detected if captions.vtt exists; "
+                             "falls back to source_captions.vtt, e.g. IGA captions, which are never auto-used)")
     parser.add_argument("--diarizer", choices=["oss", "api", "vibevoice", "api-recluster"],
                         default="oss",
                         help="Diarization backend. 'oss' uses local pyannote 3.1 "
