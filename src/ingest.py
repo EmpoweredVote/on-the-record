@@ -138,11 +138,16 @@ def fetch_source_metadata(url: str) -> dict:
 
 
 def _resolve_source_safe(url: str):
-    """resolve_source that never raises — returns None on any failure."""
-    try:
-        from .resolve import resolve_source
+    """resolve_source that returns None on any failure — except a listing page
+    that needs a recording picked, which must reach the user (falling back to a
+    blind download of an HTML page would fail far less clearly)."""
+    from .resolve import SourceSelectionRequired, resolve_source
 
+    try:
         return resolve_source(url)
+    except SourceSelectionRequired as exc:
+        options = "\n".join(f"  {c['label']}: {c['url']}" for c in exc.choices)
+        raise ValueError(f"{exc}\n{options}") from exc
     except Exception:
         return None
 
@@ -248,6 +253,15 @@ def normalize_audio(
             if resolved.transcript:
                 (output_path.parent / "reference_transcript.txt").write_text(
                     resolved.transcript, encoding="utf-8"
+                )
+            if resolved.captions_vtt:
+                # Saved for reference / opt-in only (--use-vtt). NOT captions.vtt,
+                # which would make Stage 3 skip Whisper automatically, and NOT a
+                # reference_transcript, which would rewrite Whisper toward it:
+                # live CART captions condense speech (IGA Jan 14 2026: ~15% fewer
+                # words, 17% of segments near-verbatim), and quotes must be verbatim.
+                (output_path.parent / "source_captions.vtt").write_text(
+                    resolved.captions_vtt, encoding="utf-8"
                 )
         else:
             print(f"  Downloading from URL...")

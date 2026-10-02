@@ -23,13 +23,31 @@ class ResolvedSource:
     description: Optional[str] = None     # show notes / article summary
     image_url: Optional[str] = None       # episode / show / og artwork
     transcript: Optional[str] = None      # clean transcript text, when provided
-    resolver: str = ""                    # 'podcast' | 'brightspot'
+    captions_vtt: Optional[str] = None    # source WebVTT; kept for reference / --use-vtt
+    page_url: Optional[str] = None        # canonical citation page, when it differs from the input
+    resolver: str = ""                    # 'podcast' | 'brightspot' | 'iga'
+
+
+class SourceSelectionRequired(ValueError):
+    """The URL names a listing of several recordings; the caller must pick one.
+
+    ``choices`` is [{"label": str, "url": str}], each url resolving to exactly
+    one recording.
+    """
+
+    def __init__(self, message: str, choices: list[dict]):
+        super().__init__(message)
+        self.choices = choices
 
 
 def _default_fetch(url: str) -> str:
     import requests
 
-    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": "Mozilla/5.0"})
+    from .download import BROWSER_USER_AGENT
+
+    # A full browser UA: some sources (iga.in.gov) serve their SPA shell, not
+    # the requested JSON/playlist, to a bare "Mozilla/5.0".
+    resp = requests.get(url, timeout=(30, 120), headers={"User-Agent": BROWSER_USER_AGENT})
     resp.raise_for_status()
     return resp.text
 
@@ -41,8 +59,12 @@ def resolve_source(
 ) -> Optional[ResolvedSource]:
     """Try each resolver; return the first ResolvedSource, or None.
 
-    Brightspot is tried before the generic podcast resolver because it is more
-    specific (NPR-CDN MP3 + JSON-LD). Each resolver returns None when it does not
+    Raises SourceSelectionRequired when the URL is a listing page that needs
+    the caller to pick one recording (IGA committee / floor video pages).
+
+    IGA is tried first (host-gated, so free for every other URL). Brightspot is
+    tried before the generic podcast resolver because it is more specific
+    (NPR-CDN MP3 + JSON-LD). Each resolver returns None when it does not
     apply, so the caller falls back to the existing yt-dlp / direct path.
     """
     if not (url or "").startswith(("http://", "https://")):
@@ -59,11 +81,14 @@ def resolve_source(
         pass
 
     from .brightspot import resolve_brightspot_episode
+    from .iga import resolve_iga_video
     from .podcast import resolve_podcast_episode
 
-    for resolver in (resolve_brightspot_episode, resolve_podcast_episode):
+    for resolver in (resolve_iga_video, resolve_brightspot_episode, resolve_podcast_episode):
         try:
             resolved = resolver(url, fetch=fetch)
+        except SourceSelectionRequired:
+            raise
         except Exception:
             resolved = None
         if resolved is not None:

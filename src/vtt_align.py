@@ -141,6 +141,7 @@ def align_vtt_to_segments(
     vtt_path: str | Path,
     diarized_segments: list[Segment],
     clip_offset: float = 0.0,
+    proper_nouns: list[str] | None = None,
 ) -> list[Segment]:
     """Align VTT cues to diarized segments by timestamp overlap.
 
@@ -155,6 +156,8 @@ def align_vtt_to_segments(
             segments are clip-local (0-based). Pass clip_start_seconds so cue
             times rebase to the clip's timeline; cues outside the window fall
             out of every segment's range and are dropped.
+        proper_nouns: Names to capitalize when the captions turn out to be
+            all-caps live CART (e.g. the meeting roster's names).
 
     Returns:
         The same segments list, now with text populated from VTT.
@@ -171,6 +174,12 @@ def align_vtt_to_segments(
         for word in words:
             word.start -= clip_offset
             word.end -= clip_offset
+
+    from .cart_captions import clean_cart_words, looks_like_cart
+    if looks_like_cart(words):
+        words, lag = clean_cart_words(words, diarized_segments, proper_nouns or [])
+        print(f"  CART captions: markers stripped, sentence-cased, "
+              f"offset {'%+.1fs corrected' % -lag if lag else 'not detected'}")
 
     from .word_assign import assign_words_to_segments
     assign_words_to_segments(words, diarized_segments)

@@ -145,6 +145,11 @@
       const resp = await fetch("/api/source-meta?url=" + encodeURIComponent(url));
       if (!resp.ok) throw new Error("bad status");
       const data = await resp.json();
+      showChoices(data.choices);
+      if (data.choices && data.choices.length) {
+        note.textContent = "This page lists " + data.choices.length + " recordings — pick one.";
+        return;
+      }
       if (!data.date && !data.title && !data.event_org) { note.textContent = ""; return; }
       fillIfEmpty(input.date, data.date);
       fillIfEmpty(input.title, data.title);
@@ -153,6 +158,28 @@
       refresh();
     } catch (e) { note.textContent = "Couldn't fetch details — fill in manually."; }
   }
+  // Listing pages (e.g. an IGA committee's videos) return several recordings;
+  // choosing one replaces the input with that recording's own URL and refetches.
+  const choiceSelect = $("f-source-choice");
+  function showChoices(choices) {
+    choiceSelect.replaceChildren();
+    if (!choices || !choices.length) { choiceSelect.hidden = true; return; }
+    const ph = document.createElement("option");
+    ph.value = ""; ph.textContent = "Choose a recording…";
+    choiceSelect.appendChild(ph);
+    choices.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.url; o.textContent = c.label;
+      choiceSelect.appendChild(o);
+    });
+    choiceSelect.hidden = false;
+  }
+  choiceSelect.addEventListener("change", () => {
+    if (!choiceSelect.value) return;
+    sourceInput.value = choiceSelect.value;
+    choiceSelect.hidden = true;
+    fetchSourceMeta();
+  });
   sourceInput.addEventListener("blur", fetchSourceMeta);
   sourceInput.addEventListener("change", fetchSourceMeta);
   sourceInput.addEventListener("paste", () => setTimeout(fetchSourceMeta, 0));

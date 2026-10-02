@@ -1,0 +1,42 @@
+{
+ "meetings": [
+  {
+   "id": "69c61c76-94ac-4413-9bd2-c3cc66af9a95",
+   "lpid": "9ab78dac-bc67-47a1-8bff-68cf8ae5afc4",
+   "chamber": "senate",
+   "date": "02/18/2026",
+   "start_time": "13:30:00",
+   "end_time": "15:30:00",
+   "convened_time": "15:25:30",
+   "custom_start": "",
+   "cancelled": false,
+   "location": "Room 130",
+   "location_lpid": "location_room130",
+   "custom_location": null,
+   "address1": null,
+   "address2": null,
+   "committee_id": "54e74b71-7d9a-4031-9a97-df093348e7c9",
+   "notes": null,
+   "committee_name": "Judiciary"
+  },
+  {
+   "id": "8562da70-8f8e-4345-bed8-c93dc135d0e9",
+   "lpid": "e3d3d7a6-b420-40b5-896d-46771d09861f",
+   "chamber": "senate",
+   "date": "01/14/2026",
+   "start_time": "13:00:00",
+   "end_time": "15:00:00",
+   "convened_time": "13:03:23",
+   "custom_start": "",
+   "cancelled": false,
+   "location": "Room 130",
+   "location_lpid": "location_room130",
+   "custom_location": null,
+   "address1": null,
+   "address2": null,
+   "committee_id": "54e74b71-7d9a-4031-9a97-df093348e7c9",
+   "notes": "45 minutes allotted to testimony Against and testimony In Support of SB 285, followed by 30 minutes of Committee discussion; however, the Chair may adjust allotted testimony at her discretion.",
+   "committee_name": "Judiciary"
+  }
+ ]
+}

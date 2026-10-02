@@ -1,0 +1,76 @@
+{
+ "legislators": [
+  {
+   "lpid": "legislator_greg_walker_867",
+   "firstname": "Greg",
+   "lastname": "Walker",
+   "honorific": "Senator",
+   "district": 41,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_greg_walker_867"
+  },
+  {
+   "lpid": "legislator_chris_garten_1",
+   "firstname": "Chris",
+   "lastname": "Garten",
+   "honorific": "Senator",
+   "district": 45,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_chris_garten_1"
+  },
+  {
+   "lpid": "legislator_eric_koch_1",
+   "firstname": "Eric",
+   "lastname": "Koch",
+   "honorific": "Senator",
+   "district": 44,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_eric_koch_1"
+  },
+  {
+   "lpid": "legislator_cyndi_carrasco_1",
+   "firstname": "Cyndi",
+   "lastname": "Carrasco",
+   "honorific": "Senator",
+   "district": 36,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_cyndi_carrasco_1"
+  },
+  {
+   "lpid": "legislator_scott_baldwin_1",
+   "firstname": "Scott",
+   "lastname": "Baldwin",
+   "honorific": "Senator",
+   "district": 20,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_scott_baldwin_1"
+  },
+  {
+   "lpid": "legislator_brett_clark_1",
+   "firstname": "Brett",
+   "lastname": "Clark",
+   "honorific": "Senator",
+   "district": 24,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_brett_clark_1"
+  },
+  {
+   "lpid": "legislator_kyle_walker_1",
+   "firstname": "Kyle",
+   "lastname": "Walker",
+   "honorific": "Senator",
+   "district": 31,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_kyle_walker_1"
+  },
+  {
+   "lpid": "legislator_aaron_freeman_1",
+   "firstname": "Aaron",
+   "lastname": "Freeman",
+   "honorific": "Senator",
+   "district": 32,
+   "party": "Republican",
+   "url": "/legislative/2026/legislators/legislator_aaron_freeman_1"
+  }
+ ]
+}

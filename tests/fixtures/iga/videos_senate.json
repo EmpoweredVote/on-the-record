@@ -1,0 +1,22 @@
+{
+ "title": "Senate Chamber",
+ "placeholder_text": "Search for a session day...",
+ "videos": [
+  {
+   "original_date": "02/27/2026, 00:00:00",
+   "order": 3,
+   "text": "Friday, Feb. 27 part 4",
+   "value": {
+    "http": "https://iga.in.gov/video/124/2026/senate/media/video_senate_2026_day_32/Session_2_27_2026_4.mp4/Session_2_27_2026_4.m3u8"
+   }
+  },
+  {
+   "original_date": "02/27/2026, 00:00:00",
+   "order": 2,
+   "text": "Friday, Feb. 27 part 3",
+   "value": {
+    "http": "https://iga.in.gov/video/124/2026/senate/media/video_senate_2026_day_32/Session_2_27_2026_3.mp4/Session_2_27_2026_3.m3u8"
+   }
+  }
+ ]
+}

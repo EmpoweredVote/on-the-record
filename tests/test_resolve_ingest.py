@@ -133,3 +133,32 @@ def test_normalize_audio_no_resolved_enclosure_for_plain_url(monkeypatch, tmp_pa
     monkeypatch.setattr(dl, "is_ytdlp_url", lambda u: False)
     meta = ingest.normalize_audio("https://example.com/x.mp4", tmp_path / "audio.wav")
     assert meta["source_audio_url"] is None
+
+
+def test_normalize_audio_keeps_source_captions_opt_in(monkeypatch, tmp_path, _stub_ffmpeg):
+    # IGA live captions are condensed, not verbatim: saved for reference only,
+    # never as captions.vtt (which would silently replace Whisper) and never as
+    # a reconcile reference.
+    resolved = ResolvedSource(
+        audio_url="https://iga.in.gov/video/x/X.mp4/X.m3u8",
+        title="Indiana Senate Judiciary Committee — Jan. 14, 2026",
+        date="2026-01-14",
+        outlet="Indiana General Assembly",
+        captions_vtt="WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n>> THANK YOU.\n",
+        resolver="iga",
+    )
+    monkeypatch.setattr(ingest, "_resolve_source_safe", lambda url: resolved)
+    import src.download as dl
+
+    def _fake_download(url, out, cookies_file=None, progress=True, try_ytdlp=True):
+        Path(out).write_bytes(b"x")
+        return Path(out)
+
+    monkeypatch.setattr(dl, "download_from_url", _fake_download)
+
+    out = tmp_path / "audio.wav"
+    ingest.normalize_audio("https://iga.in.gov/session/2026/video/committee_judiciary_4200/?video=X", out)
+
+    assert (out.parent / "source_captions.vtt").read_text().startswith("WEBVTT")
+    assert not (out.parent / "captions.vtt").exists()
+    assert not (out.parent / "reference_transcript.txt").exists()

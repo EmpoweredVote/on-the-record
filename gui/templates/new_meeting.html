@@ -14,6 +14,7 @@
       <label>Source URL or file path
         <input type="text" name="input" id="f-input" required placeholder="https://… or /path/to/video.mp4" value="{{ prefill.input or '' }}">
         <small class="help" id="source-meta-note" aria-live="polite"></small>
+        <select id="f-source-choice" hidden aria-label="Choose a recording"></select>
       </label>
       <label>Date (YYYY-MM-DD)
         <input type="text" name="date" id="f-date" placeholder="2026-02-10" required value="{{ prefill.date or '' }}">

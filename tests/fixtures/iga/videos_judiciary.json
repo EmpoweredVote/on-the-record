@@ -1,0 +1,22 @@
+{
+ "title": "Meetings",
+ "placeholder_text": "Search for a meeting...",
+ "videos": [
+  {
+   "original_date": "02/18/2026, 00:00:00",
+   "order": 0,
+   "text": "Wednesday, Feb. 18 - 1:30pm",
+   "value": {
+    "http": "https://iga.in.gov/video/124/2026/committees/senate/standing/committee_judiciary_4200/media/9ab78dac-bc67-47a1-8bff-68cf8ae5afc4/Judiciary_2_18_2026_1.mp4/Judiciary_2_18_2026_1.m3u8"
+   }
+  },
+  {
+   "original_date": "01/14/2026, 00:00:00",
+   "order": 0,
+   "text": "Wednesday, Jan. 14 - 1:00pm",
+   "value": {
+    "http": "https://iga.in.gov/video/124/2026/committees/senate/standing/committee_judiciary_4200/media/e3d3d7a6-b420-40b5-896d-46771d09861f/Judiciary_1_14_2026_1.mp4/Judiciary_1_14_2026_1.m3u8"
+   }
+  }
+ ]
+}
