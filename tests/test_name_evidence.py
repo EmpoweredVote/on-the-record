@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.models import Segment
-from src.name_evidence import build_turns, find_self_intros, is_mention
+from src.name_evidence import build_turns, find_self_intros, is_mention, find_chair_calls, find_thank_backs
 
 
 def seg(i: int, label: str, text: str) -> Segment:
@@ -153,7 +153,6 @@ def test_x_curly_apostrophes():
 
 
 # TASK 2: E2 CHAIR CALLS AND E3 THANK-BACKS
-from src.name_evidence import find_chair_calls, find_thank_backs
 
 
 def test_e2_yes_senator_names_next_speaker():
@@ -203,3 +202,88 @@ def test_e3_thank_back_names_previous_speaker():
 def test_e3_madam_chair_is_not_a_name():
     turns = build_turns([seg(0, "CHAIR", "Go ahead."), seg(1, "W", "Thank you, Madam Chair, members.")])
     assert find_thank_backs(turns) == []
+
+
+# FIXES: Same-sentence thanks, bare titles, spec gap patterns
+
+def test_e2_across_sentence_boundary_thank_is_allowed():
+    """Thank at end of previous sentence should not exclude next sentence's call."""
+    # "Thank you, Erin. Yes, Senator Taylor." → Taylor is a call, not excluded
+    turns = build_turns([seg(0, "CHAIR", "Thank you, Erin. Yes, Senator Taylor."),
+                         seg(1, "T", "Thank you.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name) for e in ev] == [("T", "Taylor")]
+
+
+def test_e2_thank_at_sentence_end_then_call():
+    """Thank period-separated from call should not exclude."""
+    turns = build_turns([seg(0, "CHAIR", "Thank you. Yes, Senator Taylor."),
+                         seg(1, "T", "Hello.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name) for e in ev] == [("T", "Taylor")]
+
+
+def test_e2_thank_separated_then_invitation():
+    """Thank period-separated from invitation should not exclude."""
+    turns = build_turns([seg(0, "CHAIR", "Thank you. Please go ahead, Senator Garten."),
+                         seg(1, "G", "Thank you.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name) for e in ev] == [("G", "Garten")]
+
+
+def test_e2_thank_same_sentence_call_excluded():
+    """Thank in same sentence as call should still exclude."""
+    turns = build_turns([seg(0, "CHAIR", "Thank you, Senator Garten."),
+                         seg(1, "B", "I have a question.")])
+    ev = find_chair_calls(turns)
+    assert ev == []
+
+
+def test_e3_bare_title_rejected():
+    """Bare title with no name should be rejected."""
+    turns = build_turns([seg(0, "W", "That concludes my remarks."),
+                         seg(1, "CHAIR", "Thank you, Senator. Any questions?")])
+    ev = find_thank_backs(turns)
+    assert ev == []
+
+
+def test_e2_bare_title_rejected():
+    """Chair call ending with bare title should be rejected."""
+    turns = build_turns([seg(0, "CHAIR", "... Any questions? Yes, Senator."),
+                         seg(1, "W", "Thank you.")])
+    ev = find_chair_calls(turns)
+    assert ev == []
+
+
+def test_e2_we_will_call_with_name():
+    """'We will call' should be recognized as a call verb."""
+    turns = build_turns([seg(0, "CHAIR", "We will call Dr. Smith to testify."),
+                         seg(1, "S", "Thank you.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name, e.title) for e in ev] == [("S", "Smith", "Dr.")]
+
+
+def test_e2_well_call_with_name():
+    """'We' + apostrophe + 'll call' should be recognized as a call verb."""
+    turns = build_turns([seg(0, "CHAIR", "We'll call Dr. Smith next."),
+                         seg(1, "S", "I'm ready.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name, e.title) for e in ev] == [("S", "Smith", "Dr.")]
+
+
+def test_e2_bare_office_title_at_sentence_end():
+    """OFFICE_TITLES + name at sentence/window end should be recognized."""
+    turns = build_turns([seg(0, "CHAIR", "Any questions? Senator Garten."),
+                         seg(1, "G", "Thank you.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name) for e in ev] == [("G", "Garten")]
+
+
+def test_e2_bare_title_rejects_courtesy_only():
+    """Bare title pattern should only match OFFICE_TITLES, rejecting bare courtesy titles."""
+    # "Professor Jones" at end of window should NOT match bare pattern (Professor is courtesy)
+    turns = build_turns([seg(0, "CHAIR", "Questions for Professor Jones?"),
+                         seg(1, "J", "No.")])
+    ev = find_chair_calls(turns)
+    # Should have no matches because bare pattern only uses OFFICE_TITLES
+    assert ev == []

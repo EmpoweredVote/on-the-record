@@ -27,6 +27,7 @@ COURTESY_TITLES = (
     "Miss", "Mrs.", "Rev.", "Mr.", "Ms.", "Dr.",
 )
 _TITLE = "|".join(re.escape(t) for t in sorted(OFFICE_TITLES + COURTESY_TITLES, key=len, reverse=True))
+_OFFICE_TITLE = "|".join(re.escape(t) for t in sorted(OFFICE_TITLES, key=len, reverse=True))
 _TOKEN = r"[A-Z][a-zA-Z'\u2019\-]+"
 _NAME_1_3 = rf"{_TOKEN}(?:\s+{_TOKEN}){{0,2}}"
 _NAME_2_3 = rf"{_TOKEN}(?:\s+{_TOKEN}){{1,2}}"
@@ -105,7 +106,7 @@ def clean_name(raw: str) -> Optional[str]:
     """Trim non-name trailing tokens; None if nothing name-like is left.
 
     Removes trailing contractions (I'm, I'll, I've, I'd, n't) and rejects
-    names with possessive 's/'s endings.
+    names with possessive 's/'s endings or bare titles.
     """
     toks = raw.split()
 
@@ -129,6 +130,12 @@ def clean_name(raw: str) -> Optional[str]:
 
     # Reject if any token is in NOT_NAME
     if any(t.lower() in NOT_NAME for t in toks):
+        return None
+
+    # Reject if first token is a bare title (OFFICE or COURTESY, with or without trailing .)
+    title_set = {t.lower() for t in OFFICE_TITLES + COURTESY_TITLES}
+    first_lower = toks[0].lower().rstrip(".")
+    if first_lower in title_set:
         return None
 
     return " ".join(toks)
@@ -221,13 +228,35 @@ _CALL_PATTERNS = (
                rf"recognize|welcome|is)\s+)(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
     re.compile(rf"(?i:\b(?:welcome|recognize|calling|call\s+up|I\s+see)\s+)"
                rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
+    re.compile(rf"(?i:\b(?:(?:we['′\u2019]ll|we\s+will)\s+)?call\s+)"
+               rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
+    re.compile(rf"(?:(?P<title>{_OFFICE_TITLE})\s+)(?P<name>{_NAME_1_3})\s*[.?!]*$"),
 )
 _R_THANK = re.compile(rf"(?i:\bthank(?:s|\s+you)(?:\s+(?:so|very)\s+much)?,?\s+)"
                       rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})")
 
 
 def _preceded_by_thanks(text: str, start: int) -> bool:
-    return any(w.startswith("thank") for w in re.findall(r"[a-z]+", text[:start].lower())[-3:])
+    """Check if match is preceded by thank/thanks in the SAME sentence.
+
+    Returns True only if a thank-word appears between the last sentence boundary
+    (. ? ! or start of text) and the match position.
+    """
+    # Find the last sentence boundary (. ? ! or start of text) before the match
+    before_match = text[:start]
+    last_boundary = max(
+        before_match.rfind("."),
+        before_match.rfind("?"),
+        before_match.rfind("!")
+    )
+    # Extract text from last boundary to match start (same sentence)
+    if last_boundary == -1:
+        same_sentence = before_match
+    else:
+        same_sentence = before_match[last_boundary + 1:]
+
+    # Check if any thank-word appears in the same sentence
+    return any(w.startswith("thank") for w in re.findall(r"[a-z]+", same_sentence.lower()))
 
 
 def find_chair_calls(turns: list[Turn]) -> list[Evidence]:
