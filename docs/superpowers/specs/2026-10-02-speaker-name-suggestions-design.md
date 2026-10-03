@@ -55,7 +55,7 @@ never called by a name; building profiles of private individuals.
 
 - **Strong:** E1 and (E2 or E3) agree.
 - **Medium:** E1 alone, or E2 and E3 agree.
-- **Weak:** E2 alone ("called on only").
+- **Weak:** E2 alone ("called on only") or E3 alone ("thanked only").
 
 In v1 every tier waits for Chris. The tier decides ordering, wording and
 whether it may be pre-filled (see "Evaluation").
@@ -183,3 +183,13 @@ this spec.
   against the current panel layout.
 - Whether Layer 2's existing roster-only `self_identification` stays as-is or is
   replaced by this module is decided after slice 1's numbers.
+
+## Refinements from planning (2026-10-02)
+
+- **Partial names:** a first-name-only name ("my name is Nitya") is kept as a
+  hint but is never pre-filled.
+- **"Misspelled" eval outcome:** same speaker and same first name, different
+  surname spelling (Whisper writes "Peter Pearson" for gold "Peter Berezin").
+  It counts as correct attribution and is reported separately as a spelling
+  miss for slice 2's lookup to fix.
+- **Junk gold labels** ("Candidate7", "Host (Unknown - CRG)") count as no-name.
