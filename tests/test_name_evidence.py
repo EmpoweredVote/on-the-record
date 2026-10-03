@@ -137,16 +137,69 @@ def test_x_possessive_over_capture():
 
 
 def test_x_curly_apostrophes():
-    """Regexes accept both straight (') and curly (') apostrophes."""
-    # Straight apostrophe with I'm
-    ev1 = find_self_intros(build_turns([seg(0, "W", "Hi, I'm Jane Doe from Fishers. " + FILLER)]))
+    """Regexes accept both straight (‘) and curly (‘) apostrophes."""
+    # Straight apostrophe with I’m
+    ev1 = find_self_intros(build_turns([seg(0, "W", "Hi, I’m Jane Doe from Fishers. " + FILLER)]))
     assert [e.name for e in ev1] == ["Jane Doe"]
-    # Curly apostrophe with I'm (U+2019)
+    # Curly apostrophe with I’m (U+2019)
     ev2 = find_self_intros(build_turns([seg(0, "W", "Hi, I’m Jane Doe from Fishers. " + FILLER)]))
     assert [e.name for e in ev2] == ["Jane Doe"]
-    # Test with straight my name's
-    ev3 = find_self_intros(build_turns([seg(0, "W", "Well, my name's John Brown, and I'm here. " + FILLER)]))
+    # Test with straight my name’s
+    ev3 = find_self_intros(build_turns([seg(0, "W", "Well, my name’s John Brown, and I’m here. " + FILLER)]))
     assert [e.name for e in ev3] == ["John Brown"]
-    # Test with curly my name's
+    # Test with curly my name’s
     ev4 = find_self_intros(build_turns([seg(0, "W", "Well, my name’s John Brown, and I’m here. " + FILLER)]))
     assert [e.name for e in ev4] == ["John Brown"]
+
+
+# TASK 2: E2 CHAIR CALLS AND E3 THANK-BACKS
+from src.name_evidence import find_chair_calls, find_thank_backs
+
+
+def test_e2_yes_senator_names_next_speaker():
+    turns = build_turns([seg(0, "CHAIR", "Thank you, Senator Garten. Any questions? Yes, Senator Brown."),
+                         seg(1, "B", "Thank you, Madam Chair. I support the bill.")])
+    ev = find_chair_calls(turns)
+    assert [(e.kind, e.label, e.name, e.title) for e in ev] == [("E2", "B", "Brown", "Senator")]
+
+
+def test_e2_name_then_invitation():
+    turns = build_turns([seg(0, "CHAIR", "All right. Senator Garten, would you like to close?"),
+                         seg(1, "G", "Yes, thank you.")])
+    assert [(e.label, e.name) for e in find_chair_calls(turns)] == [("G", "Garten")]
+
+
+def test_e2_next_we_hear_from():
+    turns = build_turns([seg(0, "CHAIR", "Okay, next we will hear from Rabbi Aaron Spiegel."),
+                         seg(1, "W", "Thank you.")])
+    assert [(e.label, e.name, e.title) for e in find_chair_calls(turns)] == [("W", "Aaron Spiegel", "Rabbi")]
+
+
+def test_e2_thank_you_name_is_not_a_call():
+    turns = build_turns([seg(0, "CHAIR", "Thank you, Senator Garten."), seg(1, "B", "I have a question.")])
+    assert find_chair_calls(turns) == []
+
+
+def test_e2_x1_bill_by_senator_is_not_a_call():
+    # "Senator Koch, please" would be a call, but "by" marks a mention of the author (X1).
+    turns = build_turns([seg(0, "CHAIR", "We are hearing the bill by Senator Koch, please hold questions."),
+                         seg(1, "W", "Hi.")])
+    assert find_chair_calls(turns) == []
+
+
+def test_e2_only_window_before_turn_change():
+    early = "Yes, Senator Brown. " + " ".join(["filler"] * 40)
+    turns = build_turns([seg(0, "CHAIR", early), seg(1, "B", "Hello.")])
+    assert find_chair_calls(turns) == []
+
+
+def test_e3_thank_back_names_previous_speaker():
+    turns = build_turns([seg(0, "W", "That concludes my testimony on this bill."),
+                         seg(1, "CHAIR", "Thank you, Ms. Sample. Any questions for Ms. Sample?")])
+    ev = find_thank_backs(turns)
+    assert [(e.kind, e.label, e.name, e.title) for e in ev] == [("E3", "W", "Sample", "Ms.")]
+
+
+def test_e3_madam_chair_is_not_a_name():
+    turns = build_turns([seg(0, "CHAIR", "Go ahead."), seg(1, "W", "Thank you, Madam Chair, members.")])
+    assert find_thank_backs(turns) == []

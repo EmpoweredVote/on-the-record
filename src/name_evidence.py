@@ -209,3 +209,63 @@ def find_self_intros(turns: list[Turn]) -> list[Evidence]:
             quote=window[start:m.end() + 60].strip(), segment_id=turn.segment_ids[0],
         ))
     return out
+
+
+_CALL_PATTERNS = (
+    re.compile(rf"(?i:\b(?:yes|okay|ok|all\s+right|alright|go\s+ahead|please)\b,?\s+)"
+               rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})\s*[.?!,]"),
+    re.compile(rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3}),\s+"
+               r"(?i:would\s+you|you['′\u2019]re\s+recognized|you\s+are\s+recognized|please|go\s+ahead|"
+               r"the\s+floor\s+is\s+yours|you['′\u2019]re\s+up|come\s+on\s+up|welcome)"),
+    re.compile(rf"(?i:\b(?:next|now)\b[^.?!]{{0,30}}?\b(?:hear\s+from|have|call(?:\s+up)?|invite|"
+               rf"recognize|welcome|is)\s+)(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
+    re.compile(rf"(?i:\b(?:welcome|recognize|calling|call\s+up|I\s+see)\s+)"
+               rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
+)
+_R_THANK = re.compile(rf"(?i:\bthank(?:s|\s+you)(?:\s+(?:so|very)\s+much)?,?\s+)"
+                      rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})")
+
+
+def _preceded_by_thanks(text: str, start: int) -> bool:
+    return any(w.startswith("thank") for w in re.findall(r"[a-z]+", text[:start].lower())[-3:])
+
+
+def find_chair_calls(turns: list[Turn]) -> list[Evidence]:
+    """E2: the last name called in the words just before a turn change."""
+    out: list[Evidence] = []
+    for prev, nxt in zip(turns, turns[1:]):
+        if prev.label == nxt.label:
+            continue
+        window = " ".join(prev.words[-CALL_WINDOW_WORDS:])
+        best = None
+        for rx in _CALL_PATTERNS:
+            for m in rx.finditer(window):
+                name = clean_name(m.group("name"))
+                if not name or is_mention(window, m.start("name"), m.end("name")) or _preceded_by_thanks(window, m.start()):
+                    continue
+                if best is None or m.start() > best[0]:
+                    best = (m.start(), m, name)
+        if best:
+            start, m, name = best
+            out.append(Evidence(kind="E2", label=nxt.label, name=name, title=m.groupdict().get("title"),
+                                affiliation=None, quote=window[start:m.end()].strip(),
+                                segment_id=prev.segment_ids[-1]))
+    return out
+
+
+def find_thank_backs(turns: list[Turn]) -> list[Evidence]:
+    """E3: "thank you, <name>" at the start of the next speaker's turn."""
+    out: list[Evidence] = []
+    for prev, nxt in zip(turns, turns[1:]):
+        if prev.label == nxt.label:
+            continue
+        window = " ".join(nxt.words[:THANK_WINDOW_WORDS])
+        m = _R_THANK.search(window)
+        if not m:
+            continue
+        name = clean_name(m.group("name"))
+        if name:
+            out.append(Evidence(kind="E3", label=prev.label, name=name, title=m.group("title"),
+                                affiliation=None, quote=window[m.start():m.end()].strip(),
+                                segment_id=nxt.segment_ids[0]))
+    return out
