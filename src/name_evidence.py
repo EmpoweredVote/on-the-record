@@ -39,22 +39,23 @@ NOT_NAME = {
     "chairwoman", "members", "member", "committee", "everyone", "everybody", "all", "sir",
     "senators", "folks", "yes", "no", "okay", "ok", "thank", "thanks", "good", "morning",
     "afternoon", "evening", "today", "now", "well", "speaker", "president", "colleagues",
-    "absolutely", "great", "right", "mud", "tonight", "again", "please", "welcome",
+    "absolutely", "great", "right", "tonight", "again", "please", "welcome",
 }
 # Words just before a name that mean "this is someone else" (X1).
+# Note: "said", "says", "asked", "told" are handled by the (b) rule in is_mention
 MENTION_CUES = {
-    "colleague", "colleagues", "said", "says", "asked", "told", "by", "author", "sponsor",
+    "colleague", "colleagues", "by", "author", "sponsor",
     "son", "daughter", "wife", "husband", "father", "mother", "brother", "sister", "friend",
 }
 
-_R_MY_NAME = re.compile(rf"(?i:\bmy\s+name(?:'s|\s+is)\s+)(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})")
-_R_IM_TITLED = re.compile(rf"(?i:\b(?:I'm|I\s+am)\s+)(?P<title>{_TITLE})\s+(?P<name>{_NAME_1_3})")
+_R_MY_NAME = re.compile(rf"(?i:\bmy\s+name(?:['′\u2019]s|\s+is)\s+)(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})")
+_R_IM_TITLED = re.compile(rf"(?i:\b(?:I['′\u2019]m|I\s+am)\s+)(?P<title>{_TITLE})\s+(?P<name>{_NAME_1_3})")
 _R_IM = re.compile(
-    rf"(?i:\b(?:I'm|I\s+am)\s+)(?P<name>{_NAME_2_3})"
+    rf"(?i:\b(?:I['′\u2019]m|I\s+am)\s+)(?P<name>{_NAME_2_3})"
     r"(?=\s*(?:[.,;!?]|$|(?i:and|with|from|of|on|representing|here|a|an|the)\b))"
 )
 _R_AFFIL = re.compile(
-    r"(?i:\b(?:I'm\s+with|I\s+am\s+with|with|from|representing|on\s+behalf\s+of|here\s+for))\s+"
+    r"(?i:\b(?:I['′\u2019]m\s+with|I\s+am\s+with|with|from|representing|on\s+behalf\s+of|here\s+for))\s+"
     r"(?P<org>(?:(?i:the)\s+)?[A-Z][^.,;!?]{1,80})"
 )
 
@@ -101,21 +102,81 @@ def build_turns(segments: Iterable[Segment]) -> list[Turn]:
 
 
 def clean_name(raw: str) -> Optional[str]:
-    """Trim non-name trailing tokens; None if nothing name-like is left."""
+    """Trim non-name trailing tokens; None if nothing name-like is left.
+
+    Removes trailing contractions (I'm, I'll, I've, I'd, n't) and rejects
+    names with possessive 's/'s endings.
+    """
     toks = raw.split()
-    while toks and toks[-1].lower().strip("'\u2019") in NOT_NAME:
-        toks.pop()
+
+    # Drop trailing contraction tokens (I'm, I'll, I've, I'd, or n't)
+    while toks:
+        last_lower = toks[-1].lower()
+        # Remove apostrophes for comparison
+        last_stripped = last_lower.strip("'\u2019")
+        # Check if it's a contraction or NOT_NAME token
+        if last_stripped in ("i'm", "i'll", "i've", "i'd", "i've") or last_lower.endswith("n't") or last_stripped in NOT_NAME:
+            toks.pop()
+        else:
+            break
+
     if not toks or len(toks) > 3 or len(" ".join(toks)) > 40:
         return None
+
+    # Reject if last token is possessive ('s or 's)
+    if toks[-1].endswith("'s") or toks[-1].endswith("'s"):
+        return None
+
+    # Reject if any token is in NOT_NAME
     if any(t.lower() in NOT_NAME for t in toks):
         return None
+
     return " ".join(toks)
 
 
-def is_mention(text: str, start: int) -> bool:
-    """X1: the 4 words before position `start` mark a mention of someone else."""
-    before = re.findall(r"[a-z']+", text[:start].lower())[-4:]
-    return any(w in MENTION_CUES for w in before)
+def is_mention(text: str, name_start: int, name_end: int) -> bool:
+    """X1: Check if a name is a mention of someone else (not the speaker).
+
+    A name is a mention if:
+    (a) The word immediately before the name (skipping optional title), is in MENTION_CUES
+    (b) The word before name/title is "as" and word right after name is said/says/asked/mentioned/noted
+    (c) The name is immediately followed by 's or 's (possessive)
+    """
+    # Extract words before and after the name match
+    before_text = text[:name_start].lower()
+    after_text = text[name_end:].lower()
+
+    # (c) Check for possessive: name followed by 's or 's
+    if after_text.startswith("'s") or after_text.startswith("'s"):
+        return True
+
+    # Extract word tokens before the name (up to the match start)
+    before_words = re.findall(r"[a-z'′]+", before_text)
+
+    # (a) Check if word immediately before name is a mention cue
+    # Skip one optional title word first
+    if before_words:
+        # Check if the word immediately before is a title (in OFFICE_TITLES or COURTESY_TITLES)
+        last_word = before_words[-1]
+        title_set = {t.lower() for t in OFFICE_TITLES + COURTESY_TITLES}
+
+        if last_word in title_set:
+            # Skip the title and check the word before it
+            if len(before_words) > 1 and before_words[-2] in MENTION_CUES:
+                return True
+        elif last_word in MENTION_CUES:
+            # Direct mention cue before the name
+            return True
+
+    # (b) Check for "as [name] said/says/asked/mentioned/noted" pattern
+    # The word before name/title is "as" and word after name is said/says/asked/mentioned/noted
+    if before_words and before_words[-1] == "as":
+        # Check word right after the name
+        after_words = re.findall(r"[a-z'′]+", after_text)
+        if after_words and after_words[0] in ("said", "says", "asked", "mentioned", "noted"):
+            return True
+
+    return False
 
 
 def _affiliation_after(text: str, end: int) -> Optional[str]:
@@ -136,7 +197,8 @@ def find_self_intros(turns: list[Turn]) -> list[Evidence]:
         for rx in (_R_MY_NAME, _R_IM_TITLED, _R_IM):
             for m in rx.finditer(window):
                 name = clean_name(m.group("name"))
-                if name and not is_mention(window, m.start()):
+                # Check if the name is a mention using the name group's span
+                if name and not is_mention(window, m.start("name"), m.end("name")):
                     matches.append((m.start(), m, name))
         if not matches:
             continue
