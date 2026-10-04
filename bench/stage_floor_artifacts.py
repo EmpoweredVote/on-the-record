@@ -55,6 +55,11 @@ def stage(meetings_dir: Path, out_dir: Path) -> list[dict]:
 
 
 if __name__ == "__main__":  # pragma: no cover
+    import sys
+
+    # Run as `python bench/stage_floor_artifacts.py` (as the weekly workflow
+    # does), sys.path[0] is bench/, not the repo root, so `src` is unimportable.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src.config import MEETINGS_DIR
 
     stage(MEETINGS_DIR, Path("artifact_staging"))
