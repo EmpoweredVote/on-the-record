@@ -230,7 +230,8 @@ _CALL_PATTERNS = (
                rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
     re.compile(rf"(?i:\b(?:(?:we['′\u2019]ll|we\s+will)\s+)?call\s+)"
                rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})"),
-    re.compile(rf"(?:(?P<title>{_OFFICE_TITLE})\s+)(?P<name>{_NAME_1_3})\s*[.?!]*$"),
+    re.compile(rf"(?:^|[.?!]\s*)(?i:(?:yes|okay|ok|all\s+right|alright),?\s+)?"
+               rf"(?:(?P<title>{_OFFICE_TITLE})\s+)(?P<name>{_NAME_1_3})\s*[.?!]*$"),
 )
 _R_THANK = re.compile(rf"(?i:\bthank(?:s|\s+you)(?:\s+(?:so|very)\s+much)?,?\s+)"
                       rf"(?:(?P<title>{_TITLE})\s+)?(?P<name>{_NAME_1_3})")
@@ -240,8 +241,24 @@ def _preceded_by_thanks(text: str, start: int) -> bool:
     """Check if match is preceded by thank/thanks in the SAME sentence.
 
     Returns True only if a thank-word appears between the last sentence boundary
-    (. ? ! or start of text) and the match position.
+    (. ? ! or start of text) and the match position. If the match is at or
+    immediately after a boundary, returns False (new sentence).
     """
+    # Check if match is at or right after a sentence boundary
+    if start == 0:
+        return False
+
+    # Check if char at start is a boundary marker
+    if text[start] in ".?!":
+        return False
+
+    # Check if previous non-space char is a boundary
+    i = start - 1
+    while i >= 0 and text[i] == " ":
+        i -= 1
+    if i >= 0 and text[i] in ".?!":
+        return False
+
     # Find the last sentence boundary (. ? ! or start of text) before the match
     before_match = text[:start]
     last_boundary = max(

@@ -136,20 +136,24 @@ def test_x_possessive_over_capture():
     assert ev == []
 
 
-def test_x_curly_apostrophes():
-    """Regexes accept both straight (‘) and curly (‘) apostrophes."""
+def test_x_straight_apostrophes():
+    """Regexes accept straight (‘) apostrophes."""
     # Straight apostrophe with I’m
+    ev1 = find_self_intros(build_turns([seg(0, "W", "Hi, I'm Jane Doe from Fishers. " + FILLER)]))
+    assert [e.name for e in ev1] == ["Jane Doe"]
+    # Test with straight my name’s
+    ev2 = find_self_intros(build_turns([seg(0, "W", "Well, my name's John Brown, and I'm here. " + FILLER)]))
+    assert [e.name for e in ev2] == ["John Brown"]
+
+
+def test_x_curly_apostrophes():
+    """Regexes accept curly (‘) apostrophes (U+2019)."""
+    # Curly apostrophe with I’m (U+2019)
     ev1 = find_self_intros(build_turns([seg(0, "W", "Hi, I’m Jane Doe from Fishers. " + FILLER)]))
     assert [e.name for e in ev1] == ["Jane Doe"]
-    # Curly apostrophe with I’m (U+2019)
-    ev2 = find_self_intros(build_turns([seg(0, "W", "Hi, I’m Jane Doe from Fishers. " + FILLER)]))
-    assert [e.name for e in ev2] == ["Jane Doe"]
-    # Test with straight my name’s
-    ev3 = find_self_intros(build_turns([seg(0, "W", "Well, my name’s John Brown, and I’m here. " + FILLER)]))
-    assert [e.name for e in ev3] == ["John Brown"]
     # Test with curly my name’s
-    ev4 = find_self_intros(build_turns([seg(0, "W", "Well, my name’s John Brown, and I’m here. " + FILLER)]))
-    assert [e.name for e in ev4] == ["John Brown"]
+    ev2 = find_self_intros(build_turns([seg(0, "W", "Well, my name’s John Brown, and I’m here. " + FILLER)]))
+    assert [e.name for e in ev2] == ["John Brown"]
 
 
 # TASK 2: E2 CHAIR CALLS AND E3 THANK-BACKS
@@ -287,3 +291,39 @@ def test_e2_bare_title_rejects_courtesy_only():
     ev = find_chair_calls(turns)
     # Should have no matches because bare pattern only uses OFFICE_TITLES
     assert ev == []
+
+
+def test_e2_bare_title_only_whole_sentence_as_i_told():
+    """Bare title pattern should NOT match mid-sentence 'Title Name'."""
+    # "As I told Senator Brown." has Senator Brown but is not a call (mid-sentence)
+    turns = build_turns([seg(0, "CHAIR", "As I told Senator Brown."),
+                         seg(1, "B", "Thanks.")])
+    ev = find_chair_calls(turns)
+    assert ev == []
+
+
+def test_e2_bare_title_only_whole_sentence_we_worked():
+    """Bare title pattern should NOT match mid-sentence 'Title Name'."""
+    # "We worked with Senator Brown." has Senator Brown but is not a call
+    turns = build_turns([seg(0, "CHAIR", "We worked with Senator Brown."),
+                         seg(1, "B", "Thanks.")])
+    ev = find_chair_calls(turns)
+    assert ev == []
+
+
+def test_e2_bare_title_only_whole_sentence_i_spoke():
+    """Bare title pattern should NOT match mid-sentence 'Title Name'."""
+    # "I spoke to Mayor Smith." has Mayor Smith but is not a call
+    turns = build_turns([seg(0, "CHAIR", "I spoke to Mayor Smith."),
+                         seg(1, "S", "Thanks.")])
+    ev = find_chair_calls(turns)
+    assert ev == []
+
+
+def test_e2_bare_title_whole_sentence_only_title_name():
+    """Bare title pattern should match when sentence is only 'Title Name'."""
+    # "Thank you, Madam Chair. Senator Koch." is a call (second sentence is just title+name)
+    turns = build_turns([seg(0, "CHAIR", "Thank you, Madam Chair. Senator Koch."),
+                         seg(1, "K", "Thank you.")])
+    ev = find_chair_calls(turns)
+    assert [(e.label, e.name) for e in ev] == [("K", "Koch")]
