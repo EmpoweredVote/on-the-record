@@ -138,7 +138,7 @@ def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None)
         if not scored:
             continue
 
-        scored.sort(reverse=True)
+        scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
         _, _, _, tier, items = scored[0]
         best = _best_name(items)
         title = next((e.title for e in items if e.title), None)

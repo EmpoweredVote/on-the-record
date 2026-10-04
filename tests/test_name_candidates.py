@@ -130,3 +130,11 @@ def test_office_title_in_debate_is_none():
     """Titled 'Senator' in debate event_kind → role None."""
     c = build_candidates([ev("E1", "A", "Brown", "Senator")], event_kind="debate")
     assert c["A"].titled is True and c["A"].role is None
+
+
+def test_tied_groups_do_not_crash_sorting():
+    """The same unmatched first name twice makes two own-groups tie on every sort key (distinct quotes, so Evidence would be compared)."""
+    c = build_candidates([
+        ev("E1", "A", "Carolyn Johnson"), ev("E2", "A", "Lolita", quote="one"), ev("E2", "A", "Lolita", quote="two"),
+    ])
+    assert c["A"].name == "Carolyn Johnson"
