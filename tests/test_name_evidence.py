@@ -320,6 +320,26 @@ def test_e2_bare_title_only_whole_sentence_i_spoke():
     assert ev == []
 
 
+# TASK 3: E4 CAPTION CORROBORATION AND extract_evidence
+
+from src.name_evidence import extract_evidence
+
+
+def test_extract_evidence_combines_rules():
+    segs = [seg(0, "CHAIR", "Next we will hear from Ms. Rachel Sample."),
+            seg(1, "W", "Thank you. My name is Rachel Sample, I'm with Hoosier Families. " + FILLER),
+            seg(2, "CHAIR", "Thank you, Ms. Sample.")]
+    kinds = sorted((e.kind, e.label) for e in extract_evidence(segs))
+    assert kinds == [("E1", "W"), ("E2", "W"), ("E3", "W")]
+
+
+def test_e4_from_captions_full_name_only():
+    segs = [seg(0, "W", "My name is Rachel Sample, I'm with Hoosier Families. " + FILLER)]
+    ev = extract_evidence(segs, captions_text=">> MY NAME IS RACHEL SAMPLE.")
+    assert sorted(e.kind for e in ev) == ["E1", "E4"]
+    assert extract_evidence(segs, captions_text=">> SOMETHING ELSE.")[0].kind == "E1"
+
+
 def test_e2_bare_title_whole_sentence_only_title_name():
     """Bare title pattern should match when sentence is only 'Title Name'."""
     # "Thank you, Madam Chair. Senator Koch." is a call (second sentence is just title+name)

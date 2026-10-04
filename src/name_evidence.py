@@ -315,3 +315,24 @@ def find_thank_backs(turns: list[Turn]) -> list[Evidence]:
                                 affiliation=None, quote=window[m.start():m.end()].strip(),
                                 segment_id=nxt.segment_ids[0]))
     return out
+
+
+def _norm(s: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9' ]+", " ", s.lower()).split())
+
+
+def extract_evidence(segments: list[Segment], captions_text: Optional[str] = None) -> list[Evidence]:
+    """All E1-E3 evidence, plus E4 where source captions contain the full name."""
+    turns = build_turns(segments)
+    found = find_self_intros(turns) + find_chair_calls(turns) + find_thank_backs(turns)
+    if captions_text:
+        caps = f" {_norm(captions_text)} "
+        seen: set[tuple[str, str]] = set()
+        for e in list(found):
+            key = (e.label, _norm(e.name))
+            if e.partial or key in seen or f" {key[1]} " not in caps:
+                continue
+            seen.add(key)
+            found.append(Evidence(kind="E4", label=e.label, name=e.name, title=e.title,
+                                  affiliation=None, quote="(source captions)", segment_id=e.segment_id))
+    return found
