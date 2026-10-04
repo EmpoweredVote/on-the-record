@@ -26,13 +26,20 @@ from src.name_evidence import extract_evidence  # noqa: E402
 from src.name_suggestion_eval import gold_labels, score_meeting, strip_names, summarize  # noqa: E402
 
 _VTT_TIME = re.compile(r"^\d\d:\d\d:\d\d\.\d+ --> .*$", re.M)
+_VTT_TAG = re.compile(r"<[^>]+>")
+_VTT_HEADER = re.compile(r"^(WEBVTT.*|NOTE.*|Kind:.*|Language:.*)$", re.M)
 
 
 def _captions(meeting_dir: Path) -> Optional[str]:
-    for name in ("source_captions.vtt", "captions.vtt"):
-        p = meeting_dir / name
+    """Plain caption text: cue timings, inline <..> tags and header lines removed."""
+    candidates = [meeting_dir / "source_captions.vtt", meeting_dir / "captions.vtt"]
+    candidates += sorted(meeting_dir.glob("captions*.vtt"))
+    for p in candidates:
         if p.exists():
-            return _VTT_TIME.sub("", p.read_text(encoding="utf-8", errors="ignore"))
+            text = p.read_text(encoding="utf-8", errors="ignore")
+            text = _VTT_TIME.sub("", text)
+            text = _VTT_TAG.sub("", text)
+            return _VTT_HEADER.sub("", text)
     return None
 
 
@@ -40,9 +47,11 @@ def run(meetings_dir: Path, kinds: Optional[list[str]]) -> list[dict]:
     rows: list[dict] = []
     for path in sorted(glob.glob(str(meetings_dir / "*" / "transcript_named.json"))):
         try:
-            with open(path) as fh:
+            with open(path, encoding="utf-8") as fh:
                 meeting = json.load(fh)
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            continue
+        if not isinstance(meeting, dict):
             continue
         kind = meeting.get("event_kind")
         if kinds and kind not in kinds:
@@ -63,10 +72,11 @@ def run(meetings_dir: Path, kinds: Optional[list[str]]) -> list[dict]:
 def _table(title: str, summary: dict[str, dict]) -> None:
     print(f"\n{title}")
     cols = ("n", "predicted", "correct", "misspelled", "wrong", "hallucination", "miss",
-            "safe_null", "precision", "bad_rate", "exact_rate", "passes_prefill_bar")
-    print("  " + f"{'group':<18}" + "".join(f"{c[:10]:>11}" for c in cols))
+            "safe_null", "precision", "bad_rate", "exact_rate", "misspell_rate",
+            "passes_prefill_bar")
+    print("  " + f"{'group':<18}" + "".join(f"{c:>{len(c) + 2}}" for c in cols))
     for group, s in summary.items():
-        print("  " + f"{str(group):<18}" + "".join(f"{str(s[c]):>11}" for c in cols))
+        print("  " + f"{str(group):<18}" + "".join(f"{str(s[c]):>{len(c) + 2}}" for c in cols))
 
 
 def main() -> None:
