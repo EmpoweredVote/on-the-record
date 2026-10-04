@@ -18,7 +18,7 @@ from .speaker_id_eval import classify
 
 PREFILL_MIN_PRECISION = 0.95
 PREFILL_MAX_BAD = 0.02
-MISSPELL_MIN_SURNAME_SIMILARITY = 0.5
+MISSPELL_MIN_SURNAME_SIMILARITY = 0.4
 OUTCOMES = ("correct", "misspelled", "wrong", "hallucination", "miss", "safe_null")
 _GOLD_JUNK = re.compile(
     r"^\s*speaker[_ ]?\d+$|^\s*candidate\s*\d+$|\b(unknown|unidentified)\b|\(.*?(unknown|unidentified).*?\)",
@@ -67,7 +67,7 @@ def score_meeting(gold: dict[str, Optional[str]], candidates: dict[str, Candidat
         # Promote "wrong" to "misspelled" only if:
         # - Both names have ≥2 significant tokens
         # - First significant tokens match
-        # - Last significant tokens (surnames) have similarity ≥ threshold
+        # - Surnames share their first letter (ASR keeps the first sound) and similarity ≥ threshold
         if outcome == "wrong" and gold_name and predicted:
             g_sig = significant_tokens(gold_name)
             p_sig = significant_tokens(predicted)
@@ -75,7 +75,7 @@ def score_meeting(gold: dict[str, Optional[str]], candidates: dict[str, Candidat
                 g_surname = g_sig[-1]
                 p_surname = p_sig[-1]
                 similarity = SequenceMatcher(None, g_surname, p_surname).ratio()
-                if similarity >= MISSPELL_MIN_SURNAME_SIMILARITY:
+                if g_surname[:1] == p_surname[:1] and similarity >= MISSPELL_MIN_SURNAME_SIMILARITY:
                     outcome = "misspelled"
         if predicted:
             tier = cand.tier

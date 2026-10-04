@@ -100,3 +100,17 @@ def test_gold_labels_first_usable_name():
         {"segment_id": 0, "speaker_label": "X", "speaker_name": "Host (Unknown)", "id_method": "human_review"},
         {"segment_id": 1, "speaker_label": "X", "speaker_name": "Alex Chen", "id_method": "human_review"},
     ]}) == {"X": "Alex Chen"}, "Should skip junk and use first real name"
+
+
+def test_misspelled_asr_keeps_first_letter_of_surname():
+    """ASR mishearings keep the first sound: Murfree/Murphy is misspelled; Berezin/Pearson is not."""
+    gold = {"A": "Lauren Murfree", "B": "Peter Berezin", "C": "Liz Brown"}
+    cands = {
+        "A": cand("A", "Lauren Murphy"),
+        "B": cand("B", "Peter Pearson"),
+        "C": cand("C", "Liz Green"),
+    }
+    rows = {r["label"]: r for r in score_meeting(gold, cands, "council")}
+    assert rows["A"]["outcome"] == "misspelled"
+    assert rows["B"]["outcome"] == "wrong"
+    assert rows["C"]["outcome"] == "wrong"
