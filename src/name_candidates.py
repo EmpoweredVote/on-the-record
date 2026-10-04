@@ -19,6 +19,7 @@ CAMPAIGN_KINDS = {"debate", "forum"}
 STAFF_CUES = (
     "legislative services agency", "committee counsel", "committee attorney", "fiscal analyst",
     "city staff", "staff attorney", "clerk's office", "legal counsel", "nonpartisan staff",
+    "city clerk", "county clerk",
 )
 
 
@@ -42,9 +43,20 @@ class Candidate:
         return self.name
 
 
-def _surname_key(name: str) -> str:
+def _full_key(name: str) -> str:
+    """Full name key: " ".join(significant_tokens(name))."""
+    return " ".join(significant_tokens(name))
+
+
+def _surname(name: str) -> str:
+    """Last significant token; fallback to normalize."""
     toks = significant_tokens(name)
     return toks[-1] if toks else normalize(name)
+
+
+def _is_partial_by_tokens(name: str) -> bool:
+    """Partial for grouping: single significant token (e.g., 'Brown', 'Senator Brown')."""
+    return len(significant_tokens(name)) == 1
 
 
 def _tier(kinds: set[str]) -> Optional[str]:
@@ -58,16 +70,16 @@ def _tier(kinds: set[str]) -> Optional[str]:
 
 
 def _best_name(items: list[Evidence]) -> Evidence:
-    """Most tokens wins; E1 breaks ties."""
-    return max(items, key=lambda e: (len(e.name.split()), e.kind == "E1"))
+    """Most significant tokens wins; E1 breaks ties."""
+    return max(items, key=lambda e: (len(significant_tokens(e.name)), e.kind == "E1"))
 
 
-def _role(titled: bool, affiliation: Optional[str], quotes: str, event_kind: Optional[str]) -> Optional[str]:
+def _role(titled: bool, affiliation: Optional[str], e1_quotes: str, event_kind: Optional[str]) -> Optional[str]:
     if event_kind in CAMPAIGN_KINDS:
         return None
     if titled:
         return "official"
-    hay = f"{affiliation or ''} {quotes}".lower()
+    hay = f"{affiliation or ''} {e1_quotes}".lower()
     if any(cue in hay for cue in STAFF_CUES):
         return "staff"
     if affiliation:
@@ -76,43 +88,121 @@ def _role(titled: bool, affiliation: Optional[str], quotes: str, event_kind: Opt
 
 
 def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None) -> dict[str, Candidate]:
-    """One Candidate per speaker label that has E1-E3 evidence."""
-    by_label: dict[str, dict[str, list[Evidence]]] = defaultdict(lambda: defaultdict(list))
-    for e in evidence:
-        by_label[e.label][_surname_key(e.name)].append(e)
+    """One Candidate per speaker label that has E1-E3 evidence.
 
+    Groups by full name key (significant tokens), with partial names joining
+    only if exactly one full-name group shares their surname.
+    """
+    # Separate full and partial names (by significant tokens), group full by key
+    full_by_label: dict[str, dict[str, list[Evidence]]] = defaultdict(lambda: defaultdict(list))
+    partial_by_label: dict[str, list[Evidence]] = defaultdict(list)
+
+    for e in evidence:
+        if _is_partial_by_tokens(e.name):
+            partial_by_label[e.label].append(e)
+        else:
+            full_by_label[e.label][_full_key(e.name)].append(e)
+
+    # Build candidates from full-name groups
     out: dict[str, Candidate] = {}
-    for label, groups in by_label.items():
+    for label, full_groups in full_by_label.items():
         scored = []
-        for key, items in groups.items():
+        for key, items in full_groups.items():
             tier = _tier({e.kind for e in items})
             if tier:
                 scored.append((TIER_RANK[tier], len(items), key, tier, items))
+
+        # Attach partial names to groups: join if exactly one full group with that surname exists
+        partial_items = partial_by_label.get(label, [])
+        for p in partial_items:
+            p_surname = _surname(p.name)
+            matching_groups = [k for k in full_groups.keys() if _surname(k) == p_surname]
+            if len(matching_groups) == 1:
+                # Exactly one match: add to that group
+                matching_key = matching_groups[0]
+                full_groups[matching_key].append(p)
+                # Recalculate tier for this group
+                items = full_groups[matching_key]
+                tier = _tier({e.kind for e in items})
+                # Remove old entry and add new
+                scored = [(r, c, k, t, it) for (r, c, k, t, it) in scored if k != matching_key]
+                if tier:
+                    scored.append((TIER_RANK[tier], len(items), matching_key, tier, items))
+            elif len(matching_groups) == 0:
+                # No full-name groups with this surname: partial forms its own weak group
+                tier = _tier({p.kind})
+                if tier:
+                    scored.append((TIER_RANK[tier], 1, _surname(p.name), tier, [p]))
+            # else: 2+ full-name groups share the surname; partial is ambiguous and stays out
+
         if not scored:
             continue
+
         scored.sort(reverse=True)
         _, _, _, tier, items = scored[0]
         best = _best_name(items)
         title = next((e.title for e in items if e.title), None)
         affiliation = next((e.affiliation for e in items if e.kind == "E1" and e.affiliation), None)
         titled = title in OFFICE_TITLES
+
+        # Gather only E1 quotes for role inference
+        e1_quotes = " ".join(e.quote for e in items if e.kind == "E1")
+
         cand = Candidate(
             label=label, name=best.name, tier=tier,
-            role=_role(titled, affiliation, " ".join(e.quote for e in items), event_kind),
+            role=_role(titled, affiliation, e1_quotes, event_kind),
             titled=titled, partial=best.partial, affiliation=affiliation,
-            evidence=[e for g in groups.values() for e in g],
+            evidence=[e for g in full_groups.values() for e in g] + partial_items,
         )
-        strong_or_medium = [s for s in scored if s[0] >= TIER_RANK["medium"]]
-        if len(strong_or_medium) >= 2:  # X5
+
+        # X5: conflict if 2+ full-name groups at medium or better
+        full_name_groups_scored = [s for s in scored if s[3] in ("strong", "medium")]
+        if len(full_name_groups_scored) >= 2:
             cand.conflict = CONFLICT_TWO_NAMES
+
         out[label] = cand
 
-    by_name: dict[str, list[str]] = defaultdict(list)  # X4
+    # Handle labels with only partial names (group by surname)
+    for label, partial_items in partial_by_label.items():
+        if label in out:
+            continue  # Already processed
+
+        # Group partial items by surname
+        by_surname: dict[str, list[Evidence]] = defaultdict(list)
+        for p in partial_items:
+            by_surname[_surname(p.name)].append(p)
+
+        scored = []
+        for surname, items in by_surname.items():
+            tier = _tier({e.kind for e in items})
+            if tier:
+                scored.append((TIER_RANK[tier], len(items), surname, tier, items))
+
+        if not scored:
+            continue
+        scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+        _, _, _, tier, items = scored[0]
+        best = _best_name(items)
+        title = next((e.title for e in items if e.title), None)
+        affiliation = next((e.affiliation for e in items if e.kind == "E1" and e.affiliation), None)
+        titled = title in OFFICE_TITLES
+        e1_quotes = " ".join(e.quote for e in items if e.kind == "E1")
+        cand = Candidate(
+            label=label, name=best.name, tier=tier,
+            role=_role(titled, affiliation, e1_quotes, event_kind),
+            titled=titled, partial=best.partial, affiliation=affiliation,
+            evidence=partial_items,
+        )
+        out[label] = cand
+
+    # X4: same full key on two labels → conflict
+    by_full_key: dict[str, list[str]] = defaultdict(list)
     for label, cand in out.items():
         if cand.name and not cand.partial:
-            by_name[normalize(cand.name)].append(label)
-    for labels in by_name.values():
+            by_full_key[_full_key(cand.name)].append(label)
+    for labels in by_full_key.values():
         if len(labels) > 1:
             for label in labels:
                 out[label].conflict = out[label].conflict or CONFLICT_TWO_LABELS
+
     return out
