@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from src.name_candidates import Candidate
-from src.name_suggestion_eval import gold_labels, score_meeting, strip_names, summarize
+from src.name_suggestion_eval import ROLE_GOLD, gold_labels, score_meeting, strip_names, summarize
 
 
 def cand(label, name, tier="medium", partial=False, conflict=None):
@@ -91,7 +93,7 @@ def test_gold_junk_keeps_real_titled_names():
         {"segment_id": 1, "speaker_label": "B", "speaker_name": "Host (Unknown - CRG)", "id_method": "human_review"},
         {"segment_id": 2, "speaker_label": "C", "speaker_name": "SPEAKER_03", "id_method": "human_review"},
         {"segment_id": 3, "speaker_label": "D", "speaker_name": "Unidentified Speaker", "id_method": "human_review"},
-    ]}) == {"A": None, "B": None, "C": None, "D": None}
+    ]}) == {"A": ROLE_GOLD, "B": None, "C": ROLE_GOLD, "D": None}
 
 
 def test_gold_labels_first_usable_name():
@@ -114,3 +116,48 @@ def test_misspelled_asr_keeps_first_letter_of_surname():
     assert rows["A"]["outcome"] == "misspelled"
     assert rows["B"]["outcome"] == "wrong"
     assert rows["C"]["outcome"] == "wrong"
+
+
+# ---- final-review fixes ----
+
+
+def _g(name):
+    return gold_labels({"segments": [{"segment_id": 0, "speaker_label": "A", "speaker_name": name,
+                                      "id_method": "human_review"}]})["A"]
+
+
+@pytest.mark.parametrize("name", ["Reporter1", "Interviewee1", "Moderator (Middle)", "Moderator (Right2)",
+                                  "Moderator-Commissioners", "Moderator-Sherriff", "Host", "Panelist 2",
+                                  "Jane Doe (Candidate3)"])
+def test_role_only_gold_is_role(name):
+    assert _g(name) == ROLE_GOLD
+
+
+def test_real_names_not_role_and_unidentified_stays_none():
+    assert _g("Speaker Huston") == "Speaker Huston"
+    assert _g("Nancy Pelosi (D)") == "Nancy Pelosi (D)"
+    assert _g("Moderator John Doe") == "Moderator John Doe"
+    assert _g("Unidentified Speaker") is None
+
+
+def test_unverifiable_outcome_excluded_from_precision():
+    gold = {"A": ROLE_GOLD, "B": ROLE_GOLD, "C": None}
+    cands = {"A": cand("A", "Ted Simons"), "C": cand("C", "Ann Lee")}
+    rows = {r["label"]: r for r in score_meeting(gold, cands, "debate")}
+    assert rows["A"]["outcome"] == "unverifiable"
+    assert rows["B"]["outcome"] == "safe_null"
+    assert rows["C"]["outcome"] == "hallucination"
+    s = summarize(list(rows.values()), "event_kind")["debate"]
+    assert s["unverifiable"] == 1 and s["predicted"] == 1 and s["bad_rate"] == 1.0
+
+
+def test_insufficient_n_blocks_bar_and_strict_precision():
+    rows = [{"tier": "strong", "outcome": "correct", "exact": True}] * 49
+    s = summarize(rows, "tier")["strong"]
+    assert s["insufficient_n"] is True and s["passes_prefill_bar"] is False
+    rows = [{"tier": "strong", "outcome": "correct", "exact": True}] * 50
+    s = summarize(rows, "tier")["strong"]
+    assert s["insufficient_n"] is False and s["passes_prefill_bar"] is True
+    rows = [{"tier": "t", "outcome": "correct", "exact": True},
+            {"tier": "t", "outcome": "correct", "exact": False}]
+    assert summarize(rows, "tier")["t"]["strict_precision"] == 0.5

@@ -15,6 +15,7 @@ from .name_matching import normalize, significant_tokens
 TIER_RANK = {"strong": 3, "medium": 2, "weak": 1}
 CONFLICT_TWO_LABELS = "name_on_two_labels"
 CONFLICT_TWO_NAMES = "two_names_one_label"
+CONFLICT_TIED_NAMES = "tied_names"
 CAMPAIGN_KINDS = {"debate", "forum"}
 STAFF_CUES = (
     "legislative services agency", "committee counsel", "committee attorney", "fiscal analyst",
@@ -52,6 +53,13 @@ def _surname(name: str) -> str:
     """Last significant token; fallback to normalize."""
     toks = significant_tokens(name)
     return toks[-1] if toks else normalize(name)
+
+
+def _norm_title(title: Optional[str]) -> str:
+    return (title or "").rstrip(".").lower()
+
+
+_OFFICE_TITLE_SET = {_norm_title(t) for t in OFFICE_TITLES}
 
 
 def _is_partial_by_tokens(name: str) -> bool:
@@ -98,6 +106,8 @@ def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None)
     partial_by_label: dict[str, list[Evidence]] = defaultdict(list)
 
     for e in evidence:
+        if not significant_tokens(e.name):
+            continue  # honorific-only ("Chair"): no usable name, would form an empty-key group
         if _is_partial_by_tokens(e.name):
             partial_by_label[e.label].append(e)
         else:
@@ -143,7 +153,7 @@ def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None)
         best = _best_name(items)
         title = next((e.title for e in items if e.title), None)
         affiliation = next((e.affiliation for e in items if e.kind == "E1" and e.affiliation), None)
-        titled = title in OFFICE_TITLES
+        titled = _norm_title(title) in _OFFICE_TITLE_SET
 
         # Gather only E1 quotes for role inference
         e1_quotes = " ".join(e.quote for e in items if e.kind == "E1")
@@ -151,7 +161,7 @@ def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None)
         cand = Candidate(
             label=label, name=best.name, tier=tier,
             role=_role(titled, affiliation, e1_quotes, event_kind),
-            titled=titled, partial=best.partial, affiliation=affiliation,
+            titled=titled, partial=len(significant_tokens(best.name)) < 2, affiliation=affiliation,
             evidence=[e for g in full_groups.values() for e in g] + partial_items,
         )
 
@@ -159,6 +169,8 @@ def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None)
         full_name_groups_scored = [s for s in scored if s[3] in ("strong", "medium")]
         if len(full_name_groups_scored) >= 2:
             cand.conflict = CONFLICT_TWO_NAMES
+        elif len(scored) >= 2 and scored[0][0] == scored[1][0]:
+            cand.conflict = CONFLICT_TIED_NAMES  # distinct names tie at the top tier
 
         out[label] = cand
 
@@ -185,14 +197,16 @@ def build_candidates(evidence: list[Evidence], event_kind: Optional[str] = None)
         best = _best_name(items)
         title = next((e.title for e in items if e.title), None)
         affiliation = next((e.affiliation for e in items if e.kind == "E1" and e.affiliation), None)
-        titled = title in OFFICE_TITLES
+        titled = _norm_title(title) in _OFFICE_TITLE_SET
         e1_quotes = " ".join(e.quote for e in items if e.kind == "E1")
         cand = Candidate(
             label=label, name=best.name, tier=tier,
             role=_role(titled, affiliation, e1_quotes, event_kind),
-            titled=titled, partial=best.partial, affiliation=affiliation,
+            titled=titled, partial=len(significant_tokens(best.name)) < 2, affiliation=affiliation,
             evidence=partial_items,
         )
+        if len(scored) >= 2 and scored[0][0] == scored[1][0]:
+            cand.conflict = CONFLICT_TIED_NAMES
         out[label] = cand
 
     # X4: same full key on two labels → conflict

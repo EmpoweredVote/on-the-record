@@ -99,7 +99,9 @@ def test_partial_joins_only_one_full_group_by_surname():
 def test_partial_alone_forms_own_group():
     """'Senator Brown' E2 alone (single significant token) forms its own weak group."""
     c = build_candidates([ev("E2", "A", "Senator Brown")])
-    assert c["A"].name == "Senator Brown" and c["A"].tier == "weak" and not c["A"].partial
+    assert c["A"].name == "Senator Brown" and c["A"].tier == "weak"
+    # one significant token ("Senator" is an honorific) => partial, never pre-filled
+    assert c["A"].partial and c["A"].prefill_name is None
 
 
 def test_staff_cues_from_e1_and_affiliation_only():
@@ -138,3 +140,22 @@ def test_tied_groups_do_not_crash_sorting():
         ev("E1", "A", "Carolyn Johnson"), ev("E2", "A", "Lolita", quote="one"), ev("E2", "A", "Lolita", quote="two"),
     ])
     assert c["A"].name == "Carolyn Johnson"
+
+
+# ---- final-review fixes ----
+def test_title_without_period_and_partial_by_significant_tokens():
+    c = build_candidates([ev("E2", "A", "Sen. Brown", "Sen.")])["A"]
+    assert c.partial is True and c.titled is True and c.prefill_name is None
+    c = build_candidates([ev("E2", "A", "Brown", "Gov")])["A"]
+    assert c.titled is True
+
+
+def test_honorific_only_evidence_dropped_no_false_conflict():
+    c = build_candidates([ev("E1", "A", "Ann Lee"), ev("E1", "A", "Chair"), ev("E2", "A", "Chair")])["A"]
+    assert c.conflict is None and c.prefill_name == "Ann Lee"
+
+
+def test_tied_top_tier_names_block_prefill():
+    from src.name_candidates import CONFLICT_TIED_NAMES
+    c = build_candidates([ev("E2", "A", "Ann Lee"), ev("E3", "A", "Bob Fox")])["A"]
+    assert c.conflict == CONFLICT_TIED_NAMES and c.prefill_name is None

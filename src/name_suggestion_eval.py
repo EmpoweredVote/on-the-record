@@ -18,16 +18,23 @@ from .speaker_id_eval import classify
 
 PREFILL_MIN_PRECISION = 0.95
 PREFILL_MAX_BAD = 0.02
+PREFILL_MIN_N = 50   # fewer predictions than this cannot establish the bar
+ROLE_GOLD = "__ROLE__"  # gold label is a role/junk label: cannot verify a name either way
 MISSPELL_MIN_SURNAME_SIMILARITY = 0.4
-OUTCOMES = ("correct", "misspelled", "wrong", "hallucination", "miss", "safe_null")
-_GOLD_JUNK = re.compile(
-    r"^\s*speaker[_ ]?\d+$|^\s*candidate\s*\d+$|\b(unknown|unidentified)\b|\(.*?(unknown|unidentified).*?\)",
-    re.I
-)
+OUTCOMES = ("correct", "misspelled", "wrong", "hallucination", "unverifiable", "miss", "safe_null")
+# Explicitly unnamed by the reviewer: a prediction here is a real hallucination.
+_GOLD_UNNAMED = re.compile(r"\b(unknown|unidentified)\b|\(.*?(unknown|unidentified).*?\)", re.I)
+# Role-only / placeholder labels: no name to verify against.
+_ROLE_WORDS = "moderator|reporter|interviewee|host|panelist|narrator|announcer"
+_GOLD_ROLE = re.compile(
+    rf"^\s*speaker[_ ]?\d+$|^\s*candidate\s*\d+$|\(\s*candidate\s*\d+\s*\)"
+    rf"|^\s*(?:{_ROLE_WORDS})\s*(?:[\d(\-].*)?$", re.I)
 
 
 def gold_labels(meeting: dict) -> dict[str, Optional[str]]:
-    """Extract label→gold-name from human_review segments (first usable name per label)."""
+    """Extract label→gold-name from human_review segments (first usable name per label).
+
+    Role/placeholder labels map to ROLE_GOLD; explicitly unidentified ones to None."""
     gold: dict[str, Optional[str]] = {}
     found: set[str] = set()  # Labels with usable names found
     for s in meeting.get("segments", []):
@@ -37,10 +44,10 @@ def gold_labels(meeting: dict) -> dict[str, Optional[str]]:
         if label in found:  # Already found a usable name for this label
             continue
         name = s.get("speaker_name")
-        if not name or _GOLD_JUNK.search(name):
+        if not name or _GOLD_UNNAMED.search(name) or _GOLD_ROLE.search(name):
             # Junk name; mark as None if not yet seen, but continue looking for a usable name
             if label not in gold:
-                gold[label] = None
+                gold[label] = ROLE_GOLD if name and not _GOLD_UNNAMED.search(name) else None
         else:
             # Usable name; use it and mark as found (won't be overwritten)
             gold[label] = name
@@ -63,7 +70,10 @@ def score_meeting(gold: dict[str, Optional[str]], candidates: dict[str, Candidat
     for label, gold_name in gold.items():
         cand = candidates.get(label)
         predicted = cand.prefill_name if cand else None
-        outcome = classify(gold_name, predicted)
+        if gold_name == ROLE_GOLD:
+            outcome = "unverifiable" if predicted else "safe_null"
+        else:
+            outcome = classify(gold_name, predicted)
         # Promote "wrong" to "misspelled" only if:
         # - Both names have ≥2 significant tokens
         # - First significant tokens match
@@ -106,10 +116,12 @@ def summarize(rows: list[dict], key: str) -> dict[str, dict]:
         bad = (counts["wrong"] + counts["hallucination"]) / predicted if predicted else 0.0
         out[name] = {
             "n": len(items), **counts, "predicted": predicted,
+            "insufficient_n": predicted < PREFILL_MIN_N,
+            "strict_precision": round(sum(1 for r in items if r.get("exact")) / predicted, 3) if predicted else 0.0,
             "precision": round(precision, 3), "bad_rate": round(bad, 3),
             "misspell_rate": round(counts["misspelled"] / predicted, 3) if predicted else 0.0,
             "exact_rate": round(sum(1 for r in items if r.get("exact")) / predicted, 3) if predicted else 0.0,
-            "passes_prefill_bar": bool(predicted and precision >= PREFILL_MIN_PRECISION
+            "passes_prefill_bar": bool(predicted >= PREFILL_MIN_N and precision >= PREFILL_MIN_PRECISION
                                        and bad <= PREFILL_MAX_BAD),
         }
     return out

@@ -347,3 +347,66 @@ def test_e2_bare_title_whole_sentence_only_title_name():
                          seg(1, "K", "Thank you.")])
     ev = find_chair_calls(turns)
     assert [(e.label, e.name) for e in ev] == [("K", "Koch")]
+
+
+# ---- final-review fixes ----
+import pytest
+from src.name_evidence import clean_name
+
+
+def _e1(text):
+    return find_self_intros(build_turns([seg(0, "W", text)]))
+
+
+def test_no_mid_word_truncation_before_im():
+    ev = _e1("Good evening. I'm Mary Morgan I'm testifying today " + FILLER)
+    assert [e.name for e in ev] == ["Mary Morgan"]
+
+
+def test_no_mid_word_truncation_francesca_and_unicode():
+    ev = _e1("Hello. I'm Francesca Hong, and " + FILLER)
+    assert ev[0].name == "Francesca Hong"
+    ev = _e1("My name is José Ramírez, from Madison " + FILLER)
+    assert ev[0].name == "José Ramírez"
+
+
+@pytest.mark.parametrize("text,name,title", [
+    ("I'm State Representative Francesca Hong, and ", "Francesca Hong", "Representative"),
+    ("I'm State Senator Kelda Roys, and ", "Kelda Roys", "Senator"),
+    ("I'm County Commissioner Ann Lee, and ", "Ann Lee", "Commissioner"),
+])
+def test_qualified_titles_do_not_spill_into_name(text, name, title):
+    ev = _e1(text + FILLER)
+    assert (ev[0].name, ev[0].title) == (name, title)
+
+
+def test_title_without_period_is_a_title():
+    ev = find_thank_backs(build_turns([seg(0, "A", "Words words."), seg(1, "B", "Thank you Mr Smith. " + FILLER)]))
+    assert (ev[0].name, ev[0].title) == ("Smith", "Mr")
+    assert ev[0].partial is True
+
+
+def test_gov_title_recognized():
+    ev = _e1("My name is Gov Smith and " + FILLER)
+    assert (ev[0].name, ev[0].title) == ("Smith", "Gov")
+
+
+def test_my_name_greedy_capital_run_trimmed():
+    ev = _e1("My name is Chris Swanson American Federation of Teachers and " + FILLER)
+    assert ev[0].name == "Chris Swanson"
+    ev = _e1("My name is Mary Ann Jones, from Madison " + FILLER)
+    assert ev[0].name == "Mary Ann Jones"
+
+
+def test_possessive_curly_and_uppercase_rejected():
+    assert clean_name("Smith’s") is None
+    assert clean_name("Smith’S") is None
+    assert clean_name("Smith's") is None
+    assert clean_name("THEM BACK LET'S") is None
+    assert clean_name("Ann Lee") == "Ann Lee"
+
+
+def test_is_mention_curly_possessive():
+    t = "Ann Lee’s bill"
+    assert is_mention(t, 0, 7)
+    assert is_mention("Ann Lee’S bill", 0, 7)

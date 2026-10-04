@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
 from .models import Segment
+from .name_matching import significant_tokens
 
 INTRO_WORDS = 60          # E1 window: first N words of the first substantial turn
 MIN_TURN_WORDS = 10       # a turn shorter than this is not "substantial"
@@ -20,17 +21,32 @@ OFFICE_TITLES = (
     "Lieutenant Governor", "Attorney General", "Council Member", "Congresswoman",
     "Congressman", "Councilmember", "Councilwoman", "Councilman", "Representative",
     "Commissioner", "Prosecutor", "Treasurer", "Governor", "Senator", "Auditor",
-    "Justice", "Sheriff", "Trustee", "Mayor", "Judge", "Rep.", "Sen.",
+    "Justice", "Sheriff", "Trustee", "Mayor", "Judge", "Rep.", "Sen.", "Gov.",
 )
 COURTESY_TITLES = (
     "Professor", "Reverend", "Doctor", "Pastor", "Father", "Rabbi", "Chief", "Imam",
     "Miss", "Mrs.", "Rev.", "Mr.", "Ms.", "Dr.",
 )
-_TITLE = "|".join(re.escape(t) for t in sorted(OFFICE_TITLES + COURTESY_TITLES, key=len, reverse=True))
-_OFFICE_TITLE = "|".join(re.escape(t) for t in sorted(OFFICE_TITLES, key=len, reverse=True))
-_TOKEN = r"[A-Z][a-zA-Z'\u2019\-]+"
+def _title_alt(titles: tuple) -> str:
+    """Alternation of titles; abbreviations accept the period optionally ("Mr" and "Mr.")."""
+    abbr = {t.rstrip(".") for t in titles if t.endswith(".")}
+    forms = sorted({t.rstrip(".") for t in titles}, key=len, reverse=True)
+    return r"(?:" + "|".join(re.escape(t) + (r"\.?" if t in abbr else "") for t in forms) + r")"
+
+
+TITLE_QUALIFIERS = ("State", "County", "City", "U.S.", "Former", "Assistant", "Deputy")
+_QUAL = r"(?:(?:" + "|".join(re.escape(q) for q in TITLE_QUALIFIERS) + r")\s+)*"
+_TITLE_ONLY = _title_alt(OFFICE_TITLES + COURTESY_TITLES)
+_OFFICE_ONLY = _title_alt(OFFICE_TITLES)
+_TITLE = _QUAL + _TITLE_ONLY
+_OFFICE_TITLE = _QUAL + _OFFICE_ONLY
+_L = r"[^\W\d_]"                      # any Unicode letter
+_UP = r"[A-Z\u00C0-\u00D6\u00D8-\u00DE]"  # capital letter (Latin incl. accented)
+_TOKEN = rf"{_UP}(?:{_L}|['\u2019\-](?={_L}))+(?!{_L})"
 _NAME_1_3 = rf"{_TOKEN}(?:\s+{_TOKEN}){{0,2}}"
 _NAME_2_3 = rf"{_TOKEN}(?:\s+{_TOKEN}){{1,2}}"
+_TITLE_WORDS = {w.lower() for t in OFFICE_TITLES + COURTESY_TITLES for w in t.rstrip(".").split()}
+_QUAL_WORDS = {q.lower().rstrip(".") for q in TITLE_QUALIFIERS}
 
 # Capitalized words that are not names (sentence starts, courtesies, fillers).
 NOT_NAME = {
@@ -53,7 +69,7 @@ _R_MY_NAME = re.compile(rf"(?i:\bmy\s+name(?:['′\u2019]s|\s+is)\s+)(?:(?P<titl
 _R_IM_TITLED = re.compile(rf"(?i:\b(?:I['′\u2019]m|I\s+am)\s+)(?P<title>{_TITLE})\s+(?P<name>{_NAME_1_3})")
 _R_IM = re.compile(
     rf"(?i:\b(?:I['′\u2019]m|I\s+am)\s+)(?P<name>{_NAME_2_3})"
-    r"(?=\s*(?:[.,;!?]|$|(?i:and|with|from|of|on|representing|here|a|an|the)\b))"
+    r"(?=\s*[.,;!?]|\s*$|\s+(?i:and|with|from|of|on|representing|here|a|an|the)\b|\s+I['’]m\b)"
 )
 _R_AFFIL = re.compile(
     r"(?i:\b(?:I['′\u2019]m\s+with|I\s+am\s+with|with|from|representing|on\s+behalf\s+of|here\s+for))\s+"
@@ -84,7 +100,7 @@ class Evidence:
 
     @property
     def partial(self) -> bool:
-        return len(self.name.split()) < 2
+        return len(significant_tokens(self.name)) < 2
 
 
 def build_turns(segments: Iterable[Segment]) -> list[Turn]:
@@ -102,43 +118,68 @@ def build_turns(segments: Iterable[Segment]) -> list[Turn]:
     return turns
 
 
-def clean_name(raw: str) -> Optional[str]:
-    """Trim non-name trailing tokens; None if nothing name-like is left.
+def split_name_title(raw: str) -> tuple[Optional[str], Optional[str]]:
+    """Trim non-name tokens; return (name, title_found_inside_the_capture).
 
-    Removes trailing contractions (I'm, I'll, I've, I'd, n't) and rejects
-    names with possessive 's/'s endings or bare titles.
+    Removes trailing contractions and filler, drops everything up to and
+    including the last title token ("State Representative Francesca" ->
+    title "Representative"), and rejects possessives, ALL-CAPS runs, NOT_NAME
+    words and bare titles. (None, None) if nothing name-like is left.
     """
     toks = raw.split()
 
-    # Drop trailing contraction tokens (I'm, I'll, I've, I'd, or n't)
+    # Drop trailing contraction / filler tokens
     while toks:
         last_lower = toks[-1].lower()
-        # Remove apostrophes for comparison
         last_stripped = last_lower.strip("'\u2019")
-        # Check if it's a contraction or NOT_NAME token
-        if last_stripped in ("i'm", "i'll", "i've", "i'd", "i've") or last_lower.endswith("n't") or last_stripped in NOT_NAME:
+        if last_stripped in ("i'm", "i'll", "i've", "i'd") or last_lower.endswith("n't") or last_stripped in NOT_NAME:
             toks.pop()
         else:
             break
 
+    title = None
+    last_title = max((i for i, t in enumerate(toks) if t.lower().rstrip(".") in _TITLE_WORDS), default=-1)
+    if last_title >= 0:
+        title = toks[last_title]
+        toks = toks[last_title + 1:]
+
     if not toks or len(toks) > 3 or len(" ".join(toks)) > 40:
-        return None
+        return None, None
 
-    # Reject if last token is possessive ('s or 's)
-    if toks[-1].endswith("'s") or toks[-1].endswith("'s"):
-        return None
+    # Reject possessives (straight or curly apostrophe, any case)
+    if toks[-1].lower().endswith(("'s", "\u2019s")):
+        return None, None
 
-    # Reject if any token is in NOT_NAME
     if any(t.lower() in NOT_NAME for t in toks):
-        return None
+        return None, None
 
-    # Reject if first token is a bare title (OFFICE or COURTESY, with or without trailing .)
-    title_set = {t.lower() for t in OFFICE_TITLES + COURTESY_TITLES}
-    first_lower = toks[0].lower().rstrip(".")
-    if first_lower in title_set:
-        return None
+    # ASR shouting / sentence fragments: every token ALL CAPS
+    if all(t.isupper() for t in toks):
+        return None, None
 
-    return " ".join(toks)
+    return " ".join(toks), title
+
+
+def clean_name(raw: str) -> Optional[str]:
+    """Name part of split_name_title (None if rejected)."""
+    return split_name_title(raw)[0]
+
+
+def _norm_title(raw: Optional[str]) -> Optional[str]:
+    """Drop qualifiers ("State Senator" -> "Senator"); None stays None."""
+    if not raw:
+        return None
+    words = raw.split()
+    while len(words) > 1 and words[0].lower().rstrip(".") in _QUAL_WORDS:
+        words.pop(0)
+    return " ".join(words)
+
+
+def resolve_name_title(m: "re.Match", raw_name: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
+    """(name, title) for a pattern match: explicit title group wins, else a title found in the capture."""
+    name, inner = split_name_title(raw_name if raw_name is not None else m.group("name"))
+    gd = m.groupdict()
+    return name, _norm_title(gd.get("title")) or inner
 
 
 def is_mention(text: str, name_start: int, name_end: int) -> bool:
@@ -154,7 +195,7 @@ def is_mention(text: str, name_start: int, name_end: int) -> bool:
     after_text = text[name_end:].lower()
 
     # (c) Check for possessive: name followed by 's or 's
-    if after_text.startswith("'s") or after_text.startswith("'s"):
+    if after_text.startswith(("'s", "\u2019s")):
         return True
 
     # Extract word tokens before the name (up to the match start)
@@ -203,15 +244,20 @@ def find_self_intros(turns: list[Turn]) -> list[Evidence]:
         matches = []
         for rx in (_R_MY_NAME, _R_IM_TITLED, _R_IM):
             for m in rx.finditer(window):
-                name = clean_name(m.group("name"))
-                # Check if the name is a mention using the name group's span
+                raw = m.group("name")
+                # Greedy capture of 3 capitalized words followed by yet another capitalized
+                # word: the name boundary is unknown ("Chris Swanson American Federation"),
+                # so keep only the first two tokens.
+                if rx is not _R_IM and len(raw.split()) == 3 and re.match(rf"\s+{_UP}", window[m.end("name"):]):
+                    raw = " ".join(raw.split()[:2])
+                name, title = resolve_name_title(m, raw)
                 if name and not is_mention(window, m.start("name"), m.end("name")):
-                    matches.append((m.start(), m, name))
+                    matches.append((m.start(), m, name, title))
         if not matches:
             continue
-        start, m, name = min(matches, key=lambda x: x[0])  # X3: first intro only
+        start, m, name, title = min(matches, key=lambda x: x[0])  # X3: first intro only
         out.append(Evidence(
-            kind="E1", label=turn.label, name=name, title=m.groupdict().get("title"),
+            kind="E1", label=turn.label, name=name, title=title,
             affiliation=_affiliation_after(window, m.end()),
             quote=window[start:m.end() + 60].strip(), segment_id=turn.segment_ids[0],
         ))
@@ -286,14 +332,14 @@ def find_chair_calls(turns: list[Turn]) -> list[Evidence]:
         best = None
         for rx in _CALL_PATTERNS:
             for m in rx.finditer(window):
-                name = clean_name(m.group("name"))
+                name, title = resolve_name_title(m)
                 if not name or is_mention(window, m.start("name"), m.end("name")) or _preceded_by_thanks(window, m.start()):
                     continue
                 if best is None or m.start() > best[0]:
-                    best = (m.start(), m, name)
+                    best = (m.start(), m, name, title)
         if best:
-            start, m, name = best
-            out.append(Evidence(kind="E2", label=nxt.label, name=name, title=m.groupdict().get("title"),
+            start, m, name, title = best
+            out.append(Evidence(kind="E2", label=nxt.label, name=name, title=title,
                                 affiliation=None, quote=window[start:m.end()].strip(),
                                 segment_id=prev.segment_ids[-1]))
     return out
@@ -309,9 +355,9 @@ def find_thank_backs(turns: list[Turn]) -> list[Evidence]:
         m = _R_THANK.search(window)
         if not m:
             continue
-        name = clean_name(m.group("name"))
+        name, title = resolve_name_title(m)
         if name:
-            out.append(Evidence(kind="E3", label=prev.label, name=name, title=m.group("title"),
+            out.append(Evidence(kind="E3", label=prev.label, name=name, title=title,
                                 affiliation=None, quote=window[m.start():m.end()].strip(),
                                 segment_id=nxt.segment_ids[0]))
     return out

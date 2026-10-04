@@ -71,9 +71,9 @@ def run(meetings_dir: Path, kinds: Optional[list[str]]) -> list[dict]:
 
 def _table(title: str, summary: dict[str, dict]) -> None:
     print(f"\n{title}")
-    cols = ("n", "predicted", "correct", "misspelled", "wrong", "hallucination", "miss",
-            "safe_null", "precision", "bad_rate", "exact_rate", "misspell_rate",
-            "passes_prefill_bar")
+    cols = ("n", "predicted", "correct", "misspelled", "wrong", "hallucination", "unverifiable",
+            "miss", "safe_null", "precision", "strict_precision", "bad_rate", "misspell_rate",
+            "insufficient_n", "passes_prefill_bar")
     print("  " + f"{'group':<18}" + "".join(f"{c:>{len(c) + 2}}" for c in cols))
     for group, s in summary.items():
         print("  " + f"{str(group):<18}" + "".join(f"{str(s[c]):>{len(c) + 2}}" for c in cols))
