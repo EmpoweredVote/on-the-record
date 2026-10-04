@@ -8,26 +8,43 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from difflib import SequenceMatcher
 from typing import Optional
 
 from .models import Segment
 from .name_candidates import Candidate
-from .name_matching import normalize
+from .name_matching import normalize, significant_tokens
 from .speaker_id_eval import classify
 
 PREFILL_MIN_PRECISION = 0.95
 PREFILL_MAX_BAD = 0.02
+MISSPELL_MIN_SURNAME_SIMILARITY = 0.5
 OUTCOMES = ("correct", "misspelled", "wrong", "hallucination", "miss", "safe_null")
-_GOLD_JUNK = re.compile(r"\d|\(|\bunknown\b|^speaker[_ ]|^candidate\s*\d", re.I)
+_GOLD_JUNK = re.compile(
+    r"^\s*speaker[_ ]?\d+$|^\s*candidate\s*\d+$|\b(unknown|unidentified)\b|\(.*?(unknown|unidentified).*?\)",
+    re.I
+)
 
 
 def gold_labels(meeting: dict) -> dict[str, Optional[str]]:
+    """Extract label→gold-name from human_review segments (first usable name per label)."""
     gold: dict[str, Optional[str]] = {}
+    found: set[str] = set()  # Labels with usable names found
     for s in meeting.get("segments", []):
         if s.get("id_method") != "human_review" or not s.get("speaker_label"):
             continue
+        label = s["speaker_label"]
+        if label in found:  # Already found a usable name for this label
+            continue
         name = s.get("speaker_name")
-        gold.setdefault(s["speaker_label"], None if (not name or _GOLD_JUNK.search(name)) else name)
+        if not name or _GOLD_JUNK.search(name):
+            # Junk name; mark as None if not yet seen, but continue looking for a usable name
+            if label not in gold:
+                gold[label] = None
+        else:
+            # Usable name; use it and mark as found (won't be overwritten)
+            gold[label] = name
+            found.add(label)
     return gold
 
 
@@ -40,11 +57,6 @@ def strip_names(meeting: dict) -> list[Segment]:
     return segs
 
 
-def _first(name: str) -> str:
-    toks = normalize(name).split()
-    return toks[0] if toks else ""
-
-
 def score_meeting(gold: dict[str, Optional[str]], candidates: dict[str, Candidate],
                   event_kind: Optional[str]) -> list[dict]:
     rows = []
@@ -52,8 +64,19 @@ def score_meeting(gold: dict[str, Optional[str]], candidates: dict[str, Candidat
         cand = candidates.get(label)
         predicted = cand.prefill_name if cand else None
         outcome = classify(gold_name, predicted)
-        if outcome == "wrong" and gold_name and predicted and _first(gold_name) == _first(predicted):
-            outcome = "misspelled"
+        # Promote "wrong" to "misspelled" only if:
+        # - Both names have ≥2 significant tokens
+        # - First significant tokens match
+        # - Last significant tokens (surnames) have similarity ≥ threshold
+        if outcome == "wrong" and gold_name and predicted:
+            g_sig = significant_tokens(gold_name)
+            p_sig = significant_tokens(predicted)
+            if len(g_sig) >= 2 and len(p_sig) >= 2 and g_sig[0] == p_sig[0]:
+                g_surname = g_sig[-1]
+                p_surname = p_sig[-1]
+                similarity = SequenceMatcher(None, g_surname, p_surname).ratio()
+                if similarity >= MISSPELL_MIN_SURNAME_SIMILARITY:
+                    outcome = "misspelled"
         if predicted:
             tier = cand.tier
         elif cand and cand.name:

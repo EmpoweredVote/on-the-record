@@ -36,7 +36,7 @@ def test_score_outcomes():
     rows = {r["label"]: r for r in score_meeting(gold, cands, "council")}
     assert rows["A"]["outcome"] == "correct" and rows["A"]["exact"] and rows["A"]["tier"] == "strong"
     assert rows["B"]["outcome"] == "hallucination"
-    assert rows["C"]["outcome"] == "misspelled"
+    assert rows["C"]["outcome"] == "wrong"  # Berezin/Pearson ratio=0.429 < 0.5, so wrong not misspelled
     assert rows["D"]["outcome"] == "miss" and rows["D"]["tier"] == "none"
     assert rows["E"]["outcome"] == "miss" and rows["E"]["tier"] == "hint" and rows["E"]["hint"] == "Jo"
 
@@ -50,3 +50,53 @@ def test_summarize_and_prefill_bar():
     rows.append({"tier": "strong", "outcome": "hallucination", "exact": False})
     rows += [{"tier": "strong", "outcome": "wrong", "exact": False}] * 2
     assert summarize(rows, "tier")["strong"]["passes_prefill_bar"] is False
+
+
+def test_misspelled_needs_two_tokens_and_surname_similarity():
+    """Misspelled only when both names ≥2 sig tokens, first match, surnames ≥0.5 similar."""
+    gold = {
+        "A": "Mr. Smith", "B": "Dr. Liz Brown", "C": "Liz Brown",
+        "D": "Brown", "E": "Bill Nelson", "F": "Jan Sorbee"
+    }
+    cands = {
+        "A": cand("A", "Mr. Jones"),  # Different surnames (Smith vs Jones, low ratio ~0.2)
+        "B": cand("B", "Dr. Liz Green"),  # Different surnames (Brown vs Green, low ratio ~0.4)
+        "C": cand("C", "Liz Green"),  # Different surnames (Brown vs Green, low ratio ~0.4)
+        "D": cand("D", "Brown Smith"),  # Gold is 1 token, pred is 2 tokens -> wrong
+        "E": cand("E", "Bill Nelsen"),  # Nelson vs Nelsen ratio=0.833 (0.5<=r<0.85) -> misspelled
+        "F": cand("F", "Jan Sorby"),  # Sorbee vs Sorby ratio=0.727 (0.5<=r<0.85) -> misspelled
+    }
+    rows = {r["label"]: r for r in score_meeting(gold, cands, "council")}
+    assert rows["A"]["outcome"] == "wrong", "Smith/Jones should be wrong (low surname similarity)"
+    assert rows["B"]["outcome"] == "wrong", "Brown/Green should be wrong (low surname similarity)"
+    assert rows["C"]["outcome"] == "wrong", "Brown/Green should be wrong (low surname similarity)"
+    assert rows["D"]["outcome"] == "wrong", "Gold 1-token should be wrong"
+    assert rows["E"]["outcome"] == "misspelled", "Nelson/Nelsen should be misspelled (ratio=0.833)"
+    assert rows["F"]["outcome"] == "misspelled", "Sorbee/Sorby should be misspelled (ratio=0.727)"
+
+
+def test_gold_junk_keeps_real_titled_names():
+    """Real titles/names are kept; junk names (unknowns, candidates, indexed speakers) are None."""
+    # Real names to keep
+    assert gold_labels({"segments": [
+        {"segment_id": 0, "speaker_label": "A", "speaker_name": "Nancy Pelosi (D)", "id_method": "human_review"},
+        {"segment_id": 1, "speaker_label": "B", "speaker_name": "Mary O'Neil (Chair)", "id_method": "human_review"},
+        {"segment_id": 2, "speaker_label": "C", "speaker_name": "Speaker Pelosi", "id_method": "human_review"},
+        {"segment_id": 3, "speaker_label": "D", "speaker_name": "Speaker Huston", "id_method": "human_review"},
+    ]}) == {"A": "Nancy Pelosi (D)", "B": "Mary O'Neil (Chair)", "C": "Speaker Pelosi", "D": "Speaker Huston"}
+
+    # Junk names to discard
+    assert gold_labels({"segments": [
+        {"segment_id": 0, "speaker_label": "A", "speaker_name": "Candidate7", "id_method": "human_review"},
+        {"segment_id": 1, "speaker_label": "B", "speaker_name": "Host (Unknown - CRG)", "id_method": "human_review"},
+        {"segment_id": 2, "speaker_label": "C", "speaker_name": "SPEAKER_03", "id_method": "human_review"},
+        {"segment_id": 3, "speaker_label": "D", "speaker_name": "Unidentified Speaker", "id_method": "human_review"},
+    ]}) == {"A": None, "B": None, "C": None, "D": None}
+
+
+def test_gold_labels_first_usable_name():
+    """gold_labels takes the first usable human_review name for a label, skipping junk."""
+    assert gold_labels({"segments": [
+        {"segment_id": 0, "speaker_label": "X", "speaker_name": "Host (Unknown)", "id_method": "human_review"},
+        {"segment_id": 1, "speaker_label": "X", "speaker_name": "Alex Chen", "id_method": "human_review"},
+    ]}) == {"X": "Alex Chen"}, "Should skip junk and use first real name"
