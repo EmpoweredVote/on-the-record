@@ -447,3 +447,26 @@ def test_only_titles_is_still_rejected():
     assert split_name_title("State Senator") == (None, None)
     assert split_name_title("Pastor Smith") == ("Smith", "Pastor")
     assert split_name_title("State Representative Francesca Hong") == ("Francesca Hong", "Representative")
+
+
+# REGRESSION FIX: Title before title-word surname
+
+def test_title_before_title_word_surname_drops_first_title():
+    from src.name_evidence import split_name_title
+    # Governor + Jim + Justice: Justice is a title word but is the surname
+    assert split_name_title("Governor Jim Justice") == ("Jim Justice", "Governor")
+    # Senator + Mary + Pastor: Pastor is a title word but is the surname
+    assert split_name_title("Senator Mary Pastor") == ("Mary Pastor", "Senator")
+    # Existing cases should stay the same
+    assert split_name_title("Pastor Smith") == ("Smith", "Pastor")
+    assert split_name_title("Jim Justice") == ("Jim Justice", None)
+
+
+def test_title_suffix_with_period_in_trim():
+    # "Jr." with a period should be recognized as a suffix in _trim_greedy
+    assert _intro("My name is John Smith Jr. and I live here") == ["John Smith"]
+
+
+def test_curly_im_after_three_tokens_keeps_three():
+    # Curly I'm (U+2019) after 3 tokens should keep all three
+    assert _intro("My name is Chris Swanson I’m the teacher") == ["Chris Swanson"]

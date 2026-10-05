@@ -50,7 +50,7 @@ _QUAL_WORDS = {q.lower().rstrip(".") for q in TITLE_QUALIFIERS}
 
 # A capitalized word after a 3-token capture that starts a new clause or is a
 # name suffix does not make the name boundary unknown.
-_CLAUSE_STARTS = {"i", "i'm", "i'll", "i've", "i'd", "i’m", "i’ll", "i’ve", "i’d"}
+_CLAUSE_STARTS = {"i", "i’m", "i’ll", "i’ve", "i’d", "i’m", "i’ll", "i’ve", "i’d"}
 _NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
 
 # Capitalized words that are not names (sentence starts, courtesies, fillers).
@@ -130,6 +130,10 @@ def _trim_greedy(raw: str, after: str) -> str:
     toks = raw.split()
     if len(toks) != 3:
         return raw
+    # Check if the last token itself is a suffix (including periods)
+    last_tok = toks[-1].lower().rstrip(".")
+    if last_tok in _NAME_SUFFIXES:
+        return raw
     m = re.match(rf"\s+({_UP}[^\s,.;:!?]*)", after)
     if not m:
         return raw
@@ -149,11 +153,15 @@ def split_name_title(raw: str) -> tuple[Optional[str], Optional[str]]:
     """
     toks = raw.split()
 
-    # Drop trailing contraction / filler tokens
+    # Drop trailing contraction / filler tokens and suffixes
     while toks:
         last_lower = toks[-1].lower()
         last_stripped = last_lower.strip("'\u2019")
-        if last_stripped in ("i'm", "i'll", "i've", "i'd") or last_lower.endswith("n't") or last_stripped in NOT_NAME:
+        last_rstripped = last_lower.rstrip(".")
+        # Check for contractions with any form of apostrophe
+        is_contraction = (last_lower in ("i'm", "i\u2019m", "i'll", "i\u2019ll", "i've", "i\u2019ve", "i'd", "i\u2019d") or
+                          last_lower.endswith("n't"))
+        if (is_contraction or last_stripped in NOT_NAME or last_rstripped in _NAME_SUFFIXES):
             toks.pop()
         else:
             break
@@ -161,14 +169,21 @@ def split_name_title(raw: str) -> tuple[Optional[str], Optional[str]]:
     title = None
     title_idx = [i for i, t in enumerate(toks) if t.lower().rstrip(".") in _TITLE_WORDS]
     if title_idx:
-        name_like = [t for i, t in enumerate(toks)
-                     if i not in title_idx and t.lower().rstrip(".") not in _QUAL_WORDS]
-        if not name_like:
+        # Get indices of non-title, non-qualifier tokens (potential names)
+        name_idx = [i for i, t in enumerate(toks)
+                    if t.lower().rstrip(".") not in _TITLE_WORDS and
+                       t.lower().rstrip(".") not in _QUAL_WORDS]
+        if not name_idx:
             return None, None  # only titles / qualifiers ("Senator", "State Senator")
-        last = title_idx[-1]
-        if last < len(toks) - 1:  # a name token follows the title: drop through it
-            title = toks[last]
-            toks = toks[last + 1:]
+        # Find the last title that comes before at least one name token
+        title_to_drop = None
+        for t_idx in reversed(title_idx):
+            if any(n_idx > t_idx for n_idx in name_idx):
+                title_to_drop = t_idx
+                break
+        if title_to_drop is not None:
+            title = toks[title_to_drop]
+            toks = toks[title_to_drop + 1:]
         # else the title word is the surname ("Jim Justice", "Mary Pastor"): keep it
 
     if not toks or len(toks) > 3 or len(" ".join(toks)) > 40:
