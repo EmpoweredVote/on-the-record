@@ -50,7 +50,7 @@ _QUAL_WORDS = {q.lower().rstrip(".") for q in TITLE_QUALIFIERS}
 
 # A capitalized word after a 3-token capture that starts a new clause or is a
 # name suffix does not make the name boundary unknown.
-_CLAUSE_STARTS = {"i", "i’m", "i’ll", "i’ve", "i’d", "i’m", "i’ll", "i’ve", "i’d"}
+_CLAUSE_STARTS = {"i", "i'm", "i'll", "i've", "i'd", "i’m", "i’ll", "i’ve", "i’d"}
 _NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
 
 # Capitalized words that are not names (sentence starts, courtesies, fillers).

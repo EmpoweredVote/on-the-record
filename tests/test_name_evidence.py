@@ -468,5 +468,15 @@ def test_title_suffix_with_period_in_trim():
 
 
 def test_curly_im_after_three_tokens_keeps_three():
-    # Curly I'm (U+2019) after 3 tokens should keep all three
+    # Curly I’m (U+2019) after 3 tokens should keep all three
     assert _intro("My name is Chris Swanson I’m the teacher") == ["Chris Swanson"]
+
+
+def test_straight_apostrophe_im_after_three_tokens():
+    # Straight I’m (ASCII) after 3 tokens should keep all three (common ASR form)
+    assert _intro("My name is Chris Swanson Smith I’m the teacher here") == ["Chris Swanson Smith"]
+
+
+def test_curly_apostrophe_im_after_three_tokens():
+    # Curly I’m (U+2019) after 3 tokens should keep all three
+    assert _intro("My name is Chris Swanson Smith I’m the teacher here") == ["Chris Swanson Smith"]
