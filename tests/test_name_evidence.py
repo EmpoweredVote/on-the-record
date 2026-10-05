@@ -410,3 +410,40 @@ def test_is_mention_curly_possessive():
     t = "Ann Lee’s bill"
     assert is_mention(t, 0, 7)
     assert is_mention("Ann Lee’S bill", 0, 7)
+
+
+# TASK 1: GREEDY TRIM FIXES AND TITLE-WORD SURNAMES
+
+_TAIL = " and I want to thank the committee for the time today."
+
+
+def _intro(text):
+    return [e.name for e in find_self_intros(build_turns([seg(0, "W", text + _TAIL)]))]
+
+
+def test_trim_does_not_fire_before_a_new_clause():
+    assert _intro("My name is Ann Lee Smith I live on Main Street") == ["Ann Lee Smith"]
+    assert _intro("My name is Ann Lee Smith I’m a teacher here") == ["Ann Lee Smith"]
+
+
+def test_trim_does_not_fire_before_a_name_suffix():
+    assert _intro("My name is Ann Lee Smith Jr and I live here") == ["Ann Lee Smith"]
+    assert _intro("My name is Art Reyes Lopez III from Gary") == ["Art Reyes Lopez"]
+
+
+def test_trim_still_fires_on_an_unbounded_capital_run():
+    assert _intro("My name is Chris Swanson American Federation of Teachers") == ["Chris Swanson"]
+
+
+def test_title_word_surname_is_kept():
+    ev = find_self_intros(build_turns([seg(0, "W", "Hello. I’m Jim Justice, from Beckley." + _TAIL)]))
+    assert [(e.name, e.title) for e in ev] == [("Jim Justice", None)]
+    assert _intro("Hi, my name is Mary Pastor, from Fishers.") == ["Mary Pastor"]
+
+
+def test_only_titles_is_still_rejected():
+    from src.name_evidence import split_name_title
+    assert split_name_title("Senator") == (None, None)
+    assert split_name_title("State Senator") == (None, None)
+    assert split_name_title("Pastor Smith") == ("Smith", "Pastor")
+    assert split_name_title("State Representative Francesca Hong") == ("Francesca Hong", "Representative")
