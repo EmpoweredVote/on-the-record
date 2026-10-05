@@ -8,8 +8,9 @@ injected so tests never touch them.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import asdict, dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 from urllib.parse import urlparse
 
 MAX_PAGE_BYTES = 2_000_000
@@ -34,12 +35,24 @@ class Lookup:
 
 
 def norm_name(s: str) -> str:
-    s = s.replace("’", "'").replace("\xa0", " ").lower()
+    s = unicodedata.normalize("NFC", s)
+    s = s.replace("\u2019", "'").replace("\u2018", "'").replace("\xa0", " ").lower()
     s = re.sub(r"[^\w' ]+", " ", s)
     return " ".join(s.split())
 
 
-def page_text(html: str) -> str:
+def _strip_possessive(normed: str) -> str:
+    out = []
+    for tok in normed.split():
+        tok = tok.strip("'")
+        if tok.endswith("'s"):
+            tok = tok[:-2]
+        if tok:
+            out.append(tok)
+    return " ".join(out)
+
+
+def page_text(html: Union[str, bytes]) -> str:
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
@@ -50,25 +63,41 @@ def page_text(html: str) -> str:
 
 def name_on_page(name: str, text: str) -> bool:
     n = norm_name(name)
-    return bool(n) and f" {n} " in f" {norm_name(text)} "
+    if not n:
+        return False
+    t = norm_name(text)
+    return f" {n} " in f" {t} " or f" {n} " in f" {_strip_possessive(t)} "
 
 
-def default_fetch(url: str) -> str:
+_OK_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
+
+
+def default_fetch(url: str) -> bytes:
     import requests
 
     from .download import BROWSER_USER_AGENT
 
-    resp = requests.get(url, timeout=(10, 20), headers={"User-Agent": BROWSER_USER_AGENT}, stream=True)
-    resp.raise_for_status()
-    body = resp.raw.read(MAX_PAGE_BYTES, decode_content=True)
-    return body.decode(resp.encoding or "utf-8", errors="replace")
+    with requests.get(url, timeout=(10, 20), headers={"User-Agent": BROWSER_USER_AGENT}, stream=True) as resp:
+        resp.raise_for_status()
+        ctype = resp.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        if ctype and ctype not in _OK_TYPES:
+            raise ValueError(f"non-html content: {ctype}")
+        return resp.raw.read(MAX_PAGE_BYTES, decode_content=True)
 
 
-def verify_on_page(name: str, url: str, fetch: Callable[[str], str] = default_fetch) -> tuple[bool, Optional[str]]:
-    if urlparse(url or "").scheme not in ("http", "https"):
+def verify_on_page(
+    name: str, url: str, fetch: Callable[[str], Union[str, bytes]] = default_fetch
+) -> tuple[bool, Optional[str]]:
+    try:
+        if urlparse(url or "").scheme not in ("http", "https"):
+            return False, "bad url"
+    except Exception:  # noqa: BLE001 - malformed url
         return False, "bad url"
     try:
         html = fetch(url)
     except Exception as exc:  # noqa: BLE001 - any fetch failure just means "not verified"
         return False, f"fetch failed: {exc}"[:200]
-    return (True, None) if name_on_page(name, page_text(html)) else (False, "name not on page")
+    try:
+        return (True, None) if name_on_page(name, page_text(html)) else (False, "name not on page")
+    except Exception as exc:  # noqa: BLE001 - never raise from verification
+        return False, f"verify failed: {exc}"[:200]
