@@ -473,8 +473,8 @@ def test_curly_im_after_three_tokens_keeps_three():
 
 
 def test_straight_apostrophe_im_after_three_tokens():
-    # Straight I’m (ASCII) after 3 tokens should keep all three (common ASR form)
-    assert _intro("My name is Chris Swanson Smith I’m the teacher here") == ["Chris Swanson Smith"]
+    # Straight I’m (ASCII \\x27) after 3 tokens should keep all three (common ASR form)
+    assert _intro("My name is Chris Swanson Smith I\x27m the teacher here") == ["Chris Swanson Smith"]
 
 
 def test_curly_apostrophe_im_after_three_tokens():
