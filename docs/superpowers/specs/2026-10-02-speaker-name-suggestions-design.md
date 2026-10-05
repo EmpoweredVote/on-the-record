@@ -193,3 +193,29 @@ this spec.
   It counts as correct attribution and is reported separately as a spelling
   miss for slice 2's lookup to fix.
 - **Junk gold labels** ("Candidate7", "Host (Unknown - CRG)") count as no-name.
+
+## Slice 2 decisions (2026-10-05)
+
+- **Lookup order** (first hit wins): (a) the meeting's attached roster
+  (surname/alias match → `politician_id`); (b) `essentials.politicians` for
+  titled names, filtered by state; (c) `meetings.local_people` (people named in
+  past meetings); (d) Claude Code web researcher; (e) page verification of (d).
+- **State inference:** `meetings.state` is almost always empty (4 of 172 on
+  2026-10-05). State comes from the roster's politicians, then from the
+  meeting's race (`races.election_id → elections.state`). With neither, a
+  titled name is suggested but not linked to a politician.
+- **Researcher:** `claude -p` with `--model sonnet`, `--json-schema`
+  (structured output), `--allowedTools WebSearch,WebFetch`,
+  `--no-session-persistence`, `--strict-mcp-config`, `--max-turns 8`.
+- **CLI not logged in** (seen 2026-10-05: "OAuth access token has expired") is
+  reported once per run as a clear action ("run `claude`, then /login"), not as
+  dozens of silent "not verified" results.
+- **Output:** `run_local.py --suggest-names MEETING` writes
+  `name_suggestions.json`. Running it automatically inside the pipeline waits
+  for slice 3, when review can show the result.
+- **Spelling eval:** web step only (steps a–c would leak gold, because published
+  gold names are already in `local_people`), on ~50 gold witnesses sampled
+  across event kinds with a fixed seed.
+- **Parked slice-1 fixes first:** the 3-token trim must not fire before
+  I / I'm / Jr / Sr / II / III / IV; a surname that is a title word ("Jim
+  Justice") is kept when no name token follows the title.
