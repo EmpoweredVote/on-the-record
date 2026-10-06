@@ -298,3 +298,18 @@ def test_match_politician_needs_compatible_first_name():
     assert match_politician("Tom Garten", "IN", db) is None
     assert match_politician("Chris Garten", "IN", db) == row
     assert match_politician("Garten", "IN", db) == row
+
+
+def test_run_cli_passes_stdin_devnull(monkeypatch):
+    import subprocess
+    from src import name_lookup
+
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, "out", "err")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert name_lookup.run_cli(["x"], 5) == (0, "out", "err")
+    assert seen["stdin"] is subprocess.DEVNULL

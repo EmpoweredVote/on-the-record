@@ -125,3 +125,25 @@ def summarize(rows: list[dict], key: str) -> dict[str, dict]:
                                        and bad <= PREFILL_MAX_BAD),
         }
     return out
+
+
+def score_lookup_rows(rows: list[dict]) -> dict:
+    """Spelling outcomes of the web lookup on gold witnesses (slice 2)."""
+    from .name_lookup import norm_name
+
+    def exact(a, b):
+        return bool(a and b) and norm_name(a) == norm_name(b)
+
+    verified = [r for r in rows if r.get("verified")]
+    v_exact = sum(1 for r in verified if exact(r["gold"], r["looked_up"]))
+    return {
+        "n": len(rows),
+        "spoken_exact": sum(1 for r in rows if exact(r["gold"], r["spoken"])),
+        "final_exact": sum(1 for r in rows if exact(r["gold"], r["looked_up"] if r.get("verified") else r["spoken"])),
+        "verified": len(verified),
+        "verified_exact": v_exact,
+        "verified_precision": round(v_exact / len(verified), 3) if verified else 0.0,
+        "not_found": sum(1 for r in rows if r.get("status") == "not_found"),
+        "unavailable": sum(1 for r in rows if r.get("status") == "unavailable"),
+        "failed": sum(1 for r in rows if r.get("status") == "failed"),
+    }

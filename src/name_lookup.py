@@ -173,7 +173,8 @@ def research_command(prompt: str, model: str = RESEARCH_MODEL) -> list[str]:
 
 
 def run_cli(cmd: list[str], timeout: int) -> tuple[int, str, str]:
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                          stdin=subprocess.DEVNULL)
     return proc.returncode, proc.stdout, proc.stderr
 
 
