@@ -141,3 +141,12 @@ def apply_action_to_mappings(mappings, segments, label: str, action: AcceptActio
         review.link_speaker(mappings, label, None, action.politician_id)
     else:
         review.assign_local_person(mappings, label, action.slug, resolve_local_role(action.role, event_kind))
+
+
+def terminal_suggestion_line(view: SuggestionView) -> str:
+    src = f"{view.source} · {view.domain}" if view.domain else view.source
+    if view.state == "acceptable":
+        return f"Suggested: {view.name} (verified, {src}) — [Y] to accept"
+    if view.state == "unverified":
+        return f"Suggested (not verified): {view.name} — {view.reason or 'not verified'}"
+    return f"Possible: {view.name} — {view.reason or ''}".rstrip(" —")

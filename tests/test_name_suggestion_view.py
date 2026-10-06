@@ -76,3 +76,11 @@ def test_apply_action_to_mappings_local_and_link():
     maps2 = {"W": SpeakerMapping(speaker_label="W", speaker_name=None)}
     apply_action_to_mappings(maps2, segs, "W", AcceptAction("link", "Liz Brown", politician_id="p-b"), "council")
     assert maps2["W"].speaker_name == "Liz Brown" and maps2["W"].politician_id == "p-b"
+
+
+def test_terminal_suggestion_line():
+    from src.name_suggestion_view import terminal_suggestion_line
+    v = to_view(rec(prefill="Rachael Sample", verified=True, url="https://www.example.org/x"))
+    assert terminal_suggestion_line(v) == "Suggested: Rachael Sample (verified, web · example.org) — [Y] to accept"
+    v = to_view(rec(reason="different name returned"))
+    assert terminal_suggestion_line(v) == "Suggested (not verified): Rachael Sample — different name returned"
