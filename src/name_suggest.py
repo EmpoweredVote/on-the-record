@@ -4,19 +4,19 @@ Spec: docs/superpowers/specs/2026-10-02-speaker-name-suggestions-design.md (slic
 """
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+from .atomic_io import atomic_write_json
 from .models import Segment
 from .name_candidates import Candidate, build_candidates
 from .name_evidence import extract_evidence
 from .name_lookup import (
-    NameDB, RESEARCH_MODEL, Lookup, ResearchCache, ResearchFailed, ResearcherUnavailable, default_fetch, infer_state, norm_name,
-    match_local_people, match_politician, match_roster, research, should_research, verify_on_page,
+    PARTIAL_EXPANDED, NameDB, RESEARCH_MODEL, Lookup, ResearchCache, ResearchFailed, ResearcherUnavailable, default_fetch, infer_state,
+    match_local_people, match_politician, match_roster, norm_name, research, should_research, verify_web_result,
 )
 
 OUTPUT_NAME = "name_suggestions.json"
@@ -58,6 +58,9 @@ def suggest_for_candidate(cand: Candidate, *, members: list, state: Optional[str
         return _transcript(cand, f"conflict: {cand.conflict}")
     hit = match_roster(cand.name, members) if members else None
     if hit:
+        if cand.partial and not cand.titled:
+            # A bare surname/first name with no title is too weak to link to a member.
+            return Lookup(name=hit[0], source="roster", verified=False, reason="possible roster match")
         return Lookup(name=hit[0], source="roster", verified=True, politician_id=hit[1])
     if cand.titled:
         pol = match_politician(cand.name, state, deps.db) if deps.db else None
@@ -90,11 +93,14 @@ def suggest_for_candidate(cand: Candidate, *, members: list, state: Optional[str
             deps.cache.put(key, found)
     if not found:
         return _transcript(cand, "not found on the web")
-    ok, why = verify_on_page(found["name"], found["url"], deps.fetch)
+    ok, why, aff_ok = verify_web_result(cand.name, cand.partial, cand.affiliation, found, deps.fetch)
+    affiliation = (found.get("affiliation") or cand.affiliation) if aff_ok else cand.affiliation
     if not ok:
+        if why == PARTIAL_EXPANDED:
+            return Lookup(name=found["name"], source="web", verified=False, url=found["url"],
+                          affiliation=affiliation, reason=why)
         return _transcript(cand, why)
-    return Lookup(name=found["name"], source="web", verified=True, url=found["url"],
-                  affiliation=found.get("affiliation") or cand.affiliation)
+    return Lookup(name=found["name"], source="web", verified=True, url=found["url"], affiliation=affiliation)
 
 
 def _identity(lk: Lookup) -> Optional[str]:
@@ -130,7 +136,8 @@ def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps
             except Exception as exc:
                 lk = _transcript(c, f"lookup error: {type(exc).__name__}")
             out.append({
-                "label": label, "tier": c.tier, "role": c.role, "titled": c.titled, "conflict": c.conflict,
+                "label": label, "tier": c.tier, "role": c.role, "titled": c.titled, "partial": c.partial,
+                "conflict": c.conflict,
                 "spoken_name": c.name,
                 "evidence": [{"kind": e.kind, "quote": e.quote} for e in c.evidence],
                 "lookup": lk,
@@ -152,7 +159,9 @@ def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps
                                      affiliation=s["lookup"].affiliation,
                                      reason="conflict: name_on_two_labels")
     for s in out:
-        s["lookup"] = s["lookup"].to_dict()
+        lk = s["lookup"]
+        s["prefill_name"] = lk.name if (lk.verified and s["conflict"] is None) else None
+        s["lookup"] = lk.to_dict()
     warns = list(warnings or [])
     if run["web_disabled"]:
         warns.append(run["web_disabled"])
@@ -166,5 +175,5 @@ def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps
 
 def write_suggestions(meeting_dir: Path, result: dict) -> Path:
     path = Path(meeting_dir) / OUTPUT_NAME
-    path.write_text(json.dumps(result, indent=1, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, result, indent=1)
     return path

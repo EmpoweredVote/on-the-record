@@ -20,15 +20,16 @@ import json
 import os
 import random
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.name_candidates import build_candidates  # noqa: E402
 from src.name_evidence import extract_evidence  # noqa: E402
 from src.name_lookup import (  # noqa: E402
-    ResearchCache, ResearchFailed, ResearcherUnavailable, research, should_research, verify_on_page,
+    ResearchCache, ResearchFailed, ResearcherUnavailable, research, should_research, verify_web_result,
 )
 from src.name_suggest import read_captions_text  # noqa: E402
 from src.name_suggestion_eval import gold_labels, score_lookup_rows, strip_names  # noqa: E402
@@ -61,7 +62,7 @@ def select_witnesses(meetings_dir: Path, sample: int, seed: int) -> list[dict]:
                 continue
             by_kind[meeting.get("event_kind") or "unknown"].append({
                 "meeting": mdir.name, "label": label, "event_kind": meeting.get("event_kind"),
-                "gold": gname, "spoken": c.name, "affiliation": c.affiliation,
+                "gold": gname, "spoken": c.name, "affiliation": c.affiliation, "partial": c.partial,
                 "place": ", ".join(x for x in (meeting.get("city"), meeting.get("state")) if x) or None,
             })
     rng = random.Random(seed)
@@ -73,6 +74,16 @@ def select_witnesses(meetings_dir: Path, sample: int, seed: int) -> list[dict]:
             if by_kind[k] and len(picked) < sample:
                 picked.append(by_kind[k].pop())
     return picked
+
+
+def verified_domain_counts(rows: list[dict]) -> dict[str, int]:
+    """Verified URLs per host ("www." dropped), most common first."""
+    hosts = Counter()
+    for r in rows:
+        if r.get("verified") and r.get("url"):
+            host = (urlparse(r["url"]).hostname or "").lower()
+            hosts[host[4:] if host.startswith("www.") else host] += 1
+    return dict(hosts.most_common())
 
 
 def main() -> None:
@@ -115,7 +126,8 @@ def main() -> None:
             cache.put(key, found)
             cache.save()
         if found:
-            ok, why = verify_on_page(found["name"], found["url"])
+            # Same checks as production: name tied to the speaker, affiliation, page, partial cap.
+            ok, why, _ = verify_web_result(r["spoken"], r.get("partial", False), r["affiliation"], found)
             r.update(looked_up=found["name"], verified=ok, status="verified" if ok else "not_verified",
                      url=found["url"] if ok else None, reason=why)
         print(f"  [{i}/{len(rows)}] {r['status']:<12} gold={r['gold']!r} spoken={r['spoken']!r} -> {r['looked_up']!r}")
@@ -125,6 +137,7 @@ def main() -> None:
     print(f"\nVerified but wrong ({len(wrong)}):")
     for r in wrong:
         print(f"  gold={r['gold']!r} spoken={r['spoken']!r} looked_up={r['looked_up']!r} url={r['url']}")
+    print(f"\nVerified URLs by domain: {json.dumps(verified_domain_counts(rows))}")
     regressed = [r for r in wrong if norm_name(r["spoken"]) == norm_name(r["gold"])]
     print(f"\nRegressed ({len(regressed)}):")
     for r in regressed:

@@ -84,3 +84,9 @@ def test_select_witnesses(tmp_path):
     # fill-to-sample across kinds
     two = _mod.select_witnesses(tmp_path, 2, 7)
     assert len(two) == 2 and {r["event_kind"] for r in two} == {"council", "forum"}
+
+
+def test_verified_domain_counts():
+    rows = [{"verified": True, "url": "https://www.in.gov/a"}, {"verified": True, "url": "https://in.gov/b"},
+            {"verified": True, "url": "https://iga.in.gov/x"}, {"verified": False, "url": None}]
+    assert _mod.verified_domain_counts(rows) == {"in.gov": 2, "iga.in.gov": 1}

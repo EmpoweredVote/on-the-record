@@ -243,3 +243,113 @@ def test_extra_warnings_and_cache_saved_on_failure(tmp_path):
     assert (tmp_path / "c.json").exists()
     out = suggest_names(meeting, tmp_path, members=[], deps=Deps(db=None), warnings=["w1"])
     assert out["warnings"] == ["w1"]
+
+
+# ---- final-review fixes ----
+def _web(found, page, c, place=None):
+    deps = Deps(db=DB(), researcher=researcher(found), fetch=lambda u: page)
+    return suggest_for_candidate(c, members=[], state=None, place=place, deps=deps, run=run())
+
+
+def test_web_result_with_a_different_name_is_not_verified():
+    page = "<p>Attorney General Todd Rokita, Office of the Indiana Attorney General</p>"
+    lk = _web({"name": "Todd Rokita", "affiliation": "Office of the Attorney General", "url": "https://in.gov/ag"},
+              page, cand("Aaron Tuttle", affiliation="Attorney General's office"))
+    assert (lk.verified, lk.reason, lk.source) == (False, "different name returned", "transcript")
+    assert lk.name == "Aaron Tuttle"
+
+
+def test_web_result_affiliation_must_be_on_page():
+    lk = _web({"name": "Aaron Spiegel", "affiliation": "Hoosier Families", "url": "https://x.org"},
+              "<p>Aaron Spiegel, Bloomington chess club</p>", cand("Aaron Spiegal", affiliation="Hoosier Families"))
+    assert (lk.verified, lk.reason) == (False, "affiliation not on page")
+
+
+def test_web_spiegel_still_verified_and_researcher_affiliation_kept():
+    lk = _web({"name": "Aaron Spiegel", "affiliation": "Indy Multi-Faith Alliance", "url": "https://imfa.org"},
+              PAGE, cand("Aaron Spiegal", affiliation="Indy multi-faith"))
+    assert (lk.verified, lk.name, lk.affiliation) == (True, "Aaron Spiegel", "Indy Multi-Faith Alliance")
+
+
+def test_web_no_stated_affiliation_does_not_adopt_researcher_affiliation():
+    lk = _web({"name": "Aaron Spiegel", "affiliation": "Indy Multi-Faith Alliance", "url": "https://imfa.org"},
+              PAGE, cand("Aaron Spiegel"))
+    assert lk.verified is True and lk.affiliation is None
+
+
+def test_web_own_site_url_rejected():
+    lk = _web({"name": "Aaron Spiegel", "affiliation": None, "url": "https://empowered.vote/people/x"},
+              PAGE, cand("Aaron Spiegel"))
+    assert (lk.verified, lk.reason) == (False, "own site excluded")
+
+
+def test_partial_untitled_roster_hit_is_unverified_without_link():
+    m = [RosterMember(name="Greg Taylor", aliases=["Greg Taylor", "Taylor"], politician_id="p-t")]
+    lk = suggest_for_candidate(cand("Taylor", partial=True), members=m, state=None, place=None,
+                               deps=Deps(db=DB()), run=run())
+    assert (lk.name, lk.source, lk.verified, lk.politician_id, lk.reason) == (
+        "Greg Taylor", "roster", False, None, "possible roster match")
+
+
+def test_partial_titled_roster_hit_stays_verified():
+    m = [RosterMember(name="Liz Brown", aliases=["Liz Brown", "Brown"], politician_id="p-b")]
+    lk = suggest_for_candidate(cand("Brown", titled=True, partial=True), members=m, state=None, place=None,
+                               deps=Deps(db=DB()), run=run())
+    assert (lk.verified, lk.politician_id) == (True, "p-b")
+
+
+def test_partial_expanded_by_web_is_capped():
+    lk = _web({"name": "Nitya Kumar", "affiliation": "Hoosier Families", "url": "https://hf.org"},
+              "<p>Nitya Kumar, policy director, Hoosier Families</p>",
+              cand("Nitya", partial=True, affiliation="Hoosier Families"))
+    assert (lk.verified, lk.name, lk.reason) == (False, "Nitya Kumar", "partial name expanded by web — confirm")
+    assert lk.to_dict()["url"] is None
+
+
+def _one_cand_meeting(monkeypatch, cands, **extra):
+    from src import name_suggest
+    monkeypatch.setattr(name_suggest, "build_candidates", lambda *a, **k: cands)
+    m = _meeting_two_labels([("A", "hello")])
+    m.update(extra)
+    return m
+
+
+def test_records_carry_partial_and_prefill_name(tmp_path, monkeypatch):
+    rs = researcher({"name": "Aaron Spiegel", "affiliation": None, "url": "https://imfa.org"})
+    cands = {"A": cand("Aaron Spiegal", label="A", affiliation="Indy multi-faith"),
+             "B": cand("Nitya", label="B", partial=True)}
+    meeting = _one_cand_meeting(monkeypatch, cands)
+    out = suggest_names(meeting, tmp_path, members=[], deps=Deps(db=None, researcher=rs, fetch=lambda u: PAGE))
+    by = {s["label"]: s for s in out["suggestions"]}
+    assert (by["A"]["partial"], by["A"]["prefill_name"]) == (False, "Aaron Spiegel")
+    assert (by["B"]["partial"], by["B"]["prefill_name"]) == (True, None)
+
+
+def test_prefill_name_none_for_conflict(tmp_path, monkeypatch):
+    m = [RosterMember(name="Greg Taylor", aliases=["Greg Taylor", "Taylor"], politician_id="p-t")]
+    cands = {l: cand("Taylor", titled=True, partial=True, label=l) for l in ("A", "B")}
+    meeting = _one_cand_meeting(monkeypatch, cands)
+    out = suggest_names(meeting, tmp_path, members=m, deps=Deps(db=None))
+    assert all(s["prefill_name"] is None and s["partial"] is True for s in out["suggestions"])
+
+
+class INDB(DB):
+    def state_for_race(self, r):
+        return "IN" if r == "r1" else None
+
+
+def test_place_passed_to_researcher_uses_inferred_state(tmp_path, monkeypatch):
+    rs = researcher(None)
+    meeting = _one_cand_meeting(monkeypatch, {"A": cand("Ann Lee", label="A")}, city="Indianapolis", race_id="r1")
+    out = suggest_names(meeting, tmp_path, members=[], deps=Deps(db=INDB(), researcher=rs))
+    assert out["state"] == "IN" and rs.calls[0][3] == "Indianapolis, IN"
+
+
+def test_write_suggestions_is_atomic(tmp_path, monkeypatch):
+    from src import name_suggest
+    seen = []
+    monkeypatch.setattr(name_suggest, "atomic_write_json",
+                        lambda path, data, **k: (seen.append(path), path.write_text(json.dumps(data))))
+    p = write_suggestions(tmp_path, {"suggestions": [], "note": "José"})
+    assert seen == [p] and json.loads(p.read_text())["note"] == "José"
+
