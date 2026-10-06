@@ -564,3 +564,72 @@ def test_roster_first_name_rule_stays_strict():
 
     m = [RosterMember(name="Rachael Sample", aliases=["Rachael Sample", "Sample"], politician_id="p-s")]
     assert match_roster("Rachel Sample", m) is None
+
+
+# ---- claude-ev login (config dir) ----
+def test_claude_config_dir_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("NAME_LOOKUP_CLAUDE_CONFIG_DIR", "/some/dir")
+    assert NL.claude_config_dir() == "/some/dir"
+
+
+def test_claude_config_dir_empty_env_means_default_login(monkeypatch, tmp_path):
+    (tmp_path / ".claude-ev").mkdir()
+    monkeypatch.setattr(NL.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setenv("NAME_LOOKUP_CLAUDE_CONFIG_DIR", "")
+    assert NL.claude_config_dir() is None
+
+
+def test_claude_config_dir_detects_claude_ev(monkeypatch, tmp_path):
+    monkeypatch.delenv("NAME_LOOKUP_CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(NL.Path, "home", classmethod(lambda cls: tmp_path))
+    assert NL.claude_config_dir() is None
+    (tmp_path / ".claude-ev").mkdir()
+    assert NL.claude_config_dir() == str(tmp_path / ".claude-ev")
+
+
+def test_claude_config_dir_ignores_plain_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("NAME_LOOKUP_CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(NL.Path, "home", classmethod(lambda cls: tmp_path))
+    (tmp_path / ".claude-ev").write_text("x")
+    assert NL.claude_config_dir() is None
+
+
+def _capture_run(monkeypatch):
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return seen
+
+
+def test_run_cli_sets_config_dir_env(monkeypatch):
+    monkeypatch.setattr(NL, "claude_config_dir", lambda: "/cfg")
+    seen = _capture_run(monkeypatch)
+    NL.run_cli(["x"], 5)
+    assert seen["env"]["CLAUDE_CONFIG_DIR"] == "/cfg"
+    assert seen["stdin"] is subprocess.DEVNULL
+
+
+def test_run_cli_leaves_env_alone_when_no_config_dir(monkeypatch):
+    monkeypatch.setattr(NL, "claude_config_dir", lambda: None)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    seen = _capture_run(monkeypatch)
+    NL.run_cli(["x"], 5)
+    assert seen.get("env") is None or "CLAUDE_CONFIG_DIR" not in seen["env"]
+
+
+def _logged_out(cmd, timeout):
+    return 1, "", "Not logged in. Please run /login"
+
+
+@pytest.mark.parametrize("cfg,expected", [("/cfg", "`claude-ev`"), (None, "`claude`")])
+def test_unavailable_message_names_the_login(monkeypatch, cfg, expected):
+    monkeypatch.setattr(NL, "claude_config_dir", lambda: cfg)
+    with pytest.raises(NL.ResearcherUnavailable) as ei:
+        NL.research("A B", None, None, None, runner=_logged_out)
+    assert expected in str(ei.value)
+    if cfg is None:
+        assert "claude-ev" not in str(ei.value)

@@ -4,12 +4,18 @@ Spec: docs/superpowers/specs/2026-10-02-speaker-name-suggestions-design.md
 Order: roster -> politicians (titled, by state) -> local_people -> Claude web
 researcher -> our own page verification. Network, DB and the claude CLI are
 injected so tests never touch them.
+
+Claude login: the researcher runs the claude CLI with CLAUDE_CONFIG_DIR set, so it
+uses the Empowered Vote login (shell alias `claude-ev`). Setting
+NAME_LOOKUP_CLAUDE_CONFIG_DIR overrides the directory; an empty value means the
+default `claude` login. Unset: ~/.claude-ev is used when it exists.
 """
 from __future__ import annotations
 
 import difflib
 import ipaddress
 import json
+import os
 import re
 import socket
 import subprocess
@@ -389,11 +395,22 @@ def research_command(prompt: str, model: str = RESEARCH_MODEL) -> list[str]:
     ]
 
 
+def claude_config_dir() -> Optional[str]:
+    """CLAUDE_CONFIG_DIR for the researcher, or None to use the default claude login."""
+    override = os.environ.get("NAME_LOOKUP_CLAUDE_CONFIG_DIR")
+    if override is not None:
+        return override or None
+    ev = Path.home() / ".claude-ev"
+    return str(ev.resolve()) if ev.is_dir() else None
+
+
 def run_cli(cmd: list[str], timeout: int) -> tuple[int, str, str]:
+    cfg = claude_config_dir()
+    env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg} if cfg is not None else None
     # Fresh empty cwd: no project CLAUDE.md / .claude settings / files for the researcher to see.
     with tempfile.TemporaryDirectory(prefix="name-lookup-") as cwd:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                              stdin=subprocess.DEVNULL, cwd=cwd)
+                              stdin=subprocess.DEVNULL, cwd=cwd, env=env)
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -431,9 +448,10 @@ def research(name: str, title: Optional[str], affiliation: Optional[str], place:
     if rc != 0 or (data is not None and data.get("is_error")):
         text = " ".join([str(data.get("result") or "") if data is not None else out, err])
         if _UNAVAILABLE_RE.search(text):
+            login = "claude-ev" if claude_config_dir() is not None else "claude"
             raise ResearcherUnavailable(
                 "Claude CLI cannot run lookups (not logged in or usage limit) \u2014 "
-                "run `claude`, then /login, and try again")
+                f"run `{login}`, then /login, and try again")
         raise ResearchFailed(f"claude CLI error (exit {rc})")
     if data is None:
         raise ResearchFailed("unparseable CLI output")
