@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import logging
 import os
 import re
 import subprocess
@@ -4249,10 +4250,26 @@ Environment Variables:
     return parser
 
 
+def _enable_llm_usage_logging() -> None:
+    """Print the per-call token lines from src.llm_providers (INFO) and its
+    truncation warnings to stderr. Only that logger is configured, so other
+    modules' log output is unchanged. Safe to call more than once. Records
+    still propagate; nothing configures the root logger, so no line prints
+    twice."""
+    log = logging.getLogger("src.llm_providers")
+    log.setLevel(logging.INFO)
+    if not any(getattr(h, "_llm_usage", False) for h in log.handlers):
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("  [%(levelname)s] %(message)s"))
+        handler._llm_usage = True
+        log.addHandler(handler)
+
+
 def main():
     parser = build_parser()
 
     args = parser.parse_args()
+    _enable_llm_usage_logging()
 
     # A --publish-as-draft run publishes via the terminal draft path in
     # run_pipeline (see _route_after_gate), which does not depend on args.publish.

@@ -12,6 +12,7 @@ for the bloomington roster fixture JSON.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -227,3 +228,16 @@ def sample_roster_response():
     """Load the Bloomington roster response fixture."""
     path = Path(__file__).parent / "fixtures" / "bloomington_roster_response.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def _reset_llm_usage_logger():
+    """A test that runs run_local.main() adds a stderr handler to the
+    src.llm_providers logger, bound to that test's captured stream. Restore
+    the logger after every test so the handler cannot leak into later tests."""
+    log = logging.getLogger("src.llm_providers")
+    saved = (log.level, list(log.handlers), log.propagate)
+    yield
+    log.setLevel(saved[0])
+    log.handlers[:] = saved[1]
+    log.propagate = saved[2]
