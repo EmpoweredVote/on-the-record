@@ -22,6 +22,13 @@ from .models import Segment, Word
 # clips, and it can drop faint short turns).
 WHISPER_DECODE_OPTIONS = {"condition_on_previous_text": False}
 
+# The whole-audio pass also skips silence. Over long silent stretches (a House
+# floor recess) Whisper invents text — "Thank you." x64, ". . . ." — and
+# word assignment then hands it to the nearest speaker. vad_filter removes the
+# silence before decoding (timestamps stay on the original timeline). Not used
+# for recover_orphan_turns: those slices are short, faint turns VAD could drop.
+WHISPER_FULL_PASS_OPTIONS = {**WHISPER_DECODE_OPTIONS, "vad_filter": True}
+
 
 def remove_segment_overlaps(segments: list[Segment]) -> list[Segment]:
     """Trim later segments so each instant of audio is transcribed once.
@@ -74,7 +81,7 @@ def transcribe_full_audio(model, wav_path: str | Path) -> list[Word]:
         samples,
         word_timestamps=True,
         language="en",
-        **WHISPER_DECODE_OPTIONS,
+        **WHISPER_FULL_PASS_OPTIONS,
     )
     words: list[Word] = []
     for rs in result_segments:
