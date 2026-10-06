@@ -14,7 +14,6 @@ import argparse
 import glob
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -23,24 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.name_candidates import build_candidates  # noqa: E402
 from src.name_evidence import extract_evidence  # noqa: E402
+from src.name_suggest import read_captions_text  # noqa: E402
 from src.name_suggestion_eval import gold_labels, score_meeting, strip_names, summarize  # noqa: E402
 
-_VTT_TIME = re.compile(r"^\d\d:\d\d:\d\d\.\d+ --> .*$", re.M)
-_VTT_TAG = re.compile(r"<[^>]+>")
-_VTT_HEADER = re.compile(r"^(WEBVTT.*|NOTE.*|Kind:.*|Language:.*)$", re.M)
-
-
-def _captions(meeting_dir: Path) -> Optional[str]:
-    """Plain caption text: cue timings, inline <..> tags and header lines removed."""
-    candidates = [meeting_dir / "source_captions.vtt", meeting_dir / "captions.vtt"]
-    candidates += sorted(meeting_dir.glob("captions*.vtt"))
-    for p in candidates:
-        if p.exists():
-            text = p.read_text(encoding="utf-8", errors="ignore")
-            text = _VTT_TIME.sub("", text)
-            text = _VTT_TAG.sub("", text)
-            return _VTT_HEADER.sub("", text)
-    return None
+_captions = read_captions_text  # kept as an alias; tests/test_eval_name_suggestions_cli.py calls it
 
 
 def run(meetings_dir: Path, kinds: Optional[list[str]]) -> list[dict]:

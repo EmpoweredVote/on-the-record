@@ -48,6 +48,11 @@ _NAME_2_3 = rf"{_TOKEN}(?:\s+{_TOKEN}){{1,2}}"
 _TITLE_WORDS = {w.lower() for t in OFFICE_TITLES + COURTESY_TITLES for w in t.rstrip(".").split()}
 _QUAL_WORDS = {q.lower().rstrip(".") for q in TITLE_QUALIFIERS}
 
+# A capitalized word after a 3-token capture that starts a new clause or is a
+# name suffix does not make the name boundary unknown.
+_CLAUSE_STARTS = {"i", "i'm", "i'll", "i've", "i'd", "i’m", "i’ll", "i’ve", "i’d"}
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
+
 # Capitalized words that are not names (sentence starts, courtesies, fillers).
 NOT_NAME = {
     "i", "sorry", "just", "not", "going", "gonna", "here", "very", "so", "really", "glad",
@@ -118,6 +123,26 @@ def build_turns(segments: Iterable[Segment]) -> list[Turn]:
     return turns
 
 
+def _trim_greedy(raw: str, after: str) -> str:
+    """A 3-token capture followed by another capitalized word has an unknown
+    boundary ("Chris Swanson American Federation"): keep the first two tokens.
+    Not when that word starts a new clause ("I", "I'm") or is a suffix (Jr, III)."""
+    toks = raw.split()
+    if len(toks) != 3:
+        return raw
+    # Check if the last token itself is a suffix (including periods)
+    last_tok = toks[-1].lower().rstrip(".")
+    if last_tok in _NAME_SUFFIXES:
+        return raw
+    m = re.match(rf"\s+({_UP}[^\s,.;:!?]*)", after)
+    if not m:
+        return raw
+    nxt = m.group(1).lower().rstrip(".")
+    if nxt in _CLAUSE_STARTS or nxt in _NAME_SUFFIXES:
+        return raw
+    return " ".join(toks[:2])
+
+
 def split_name_title(raw: str) -> tuple[Optional[str], Optional[str]]:
     """Trim non-name tokens; return (name, title_found_inside_the_capture).
 
@@ -128,20 +153,38 @@ def split_name_title(raw: str) -> tuple[Optional[str], Optional[str]]:
     """
     toks = raw.split()
 
-    # Drop trailing contraction / filler tokens
+    # Drop trailing contraction / filler tokens and suffixes
     while toks:
         last_lower = toks[-1].lower()
         last_stripped = last_lower.strip("'\u2019")
-        if last_stripped in ("i'm", "i'll", "i've", "i'd") or last_lower.endswith("n't") or last_stripped in NOT_NAME:
+        last_rstripped = last_lower.rstrip(".")
+        # Check for contractions with any form of apostrophe
+        is_contraction = (last_lower in ("i'm", "i\u2019m", "i'll", "i\u2019ll", "i've", "i\u2019ve", "i'd", "i\u2019d") or
+                          last_lower.endswith("n't"))
+        if (is_contraction or last_stripped in NOT_NAME or last_rstripped in _NAME_SUFFIXES):
             toks.pop()
         else:
             break
 
     title = None
-    last_title = max((i for i, t in enumerate(toks) if t.lower().rstrip(".") in _TITLE_WORDS), default=-1)
-    if last_title >= 0:
-        title = toks[last_title]
-        toks = toks[last_title + 1:]
+    title_idx = [i for i, t in enumerate(toks) if t.lower().rstrip(".") in _TITLE_WORDS]
+    if title_idx:
+        # Get indices of non-title, non-qualifier tokens (potential names)
+        name_idx = [i for i, t in enumerate(toks)
+                    if t.lower().rstrip(".") not in _TITLE_WORDS and
+                       t.lower().rstrip(".") not in _QUAL_WORDS]
+        if not name_idx:
+            return None, None  # only titles / qualifiers ("Senator", "State Senator")
+        # Find the last title that comes before at least one name token
+        title_to_drop = None
+        for t_idx in reversed(title_idx):
+            if any(n_idx > t_idx for n_idx in name_idx):
+                title_to_drop = t_idx
+                break
+        if title_to_drop is not None:
+            title = toks[title_to_drop]
+            toks = toks[title_to_drop + 1:]
+        # else the title word is the surname ("Jim Justice", "Mary Pastor"): keep it
 
     if not toks or len(toks) > 3 or len(" ".join(toks)) > 40:
         return None, None
@@ -245,11 +288,8 @@ def find_self_intros(turns: list[Turn]) -> list[Evidence]:
         for rx in (_R_MY_NAME, _R_IM_TITLED, _R_IM):
             for m in rx.finditer(window):
                 raw = m.group("name")
-                # Greedy capture of 3 capitalized words followed by yet another capitalized
-                # word: the name boundary is unknown ("Chris Swanson American Federation"),
-                # so keep only the first two tokens.
-                if rx is not _R_IM and len(raw.split()) == 3 and re.match(rf"\s+{_UP}", window[m.end("name"):]):
-                    raw = " ".join(raw.split()[:2])
+                if rx is not _R_IM:
+                    raw = _trim_greedy(raw, window[m.end("name"):])
                 name, title = resolve_name_title(m, raw)
                 if name and not is_mention(window, m.start("name"), m.end("name")):
                     matches.append((m.start(), m, name, title))

@@ -112,9 +112,12 @@ it is shown as "spelling not verified" and the URL is not shown as a source.
 
 ### Privacy rules
 
-- Send only: spoken name, stated affiliation, meeting city/state. Never
-  transcript text.
-- Store only: the spelling and one source URL.
+- Send only: the spoken name, the speaker's OWN introduction (the E1
+  self-introduction window, at most 400 characters, from their first
+  substantial turn), the stated affiliation, the meeting title, event type and
+  producing body/outlet, and the meeting city/state. Never other speakers'
+  words or the rest of the transcript. Store only the spelling, affiliation and
+  one source URL.
 - Never search a speaker who gives no affiliation and only a common or partial
   name (e.g. "Michael", "Chelsey").
 
@@ -193,3 +196,37 @@ this spec.
   It counts as correct attribution and is reported separately as a spelling
   miss for slice 2's lookup to fix.
 - **Junk gold labels** ("Candidate7", "Host (Unknown - CRG)") count as no-name.
+
+## Slice 2 decisions (2026-10-05)
+
+- **Lookup order** (first hit wins): (a) the meeting's attached roster
+  (surname/alias match → `politician_id`); (b) `essentials.politicians` for
+  titled names, filtered by state; (c) `meetings.local_people` (people named in
+  past meetings); (d) Claude Code web researcher; (e) page verification of (d).
+- **State inference:** `meetings.state` is almost always empty (4 of 172 on
+  2026-10-05). State comes from the roster's politicians, then from the
+  meeting's race (`races.election_id → elections.state`). With neither, a
+  titled name is suggested but not linked to a politician.
+- **Researcher:** `claude -p` with `--model sonnet`, `--json-schema`
+  (structured output), `--allowedTools WebSearch,WebFetch`,
+  `--no-session-persistence`, `--strict-mcp-config`, `--max-turns 8`.
+- **CLI not logged in** (seen 2026-10-05: "OAuth access token has expired") is
+  reported once per run as a clear action ("run `claude`, then /login"), not as
+  dozens of silent "not verified" results.
+- **Output:** `run_local.py --suggest-names MEETING` writes
+  `name_suggestions.json`. Running it automatically inside the pipeline waits
+  for slice 3, when review can show the result.
+- **Spelling eval:** web step only (steps a–c would leak gold, because published
+  gold names are already in `local_people`), on ~50 gold witnesses sampled
+  across event kinds with a fixed seed.
+- **Parked slice-1 fixes first:** the 3-token trim must not fire before
+  I / I'm / Jr / Sr / II / III / IV; a surname that is a title word ("Jim
+  Justice") is kept when no name token follows the title.
+
+- **Intro + meeting context sent to the researcher (2026-10-06, Chris):** people
+  usually say "I'm NAME, the CEO of COMPANY", and the first eval fixed 0/21
+  misspellings because 20/21 had no extracted affiliation. The researcher now
+  gets the speaker's own E1 introduction (max 400 chars) and a meeting context
+  line (title, event kind, producing body; max 200 chars). The privacy rule
+  above is updated to match. Cache key is now `v2|` plus a hash of intro and
+  context, so old "not found" entries from thinner prompts are ignored.
