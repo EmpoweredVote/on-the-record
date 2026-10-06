@@ -133,8 +133,27 @@ def _identity(lk: Lookup) -> Optional[str]:
     return f"name:{norm_name(lk.name)}"
 
 
+def unnamed_labels(meeting: dict) -> set[str]:
+    """Labels with no identity: no usable name (or status unidentified), no
+    politician link, no local person, and not marked as a non-speaker."""
+    labels = {s.get("speaker_label") for s in meeting.get("segments", []) if s.get("speaker_label")}
+    speakers = meeting.get("speakers") or {}
+    out: set[str] = set()
+    for label in labels:
+        m = speakers.get(label) or {}
+        if m.get("speaker_status") == "non_speaker":
+            continue
+        if m.get("politician_id") or m.get("politician_slug") or m.get("local_slug"):
+            continue
+        name = (m.get("speaker_name") or "").strip()
+        if name and m.get("speaker_status") != "unidentified" and not name.lower().startswith("unidentified"):
+            continue
+        out.add(label)
+    return out
+
+
 def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps,
-                  warnings: Optional[list] = None) -> dict:
+                  warnings: Optional[list] = None, only_labels: Optional[set[str]] = None) -> dict:
     segments = [Segment.from_dict(s) for s in meeting.get("segments", [])]
     cands = build_candidates(extract_evidence(segments, read_captions_text(meeting_dir)),
                              meeting.get("event_kind"))
@@ -151,6 +170,8 @@ def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps
     out = []
     try:
         for label in sorted(cands):
+            if only_labels is not None and label not in only_labels:
+                continue
             c = cands[label]
             try:
                 lk = suggest_for_candidate(c, members=members, state=state, place=place, deps=deps, run=run,

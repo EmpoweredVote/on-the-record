@@ -23,6 +23,7 @@ import subprocess
 import tempfile
 import unicodedata
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -419,11 +420,29 @@ def claude_config_dir() -> Optional[str]:
     return str(ev.resolve()) if ev.is_dir() else None
 
 
+@contextmanager
+def research_lock(path: Optional[Path] = None):
+    """Exclusive cross-process lock so only one claude lookup runs at a time
+    (parallel GUI batch jobs queue here)."""
+    import fcntl
+
+    from . import config
+
+    p = Path(path) if path else config.CONFIG_DIR / "name_lookup.lock"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def run_cli(cmd: list[str], timeout: int) -> tuple[int, str, str]:
     cfg = claude_config_dir()
     env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg} if cfg is not None else None
     # Fresh empty cwd: no project CLAUDE.md / .claude settings / files for the researcher to see.
-    with tempfile.TemporaryDirectory(prefix="name-lookup-") as cwd:
+    with research_lock(), tempfile.TemporaryDirectory(prefix="name-lookup-") as cwd:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
                               stdin=subprocess.DEVNULL, cwd=cwd, env=env)
     return proc.returncode, proc.stdout, proc.stderr

@@ -430,3 +430,42 @@ def test_suggest_names_passes_e1_quote_and_context(tmp_path):
         kw = r.kwargs[0]
         assert kw["context"] == "Budget Hearing (council; Town Council)"
         assert "Ann Lee" in kw["intro"]
+
+
+from src.name_suggest import unnamed_labels
+
+
+def _meeting_with(speakers):
+    segs = [{"segment_id": i, "start_time": i, "end_time": i + 1, "speaker_label": lab, "text": "x"}
+            for i, lab in enumerate(["A", "B", "C", "D", "E", "F"])]
+    return {"segments": segs, "speakers": speakers}
+
+
+def test_unnamed_labels_only_speakers_without_identity():
+    m = _meeting_with({
+        "A": {"speaker_name": "Liz Brown", "id_method": "voice_profile"},
+        "B": {"speaker_name": None},
+        "C": {"speaker_name": "Unidentified Speaker 3", "speaker_status": "unidentified"},
+        "D": {"speaker_name": "", "politician_id": "p1"},
+        "E": {"speaker_name": "", "local_slug": "ann-lee"},
+        "F": {"speaker_name": "Music", "speaker_status": "non_speaker"},
+    })
+    assert unnamed_labels(m) == {"B", "C"}
+
+
+def test_suggest_names_only_labels_skips_lookup(tmp_path):
+    meeting = {"meeting_id": "m1", "city": "Indianapolis", "event_kind": "council", "segments": [
+        {"segment_id": 0, "start_time": 0, "end_time": 30, "speaker_label": "W",
+         "text": "My name is Rachel Sample, I'm with Hoosier Families and thank the committee for its time today."},
+        {"segment_id": 1, "start_time": 30, "end_time": 60, "speaker_label": "V",
+         "text": "My name is Paul Webster, I'm with the Bar Association and thank the committee for its time today."},
+    ]}
+    calls = []
+
+    def rs(name, title, affiliation, place, **kw):
+        calls.append(name)
+        return None
+
+    out = suggest_names(meeting, tmp_path, members=[], deps=Deps(db=None, researcher=rs), only_labels={"W"})
+    assert [s["label"] for s in out["suggestions"]] == ["W"]
+    assert calls == ["Rachel Sample"]
