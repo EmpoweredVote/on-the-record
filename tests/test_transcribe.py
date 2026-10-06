@@ -168,6 +168,7 @@ def test_transcribe_full_audio_passes_decode_options(monkeypatch, tmp_path):
 
     [kwargs] = model.calls
     assert kwargs["condition_on_previous_text"] is False
+    assert kwargs["vad_filter"] is True  # no invented text over long silences
     assert kwargs["word_timestamps"] is True and kwargs["language"] == "en"
 
 
@@ -193,5 +194,10 @@ def test_modal_transcribe_uses_shared_decode_options():
     src = (Path(__file__).resolve().parent.parent / "bench" / "modal_app.py").read_text()
     body = src[src.index("def pipeline_transcribe"):]
     body = body[:body.index("\ndef ", 1)] if "\ndef " in body[1:] else body
-    assert "WHISPER_DECODE_OPTIONS" in body
-    assert body.count("**WHISPER_DECODE_OPTIONS") == 1
+    assert "WHISPER_FULL_PASS_OPTIONS" in body
+    assert body.count("**WHISPER_FULL_PASS_OPTIONS") == 1
+
+
+def test_full_pass_options_add_silence_filter_to_decode_options():
+    from src.transcribe import WHISPER_DECODE_OPTIONS, WHISPER_FULL_PASS_OPTIONS
+    assert WHISPER_FULL_PASS_OPTIONS == {**WHISPER_DECODE_OPTIONS, "vad_filter": True}
