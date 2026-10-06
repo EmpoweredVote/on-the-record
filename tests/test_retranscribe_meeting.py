@@ -53,3 +53,41 @@ def test_reassign_raw_moves_words_onto_premerge_turns():
     raw = [_seg(0, 0.0, 2.0, "A"), _seg(1, 2.0, 4.0, "A")]
     rt.reassign_raw(raw, named)
     assert [s.text for s in raw] == ["one", "two"]
+
+
+def test_apply_promotes_reviewed_dry_run_without_calling_modal(tmp_path, monkeypatch):
+    import json
+
+    from src import config, modal_compute
+    from src.models import Meeting
+
+    mdir = tmp_path / "m1"
+    mdir.mkdir()
+    seg = _seg(0, 0.0, 2.0, "SPEAKER_00", "Ann")
+    seg.text = "big, big, big, big, big, big"
+    meeting = Meeting(meeting_id="m1", city="C", date="2026-01-01",
+                      meeting_type="podcast", segments=[seg])
+    (mdir / "transcript_named.json").write_text(json.dumps(meeting.to_dict()))
+    (mdir / "transcript_raw.json").write_text(json.dumps([seg.to_dict()]))
+    fresh = _seg(0, 0.0, 2.0, "SPEAKER_00", "Ann")
+    fresh.text, fresh.words = "A big switch.", [Word("A", 0.1, 0.2), Word("big", 0.2, 0.4),
+                                                 Word("switch.", 0.4, 0.8)]
+    dry = Meeting(meeting_id="m1", city="C", date="2026-01-01",
+                  meeting_type="podcast", segments=[fresh])
+    (mdir / "transcript_named.retranscribed.json").write_text(json.dumps(dry.to_dict()))
+
+    monkeypatch.setattr(config, "MEETINGS_DIR", tmp_path)
+    def _no_modal(*a, **k):
+        raise AssertionError("Modal must not run when a reviewed dry run exists")
+    monkeypatch.setattr(modal_compute, "run_transcription", _no_modal)
+    monkeypatch.setattr(modal_compute, "upload_audio", _no_modal)
+    import src.export as export
+    monkeypatch.setattr(export, "export_all", lambda *a, **k: None)
+
+    rt.retranscribe("m1", apply=True)
+
+    out = json.loads((mdir / "transcript_named.json").read_text())
+    assert out["segments"][0]["text"] == "A big switch."
+    assert out["segments"][0]["speaker_name"] == "Ann"
+    assert (mdir / "backup-pre-retranscribe" / "transcript_named.json").exists()
+    assert not (mdir / "transcript_named.retranscribed.json").exists()

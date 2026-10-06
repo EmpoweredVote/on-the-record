@@ -10,8 +10,9 @@ section indices stay valid. transcript_raw.json gets the same words, re-assigned
 to its own (pre-merge) turns.
 
 Default is a dry run: the new transcripts are written beside the originals as
-*.retranscribed.json and a before/after report is printed. --apply backs the
-originals up to backup-pre-retranscribe/ and replaces them. It does NOT
+*.retranscribed.json and a before/after report is printed. --apply promotes
+that dry run when it exists (otherwise transcribes first), backs the originals
+up to backup-pre-retranscribe/ and replaces them. It does NOT
 re-publish; use run_local.py --publish-meeting <id> afterwards.
 
 Run from the repo root: the Modal image bundles ./src, so the decode options in
@@ -109,13 +110,19 @@ def retranscribe(meeting_id: str, *, apply: bool) -> None:
     raw_segments = [Segment.from_dict(d) for d in raw_list]
 
     before = " ".join(s.text for s in meeting.segments)
-    wav = _opus_to_wav(mdir)
-    try:
-        upload_audio(wav, meeting_id)
-        new_data = run_transcription(meeting_id, [s.to_dict() for s in meeting.segments])
-    finally:
-        if wav.name == "audio.retranscribe.wav":
-            wav.unlink(missing_ok=True)
+    dry_named = mdir / "transcript_named.retranscribed.json"
+    if apply and dry_named.exists():
+        # Promote the dry run that was reviewed; a fresh Whisper run could differ.
+        print(f"  using reviewed dry run {dry_named.name}")
+        new_data = json.loads(dry_named.read_text(encoding="utf-8"))["segments"]
+    else:
+        wav = _opus_to_wav(mdir)
+        try:
+            upload_audio(wav, meeting_id)
+            new_data = run_transcription(meeting_id, [s.to_dict() for s in meeting.segments])
+        finally:
+            if wav.name == "audio.retranscribe.wav":
+                wav.unlink(missing_ok=True)
 
     apply_new_text(meeting.segments, new_data)
     reassign_raw(raw_segments, meeting.segments)
