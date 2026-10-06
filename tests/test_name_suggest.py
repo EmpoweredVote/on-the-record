@@ -353,3 +353,42 @@ def test_write_suggestions_is_atomic(tmp_path, monkeypatch):
     p = write_suggestions(tmp_path, {"suggestions": [], "note": "José"})
     assert seen == [p] and json.loads(p.read_text())["note"] == "José"
 
+
+# ---- run_local._suggest_names ----
+import pytest
+
+
+def _fake_pipeline(monkeypatch):
+    from src import name_suggest
+    seen = {}
+
+    def fake_suggest(meeting, meeting_dir, *, members, deps, warnings=None):
+        seen.update(members=members, warnings=list(warnings or []), researcher=deps.researcher)
+        return {"warnings": list(warnings or []), "suggestions": []}
+
+    monkeypatch.setattr(name_suggest, "suggest_names", fake_suggest)
+    monkeypatch.setenv("DATABASE_URL", "")
+    return seen
+
+
+@pytest.mark.parametrize("bad", ["../etc", "a/b", "..", "/abs"])
+def test_run_local_suggest_names_rejects_unsafe_ids(bad, tmp_meetings_dir, tmp_config_dir, monkeypatch, capsys):
+    import run_local
+    seen = _fake_pipeline(monkeypatch)
+    with pytest.raises(SystemExit) as e:
+        run_local._suggest_names(bad)
+    assert e.value.code != 0 and seen == {}
+    assert "invalid meeting id" in capsys.readouterr().out.lower()
+
+
+def test_run_local_suggest_names_corrupt_pipeline_state(tmp_meetings_dir, tmp_config_dir, monkeypatch, capsys):
+    import run_local
+    seen = _fake_pipeline(monkeypatch)
+    d = tmp_meetings_dir / "m1"
+    d.mkdir()
+    (d / "transcript_named.json").write_text(json.dumps({"segments": []}))
+    (d / "pipeline_state.json").write_text("{not json")
+    run_local._suggest_names("m1")
+    assert seen["members"] == []
+    assert any("pipeline_state.json" in w for w in seen["warnings"])
+    assert (d / "name_suggestions.json").exists()

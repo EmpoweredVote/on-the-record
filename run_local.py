@@ -3609,6 +3609,14 @@ def _suggest_names(meeting_id: str) -> None:
     from src.name_suggest import Deps, suggest_names, write_suggestions
     from src.roster import load_roster
 
+    try:
+        from gui.paths import is_safe_meeting_id
+    except ImportError:  # gui extras not installed: same rule, inline
+        def is_safe_meeting_id(mid: str) -> bool:
+            return bool(mid) and "/" not in mid and "\\" not in mid and ".." not in mid
+    if not is_safe_meeting_id(meeting_id):
+        print(f"Invalid meeting id: {meeting_id!r}")
+        sys.exit(1)
     meeting_dir = config.MEETINGS_DIR / meeting_id
     named_path = meeting_dir / "transcript_named.json"
     if not named_path.exists():
@@ -3616,12 +3624,17 @@ def _suggest_names(meeting_id: str) -> None:
         print(f"  Expected at: {named_path}")
         sys.exit(1)
     meeting = json.loads(named_path.read_text(encoding="utf-8"))
+    warnings: list = []
     state_path = meeting_dir / "pipeline_state.json"
-    body_slug = json.loads(state_path.read_text()).get("body_slug") if state_path.exists() else None
+    body_slug = None
+    if state_path.exists():
+        try:
+            body_slug = json.loads(state_path.read_text(encoding="utf-8")).get("body_slug")
+        except (OSError, ValueError, AttributeError):
+            warnings.append("pipeline_state.json unreadable: roster lookups skipped")
     roster = load_roster(body_slug=body_slug) if body_slug else None
     db_url = os.environ.get("DATABASE_URL", "").strip()
     db_warning = "database unavailable: politician and past-meeting lookups skipped"
-    warnings: list = []
     db = None
     if db_url:
         try:
