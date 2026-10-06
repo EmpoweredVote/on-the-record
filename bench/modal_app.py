@@ -1870,7 +1870,11 @@ def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
     # Make cs_src (the bundled ./src directory) importable.
     sys.path.insert(0, "/root")
     from cs_src.models import Segment, Word
-    from cs_src.transcribe import remove_segment_overlaps, recover_orphan_turns
+    from cs_src.transcribe import (
+        WHISPER_DECODE_OPTIONS,
+        recover_orphan_turns,
+        remove_segment_overlaps,
+    )
     from cs_src.word_assign import assign_words_to_segments
 
     wav_path = Path(VOLUME_PATH) / "meetings" / meeting_id / "audio.wav"
@@ -1897,7 +1901,9 @@ def pipeline_transcribe(meeting_id: str, segments_json: str) -> str:
 
     # Step 2 — single whole-audio transcription pass.
     print(f"  Transcribing full audio ({len(samples)/sr:.0f}s) …", flush=True)
-    result_segs, _ = model.transcribe(samples, word_timestamps=True, language="en")
+    result_segs, _ = model.transcribe(
+        samples, word_timestamps=True, language="en", **WHISPER_DECODE_OPTIONS
+    )
 
     # Step 3 — build flat chronological word list (global timestamps, no rebasing).
     words: list[Word] = []

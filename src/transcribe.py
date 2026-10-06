@@ -11,6 +11,17 @@ from . import config
 from .audio_utils import load_wav, slice_audio
 from .models import Segment, Word
 
+# Decode options shared by every model.transcribe() call, local and Modal
+# (bench/modal_app.py imports this). condition_on_previous_text=False stops a
+# repetition loop from feeding itself: with it on, large-v3 wrote invented
+# text over and over ("big, big, big..." x19, "Yeah." x17, a repeated
+# "reading by third grade" sentence). On two interview clips it removed every
+# loop, halved disagreement with the YouTube captions and ran 2-3x faster.
+# Not used: repetition_penalty / no_repeat_ngram_size (they also delete real
+# stutters, so quotes stop being verbatim) and vad_filter (no gain on the
+# clips, and it can drop faint short turns).
+WHISPER_DECODE_OPTIONS = {"condition_on_previous_text": False}
+
 
 def remove_segment_overlaps(segments: list[Segment]) -> list[Segment]:
     """Trim later segments so each instant of audio is transcribed once.
@@ -63,6 +74,7 @@ def transcribe_full_audio(model, wav_path: str | Path) -> list[Word]:
         samples,
         word_timestamps=True,
         language="en",
+        **WHISPER_DECODE_OPTIONS,
     )
     words: list[Word] = []
     for rs in result_segments:
@@ -115,7 +127,8 @@ def recover_orphan_turns(
 
         audio_slice = slice_audio(samples, sr, seg.start_time, seg.end_time)
         result_segments, _ = model.transcribe(
-            audio_slice, word_timestamps=True, language="en"
+            audio_slice, word_timestamps=True, language="en",
+            **WHISPER_DECODE_OPTIONS,
         )
         words: list[Word] = []
         for rs in result_segments:

@@ -146,3 +146,52 @@ def test_recover_orphan_turns_skips_sub_min_seconds_turn(monkeypatch, tmp_path):
 
     assert seg.words == []
     assert model.calls == []  # too short to transcribe
+
+
+# --- Repetition-loop guard (WHISPER_DECODE_OPTIONS) ---
+
+
+def test_decode_options_turn_off_conditioning_on_previous_text():
+    from src.transcribe import WHISPER_DECODE_OPTIONS
+    assert WHISPER_DECODE_OPTIONS["condition_on_previous_text"] is False
+    # Options that delete real repeated words would break verbatim quotes.
+    assert "repetition_penalty" not in WHISPER_DECODE_OPTIONS
+    assert "no_repeat_ngram_size" not in WHISPER_DECODE_OPTIONS
+
+
+def test_transcribe_full_audio_passes_decode_options(monkeypatch, tmp_path):
+    import src.transcribe as t
+    monkeypatch.setattr(t, "load_wav", lambda p: (np.zeros(16000), 16000))
+    model = _FakeModel([_FakeSeg([_FakeWord(" Hi", 0.0, 0.2)])])
+
+    t.transcribe_full_audio(model, tmp_path / "audio.wav")
+
+    [kwargs] = model.calls
+    assert kwargs["condition_on_previous_text"] is False
+    assert kwargs["word_timestamps"] is True and kwargs["language"] == "en"
+
+
+def test_recover_orphan_turns_passes_decode_options(monkeypatch, tmp_path):
+    import src.transcribe as t
+    monkeypatch.setattr(t, "load_wav", lambda p: (np.zeros(16000 * 40), 16000))
+    monkeypatch.setattr(t, "slice_audio", lambda samples, sr, a, b: np.zeros(int((b - a) * sr)))
+    model = _FakeModel([_FakeSeg([_FakeWord(" Here.", 0.1, 0.4)])])
+    seg = Segment(1, 5.0, 5.5, "MEMBER")
+    seg.words = []
+
+    recover_orphan_turns(model, tmp_path / "audio.wav", [seg], [])
+
+    [kwargs] = model.calls
+    assert kwargs["condition_on_previous_text"] is False
+    assert "vad_filter" not in kwargs  # VAD could drop the faint turn we want
+
+
+def test_modal_transcribe_uses_shared_decode_options():
+    """bench/modal_app.py runs production large-v3; it must pass the same
+    options (checked in source, since the Modal function cannot run here)."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "bench" / "modal_app.py").read_text()
+    body = src[src.index("def pipeline_transcribe"):]
+    body = body[:body.index("\ndef ", 1)] if "\ndef " in body[1:] else body
+    assert "WHISPER_DECODE_OPTIONS" in body
+    assert body.count("**WHISPER_DECODE_OPTIONS") == 1
