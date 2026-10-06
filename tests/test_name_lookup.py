@@ -206,7 +206,7 @@ def test_cache_roundtrip_and_stored_miss(tmp_path):
     c.save()
     c2 = ResearchCache(tmp_path / "cache.json")
     assert c2.get(k) == {"name": "Aaron Spiegel", "affiliation": "Indy Multi-Faith", "url": "https://x"}
-    assert c2.get(k2) == {"found": False}
+    assert c2.get(k2)["found"] is False and "at" in c2.get(k2)  # misses now carry a date (30-day TTL)
 
 
 def test_cache_tolerates_non_object_json_and_non_dict_entries(tmp_path):
@@ -313,3 +313,197 @@ def test_run_cli_passes_stdin_devnull(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert name_lookup.run_cli(["x"], 5) == (0, "out", "err")
     assert seen["stdin"] is subprocess.DEVNULL
+
+
+# ---- final-review fixes ----
+from src import name_lookup as NL
+
+
+def test_command_restricts_tools_and_skips_settings():
+    cmd = research_command("PROMPT")
+    assert cmd[cmd.index("--tools") + 1] == "WebSearch,WebFetch"
+    assert cmd[cmd.index("--setting-sources") + 1] == ""
+    assert cmd[cmd.index("--allowedTools") + 1] == "WebSearch,WebFetch"
+    assert "--bare" not in cmd
+
+
+def test_run_cli_uses_a_fresh_temp_cwd_removed_after(monkeypatch):
+    import os
+
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        seen["existed"] = os.path.isdir(kw["cwd"])
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    NL.run_cli(["x"], 5)
+    assert seen["existed"] and seen["stdin"] is subprocess.DEVNULL
+    assert not os.path.exists(seen["cwd"])
+    assert os.path.realpath(seen["cwd"]) != os.path.realpath(os.getcwd())
+
+
+class _Resp:
+    def __init__(self, status=200, body=b"<p>Aaron Spiegel</p>", ctype="text/html; charset=utf-8", location=None):
+        self.status_code, self.body = status, body
+        self.headers = {"Content-Type": ctype}
+        if location:
+            self.headers["Location"] = location
+        self.read_sizes = []
+        resp = self
+
+        class Raw:
+            def read(self, n, decode_content=False):
+                resp.read_sizes.append(n)
+                return resp.body[:n]
+
+        self.raw = Raw()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def close(self):
+        pass
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def _net(monkeypatch, resolve_map, responses):
+    """Fake DNS + fake requests.get. responses: url -> _Resp."""
+    import requests
+
+    gets = []
+
+    def fake_resolve(host, port):
+        return resolve_map[host]
+
+    def fake_get(url, **kw):
+        gets.append((url, kw))
+        return responses[url]
+
+    monkeypatch.setattr(NL, "_resolve", fake_resolve)
+    monkeypatch.setattr(requests, "get", fake_get)
+    return gets
+
+
+@pytest.mark.parametrize("url", ["http://localhost/", "http://127.0.0.1:8000/", "http://10.0.0.5/",
+                                 "http://inside.example/", "http://[::1]/", "ftp://x.org/"])
+def test_ssrf_private_targets_blocked(monkeypatch, url):
+    gets = _net(monkeypatch, {"localhost": ["127.0.0.1"], "inside.example": ["192.168.1.2"]}, {})
+    ok, why = verify_on_page("Aaron Spiegel", url)
+    assert not ok and (why.startswith("blocked url") or why == "bad url"), why
+    assert gets == []
+
+
+def test_ssrf_odd_port_blocked(monkeypatch):
+    gets = _net(monkeypatch, {"pub.example": ["93.184.216.34"]}, {})
+    ok, why = verify_on_page("Aaron Spiegel", "http://pub.example:8080/")
+    assert not ok and why.startswith("blocked url") and gets == []
+
+
+def test_ssrf_redirect_to_metadata_blocked(monkeypatch):
+    gets = _net(monkeypatch, {"pub.example": ["93.184.216.34"]},
+                {"https://pub.example/a": _Resp(302, location="http://169.254.169.254/latest/meta-data/")})
+    ok, why = verify_on_page("Aaron Spiegel", "https://pub.example/a")
+    assert not ok and why.startswith("blocked url"), why
+    assert [u for u, _ in gets] == ["https://pub.example/a"]
+    assert gets[0][1]["allow_redirects"] is False
+
+
+def test_public_host_allowed_and_redirects_followed(monkeypatch):
+    gets = _net(monkeypatch, {"pub.example": ["93.184.216.34"], "www.pub.example": ["93.184.216.35"]},
+                {"https://pub.example/a": _Resp(301, location="https://www.pub.example/team"),
+                 "https://www.pub.example/team": _Resp(200)})
+    assert verify_on_page("Aaron Spiegel", "https://pub.example/a") == (True, None)
+    assert [u for u, _ in gets] == ["https://pub.example/a", "https://www.pub.example/team"]
+
+
+def test_too_many_redirects(monkeypatch):
+    resp = {f"https://pub.example/{i}": _Resp(302, location=f"https://pub.example/{i + 1}") for i in range(10)}
+    gets = _net(monkeypatch, {"pub.example": ["93.184.216.34"]}, resp)
+    ok, why = verify_on_page("Aaron Spiegel", "https://pub.example/0")
+    assert not ok and len(gets) == 4
+
+
+def test_default_fetch_bytes_cap_and_content_type(monkeypatch):
+    r = _Resp(200, body=b"<p>hi</p>")
+    _net(monkeypatch, {"pub.example": ["93.184.216.34"]}, {"https://pub.example/": r,
+                                                           "https://pub.example/pdf": _Resp(200, ctype="application/pdf")})
+    assert NL.default_fetch("https://pub.example/") == b"<p>hi</p>"
+    assert r.read_sizes == [NL.MAX_PAGE_BYTES]
+    with pytest.raises(ValueError):
+        NL.default_fetch("https://pub.example/pdf")
+
+
+def test_resolve_failure_blocks(monkeypatch):
+    import socket
+
+    def nores(host, port):
+        raise socket.gaierror("nope")
+
+    monkeypatch.setattr(NL, "_resolve", nores)
+    ok, why = verify_on_page("Aaron Spiegel", "https://nowhere.example/")
+    assert not ok and why.startswith("blocked url")
+
+
+def test_own_site_excluded():
+    for url in ("https://empowered.vote/p/1", "https://www.empowered.vote/x", "https://API.Empowered.Vote/"):
+        assert verify_on_page("Aaron Spiegel", url, fetch=lambda u: HTML) == (False, "own site excluded")
+    assert verify_on_page("Aaron Spiegel", "https://notempowered.vote/", fetch=lambda u: HTML) == (True, None)
+
+
+def test_prompt_excludes_own_site():
+    assert "Do not use empowered.vote." in build_prompt("A B", None, None, None)
+
+
+def test_verify_on_page_affiliation():
+    page = "<p>Rabbi Aaron Spiegel, Executive Director, Indy Multi-Faith Alliance</p>"
+    assert verify_on_page("Aaron Spiegel", "https://x.org", fetch=lambda u: page,
+                          affiliation="the Indy multi-faith group") == (True, None)
+    assert verify_on_page("Aaron Spiegel", "https://x.org", fetch=lambda u: page,
+                          affiliation="Hoosier Families") == (False, "affiliation not on page")
+    # only stopwords / short tokens: nothing to check
+    assert verify_on_page("Aaron Spiegel", "https://x.org", fetch=lambda u: page,
+                          affiliation="the state office") == (True, None)
+    assert NL.affiliation_tokens("the Department of Natural Resources") == ["natural", "resources"]
+
+
+def test_names_similar():
+    assert NL.names_similar("Aaron Spiegal", "Aaron Spiegel")
+    assert not NL.names_similar("Aaron Tuttle", "Todd Rokita")
+    assert not NL.names_similar("Aaron Tuttle", "Aaron Rokita")
+    assert not NL.names_similar("Tom Tuttle", "Aaron Tuttle")
+    assert NL.names_similar("Chris Garten", "Christopher Garten")
+    assert NL.names_similar("José Ramírez", "Jose Ramirez")
+    assert NL.names_similar("Nitya", "Nitya Kumar")          # partial: any token
+    assert not NL.names_similar("Nitya", "Todd Rokita")
+
+
+def test_accent_folding_does_not_collide_surnames():
+    from src.roster import RosterMember
+
+    m = [RosterMember(name="José Pérez", aliases=["José Pérez", "Pérez"], politician_id="p1")]
+    assert match_roster("Jose Ramírez", m) is None
+    assert match_roster("José Pérez", m) == ("José Pérez", "p1")
+    assert match_roster("Jose Perez", m) == ("José Pérez", "p1")
+    assert NL.fold_tokens("Senator José O'Brien-Smith") == ["jose", "brien", "smith"]
+
+
+def test_cache_key_versioned_and_misses_expire(tmp_path):
+    c = ResearchCache(tmp_path / "c.json")
+    k = c.key("Ann Lee", None, None)
+    assert k.startswith("v1|")
+    c.put(k, None)
+    assert c.get(k)["found"] is False and "at" in c.get(k)
+    c._data[k]["at"] = "2020-01-01"
+    assert c.get(k) is None
+    c._data["v1|old|miss|"] = {"found": False}          # no date: treated as expired
+    assert c.get("v1|old|miss|") is None
+    c.put(k, {"name": "Ann Lee", "url": "https://x"})
+    assert c.get(k) == {"name": "Ann Lee", "affiliation": None, "url": "https://x"}
