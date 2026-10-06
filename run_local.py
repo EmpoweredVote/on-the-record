@@ -2195,6 +2195,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             event_kind=getattr(args, "event_kind", None),
             default=getattr(args, "default", False),
             title=getattr(args, "title", None),
+            no_suggest_names=getattr(args, "no_suggest_names", False),
         )
 
         # Resolve metadata up front (batch is non-interactive): an

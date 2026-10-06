@@ -84,3 +84,46 @@ def test_terminal_suggestion_line():
     assert terminal_suggestion_line(v) == "Suggested: Rachael Sample (verified, web · example.org) — [Y] to accept"
     v = to_view(rec(reason="different name returned"))
     assert terminal_suggestion_line(v) == "Suggested (not verified): Rachael Sample — different name returned"
+
+
+def _real_unidentified():
+    from src import review
+    mappings = {}
+    review.mark_unidentified(mappings, [], "W", "m1")
+    assert mappings["W"].local_slug.startswith("unidentified-")
+    return mappings
+
+
+def test_real_mark_unidentified_output_counts_as_unnamed():
+    from src.name_suggest import unnamed_labels
+    mappings = _real_unidentified()
+    assert is_unnamed_mapping(mappings["W"])
+    meeting = {"segments": [{"speaker_label": "W"}],
+               "speakers": {"W": {k: getattr(mappings["W"], k) for k in
+                                  ("speaker_name", "local_slug", "speaker_status", "politician_id", "politician_slug")}}}
+    assert unnamed_labels(meeting) == {"W"}
+
+
+def test_unidentified_still_excludes_real_links_and_non_speakers():
+    assert not is_unnamed_mapping({"speaker_name": "X", "speaker_status": "unidentified", "politician_id": "p"})
+    assert not is_unnamed_mapping({"speaker_name": "X", "speaker_status": "non_speaker", "local_slug": "unidentified-a"})
+
+
+def test_views_for_unnamed_shows_unidentified_speaker(tmp_path):
+    (tmp_path / "name_suggestions.json").write_text(json.dumps({"warnings": [], "suggestions": [rec("W")]}))
+    views, _ = views_for_unnamed(tmp_path, _real_unidentified(), ["W"])
+    assert set(views) == {"W"}
+
+
+def test_corrupt_records_are_skipped_not_raised(tmp_path):
+    bad = [
+        {"label": "A", "lookup": "oops", "spoken_name": "Ann Lee"},
+        {"label": "B", "evidence": ["str", 3, None], "lookup": {"name": "Bob Ray"}},
+        {"label": 5, "lookup": {"name": "Zed"}},
+        {"label": "C", "lookup": [1], "evidence": "nope"},
+        {"label": "D", "lookup": {"name": 7}, "spoken_name": None},
+    ]
+    (tmp_path / "name_suggestions.json").write_text(json.dumps({"warnings": [], "suggestions": [rec("W")] + bad}))
+    views, _ = views_for_unnamed(tmp_path, {}, ["W", "A", "B", "5", "C", "D"])
+    assert "W" in views and 5 not in views and "D" not in views
+    assert views["B"].quotes == [] and views["A"].name == "Ann Lee"

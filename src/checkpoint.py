@@ -138,7 +138,8 @@ class PipelineState:
     _STAGE_ARTIFACTS = {
         PipelineStage.DIARIZED: ("diarization.json", "embeddings.json"),
         PipelineStage.TRANSCRIBED: ("transcript_raw.json",),
-        PipelineStage.IDENTIFIED: ("transcript_named.json", "pre_identifications.json", "llm_partial_results.json"),
+        PipelineStage.IDENTIFIED: ("transcript_named.json", "pre_identifications.json", "llm_partial_results.json",
+                                   "name_suggestions.json"),
         PipelineStage.SUMMARIZED: ("summary.json",),
     }
 

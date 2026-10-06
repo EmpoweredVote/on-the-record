@@ -355,3 +355,37 @@ def test_review_notice_flows_through_redirect_and_is_escaped(meeting):
     assert "notice=" in r.headers["location"]
     html = c.get(r.headers["location"]).text
     assert "Accepted 1: W &lt;b&gt;x&lt;/b&gt;" in html
+
+
+def test_accept_suggestion_on_unidentified_speaker_replaces_handle(meeting):
+    """A speaker marked unidentified (synthetic unidentified-... slug) is shown a
+    suggestion, and accepting it replaces the handle with the real identity."""
+    from gui import review_api
+    from src import review
+    from src.models import SpeakerMapping
+
+    path = meeting / "transcript_named.json"
+    data = json.loads(path.read_text())
+    mappings = {"W": SpeakerMapping(speaker_label="W")}
+    review.mark_unidentified(mappings, [], "W", "m1")
+    data["speakers"]["W"] = {k: getattr(mappings["W"], k) for k in
+                             ("speaker_label", "speaker_name", "local_slug", "speaker_status",
+                              "id_method", "confidence", "needs_review")}
+    path.write_text(json.dumps(data))
+    page = review_api.load_review_page("m1")
+    assert {c.label: c for c in page.all_cards}["W"].suggestion is not None
+    assert review_api.apply_suggestion("m1", "W") == "Rachael Sample"
+    sp = json.loads(path.read_text())["speakers"]["W"]
+    assert sp["local_slug"] == "rachael-sample" and sp.get("speaker_status") in (None, "")
+
+
+def test_corrupt_suggestion_records_do_not_break_review_page(meeting):
+    (meeting / "name_suggestions.json").write_text(json.dumps({"warnings": [], "suggestions": [
+        _rec("W", "Rachael Sample"),
+        {"label": "V", "lookup": "bad", "evidence": [None, "x"]},
+        {"label": 9, "lookup": {"name": "Z"}},
+        {"label": "N", "lookup": [], "evidence": 5}]}))
+    from gui import review_api
+    page = review_api.load_review_page("m1")
+    cards = {c.label: c for c in page.all_cards}
+    assert cards["W"].suggestion is not None

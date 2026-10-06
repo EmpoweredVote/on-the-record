@@ -65,8 +65,14 @@ def _safe_url(url) -> Optional[str]:
 
 
 def to_view(rec: dict) -> Optional[SuggestionView]:
-    lk = rec.get("lookup") or {}
-    name = (lk.get("name") or rec.get("spoken_name") or "").strip()
+    lk = rec.get("lookup")
+    if not isinstance(lk, dict):
+        lk = {}
+    if not isinstance(rec.get("label"), str):
+        return None
+    spoken = rec.get("spoken_name")
+    name = lk.get("name") if isinstance(lk.get("name"), str) and lk.get("name") else spoken
+    name = (name if isinstance(name, str) else "").strip()
     if not name:
         return None
     if rec.get("prefill_name"):
@@ -84,7 +90,8 @@ def to_view(rec: dict) -> Optional[SuggestionView]:
     return SuggestionView(
         label=rec["label"], name=rec.get("prefill_name") or name, state=state, source=lk.get("source") or "transcript",
         url=url, domain=(host[4:] if host.startswith("www.") else host) or None,
-        quotes=[e.get("quote", "") for e in rec.get("evidence") or [] if e.get("kind") != "E4"][:2],
+        quotes=[e.get("quote", "") for e in (rec.get("evidence") if isinstance(rec.get("evidence"), list) else [])
+                if isinstance(e, dict) and e.get("kind") != "E4"][:2],
         role=rec.get("role"), reason=reason, politician_id=lk.get("politician_id"),
         local_slug=lk.get("local_slug"), tier=rec.get("tier"), verified=bool(lk.get("verified")),
     )
@@ -94,15 +101,28 @@ def _get(m, key):
     return m.get(key) if isinstance(m, dict) else getattr(m, key, None)
 
 
+def _is_unidentified(m) -> bool:
+    slug = _get(m, "local_slug")
+    return _get(m, "speaker_status") == "unidentified" or (
+        isinstance(slug, str) and slug.startswith("unidentified-"))
+
+
 def is_unnamed_mapping(m) -> bool:
+    """True when the speaker has no real identity: no mapping, no name, or marked
+    unidentified (review.mark_unidentified sets a synthetic unidentified-... slug,
+    which is a handle, not a person). Non-speakers and real links are never unnamed."""
     if m is None:
         return True
     if _get(m, "speaker_status") == "non_speaker":
         return False
-    if _get(m, "politician_id") or _get(m, "politician_slug") or _get(m, "local_slug"):
+    if _get(m, "politician_id") or _get(m, "politician_slug"):
+        return False
+    if _is_unidentified(m):
+        return True
+    if _get(m, "local_slug"):
         return False
     name = (_get(m, "speaker_name") or "").strip()
-    return not name or _get(m, "speaker_status") == "unidentified" or name.lower().startswith("unidentified")
+    return not name or name.lower().startswith("unidentified")
 
 
 def views_for_unnamed(meeting_dir: Path, mappings: dict, labels: Iterable[str]
@@ -111,11 +131,14 @@ def views_for_unnamed(meeting_dir: Path, mappings: dict, labels: Iterable[str]
     live = set(labels)
     out: dict[str, SuggestionView] = {}
     for r in recs:
-        lab = r["label"]
-        if lab in live and is_unnamed_mapping(mappings.get(lab)):
-            v = to_view(r)
-            if v:
-                out[lab] = v
+        try:
+            lab = r["label"]
+            if lab in live and is_unnamed_mapping(mappings.get(lab)):
+                v = to_view(r)
+                if v:
+                    out[lab] = v
+        except Exception:
+            continue  # one corrupt record must not break the review
     return out, warns
 
 

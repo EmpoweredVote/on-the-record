@@ -14,6 +14,7 @@ from .atomic_io import atomic_write_json
 from .models import Segment
 from .name_candidates import Candidate, build_candidates
 from .name_evidence import extract_evidence
+from .name_suggestion_view import is_unnamed_mapping
 from .name_lookup import (
     PARTIAL_EXPANDED, NameDB, RESEARCH_MODEL, Lookup, ResearchCache, ResearchFailed, ResearcherUnavailable, default_fetch, infer_state,
     match_local_people, match_politician, match_roster, norm_name, research, should_research, verify_web_result,
@@ -140,15 +141,8 @@ def unnamed_labels(meeting: dict) -> set[str]:
     speakers = meeting.get("speakers") or {}
     out: set[str] = set()
     for label in labels:
-        m = speakers.get(label) or {}
-        if m.get("speaker_status") == "non_speaker":
-            continue
-        if m.get("politician_id") or m.get("politician_slug") or m.get("local_slug"):
-            continue
-        name = (m.get("speaker_name") or "").strip()
-        if name and m.get("speaker_status") != "unidentified" and not name.lower().startswith("unidentified"):
-            continue
-        out.add(label)
+        if is_unnamed_mapping(speakers.get(label) or {}):
+            out.add(label)
     return out
 
 
