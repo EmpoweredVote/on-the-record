@@ -1340,6 +1340,16 @@ def publish_meeting(
     # race that staled the meeting list). Code deploys happen via git push.
     # _trigger_deploy_hook() is intentionally not called here.
 
+    # Best-effort: record where a published name differs from an accepted-quality
+    # suggestion. Never blocks or fails a publish.
+    try:
+        from .name_suggestion_log import log_overrides
+
+        log_overrides(config.MEETINGS_DIR / meeting.meeting_id, meeting.meeting_id,
+                      {lab: m.speaker_name for lab, m in meeting.speakers.items()})
+    except Exception as exc:  # noqa: BLE001 - logging never blocks a publish
+        print(f"  (name-suggestion override log skipped: {type(exc).__name__})")
+
     return PublishResult(
         meeting_id=meeting.meeting_id,
         segments=segment_count,
