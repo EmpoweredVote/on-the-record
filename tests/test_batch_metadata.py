@@ -71,3 +71,19 @@ def test_batch_resume_skip_uses_resolved_meeting_type(monkeypatch, tmp_path):
         event_kind=None, title=None,
     )
     run_local._run_batch(args)  # must not raise (would if run_pipeline ran)
+
+
+def test_batch_passes_no_suggest_names_to_each_run(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.config.MEETINGS_DIR", tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    seen = []
+    monkeypatch.setattr(run_local, "run_pipeline", lambda a: seen.append(a.no_suggest_names))
+    batchfile = tmp_path / "list.txt"
+    batchfile.write_text("/videos/a.mp4 2026-05-01\n")
+    args = argparse.Namespace(
+        batch=str(batchfile), batch_resume=False, skip_llm=False, merge=False, use_vtt=False,
+        diarizer="oss", compute="local", body=None, race_id=None, force_retag=False,
+        event_kind=None, title=None, default=True, no_suggest_names=True,
+    )
+    run_local._run_batch(args)
+    assert seen == [True]

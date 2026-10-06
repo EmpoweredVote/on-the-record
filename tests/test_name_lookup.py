@@ -701,3 +701,32 @@ def test_old_v1_cache_entries_are_ignored(tmp_path):
     path.write_text(json.dumps({"v1|a b|org|town": {"found": False, "at": "2099-01-01"}}))
     c = ResearchCache(path)
     assert c.get(ResearchCache.key("A B", "Org", "Town")) is None
+
+
+import threading
+import time
+
+
+def test_run_cli_serializes_with_research_lock(tmp_path, monkeypatch):
+    from src import name_lookup
+
+    monkeypatch.setattr("src.config.CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(name_lookup, "claude_config_dir", lambda: None)
+    spans = []
+
+    def fake_run(cmd, **kw):
+        start = time.monotonic()
+        time.sleep(0.2)
+        spans.append((start, time.monotonic()))
+
+        class P:
+            returncode, stdout, stderr = 0, "{}", ""
+        return P()
+
+    monkeypatch.setattr(name_lookup.subprocess, "run", fake_run)
+    ts = [threading.Thread(target=name_lookup.run_cli, args=(["claude"], 5)) for _ in range(2)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    (a0, a1), (b0, b1) = sorted(spans)
+    assert b0 >= a1 - 0.01  # second started only after the first finished
+    assert (tmp_path / "name_lookup.lock").exists()

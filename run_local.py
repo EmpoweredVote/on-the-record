@@ -1783,6 +1783,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     print()
 
+    # Stage 4.5: name suggestions for unnamed speakers (never fails the run).
+    from src.name_suggest_step import run_name_suggestions
+    run_name_suggestions(meeting_dir, disabled=getattr(args, "no_suggest_names", False))
+
     # ======================================================================
     # Confidence gate (Phase A): score the meeting, route non-passing
     # non-interactive runs to the review queue BEFORE any paid summary or
@@ -2193,6 +2197,7 @@ def _run_batch(args: argparse.Namespace) -> None:
             event_kind=getattr(args, "event_kind", None),
             default=getattr(args, "default", False),
             title=getattr(args, "title", None),
+            no_suggest_names=getattr(args, "no_suggest_names", False),
         )
 
         # Resolve metadata up front (batch is non-interactive): an
@@ -3242,6 +3247,18 @@ def _interactive_speaker_review(
     history: list[dict] = []
     views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
 
+    # Name suggestions (slice 3) for unnamed speakers. Never allowed to break review.
+    sug_views: dict = {}
+    if meeting_id:
+        try:
+            from src import config as _cfg
+            from src.name_suggestion_view import views_for_unnamed
+            sug_views, _ = views_for_unnamed(
+                _cfg.MEETINGS_DIR / meeting_id, mappings, {s.speaker_label for s in segments}
+            )
+        except Exception:
+            sug_views = {}
+
     i = 0
     quit_requested = False
     while i < len(views):
@@ -3272,6 +3289,11 @@ def _interactive_speaker_review(
             print(f"  Sample [{_format_ts(view.clip_start or 0)}]: \"{preview}\"")
         elif view.clip_start is not None:
             print(f"  Clip at [{_format_ts(view.clip_start)}]")
+
+        _sv = sug_views.get(label)
+        if _sv is not None:
+            from src.name_suggestion_view import terminal_suggestion_line
+            print(f"  {terminal_suggestion_line(_sv)}")
 
         advance = True
         undo_requested = False
@@ -3306,7 +3328,10 @@ def _interactive_speaker_review(
                         parts.append(f"[V]iew clip (1/{n_clips})")
                     else:
                         parts.append(f"[V]=next clip ({clip_idx % n_clips + 1}/{n_clips}) [R]eplay")
-                if top_hint:
+                _sug_ok = label in sug_views and sug_views[label].state == "acceptable"
+                if _sug_ok:
+                    parts.append(f"[Y=accept {sug_views[label].name}]")
+                elif top_hint:
                     _top_pid = top_hint[2] if len(top_hint) > 2 else ""
                     if _top_pid.startswith("local:unidentified-"):
                         parts.append(f"[Y=returning unidentified: {top_hint[0]}]")
@@ -3411,6 +3436,28 @@ def _interactive_speaker_review(
                     print(f"  Merged {label} → {target.label} ({res.combined_name or 'unidentified'})")
                     views = review.build_review_state(segments, mappings, embeddings, profile_db, show_text=show_text)
                     advance = False
+                    break
+                elif choice.lower() in ("y", "yes") and _sug_ok:
+                    from src import config as _cfg
+                    from src.name_suggestion_log import log_event
+                    from src.name_suggestion_view import accept_action, apply_action_to_mappings
+                    sv = sug_views.pop(label)
+                    action = accept_action(sv, review.default_local_slug(sv.name, label))
+                    _push_undo()
+                    old_name = mappings.get(label).speaker_name if mappings.get(label) else None
+                    try:
+                        apply_action_to_mappings(mappings, segments, label, action, event_kind)
+                    except ValueError as e:
+                        # The apply helper mutates before it can fail (bad or taken
+                        # slug); roll back to this visit's snapshot.
+                        history.pop()
+                        review.restore_mapping(mappings, segments, label, visit_snapshot)
+                        print(f"  Could not apply suggestion ({e}); nothing changed.")
+                        continue
+                    changes.append({"label": label, "old_name": old_name, "new_name": action.name})
+                    log_event(_cfg.MEETINGS_DIR / meeting_id, meeting_id=meeting_id, view=sv,
+                              action="accepted", final_name=action.name)
+                    print(f"  Accepted suggestion: {action.name}")
                     break
                 elif choice.lower() in ("y", "yes") and top_hint:
                     _push_undo()
@@ -3607,10 +3654,6 @@ def _enroll_after_review(
 
 def _suggest_names(meeting_id: str) -> None:
     """Write <meeting_dir>/name_suggestions.json and print a summary."""
-    from src.name_lookup import PgNameDB, ResearchCache
-    from src.name_suggest import Deps, suggest_names, write_suggestions
-    from src.roster import load_roster
-
     try:
         from gui.paths import is_safe_meeting_id
     except ImportError:  # gui extras not installed: same rule, inline
@@ -3625,42 +3668,16 @@ def _suggest_names(meeting_id: str) -> None:
         print(f"No transcript found for meeting: {meeting_id}")
         print(f"  Expected at: {named_path}")
         sys.exit(1)
-    meeting = json.loads(named_path.read_text(encoding="utf-8"))
-    warnings: list = []
-    state_path = meeting_dir / "pipeline_state.json"
-    body_slug = None
-    if state_path.exists():
-        try:
-            body_slug = json.loads(state_path.read_text(encoding="utf-8")).get("body_slug")
-        except (OSError, ValueError, AttributeError):
-            warnings.append("pipeline_state.json unreadable: roster lookups skipped")
-    roster = load_roster(body_slug=body_slug) if body_slug else None
-    db_url = os.environ.get("DATABASE_URL", "").strip()
-    db_warning = "database unavailable: politician and past-meeting lookups skipped"
-    db = None
-    if db_url:
-        try:
-            db = PgNameDB(db_url)
-        except Exception:
-            warnings.append(db_warning)
-    else:
-        warnings.append(db_warning)
-    try:
-        deps = Deps(db=db, cache=ResearchCache(config.CONFIG_DIR / "name_lookup_cache.json"))
-        result = suggest_names(meeting, meeting_dir, members=roster.members if roster else [], deps=deps,
-                               warnings=warnings)
-    finally:
-        if db is not None:
-            db.close()
-    path = write_suggestions(meeting_dir, result)
-    for w in result["warnings"]:
-        print(f"  WARNING: {w}")
+    from src.name_suggest_step import run_name_suggestions
+    result = run_name_suggestions(meeting_dir, force=True)
+    if result is None:
+        return
     for s in result["suggestions"]:
         lk = s["lookup"]
         mark = "\u2713" if lk["verified"] else "\u00b7"
         print(f"  {mark} {s['label']:<11} {s['tier'] or '-':<7} {lk['name']!s:<28} {lk['source']:<12} "
               f"{lk['url'] or lk['reason'] or ''}")
-    print(f"Wrote {path}")
+    print(f"Wrote {meeting_dir / 'name_suggestions.json'}")
 
 
 def _review_meeting(meeting_id: str) -> None:
@@ -3733,7 +3750,7 @@ def _review_meeting(meeting_id: str) -> None:
     print("Commands for each speaker:")
     print("  [Enter]  Skip (keep current name)")
     print("  [V]      View video clip of this speaker")
-    print("  [Y]      Accept suggested voice match (if shown)")
+    print("  [Y]      Accept the name suggestion (or the voice match) if shown")
     print("  [M]      Merge this speaker into another")
     print("  [name]   Type a new name to assign")
     print("  [U]      Mark unidentified (distinct person, unnamed)")
@@ -3897,7 +3914,7 @@ def _identify_speakers_standalone(meeting_id: str) -> None:
     print("Commands for each speaker:")
     print("  [Enter]  Skip")
     print("  [V]      View video clip of this speaker")
-    print("  [Y]      Accept suggested voice match (if shown)")
+    print("  [Y]      Accept the name suggestion (or the voice match) if shown")
     print("  [M]      Merge this speaker into another")
     print("  [name]   Type a name to assign")
     print("  [U]      Mark unidentified (distinct person, unnamed)")
@@ -4191,6 +4208,8 @@ Environment Variables:
     parser.add_argument("--suggest-names", metavar="MEETING_ID",
                         help="Suggest names for unnamed speakers (self-intros, chair calls, "
                              "roster/politician/past-meeting/web lookup); writes name_suggestions.json")
+    parser.add_argument("--no-suggest-names", action="store_true",
+                        help="Skip the automatic name-suggestion step after speaker identification")
     parser.add_argument("--review", metavar="MEETING_ID",
                         help="Review/correct/merge speakers in an existing meeting "
                              "(canonical; --review-meeting and --identify-speakers are aliases)")

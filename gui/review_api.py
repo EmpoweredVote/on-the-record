@@ -654,6 +654,18 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         )
         (confirmed if card.is_confirmed else needs).append(card)
 
+    # Name suggestions for still-unnamed speakers (name_suggestions.json). A card
+    # the reviewer already named gets none, so a stale suggestion never shows.
+    from src.name_suggestion_view import views_for_unnamed
+
+    sug_views, sug_warnings = views_for_unnamed(
+        meeting_dir, meeting.speakers, [c.label for c in needs + confirmed])
+    for c in needs + confirmed:
+        c.suggestion = sug_views.get(c.label)
+        if c.suggestion is not None:
+            c.suggestion_slug = c.suggestion.local_slug or review.default_local_slug(
+                c.suggestion.name, c.label)
+
     display_name = meeting.title or " ".join(
         p for p in (meeting.city, meeting.meeting_type) if p
     ) or meeting_id
@@ -668,4 +680,112 @@ def load_review_page(meeting_id: str) -> Optional[ReviewPageData]:
         confirmed=confirmed,
         warnings=warnings,
         local_role_options=list(local_roles_for(meeting.event_kind)),
+        suggestion_warnings=sug_warnings,
     )
+
+
+def _suggestion_for(meeting_id: str, label: str):
+    """(view, meeting_dir) for a label that is STILL unnamed in the current
+    transcript, else (None, None). Re-read on every accept, so a label the
+    reviewer named after the page loaded is never overwritten."""
+    from src.name_suggestion_view import views_for_unnamed
+
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return None, None
+    meeting, meeting_dir, _roster = ctx
+    labels = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    views, _warnings = views_for_unnamed(meeting_dir, meeting.speakers, labels)
+    view = views.get(label)
+    return (view, meeting_dir) if view is not None else (None, None)
+
+
+def apply_suggestion(meeting_id: str, label: str, *, bulk: bool = False) -> Optional[str]:
+    """Accept one acceptable name suggestion: link by politician_id, else make a
+    local person. Returns the final name, or None when there is nothing to
+    accept (unsafe/unknown meeting, label already named, suggestion not
+    acceptable, write refused, or a bad/colliding slug)."""
+    from src import review
+    from src.name_suggestion_log import log_event
+    from src.name_suggestion_view import accept_action
+
+    view, meeting_dir = _suggestion_for(meeting_id, label)
+    if view is None:
+        return None
+    action = accept_action(view, review.default_local_slug(view.name, label))
+    if action is None:
+        return None
+    if action.kind == "link":
+        ok = apply_link(meeting_id, label, "", action.politician_id or "", name=action.name)
+    else:
+        try:
+            ok = apply_make_local_person(meeting_id, label, action.slug, action.role, name=action.name)
+        except ValueError:
+            return None
+    if not ok:
+        return None
+    log_event(meeting_dir, meeting_id=meeting_id, view=view,
+              action="bulk_accepted" if bulk else "accepted", final_name=action.name)
+    return action.name
+
+
+def apply_all_suggestions(meeting_id: str) -> list[tuple[str, str]]:
+    """Accept every acceptable suggestion on a still-unnamed speaker.
+    Returns [(label, name)] for the ones applied."""
+    from src.name_suggestion_view import views_for_unnamed
+
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
+        return []
+    meeting, meeting_dir, _roster = ctx
+    labels = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    views, _warnings = views_for_unnamed(meeting_dir, meeting.speakers, labels)
+    done: list[tuple[str, str]] = []
+    # Each apply_suggestion re-reads the transcript, so a label named in between is skipped.
+    for label in sorted(l for l, v in views.items() if v.state == "acceptable"):
+        name = apply_suggestion(meeting_id, label, bulk=True)
+        if name:
+            done.append((label, name))
+    return done
+
+
+def suggestion_identity(view, label: str) -> tuple[str, str]:
+    """The identity accepting this suggestion would set: ('link', politician_id)
+    or ('local', slug) — the same rule as accept_action, for any state."""
+    from src import review
+
+    if view.politician_id:
+        return "link", view.politician_id
+    return "local", view.local_slug or review.default_local_slug(view.name, label)
+
+
+def log_suggestion_edit(meeting_id: str, label: str, final_name: str, *,
+                        identity: Optional[tuple[str, str]] = None) -> None:
+    """Log what the reviewer saved from a form pre-filled with a suggestion.
+
+    'accepted' when the name (normalized) AND the identity are unchanged, else
+    'edited'. `identity` is what the form set: ('link', politician_id-or-slug) or
+    ('local', slug); None compares the name only. A role change alone still
+    counts as accepted — role is editable metadata, not who the person is.
+    Never raises."""
+    try:
+        from src.name_lookup import norm_name
+        from src.name_suggestion_log import log_event
+        from src.name_suggestion_view import load_suggestions, to_view
+
+        if not is_safe_meeting_id(meeting_id):
+            return
+        meeting_dir = config.MEETINGS_DIR / meeting_id
+        recs, _warnings = load_suggestions(meeting_dir)
+        rec = next((r for r in recs if r.get("label") == label), None)
+        view = to_view(rec) if rec else None
+        if view is None:
+            return
+        same = norm_name(final_name or "") == norm_name(view.name)
+        if identity is not None:
+            kind, value = identity
+            same = same and (kind, (value or "").strip()) == suggestion_identity(view, label)
+        log_event(meeting_dir, meeting_id=meeting_id, view=view,
+                  action="accepted" if same else "edited", final_name=final_name)
+    except Exception as exc:  # logging must never break a review action
+        logging.getLogger(__name__).warning("name-suggestion edit not logged: %s", exc)

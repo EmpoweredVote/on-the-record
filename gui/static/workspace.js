@@ -48,6 +48,8 @@
     if (!panel.contains(form)) return;                        // only in-panel forms
     e.preventDefault();
 
+    if (form.hasAttribute("data-rerun-names")) { rerunNames(form); return; }
+
     const isPublish = form.matches(".publish-form");
     const body = new FormData(form);
 
@@ -100,6 +102,37 @@
       if (slot) slot.innerHTML = publishResult;
     }
   });
+
+  // ---- Re-run name lookup -------------------------------------------------
+  // POST starts a background job; poll /status while it runs, then reload the
+  // review so the new suggestions show. 409 = another run for this meeting is
+  // still going: say so instead of silently doing nothing.
+  async function rerunNames(form) {
+    const msg = form.parentElement && form.parentElement.querySelector(".rerun-msg");
+    const btn = form.querySelector("button");
+    const say = (t) => { if (msg) { msg.hidden = false; msg.textContent = t; } };
+    if (btn) btn.disabled = true;
+    let r = null;
+    try { r = await fetch(form.action, { method: "POST", redirect: "manual" }); } catch (_) { r = null; }
+    if (!r || (r.type !== "opaqueredirect" && !r.ok)) {
+      say(r && r.status === 409
+        ? "A run is still in progress for this meeting. Try again when it ends."
+        : "Could not start the name lookup.");
+      if (btn) btn.disabled = false;
+      return;
+    }
+    say("Name lookup running. The review reloads when it ends.");
+    const poll = async () => {
+      let st = null;
+      try {
+        const resp = await fetch(`/meetings/${enc(id)}/status`);
+        if (resp.ok) st = await resp.json();
+      } catch (_) { st = null; }
+      if (st && st.running) { setTimeout(poll, 2000); return; }
+      if (activeTab === "review") loadPanel("review", false);
+    };
+    setTimeout(poll, 1500);
+  }
 
   // ---- Live status --------------------------------------------------------
   async function refreshStatus() {
@@ -184,6 +217,7 @@
         results.innerHTML = '<div class="link-msg">' + (data.error ? "search unavailable" : "no matches") + "</div>";
         return;
       }
+      const fromSug = widget.getAttribute("data-from-suggestion") || "";
       let action = widget.getAttribute("data-link-action") || "";
       if (!action.endsWith("/link")) action += "/link";
       const esc = (s) => String(s == null ? "" : s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -212,6 +246,9 @@
           // empty name is correct (apply_link/_reset_and_rename just skips the
           // rename), never the whole decorated line landing in speaker_name.
           '<input type="hidden" name="name" value="' + esc(r.full_name || "") + '">' +
+          // Set when the card's search started from a name suggestion: the
+          // server logs whether the reviewer kept the suggested name.
+          (fromSug ? '<input type="hidden" name="from_suggestion" value="' + esc(fromSug) + '">' : "") +
           '<button type="submit" class="link-result">' + inner + "</button></form>"
         );
       }).join("");

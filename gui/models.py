@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from src.name_suggestion_view import SuggestionView
 
 # Friendly labels for src.checkpoint.PipelineStage values (0..7). Kept here (not
 # imported from checkpoint) so the label wording is a GUI concern the pipeline
@@ -221,6 +224,10 @@ class SpeakerCard:
     # a mis-merge, and it has no undo).
     merge_hints: dict = field(default_factory=dict)
     merge_mismatches: list[str] = field(default_factory=list)
+    # Name suggestion for a still-unnamed speaker (src.name_suggestion_view), or None.
+    suggestion: Optional["SuggestionView"] = None
+    # Slug the pre-filled local-person form offers for that suggestion.
+    suggestion_slug: str = ""
 
     @property
     def profile_strength(self) -> str:
@@ -330,6 +337,13 @@ class ReviewPageData:
     confirmed: list[SpeakerCard] = field(default_factory=list)
     warnings: list[dict] = field(default_factory=list)  # review.enrollment_warnings dicts
     local_role_options: list[str] = field(default_factory=list)
+    suggestion_warnings: list[str] = field(default_factory=list)  # name_suggestions.json warnings
+
+    @property
+    def bulk_accept_labels(self) -> list[str]:
+        """Labels whose card carries an acceptable (verified) name suggestion."""
+        return [c.label for c in self.all_cards
+                if c.suggestion is not None and c.suggestion.state == "acceptable"]
 
     @property
     def speaker_count(self) -> int:

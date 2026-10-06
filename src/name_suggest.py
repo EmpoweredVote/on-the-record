@@ -14,6 +14,7 @@ from .atomic_io import atomic_write_json
 from .models import Segment
 from .name_candidates import Candidate, build_candidates
 from .name_evidence import extract_evidence
+from .name_suggestion_view import is_unnamed_mapping
 from .name_lookup import (
     PARTIAL_EXPANDED, NameDB, RESEARCH_MODEL, Lookup, ResearchCache, ResearchFailed, ResearcherUnavailable, default_fetch, infer_state,
     match_local_people, match_politician, match_roster, norm_name, research, should_research, verify_web_result,
@@ -133,8 +134,20 @@ def _identity(lk: Lookup) -> Optional[str]:
     return f"name:{norm_name(lk.name)}"
 
 
+def unnamed_labels(meeting: dict) -> set[str]:
+    """Labels with no identity: no usable name (or status unidentified), no
+    politician link, no local person, and not marked as a non-speaker."""
+    labels = {s.get("speaker_label") for s in meeting.get("segments", []) if s.get("speaker_label")}
+    speakers = meeting.get("speakers") or {}
+    out: set[str] = set()
+    for label in labels:
+        if is_unnamed_mapping(speakers.get(label) or {}):
+            out.add(label)
+    return out
+
+
 def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps,
-                  warnings: Optional[list] = None) -> dict:
+                  warnings: Optional[list] = None, only_labels: Optional[set[str]] = None) -> dict:
     segments = [Segment.from_dict(s) for s in meeting.get("segments", [])]
     cands = build_candidates(extract_evidence(segments, read_captions_text(meeting_dir)),
                              meeting.get("event_kind"))
@@ -151,6 +164,8 @@ def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps
     out = []
     try:
         for label in sorted(cands):
+            if only_labels is not None and label not in only_labels:
+                continue
             c = cands[label]
             try:
                 lk = suggest_for_candidate(c, members=members, state=state, place=place, deps=deps, run=run,

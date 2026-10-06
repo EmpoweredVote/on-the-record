@@ -29,6 +29,27 @@
   </section>
   {% endif %}
 
+  {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+
+  {% if page.suggestion_warnings %}
+  <section class="review-warnings suggestion-warnings">
+    <h2>Name lookup</h2>
+    <ul>{% for w in page.suggestion_warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    {# workspace.js runs this in the background, polls /status and reloads the
+       review when the job ends; .rerun-msg shows progress or a refusal. #}
+    <form method="post" action="/meetings/{{ page.meeting_id }}/suggest-names" data-rerun-names><button type="submit">Re-run name lookup</button></form>
+    <p class="rerun-msg" hidden></p>
+  </section>
+  {% endif %}
+
+  {% if page.bulk_accept_labels %}
+  <form method="post" action="/meetings/{{ page.meeting_id }}/accept-suggestions" class="bulk-accept" data-navigate>
+    {# data-navigate: a full page navigation, so the "Accepted N: ..." notice on
+       the redirect reaches the page (the in-panel fetch path drops it). #}
+    <button type="submit" class="accept">Accept all verified ({{ page.bulk_accept_labels|length }})</button>
+  </form>
+  {% endif %}
+
   <section>
     <h2>Needs attention</h2>
     {% if page.needs_attention %}
