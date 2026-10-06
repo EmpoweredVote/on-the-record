@@ -1,22 +1,47 @@
-"""Stage 5: Meeting summary generation using Anthropic API.
+"""Stage 5: Meeting summary generation.
 
-Two-pass pipeline:
-  Pass 1 (Haiku)  — Classify transcript into sections (roll call, discussion, vote, etc.)
-  Pass 2 (Sonnet) — Summarize each substantive section + generate executive summary
+Two-pass pipeline (models come from config; calls go through make_llm_client):
+  Pass 1 (classify model)   — Classify transcript into sections (roll call, discussion, vote, etc.)
+  Pass 2 (synthesize model) — Summarize each substantive section + generate executive summary
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Optional
 
 from . import config
-from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
+from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS, summary_subject
 from .llm_providers import make_llm_client
 from .models import Meeting, MeetingSummary, Segment, SummarySection
 from .summary_sections import normalize_raw_sections
+
+logger = logging.getLogger(__name__)
+
+
+def _warn_if_truncated(message, call_site: str) -> None:
+    """Log when a reply stopped at max_tokens.
+
+    A JSON reply cut short fails to parse and degrades to a "could not be
+    parsed" placeholder or an empty result; this makes that cause visible.
+    """
+    if getattr(message, "stop_reason", None) == "max_tokens":
+        logger.warning(
+            "summarize: %s reply hit max_tokens and is truncated", call_site
+        )
+
+
+def _framed(template: str, event_kind: Optional[str]) -> str:
+    """Fill {subject}/{short_subject} in a prompt with the event-kind noun.
+
+    str.replace, not str.format: the templates contain literal JSON braces.
+    Every subject noun starts with a consonant sound, so "a {subject}" reads.
+    """
+    full, short = summary_subject(event_kind)
+    return template.replace("{subject}", full).replace("{short_subject}", short)
 
 
 def _format_ts(seconds: float) -> str:
@@ -37,7 +62,7 @@ def _condensed_transcript(segments: list[Segment], max_chars_per_seg: int = 120)
     """Build a condensed transcript for section classification.
 
     Shows timestamp, speaker, and truncated text for each segment.
-    This keeps the input small enough for efficient Haiku classification.
+    This keeps the input small enough for efficient classification.
     """
     lines = []
     for seg in segments:
@@ -133,10 +158,10 @@ def _full_section_transcript(segments: list[Segment], start: int, end: int) -> s
 
 
 # ---------------------------------------------------------------------------
-# Pass 1: Section classification (Haiku)
+# Pass 1: Section classification
 # ---------------------------------------------------------------------------
 
-_CLASSIFY_SYSTEM = """You are an expert at analyzing city council meeting transcripts.
+_CLASSIFY_SYSTEM = """You are an expert at analyzing {subject} transcripts.
 Your job is to identify the structural sections of the meeting from the transcript.
 
 Section types:
@@ -171,12 +196,12 @@ Respond with ONLY valid JSON in this format:
 def _classify_sections_chunk(
     client,
     condensed: str,
-    seg_offset: int = 0,
     chapter_hint: str = "",
     model: Optional[str] = None,
     debug: Optional[list] = None,
+    event_kind: Optional[str] = None,
 ) -> list[dict]:
-    """Classify one chunk of transcript into sections using Haiku.
+    """Classify one chunk of transcript into sections.
 
     model: override for config.SUMMARY_CLASSIFY_MODEL — the eval harness
     (scripts/eval_summary_classify.py) uses this to replay classification with
@@ -188,12 +213,15 @@ def _classify_sections_chunk(
     message = client.messages.create(
         model=model or config.SUMMARY_CLASSIFY_MODEL,
         max_tokens=config.SUMMARY_MAX_TOKENS_CLASSIFY,
-        system=_CLASSIFY_SYSTEM,
+        system=_framed(_CLASSIFY_SYSTEM, event_kind),
         messages=[{
             "role": "user",
-            "content": f"Classify this council meeting transcript into sections:\n\n{condensed}{chapter_hint}",
+            "content": _framed(
+                "Classify this {short_subject} transcript into sections:\n\n", event_kind
+            ) + f"{condensed}{chapter_hint}",
         }],
     )
+    _warn_if_truncated(message, "classify")
 
     text = message.content[0].text
     # Extract JSON from response (handle markdown code fences)
@@ -221,29 +249,33 @@ def classify_sections(
     chapter_hint: str = "",
     model: Optional[str] = None,
     debug: Optional[list] = None,
+    event_kind: Optional[str] = None,
 ) -> list[dict]:
     """Classify the full transcript into sections, chunking if needed.
 
     model / debug: see _classify_sections_chunk — threaded through unchanged
     for the eval harness; production call sites leave both unset.
+    event_kind: names the event in the prompt (see event_kinds.summary_subject).
     """
     chunk_size = config.SUMMARY_CHUNK_SIZE
 
     if len(segments) <= chunk_size:
         condensed = _condensed_transcript(segments)
         return _classify_sections_chunk(
-            client, condensed, chapter_hint=chapter_hint, model=model, debug=debug
+            client, condensed, chapter_hint=chapter_hint, model=model, debug=debug,
+            event_kind=event_kind,
         )
 
     # Chunked path: hint segment indices span the whole transcript, not a chunk,
     # so we do not inject it here (falls back to today's behavior).
-    # Chunk large transcripts with overlap for context
+    # Chunks are back-to-back, not overlapping; the merge below joins a section
+    # that a chunk boundary split in two.
     all_sections = []
     for i in range(0, len(segments), chunk_size):
         chunk = segments[i : i + chunk_size]
         condensed = _condensed_transcript(chunk)
         chunk_sections = _classify_sections_chunk(
-            client, condensed, seg_offset=i, model=model, debug=debug
+            client, condensed, model=model, debug=debug, event_kind=event_kind
         )
         all_sections.extend(chunk_sections)
 
@@ -266,10 +298,10 @@ def classify_sections(
 
 
 # ---------------------------------------------------------------------------
-# Pass 2: Section summaries (Sonnet) + structured extraction (Haiku)
+# Pass 2: Section summaries (synthesize model) + structured extraction (classify model)
 # ---------------------------------------------------------------------------
 
-_SUMMARIZE_DISCUSSION_SYSTEM = """You are summarizing a section of a city council meeting for citizens who want to understand what happened.
+_SUMMARIZE_DISCUSSION_SYSTEM = """You are summarizing a section of a {subject} for citizens who want to understand what happened.
 
 Write a clear, informative summary in markdown. Include:
 - What topic/item was being discussed
@@ -286,7 +318,7 @@ Respond with ONLY the markdown summary content. Do NOT include a title/heading �
 Do not start with "## ..." or "# ..." — the title is added separately."""
 
 
-_EXTRACT_ROLL_CALL_SYSTEM = """You are extracting roll call information from a city council meeting transcript.
+_EXTRACT_ROLL_CALL_SYSTEM = """You are extracting roll call information from a {subject} transcript.
 
 Respond with ONLY valid JSON:
 {
@@ -298,7 +330,7 @@ Respond with ONLY valid JSON:
 If you can't determine attendance clearly, include your best interpretation and note uncertainty."""
 
 
-_EXTRACT_VOTE_SYSTEM = """You are extracting vote information from a city council meeting transcript section.
+_EXTRACT_VOTE_SYSTEM = """You are extracting vote information from a {subject} transcript section.
 
 Respond with ONLY valid JSON:
 {
@@ -320,9 +352,13 @@ If vote details aren't clear, include what you can determine and note uncertaint
 
 
 def _summarize_discussion(
-    client, section_transcript: str, title: str, model: Optional[str] = None
+    client,
+    section_transcript: str,
+    title: str,
+    model: Optional[str] = None,
+    event_kind: Optional[str] = None,
 ) -> str:
-    """Generate a rich summary of a discussion section using Sonnet.
+    """Generate a rich summary of a discussion section (synthesize model).
 
     model: override for config.SUMMARY_SYNTHESIZE_MODEL — used by the
     synthesis-stage eval harness (scripts/generate_summary_ab.py); unset in
@@ -331,26 +367,30 @@ def _summarize_discussion(
     message = client.messages.create(
         model=model or config.SUMMARY_SYNTHESIZE_MODEL,
         max_tokens=config.SUMMARY_MAX_TOKENS_SYNTHESIZE,
-        system=_SUMMARIZE_DISCUSSION_SYSTEM,
+        system=_framed(_SUMMARIZE_DISCUSSION_SYSTEM, event_kind),
         messages=[{
             "role": "user",
             "content": f"Meeting section: \"{title}\"\n\nTranscript:\n{section_transcript}",
         }],
     )
+    _warn_if_truncated(message, "discussion summary")
     return message.content[0].text.strip()
 
 
-def _extract_roll_call(client, section_transcript: str) -> str:
+def _extract_roll_call(
+    client, section_transcript: str, event_kind: Optional[str] = None
+) -> str:
     """Extract roll call data and format as markdown."""
     message = client.messages.create(
-        model=config.SUMMARY_CLASSIFY_MODEL,  # Haiku — structured extraction
+        model=config.SUMMARY_CLASSIFY_MODEL,  # structured extraction
         max_tokens=1024,
-        system=_EXTRACT_ROLL_CALL_SYSTEM,
+        system=_framed(_EXTRACT_ROLL_CALL_SYSTEM, event_kind),
         messages=[{
             "role": "user",
             "content": f"Extract roll call from:\n\n{section_transcript}",
         }],
     )
+    _warn_if_truncated(message, "roll call")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -374,17 +414,20 @@ def _extract_roll_call(client, section_transcript: str) -> str:
     return "\n".join(lines)
 
 
-def _extract_votes(client, section_transcript: str) -> tuple[str, list[dict]]:
+def _extract_votes(
+    client, section_transcript: str, event_kind: Optional[str] = None
+) -> tuple[str, list[dict]]:
     """Extract vote data and format as markdown. Returns (markdown, raw_votes)."""
     message = client.messages.create(
-        model=config.SUMMARY_CLASSIFY_MODEL,  # Haiku — structured extraction
+        model=config.SUMMARY_CLASSIFY_MODEL,  # structured extraction
         max_tokens=2048,
-        system=_EXTRACT_VOTE_SYSTEM,
+        system=_framed(_EXTRACT_VOTE_SYSTEM, event_kind),
         messages=[{
             "role": "user",
             "content": f"Extract votes from:\n\n{section_transcript}",
         }],
     )
+    _warn_if_truncated(message, "votes")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -418,10 +461,10 @@ def _extract_votes(client, section_transcript: str) -> tuple[str, list[dict]]:
 
 
 # ---------------------------------------------------------------------------
-# Pass 3: Executive summary (Sonnet)
+# Pass 3: Executive summary (synthesize model)
 # ---------------------------------------------------------------------------
 
-_EXECUTIVE_SYSTEM = """You are writing an executive summary of a city council meeting for citizens.
+_EXECUTIVE_SYSTEM = """You are writing an executive summary of a {subject} for citizens.
 
 You will receive section summaries from the meeting. Write:
 
@@ -474,7 +517,7 @@ def _generate_executive_summary(
     meeting: Meeting,
     model: Optional[str] = None,
 ) -> tuple[str, list[str]]:
-    """Generate executive summary from section summaries using Sonnet.
+    """Generate executive summary from section summaries (synthesize model).
 
     model: override for config.SUMMARY_SYNTHESIZE_MODEL — used by the
     synthesis-stage eval harness; unset in production.
@@ -491,7 +534,7 @@ def _generate_executive_summary(
     message = client.messages.create(
         model=model or config.SUMMARY_SYNTHESIZE_MODEL,
         max_tokens=2048,
-        system=_EXECUTIVE_SYSTEM,
+        system=_framed(_EXECUTIVE_SYSTEM, meeting.event_kind),
         messages=[{
             "role": "user",
             "content": (
@@ -501,6 +544,7 @@ def _generate_executive_summary(
             ),
         }],
     )
+    _warn_if_truncated(message, "executive summary")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -525,7 +569,7 @@ def _classify_sections_interview(
     model: Optional[str] = None,
     debug: Optional[list] = None,
 ) -> list[dict]:
-    """Classify interview transcript into topic sections using Haiku.
+    """Classify interview transcript into topic sections (classify model).
 
     model / debug: see _classify_sections_chunk — threaded through unchanged
     for the eval harness; production call sites leave both unset.
@@ -540,6 +584,7 @@ def _classify_sections_interview(
             "content": f"Classify this interview transcript into topic sections:\n\n{condensed}{chapter_hint}",
         }],
     )
+    _warn_if_truncated(message, "interview classify")
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
     if not json_match:
@@ -561,7 +606,7 @@ def _classify_sections_interview(
 def _summarize_interview_topic(
     client, section_transcript: str, title: str, model: Optional[str] = None
 ) -> str:
-    """Generate a summary of one interview topic using Sonnet.
+    """Generate a summary of one interview topic (synthesize model).
 
     Extracted from generate_summary()'s inline interview branch so the
     synthesis-stage eval harness (scripts/generate_summary_ab.py) can call the
@@ -579,6 +624,7 @@ def _summarize_interview_topic(
             "content": f"Topic: \"{title}\"\n\nTranscript:\n{section_transcript}",
         }],
     )
+    _warn_if_truncated(message, "interview topic summary")
     return message.content[0].text.strip()
 
 
@@ -640,6 +686,7 @@ def _generate_interview_executive_summary(
             ),
         }],
     )
+    _warn_if_truncated(message, "interview executive summary")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -661,12 +708,13 @@ def generate_summary(
     meeting: Meeting,
     progress_callback: Optional[callable] = None,
 ) -> MeetingSummary:
-    """Generate a structured meeting summary using the Anthropic API.
+    """Generate a structured meeting summary.
 
     Pipeline:
-      1. Classify transcript into sections (Haiku)
-      2. Summarize each section (Sonnet for discussions, Haiku for extraction)
-      3. Generate executive summary (Sonnet)
+      1. Classify transcript into sections (config.SUMMARY_CLASSIFY_MODEL)
+      2. Summarize each section (SUMMARY_SYNTHESIZE_MODEL for discussions,
+         SUMMARY_CLASSIFY_MODEL for extraction)
+      3. Generate executive summary (SUMMARY_SYNTHESIZE_MODEL)
 
     Requires the active LLM backend's API key (see
     src.llm_providers.make_llm_client / config.LLM_CLIENT_BACKEND).
@@ -692,7 +740,8 @@ def generate_summary(
         if progress_callback:
             progress_callback(step, current, total)
 
-    is_interview = meeting.event_kind in _INTERVIEW_KINDS
+    kind = meeting.event_kind
+    is_interview = kind in _INTERVIEW_KINDS
 
     # --- Pass 1: Classify sections ---
     _progress("classifying sections")
@@ -707,7 +756,9 @@ def generate_summary(
             client, segments, chapter_hint=chapter_hint + _show_notes_hint(meeting)
         )
     else:
-        raw_sections = classify_sections(client, segments, chapter_hint=chapter_hint)
+        raw_sections = classify_sections(
+            client, segments, chapter_hint=chapter_hint, event_kind=kind
+        )
 
     if not raw_sections:
         return MeetingSummary(
@@ -757,28 +808,33 @@ def generate_summary(
         if is_interview:
             content = _summarize_interview_topic(client, section_transcript, title)
         elif sec_type == "roll_call":
-            content = _extract_roll_call(client, section_transcript)
+            content = _extract_roll_call(client, section_transcript, event_kind=kind)
         elif sec_type in ("discussion", "public_comment"):
-            content = _summarize_discussion(client, section_transcript, title)
+            content = _summarize_discussion(
+                client, section_transcript, title, event_kind=kind
+            )
         elif sec_type == "consent_agenda":
-            # Use Sonnet for consent agenda since it benefits from richer summary
-            content = _summarize_discussion(client, section_transcript, title)
+            # Synthesize model for consent agenda since it benefits from richer summary
+            content = _summarize_discussion(
+                client, section_transcript, title, event_kind=kind
+            )
         elif sec_type == "vote":
-            content, _ = _extract_votes(client, section_transcript)
+            content, _ = _extract_votes(client, section_transcript, event_kind=kind)
         else:
-            # Opening, closing, procedural — brief Haiku summary
+            # Opening, closing, procedural — brief classify-model summary
             if section_transcript.strip():
                 msg = client.messages.create(
                     model=config.SUMMARY_CLASSIFY_MODEL,
                     max_tokens=512,
                     messages=[{
                         "role": "user",
-                        "content": (
-                            f"Briefly summarize this {sec_type} section of a council meeting "
-                            f"in 1-2 sentences:\n\n{section_transcript}"
-                        ),
+                        "content": _framed(
+                            f"Briefly summarize this {sec_type} section of a {{short_subject}} "
+                            f"in 1-2 sentences:\n\n", kind
+                        ) + section_transcript,
                     }],
                 )
+                _warn_if_truncated(msg, f"{sec_type} summary")
                 content = msg.content[0].text.strip()
             else:
                 content = ""

@@ -90,6 +90,7 @@ def replay_one(client, model_override, meeting: Meeting, gold_sections: list):
     else:
         raw = classify_sections(
             client, segments, chapter_hint=chapter_hint, model=model_override, debug=debug,
+            event_kind=meeting.event_kind,
         )
 
     parse_failures = sum(1 for d in debug if not d.get("parsed"))
