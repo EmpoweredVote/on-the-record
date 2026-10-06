@@ -61,6 +61,11 @@ def repetition_runs(text: str, min_rep: int = 5) -> list[tuple[str, int]]:
     return runs
 
 
+def empty_turns(segments: list[Segment]) -> int:
+    """Turns with no text; publish skips them."""
+    return sum(1 for s in segments if not s.text.strip())
+
+
 def apply_new_text(segments: list[Segment], new_data: list[dict]) -> None:
     """Copy text/words from the Modal result onto the reviewed segments.
 
@@ -110,6 +115,7 @@ def retranscribe(meeting_id: str, *, apply: bool) -> None:
     raw_segments = [Segment.from_dict(d) for d in raw_list]
 
     before = " ".join(s.text for s in meeting.segments)
+    empty_before = empty_turns(meeting.segments)
     dry_named = mdir / "transcript_named.retranscribed.json"
     if apply and dry_named.exists():
         # Promote the dry run that was reviewed; a fresh Whisper run could differ.
@@ -131,6 +137,13 @@ def retranscribe(meeting_id: str, *, apply: bool) -> None:
     print(f"\n{meeting_id}: words {len(before.split())} -> {len(after.split())}")
     print(f"  repetition runs before: {repetition_runs(before)[:6]}")
     print(f"  repetition runs after:  {repetition_runs(after)[:6]}")
+    empty_after = empty_turns(meeting.segments)
+    print(f"  empty turns: {empty_before} -> {empty_after}")
+    if empty_after > empty_before + 5:
+        # Meetings first transcribed per turn give short interjections their own
+        # text; the whole-audio pass folds them into the neighbouring speaker.
+        print(f"  WARNING: {empty_after - empty_before} more empty turns — short "
+              "remarks moved to other speakers. Check before --apply.")
 
     raw_out = [s.to_dict() for s in raw_segments]
     if isinstance(raw_json, dict):

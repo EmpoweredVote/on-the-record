@@ -91,3 +91,9 @@ def test_apply_promotes_reviewed_dry_run_without_calling_modal(tmp_path, monkeyp
     assert out["segments"][0]["speaker_name"] == "Ann"
     assert (mdir / "backup-pre-retranscribe" / "transcript_named.json").exists()
     assert not (mdir / "transcript_named.retranscribed.json").exists()
+
+
+def test_empty_turns_counts_turns_without_text():
+    segs = [_seg(0, 0.0, 1.0, "A"), _seg(1, 1.0, 2.0, "B"), _seg(2, 2.0, 3.0, "A")]
+    segs[0].text, segs[1].text, segs[2].text = "Hi.", "  ", ""
+    assert rt.empty_turns(segs) == 2
