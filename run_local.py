@@ -3603,6 +3603,41 @@ def _enroll_after_review(
         print("  Skipped enrollment.")
 
 
+def _suggest_names(meeting_id: str) -> None:
+    """Write <meeting_dir>/name_suggestions.json and print a summary."""
+    from src.name_lookup import PgNameDB, ResearchCache
+    from src.name_suggest import Deps, suggest_names, write_suggestions
+    from src.roster import load_roster
+
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    named_path = meeting_dir / "transcript_named.json"
+    if not named_path.exists():
+        print(f"No transcript found for meeting: {meeting_id}")
+        print(f"  Expected at: {named_path}")
+        sys.exit(1)
+    meeting = json.loads(named_path.read_text(encoding="utf-8"))
+    state_path = meeting_dir / "pipeline_state.json"
+    body_slug = json.loads(state_path.read_text()).get("body_slug") if state_path.exists() else None
+    roster = load_roster(body_slug=body_slug) if body_slug else None
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    db = PgNameDB(db_url) if db_url else None
+    try:
+        deps = Deps(db=db, cache=ResearchCache(config.CONFIG_DIR / "name_lookup_cache.json"))
+        result = suggest_names(meeting, meeting_dir, members=roster.members if roster else [], deps=deps)
+    finally:
+        if db is not None:
+            db.close()
+    path = write_suggestions(meeting_dir, result)
+    for w in result["warnings"]:
+        print(f"  WARNING: {w}")
+    for s in result["suggestions"]:
+        lk = s["lookup"]
+        mark = "\u2713" if lk["verified"] else "\u00b7"
+        print(f"  {mark} {s['label']:<11} {s['tier'] or '-':<7} {lk['name']!s:<28} {lk['source']:<12} "
+              f"{lk['url'] or lk['reason'] or ''}")
+    print(f"Wrote {path}")
+
+
 def _review_meeting(meeting_id: str) -> None:
     """Interactively review and correct all speakers in an existing meeting."""
     from src import config
@@ -4128,6 +4163,9 @@ Environment Variables:
                         help="Display the current council roster and exit")
     parser.add_argument("--no-review", action="store_true",
                         help="Skip the interactive speaker review at the end of a run")
+    parser.add_argument("--suggest-names", metavar="MEETING_ID",
+                        help="Suggest names for unnamed speakers (self-intros, chair calls, "
+                             "roster/politician/past-meeting/web lookup); writes name_suggestions.json")
     parser.add_argument("--review", metavar="MEETING_ID",
                         help="Review/correct/merge speakers in an existing meeting "
                              "(canonical; --review-meeting and --identify-speakers are aliases)")
@@ -4460,6 +4498,10 @@ def main():
 
     if args.republish_all:
         _republish_all(args)
+        return
+
+    if args.suggest_names:
+        _suggest_names(args.suggest_names)
         return
 
     if args.review:
