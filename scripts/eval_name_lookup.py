@@ -5,6 +5,10 @@ Web step only: the roster/politician/local_people steps are skipped because
 published gold names are already in meetings.local_people (they would leak
 the answer). Calls the real `claude` CLI — run on Chris's Mac, logged in.
 
+Place: the prompt gets "city, STATE" from the meeting's own city/state fields.
+Production also infers a state from the DB (politician links / race); this eval
+cannot (no DB access), so its prompts may carry less context than production.
+
 Usage:
   .venv/bin/python scripts/eval_name_lookup.py --sample 50 --json /tmp/lookup_eval.json
 """
@@ -58,7 +62,7 @@ def select_witnesses(meetings_dir: Path, sample: int, seed: int) -> list[dict]:
             by_kind[meeting.get("event_kind") or "unknown"].append({
                 "meeting": mdir.name, "label": label, "event_kind": meeting.get("event_kind"),
                 "gold": gname, "spoken": c.name, "affiliation": c.affiliation,
-                "place": meeting.get("city") or None,
+                "place": ", ".join(x for x in (meeting.get("city"), meeting.get("state")) if x) or None,
             })
     rng = random.Random(seed)
     for items in by_kind.values():
@@ -82,6 +86,9 @@ def main() -> None:
 
     rows = select_witnesses(Path(args.meetings_dir), args.sample, args.seed)
     print(f"Selected {len(rows)} gold witnesses")
+    if not rows:
+        print(f"ERROR: no eligible gold witnesses found under {args.meetings_dir}")
+        sys.exit(1)
     cache = ResearchCache(Path(args.cache))
     unavailable = None
     for i, r in enumerate(rows, 1):
@@ -113,9 +120,20 @@ def main() -> None:
                      url=found["url"] if ok else None, reason=why)
         print(f"  [{i}/{len(rows)}] {r['status']:<12} gold={r['gold']!r} spoken={r['spoken']!r} -> {r['looked_up']!r}")
     print("\nSummary:", json.dumps(score_lookup_rows(rows), indent=1))
+    from src.name_lookup import norm_name
+    wrong = [r for r in rows if r["verified"] and norm_name(r["looked_up"]) != norm_name(r["gold"])]
+    print(f"\nVerified but wrong ({len(wrong)}):")
+    for r in wrong:
+        print(f"  gold={r['gold']!r} spoken={r['spoken']!r} looked_up={r['looked_up']!r} url={r['url']}")
+    regressed = [r for r in wrong if norm_name(r["spoken"]) == norm_name(r["gold"])]
+    print(f"\nRegressed ({len(regressed)}):")
+    for r in regressed:
+        print(f"  gold={r['gold']!r} looked_up={r['looked_up']!r} url={r['url']}")
     if args.json:
         Path(args.json).write_text(json.dumps(rows, indent=1, ensure_ascii=False))
         print(f"Wrote {args.json}")
+    if unavailable:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

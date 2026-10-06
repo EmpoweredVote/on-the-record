@@ -136,6 +136,7 @@ def score_lookup_rows(rows: list[dict]) -> dict:
 
     verified = [r for r in rows if r.get("verified")]
     v_exact = sum(1 for r in verified if exact(r["gold"], r["looked_up"]))
+    unverified = [r for r in rows if not r.get("verified")]
     return {
         "n": len(rows),
         "spoken_exact": sum(1 for r in rows if exact(r["gold"], r["spoken"])),
@@ -146,4 +147,10 @@ def score_lookup_rows(rows: list[dict]) -> dict:
         "not_found": sum(1 for r in rows if r.get("status") == "not_found"),
         "unavailable": sum(1 for r in rows if r.get("status") == "unavailable"),
         "failed": sum(1 for r in rows if r.get("status") == "failed"),
+        "verified_wrong": len(verified) - v_exact,
+        "regressed": sum(1 for r in verified
+                         if exact(r["gold"], r["spoken"]) and not exact(r["gold"], r["looked_up"])),
+        "rescued": sum(1 for r in verified
+                       if not exact(r["gold"], r["spoken"]) and exact(r["gold"], r["looked_up"])),
+        "unverified_spoken_exact": sum(1 for r in unverified if exact(r["gold"], r["spoken"])),
     }
