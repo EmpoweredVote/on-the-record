@@ -64,11 +64,10 @@ Each candidate also needs an `essentials.politicians` row, because **quotes atta
 
 #### 🔴 SEARCH FIRST. Never mint a person row before looking.
 
-This step has a history. A hand-add session on 2026-07-25 created NEW rows for people who
-already existed, so the race edge landed on the new row while their curated quotes stayed on
-the old one — **permanently invisible on the race page**, because a quote on a row with no
-race edge is unreachable. It took migrations 1554, 1555, 1572 and 1860 to unpick. Do not
-re-create it.
+Creating a new row for a person who already exists puts the race edge on the new row while
+their curated quotes stay on the old one. Those quotes are then **invisible on the race page**,
+because a quote on a row with no race edge is unreachable, and unpicking the twin takes a
+migration.
 
 `UNIQUE(external_id)` will NOT save you: a fresh synthetic id never collides with the
 person's real one, so the insert passes and mints a twin. There is no name or slug
@@ -144,12 +143,14 @@ one row, the race edge on another. Resolve it before moving on — reuse the row
 quotes, or confirm in writing that they are two different people.
 
 ### needs_quotes → quotes_staged
-Per candidate, work DOWN the source hierarchy (QUOTE-CURATION-PRINCIPLES §5, ranked by
+Per candidate, work DOWN the source hierarchy (`docs/quote-curation/PRINCIPLES.md`,
+"Sourcing"; ranked by
 **directness of answer** — the levels are named, not numbered, because
 `discovered_sources.source_tier_guess` is a *different* 1–4 scale):
 
 - **`answered-this-question`** — debate/forum answers, AND **candidate questionnaires**
-  (Vote411, LWV, outlet questionnaires). A questionnaire is written and self-published, yet
+  (LWV-hosted and outlet questionnaires; VOTE411/thevoterguide.org answers are a pointer only —
+  see "VOTE411 as a pointer" below). A questionnaire is written and self-published, yet
   every candidate answers an identical prompt and every ballot-qualified candidate is
   invited — the most directly comparable source there is. Prefer these.
 - **`adjacent`** — responsive, but the prompt differed: a news interview that circled the
@@ -186,7 +187,7 @@ Never pick a quote because it contrasts. Genuine agreement between candidates is
 finding and is shown as convergence, so a question whose answers converge is **not** a
 sourcing failure. A ranking question may sit off the Compass axis, or carry no Compass topic
 at all, when the candidates answered something the taxonomy doesn't cover — declare it via
-`readrank_questions.origin` (QUOTE-CURATION-PRINCIPLES §7.3).
+`readrank_questions.origin` (`essentials/docs/QUOTE-CURATION-PRINCIPLES.md` §7.3).
 
 **Video-ingest shortlist (always).** Sourcing doubles as ingest scouting: every debate,
 candidate forum, news-clip interview, or floor-speech video found — ESPECIALLY ones too
@@ -201,8 +202,8 @@ discovery rows were filed for this race.
 
 #### VOTE411 as a pointer (interim — no LWV license yet)
 
-VOTE411 candidate-questionnaire answers are the candidate's own words (a tier-2 source
-in principle), but LWV's terms bar reproducing them or fetching them programmatically
+VOTE411 candidate-questionnaire answers are the candidate's own words (an
+`answered-this-question` source in principle), but LWV's terms bar reproducing them or fetching them programmatically
 without written permission. Until a license lands, use VOTE411 as a **pointer only**:
 
 - A **human** opens the race's VOTE411 guide in a normal browser. Do NOT delegate this to
@@ -232,11 +233,11 @@ a human still selects the live quote per (candidate, topic) in `/admin/readrank-
 ## Rules
 
 - Never mark `blocked`/`skipped` without `status_reason`.
-- Production DB: additive writes only (inserts, status updates). Never delete/overwrite
-  quotes, races, or candidates in a pipeline session.
+- Production DB: additive writes only (inserts, status updates), except fixes the user approves
+  through audit-quotes' dry-run/`--commit` flow. Never delete quotes, races, or candidates in a
+  pipeline session.
 - All quote sourcing rules live in `docs/quote-curation/PRINCIPLES.md` +
   `.claude/skills/audit-quotes/CHECKS.md` — read both before sourcing.
-- MI Aug 4 / WI+MN Aug 11 primaries outrank everything until they pass.
 
 ## Discovery queue integration
 

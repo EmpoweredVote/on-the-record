@@ -106,14 +106,18 @@ speaker accountable for what they actually said, not to launder or to overstate 
 
 ## Sourcing
 
-A quote is only as trustworthy as its source, and sourcing discipline runs on two axes:
-independence from the candidate's own framing, and verifiability against what was actually
-published. On the first axis, sources form a tier ladder by how independent they are of a
-questioner the candidate is performing for — a moderated debate or an unscripted interview sits
-above a self-selected campaign statement, which sits above a source shaped entirely by a
-sympathetic or adversarial questioner. Lower-tier sources are not disqualified, but they are
-weaker evidence and are flagged for a second look rather than treated as equivalent to a
-higher-tier one.
+A quote is only as trustworthy as its source, and sourcing discipline runs on two axes: how
+directly the source answers the ranking question, and verifiability against what was actually
+published. On the first axis, provenance is directness of answer, not medium: a quote is
+`answered-this-question` (the candidate was asked this question or its clear equivalent — a
+debate or forum answer, or a candidate questionnaire, where every candidate gets an identical
+prompt), `adjacent` (responsive, but the prompt differed), or `curator-extracted` (lifted from
+material not organised as an answer — a stump speech, platform page, or op-ed). Questioner
+independence breaks ties within a level; it never sets the level. Lower levels are not
+disqualified — a curator-extracted quote may be all a candidate has, and that is honest presence —
+but they are flagged for a second look. Hot-mic, private, secretly-recorded and off-the-cuff
+"gotcha" remarks are `excluded` outright: that is a consent-and-fairness rule, and being a
+direct answer cannot rescue such a quote.
 
 The second axis is verification: **a quote must verify against its cited, ingested source** — the
 words have to actually appear there, spoken or written by the candidate, not merely be consistent

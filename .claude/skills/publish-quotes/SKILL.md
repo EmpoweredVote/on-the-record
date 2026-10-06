@@ -63,7 +63,8 @@ Two distinct jobs, do them in order:
 - [ ] **Dry-run the insert**, show the user the preview, then `--commit`.
 - [ ] **Verify**, then tell the user to select the live quote in `/admin/readrank-quotes`.
 - [ ] **Auto-run the audit (handoff).** After `--commit`, run the `audit-quotes` skill scoped to the
-      just-inserted ids: `audit-quotes --ids <id1,id2,...> --include-drafts --scope-label "<race> new"`.
+      just-inserted ids: `scripts.audit --ids <id1,id2,...> --include-drafts --scope-label "<race> new"`
+      (invocation under the audit skill's "Running the scripts").
       Show the findings before the user selects the live quote. Fix mechanical/guided findings via the
       audit's gated flow; surface decision-required ones. See `.claude/skills/audit-quotes/SKILL.md`.
 
