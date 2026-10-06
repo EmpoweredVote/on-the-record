@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import re
+from ..llm_providers import llm_call_site
 from .models import CrossCheckVerdict
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
@@ -55,6 +56,7 @@ def parse_crosscheck(raw: str) -> CrossCheckVerdict:
         issue=issue, notes=(d.get("notes") if isinstance(d.get("notes"), str) else ""))
 
 
+@llm_call_site("evidence.crosscheck")
 def crosscheck(cand, source_text, *, candidate_name, provider,
                max_tokens=400) -> CrossCheckVerdict:
     raw = provider.complete(

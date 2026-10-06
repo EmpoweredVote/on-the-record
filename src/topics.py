@@ -14,6 +14,7 @@ import re
 from typing import Optional
 
 from . import config
+from .llm_providers import llm_call_site
 from .models import SectionTopic, SummarySection
 
 
@@ -94,6 +95,7 @@ def build_classification_prompt(
     )
 
 
+@llm_call_site("topics")
 def classify_sections(
     client,
     sections: list[SummarySection],

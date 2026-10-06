@@ -14,7 +14,7 @@ from typing import Optional
 
 from . import config
 from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS
-from .llm_providers import make_llm_client
+from .llm_providers import llm_call_site, make_llm_client
 from .models import Meeting, MeetingSummary, Segment, SummarySection
 from .summary_sections import normalize_raw_sections
 
@@ -168,6 +168,7 @@ Respond with ONLY valid JSON in this format:
 }"""
 
 
+@llm_call_site("summarize.classify")
 def _classify_sections_chunk(
     client,
     condensed: str,
@@ -319,6 +320,7 @@ Respond with ONLY valid JSON:
 If vote details aren't clear, include what you can determine and note uncertainty in the description."""
 
 
+@llm_call_site("summarize.synthesize")
 def _summarize_discussion(
     client, section_transcript: str, title: str, model: Optional[str] = None
 ) -> str:
@@ -340,6 +342,7 @@ def _summarize_discussion(
     return message.content[0].text.strip()
 
 
+@llm_call_site("summarize.rollcall")
 def _extract_roll_call(client, section_transcript: str) -> str:
     """Extract roll call data and format as markdown."""
     message = client.messages.create(
@@ -374,6 +377,7 @@ def _extract_roll_call(client, section_transcript: str) -> str:
     return "\n".join(lines)
 
 
+@llm_call_site("summarize.votes")
 def _extract_votes(client, section_transcript: str) -> tuple[str, list[dict]]:
     """Extract vote data and format as markdown. Returns (markdown, raw_votes)."""
     message = client.messages.create(
@@ -468,6 +472,7 @@ Then extract 3-5 key claims or commitments the subject made as bullet points.
 Return JSON: {"executive_summary": "...", "highlights": ["...", "..."]}"""
 
 
+@llm_call_site("summarize.exec")
 def _generate_executive_summary(
     client,
     sections: list[SummarySection],
@@ -518,6 +523,7 @@ def _generate_executive_summary(
 # Interview/Media classification and executive summary helpers
 # ---------------------------------------------------------------------------
 
+@llm_call_site("summarize.classify")
 def _classify_sections_interview(
     client,
     segments: list[Segment],
@@ -558,6 +564,7 @@ def _classify_sections_interview(
         return []
 
 
+@llm_call_site("summarize.synthesize")
 def _summarize_interview_topic(
     client, section_transcript: str, title: str, model: Optional[str] = None
 ) -> str:
@@ -608,6 +615,7 @@ def _resolve_outlet(meeting: Meeting) -> str:
     return "the interviewer"
 
 
+@llm_call_site("summarize.exec")
 def _generate_interview_executive_summary(
     client,
     sections: list[SummarySection],
@@ -768,17 +776,18 @@ def generate_summary(
         else:
             # Opening, closing, procedural — brief Haiku summary
             if section_transcript.strip():
-                msg = client.messages.create(
-                    model=config.SUMMARY_CLASSIFY_MODEL,
-                    max_tokens=512,
-                    messages=[{
-                        "role": "user",
-                        "content": (
-                            f"Briefly summarize this {sec_type} section of a council meeting "
-                            f"in 1-2 sentences:\n\n{section_transcript}"
-                        ),
-                    }],
-                )
+                with llm_call_site("summarize.brief"):
+                    msg = client.messages.create(
+                        model=config.SUMMARY_CLASSIFY_MODEL,
+                        max_tokens=512,
+                        messages=[{
+                            "role": "user",
+                            "content": (
+                                f"Briefly summarize this {sec_type} section of a council meeting "
+                                f"in 1-2 sentences:\n\n{section_transcript}"
+                            ),
+                        }],
+                    )
                 content = msg.content[0].text.strip()
             else:
                 content = ""

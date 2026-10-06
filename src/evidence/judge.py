@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import re
+from ..llm_providers import llm_call_site
 from .models import JudgeScores
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
@@ -63,6 +64,7 @@ def parse_judge(raw: str) -> JudgeScores:
     )
 
 
+@llm_call_site("evidence.judge")
 def judge(cand, *, provider, max_tokens=800) -> JudgeScores:
     raw = provider.complete(
         build_judge_prompt(cand),

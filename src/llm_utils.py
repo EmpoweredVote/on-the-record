@@ -15,6 +15,7 @@ from typing import Optional
 
 from . import config
 from .event_kinds import speaker_id_framing
+from .llm_providers import llm_call_site
 from .models import Segment, SpeakerMapping
 from .name_matching import normalize as _norm, significant_tokens as _significant_tokens
 
@@ -67,6 +68,7 @@ def _parse_name(text: str) -> Optional[str]:
     return str(name).strip()
 
 
+@llm_call_site("speaker_id")
 def prompt_for_speaker_id(
     provider,
     segments: list[Segment],

@@ -1538,11 +1538,12 @@ def run_pipeline(args: argparse.Namespace) -> None:
     if reference_path.exists() and not reconciled_marker.exists() and segments:
         try:
             from src import config as _cfg
-            from src.llm_providers import make_llm_client
+            from src.llm_providers import llm_call_site, make_llm_client
             from src.reconcile import reconcile_segments
 
             client = make_llm_client()
 
+            @llm_call_site("reconcile")
             def _call_llm(prompt: str) -> str:
                 msg = client.messages.create(
                     model=_cfg.SUMMARY_CLASSIFY_MODEL,

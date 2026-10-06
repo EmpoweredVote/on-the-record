@@ -13,6 +13,7 @@ from typing import Optional
 
 from . import config
 from .agenda_parse import ParsedItem
+from .llm_providers import llm_call_site
 
 _SYSTEM = (
     "You explain city-council agenda items to ordinary residents. Plain, "
@@ -72,6 +73,7 @@ def _string_or_none(value) -> Optional[str]:
     return None
 
 
+@llm_call_site("agenda_interpret")
 def interpret_item(client, item: ParsedItem, source_text: str) -> InterpretResult:
     response = client.messages.create(
         model=config.AGENDA_INTERPRET_MODEL,
