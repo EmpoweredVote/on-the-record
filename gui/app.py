@@ -129,13 +129,14 @@ class _NoCacheStaticFiles(StaticFiles):
         return response
 
 
-def _log_suggestion_edit(meeting_id: str, label: str, from_suggestion: str, name: str) -> None:
+def _log_suggestion_edit(meeting_id: str, label: str, from_suggestion: str, name: str,
+                         identity: tuple[str, str]) -> None:
     """After an identity form that was pre-filled from a name suggestion saved,
     log what was kept. Best-effort: logging never breaks the form action."""
     if from_suggestion.strip() != label:
         return
     try:
-        review_api.log_suggestion_edit(meeting_id, label, name)
+        review_api.log_suggestion_edit(meeting_id, label, name, identity=identity)
     except Exception:
         pass
 
@@ -668,7 +669,8 @@ def create_app() -> FastAPI:
         if not review_api.apply_link(meeting_id, label, politician_slug, politician_id,
                                      name=name):
             raise HTTPException(status_code=404)
-        _log_suggestion_edit(meeting_id, label, from_suggestion, name)
+        _log_suggestion_edit(meeting_id, label, from_suggestion, name,
+                             ("link", politician_id.strip() or politician_slug.strip()))
         return redirect
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/accept-suggestion")
@@ -687,6 +689,10 @@ def create_app() -> FastAPI:
 
     @app.post("/meetings/{meeting_id}/suggest-names")
     def suggest_names_route(meeting_id: str):
+        if is_safe_meeting_id(meeting_id) and runner.run_is_live(meeting_id):
+            # Refused, not ignored: the review panel shows this to the reviewer.
+            raise HTTPException(status_code=409,
+                                detail="A run is still in progress for this meeting.")
         if runner.launch_suggest_names(meeting_id, python_exe=sys.executable,
                                        script=_RUN_LOCAL) is None:
             raise HTTPException(status_code=404)
@@ -729,7 +735,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc))
         if not ok:
             raise HTTPException(status_code=404)
-        _log_suggestion_edit(meeting_id, label, from_suggestion, name)
+        _log_suggestion_edit(meeting_id, label, from_suggestion, name, ("local", slug.strip()))
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/local-person/clear")

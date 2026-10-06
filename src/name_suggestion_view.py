@@ -52,6 +52,18 @@ def load_suggestions(meeting_dir: Path) -> tuple[list[dict], list[str]]:
     return recs, warns
 
 
+def _safe_url(url) -> Optional[str]:
+    """The url only if it is http(s). It comes from web/LLM output and becomes a
+    clickable link in the review GUI, so javascript:, data: and the like are dropped."""
+    if not isinstance(url, str) or not url.strip():
+        return None
+    try:
+        scheme = urlparse(url.strip()).scheme.lower()
+    except ValueError:
+        return None
+    return url.strip() if scheme in ("http", "https") else None
+
+
 def to_view(rec: dict) -> Optional[SuggestionView]:
     lk = rec.get("lookup") or {}
     name = (lk.get("name") or rec.get("spoken_name") or "").strip()
@@ -67,7 +79,7 @@ def to_view(rec: dict) -> Optional[SuggestionView]:
         state, reason = "info", "first name only"
     else:
         state, reason = "unverified", lk.get("reason")
-    url = lk.get("url")
+    url = _safe_url(lk.get("url"))
     host = (urlparse(url).hostname or "") if url else ""
     return SuggestionView(
         label=rec["label"], name=rec.get("prefill_name") or name, state=state, source=lk.get("source") or "transcript",

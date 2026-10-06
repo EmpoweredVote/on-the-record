@@ -127,6 +127,7 @@ iframe.player { width: min(100%, calc(40vh * 16 / 9)); height: auto; aspect-rati
 .suggestion form.inline { margin: 0; }
 .suggestion .accept, .bulk-accept .accept { background: var(--c-pass-bg); border: 1px solid var(--c-pass-border); color: var(--c-pass-fg);
               border-radius: var(--r-sm); padding: var(--sp-1) var(--sp-3); cursor: pointer; font-size: var(--fs-sm); }
+.rerun-msg { color: var(--c-ink-soft); font-size: var(--fs-sm); }
 .bulk-accept { margin: var(--sp-3) 0; }
 .notice { background: var(--c-info-bg); border: 1px solid var(--c-info-border); color: var(--c-info-fg);
           border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); }

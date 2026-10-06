@@ -188,8 +188,66 @@ def test_link_and_local_routes_log_edit_from_suggestion(meeting, monkeypatch):
     c.post("/meetings/m1/speakers/W/link", follow_redirects=False, data={"politician_id": "p-1", "name": "X"})
     c.post("/meetings/m1/speakers/W/link", follow_redirects=False,
            data={"politician_id": "p-1", "name": "X", "from_suggestion": "V"})
+    # Name changed -> edited; same name but linked to a roster person instead of
+    # the suggested local person (identity changed) -> edited too.
     assert [(l["action"], l["final_name"]) for l in _log_lines(meeting)] == [
-        ("edited", "Rachel Sample"), ("accepted", "Rachael Sample")]
+        ("edited", "Rachel Sample"), ("edited", "Rachael Sample")]
+
+
+def test_edit_logging_compares_identity(meeting, monkeypatch):
+    from gui import review_api
+    from gui.app import create_app
+
+    monkeypatch.setattr(review_api, "apply_link", lambda *a, **k: True)
+    monkeypatch.setattr(review_api, "apply_make_local_person", lambda *a, **k: True)
+    c = TestClient(create_app())
+    post = lambda path, **d: c.post(f"/meetings/m1/speakers/W/{path}", follow_redirects=False,
+                                    data={"from_suggestion": "W", **d})
+    # Same name, same slug, different role -> accepted (role is metadata).
+    post("local-person", slug="rachael-sample", role="public_comment", name="Rachael Sample")
+    # Same name, different slug -> edited.
+    post("local-person", slug="rachael-sample-2", role="presenter", name="Rachael Sample")
+    assert [l["action"] for l in _log_lines(meeting)] == ["accepted", "edited"]
+
+    # A roster suggestion: same politician_id -> accepted; another id -> edited.
+    (meeting / "name_suggestions.json").write_text(json.dumps({"warnings": [], "suggestions": [
+        _rec("W", "Liz Brown", source="roster", politician_id="p-b")]}))
+    post("link", politician_id="p-b", name="Liz Brown")
+    post("link", politician_id="p-x", name="Liz Brown")
+    post("local-person", slug="liz-brown", role="presenter", name="Liz Brown")
+    assert [l["action"] for l in _log_lines(meeting)][2:] == ["accepted", "edited", "edited"]
+
+
+def test_suggestion_url_must_be_http(meeting):
+    from gui.app import create_app
+    from src.name_suggestion_view import to_view
+
+    for bad in ("javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,<b>x</b>", "ftp://x.org/a", " "):
+        v = to_view(_rec("W", "Rachael Sample", url=bad))
+        assert v.url is None and v.domain is None
+    v = to_view(_rec("W", "Rachael Sample", url="https://www.x.org/a"))
+    assert v.url == "https://www.x.org/a" and v.domain == "x.org"
+
+    (meeting / "name_suggestions.json").write_text(json.dumps({"warnings": [], "suggestions": [
+        _rec("W", "Rachael Sample", url="javascript:alert(1)")]}))
+    (meeting / "pipeline_state.json").write_text(json.dumps({"completed_stage": 4}))
+    html = TestClient(create_app()).get("/meetings/m1?tab=review").text
+    assert "Suggested: Rachael Sample" in html
+    assert 'href="javascript:' not in html.lower() and "javascript:alert" not in html
+
+
+def test_info_suggestion_has_no_actions_or_prefill(meeting):
+    from gui.app import create_app
+
+    info = _rec("W", None, name="Rachel")
+    info["partial"] = True
+    (meeting / "name_suggestions.json").write_text(json.dumps({"warnings": [], "suggestions": [info]}))
+    (meeting / "pipeline_state.json").write_text(json.dumps({"completed_stage": 4}))
+    html = TestClient(create_app()).get("/meetings/m1/panel/review").text
+    assert "Possible: Rachel" in html and "first name only" in html
+    assert "from_suggestion" not in html and "data-from-suggestion" not in html
+    assert 'value="Rachel"' not in html
+    assert "/accept-suggestion" not in html and "Accept all verified" not in html
 
 
 def test_edit_logging_never_breaks_the_form(meeting, monkeypatch):
@@ -250,6 +308,42 @@ def test_review_page_html_shows_suggestion_banner_and_bulk(meeting):
     assert 'action="/meetings/m1/speakers/V/accept-suggestion"' not in html   # unverified: no Accept
     assert 'name="from_suggestion" value="W"' in html
     assert 'value="Rachael Sample"' in html                                   # local form pre-filled
+    assert 'class="bulk-accept" data-navigate' in html     # full navigation keeps the notice
+    assert "data-rerun-names" in html and 'class="rerun-msg"' in html
+    assert 'data-from-suggestion="V"' in html               # unverified: Edit pre-filled
+
+
+def test_bulk_accept_full_navigation_shows_notice(meeting):
+    """What a browser does with the data-navigate bulk form: POST, follow the
+    303s, and land on the shell with the report."""
+    from gui.app import create_app
+
+    (meeting / "pipeline_state.json").write_text(json.dumps({"completed_stage": 4}))
+    r = TestClient(create_app()).post("/meetings/m1/accept-suggestions")
+    assert r.status_code == 200
+    assert "Accepted 1: W Rachael Sample" in r.text
+    assert json.loads((meeting / "transcript_named.json").read_text())["speakers"]["W"]["speaker_name"] == "Rachael Sample"
+
+
+def test_rerun_refused_while_a_run_is_live(meeting, monkeypatch):
+    from gui import runner
+    from gui.app import create_app
+
+    launched = []
+    monkeypatch.setattr(runner, "run_is_live", lambda mid: True)
+    monkeypatch.setattr(runner, "_spawn", lambda *a, **k: launched.append(a) or "m1")
+    r = TestClient(create_app()).post("/meetings/m1/suggest-names", follow_redirects=False)
+    assert r.status_code == 409 and launched == []
+    assert runner.launch_suggest_names("m1", python_exe="py", script="s") is None
+
+
+def test_workspace_js_reruns_in_background_and_reloads():
+    from pathlib import Path
+
+    js = Path("gui/static/workspace.js").read_text()
+    assert "data-rerun-names" in js and "rerunNames" in js
+    assert "409" in js and "/status" in js and 'loadPanel("review"' in js
+    assert "data-from-suggestion" in js and "from_suggestion" in js
 
 
 def test_review_notice_flows_through_redirect_and_is_escaped(meeting):

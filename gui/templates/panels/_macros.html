@@ -85,7 +85,7 @@
       {% if s.state == 'acceptable' %}<strong>Suggested: {{ s.name }} ✓</strong>
       {% elif s.state == 'unverified' %}<strong>Suggested (not verified): {{ s.name }}</strong> <span class="why">{{ s.reason or '' }}</span>
       {% else %}<strong>Possible: {{ s.name }}</strong> <span class="why">{{ s.reason or '' }}</span>{% endif %}
-      <span class="src">{% if s.url %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.source }} · {{ s.domain }}</a>{% else %}{{ s.source }}{% endif %}{% if s.role %} · {{ s.role }}{% endif %}</span>
+      <span class="src">{% if s.url and (s.url|lower).startswith(('http://', 'https://')) %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.source }} · {{ s.domain }}</a>{% else %}{{ s.source }}{% endif %}{% if s.role %} · {{ s.role }}{% endif %}</span>
       {% for q in s.quotes %}<p class="sample">“{{ q[:200] }}”</p>{% endfor %}
       {% if s.state == 'acceptable' %}
       <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/accept-suggestion" class="inline">
@@ -133,11 +133,14 @@
          with the person linked. #}
       {# With a name suggestion, the search box starts on the suggested name and
          every result form carries from_suggestion, so the save is logged. #}
+      {# An information-only ("Possible") suggestion offers no actions, so it
+         pre-fills nothing. #}
+      {% set sug_edit = c.suggestion and c.suggestion.state != 'info' %}
       <div class="link-search"
            data-search-url="/api/politicians/search"
            data-link-action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/link"
-           {% if c.suggestion %}data-from-suggestion="{{ c.label }}"{% endif %}>
-        <input type="text" placeholder="Search a name…" autocomplete="off"{% if c.suggestion %} value="{{ c.suggestion.name }}"{% endif %}>
+           {% if sug_edit %}data-from-suggestion="{{ c.label }}"{% endif %}>
+        <input type="text" placeholder="Search a name…" autocomplete="off"{% if sug_edit %} value="{{ c.suggestion.name }}"{% endif %}>
         <div class="link-results"></div>
       </div>
     </div>
@@ -183,7 +186,7 @@
       {# A name suggestion is the one honest prefill for an unnamed or
          unidentified card: it states who this is, with its own slug and role.
          from_suggestion marks the save so what the reviewer kept is logged. #}
-      {% set from_sug = c.suggestion and c.identity_kind in ('none', 'unidentified') %}
+      {% set from_sug = c.suggestion and c.suggestion.state != 'info' and c.identity_kind in ('none', 'unidentified') %}
       <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/local-person"
             class="local-person">
         {% if from_sug %}<input type="hidden" name="from_suggestion" value="{{ c.label }}">{% endif %}

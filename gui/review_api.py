@@ -732,20 +732,42 @@ def apply_suggestion(meeting_id: str, label: str, *, bulk: bool = False) -> Opti
 def apply_all_suggestions(meeting_id: str) -> list[tuple[str, str]]:
     """Accept every acceptable suggestion on a still-unnamed speaker.
     Returns [(label, name)] for the ones applied."""
-    page = load_review_page(meeting_id)
-    if page is None:
+    from src.name_suggestion_view import views_for_unnamed
+
+    ctx = _load_meeting_ctx(meeting_id)
+    if ctx is None:
         return []
+    meeting, meeting_dir, _roster = ctx
+    labels = {s.speaker_label for s in meeting.segments} | set(meeting.speakers)
+    views, _warnings = views_for_unnamed(meeting_dir, meeting.speakers, labels)
     done: list[tuple[str, str]] = []
-    for label in page.bulk_accept_labels:
+    # Each apply_suggestion re-reads the transcript, so a label named in between is skipped.
+    for label in sorted(l for l, v in views.items() if v.state == "acceptable"):
         name = apply_suggestion(meeting_id, label, bulk=True)
         if name:
             done.append((label, name))
     return done
 
 
-def log_suggestion_edit(meeting_id: str, label: str, final_name: str) -> None:
-    """Log what the reviewer saved from a form pre-filled with a suggestion:
-    'accepted' when the name is unchanged, else 'edited'. Never raises."""
+def suggestion_identity(view, label: str) -> tuple[str, str]:
+    """The identity accepting this suggestion would set: ('link', politician_id)
+    or ('local', slug) — the same rule as accept_action, for any state."""
+    from src import review
+
+    if view.politician_id:
+        return "link", view.politician_id
+    return "local", view.local_slug or review.default_local_slug(view.name, label)
+
+
+def log_suggestion_edit(meeting_id: str, label: str, final_name: str, *,
+                        identity: Optional[tuple[str, str]] = None) -> None:
+    """Log what the reviewer saved from a form pre-filled with a suggestion.
+
+    'accepted' when the name (normalized) AND the identity are unchanged, else
+    'edited'. `identity` is what the form set: ('link', politician_id-or-slug) or
+    ('local', slug); None compares the name only. A role change alone still
+    counts as accepted — role is editable metadata, not who the person is.
+    Never raises."""
     try:
         from src.name_lookup import norm_name
         from src.name_suggestion_log import log_event
@@ -760,6 +782,9 @@ def log_suggestion_edit(meeting_id: str, label: str, final_name: str) -> None:
         if view is None:
             return
         same = norm_name(final_name or "") == norm_name(view.name)
+        if identity is not None:
+            kind, value = identity
+            same = same and (kind, (value or "").strip()) == suggestion_identity(view, label)
         log_event(meeting_dir, meeting_id=meeting_id, view=view,
                   action="accepted" if same else "edited", final_name=final_name)
     except Exception as exc:  # logging must never break a review action

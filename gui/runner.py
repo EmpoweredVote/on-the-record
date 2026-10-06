@@ -253,6 +253,13 @@ def launch_redo(meeting_id: str, stage: str, *, python_exe: str, script: str,
     return _spawn(meeting_id, meeting_dir, cmd, popen)
 
 
+def run_is_live(meeting_id: str) -> bool:
+    """True while a GUI-launched process for this meeting is still running
+    (live handle, or the sidecar pid after a GUI restart)."""
+    st = run_status(meeting_id)
+    return bool(st and st.get("running"))
+
+
 def launch_suggest_names(meeting_id: str, *, python_exe: str, script: str,
                          popen=subprocess.Popen) -> Optional[str]:
     """Re-run the name lookup for one meeting in the background. None on an
@@ -263,8 +270,7 @@ def launch_suggest_names(meeting_id: str, *, python_exe: str, script: str,
     meeting_dir = config.MEETINGS_DIR / meeting_id
     if not (meeting_dir / "transcript_named.json").exists():
         return None
-    live = _RUNS.get(meeting_id)
-    if live is not None and live.poll() is None:
+    if run_is_live(meeting_id):
         return None
     return _spawn(meeting_id, meeting_dir, [python_exe, script, "--suggest-names", meeting_id], popen)
 
