@@ -5,12 +5,65 @@ guardrail, and parsing live in src/llm_utils.py — providers only call the mode
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import logging
 import os
 from typing import Protocol
 
 import anthropic
 
 from . import config
+
+logger = logging.getLogger(__name__)
+
+# --- Token accounting ----------------------------------------------------------
+#
+# Every adapter below logs one INFO line per call (call site, model, input and
+# output tokens) and a WARNING when the reply was cut off at max_tokens. The call
+# site comes from a context variable, not a kwarg, so no call signature (and no
+# prompt) changes: wrap the call, or decorate the function that makes it, with
+# llm_call_site("summarize.classify"). The innermost label wins.
+
+_CALL_SITE: "contextvars.ContextVar[str]" = contextvars.ContextVar(
+    "llm_call_site", default="unlabeled")
+
+
+@contextlib.contextmanager
+def llm_call_site(name: str):
+    """Label the LLM calls made inside this block (or decorated function)."""
+    token = _CALL_SITE.set(name)
+    try:
+        yield
+    finally:
+        _CALL_SITE.reset(token)
+
+
+class Usage:
+    """Token counts, shaped like anthropic's response.usage."""
+
+    def __init__(self, input_tokens: int = 0, output_tokens: int = 0):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+    def __repr__(self) -> str:
+        return f"Usage(input_tokens={self.input_tokens}, output_tokens={self.output_tokens})"
+
+
+def _openai_usage(resp) -> Usage:
+    """resp.usage (prompt_tokens/completion_tokens) -> Usage; 0 when absent."""
+    u = getattr(resp, "usage", None)
+    return Usage(getattr(u, "prompt_tokens", None) or 0,
+                 getattr(u, "completion_tokens", None) or 0)
+
+
+def _log_usage(model: str, usage: Usage, truncated: bool, max_tokens: int) -> None:
+    site = _CALL_SITE.get()
+    logger.info("llm_usage call_site=%s model=%s input_tokens=%d output_tokens=%d",
+                site, model, usage.input_tokens, usage.output_tokens)
+    if truncated:
+        logger.warning("llm reply truncated at max_tokens=%d: call_site=%s model=%s "
+                       "output_tokens=%d", max_tokens, site, model, usage.output_tokens)
 
 _SYSTEM_PROMPT = (
     "You identify who is speaking in a transcript. Respond with ONLY the "
@@ -56,6 +109,11 @@ class AnthropicProvider:
             system=system or _SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
+        u = getattr(msg, "usage", None)
+        self.last_usage = Usage(getattr(u, "input_tokens", None) or 0,
+                                getattr(u, "output_tokens", None) or 0)
+        _log_usage(self.model, self.last_usage,
+                   getattr(msg, "stop_reason", None) == "max_tokens", max_tokens)
         return msg.content[0].text
 
 
@@ -88,7 +146,11 @@ class OpenAICompatProvider:
                 {"role": "user", "content": prompt},
             ],
         )
-        return resp.choices[0].message.content or ""
+        choice = resp.choices[0]
+        self.last_usage = _openai_usage(resp)
+        _log_usage(self.model, self.last_usage,
+                   getattr(choice, "finish_reason", None) == "length", max_tokens)
+        return choice.message.content or ""
 
 
 def get_provider(name: str) -> SpeakerIDProvider:
@@ -115,8 +177,9 @@ def get_provider(name: str) -> SpeakerIDProvider:
 # agenda_align/publish) --------------------------------------------------------
 #
 # Those modules call client.messages.create(model=..., max_tokens=..., system=...,
-# messages=[...]) and read response.content[0].text. response.stop_reason is
-# supported for SDK-shape fidelity; no production reader today. The client
+# messages=[...]) and read response.content[0].text. response.stop_reason and
+# response.usage (input_tokens/output_tokens) are supported for SDK-shape
+# fidelity; the adapter itself logs both (see "Token accounting" above). The client
 # itself is injected, constructed at entry points across src/summarize.py,
 # src/publish.py, run_local.py, scripts/poll_agendas.py,
 # scripts/backfill_agenda.py, scripts/calibrate_alignment.py. make_llm_client()
@@ -138,14 +201,16 @@ class _Text:
 
 
 class _Message:
-    def __init__(self, text: str, stop_reason: str):
+    def __init__(self, text: str, stop_reason: str, usage: "Usage | None" = None):
         self.content = [_Text(text)]
         self.stop_reason = stop_reason
+        self.usage = usage or Usage()
 
 
 class AnthropicCompatClient:
     """Duck-types the slice of anthropic.Anthropic() the pipeline uses
-    (client.messages.create(...) -> response.content[0].text / .stop_reason),
+    (client.messages.create(...) -> response.content[0].text / .stop_reason /
+    .usage),
     backed by an OpenAI-compatible endpoint (OpenRouter). Lets every
     client-injected call site switch billing without code changes."""
 
@@ -174,7 +239,9 @@ class AnthropicCompatClient:
         choice = resp.choices[0]
         stop_reason = ("max_tokens" if choice.finish_reason == "length"
                        else "end_turn")
-        return _Message(choice.message.content or "", stop_reason)
+        usage = _openai_usage(resp)
+        _log_usage(kwargs["model"], usage, stop_reason == "max_tokens", max_tokens)
+        return _Message(choice.message.content or "", stop_reason, usage)
 
 
 def make_llm_client():

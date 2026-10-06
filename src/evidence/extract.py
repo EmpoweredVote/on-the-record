@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import re
+from ..llm_providers import llm_call_site
 from .models import QuoteCandidate
 
 
@@ -150,6 +151,7 @@ def _dedup(cands: list) -> list:
     return out
 
 
+@llm_call_site("evidence.extract")
 def extract_quotes(text, *, candidate_name, provider, max_tokens=3000,
                    chunk_size=12000, overlap=2000) -> list:
     cands = []

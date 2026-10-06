@@ -11,6 +11,7 @@ import re
 
 from src import config
 from src.discovery.models import RawItem, Verdict
+from src.llm_providers import llm_call_site
 from src.source_key import source_key
 
 _SYSTEM = (
@@ -174,6 +175,7 @@ def _filter_candidates(verdict: Verdict, roster_names: list) -> Verdict:
     return verdict
 
 
+@llm_call_site("discovery.classify")
 def classify_item(provider, item: RawItem, *, race_label: str, roster_names: list,
                   peek_fetcher=None) -> Verdict:
     """One LLM pass; a second pass with a peek excerpt when confidence lands

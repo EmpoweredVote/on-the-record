@@ -36,6 +36,7 @@ from typing import Callable, Optional
 from . import config
 from .agenda_parse import ParsedItem
 from .legislation_oracle import fetch_final_action
+from .llm_providers import llm_call_site
 
 #: Publish vocabulary for item outcomes (matches src/legislation_oracle.py).
 OUTCOME_VOCABULARY = ("passed", "failed", "continued", "pulled")
@@ -358,6 +359,7 @@ def _int_or_none(value) -> Optional[int]:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+@llm_call_site("agenda_align")
 def align_items(
     client, items: list[ParsedItem], segments: list[SegmentRef]
 ) -> list[ItemSpan]:

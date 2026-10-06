@@ -255,3 +255,243 @@ def test_llm_client_env_key_openrouter(monkeypatch):
 def test_llm_client_env_key_anthropic(monkeypatch):
     monkeypatch.setattr(llm_providers.config, "LLM_CLIENT_BACKEND", "anthropic")
     assert llm_providers.llm_client_env_key() == "ANTHROPIC_API_KEY"
+
+
+# --- Token accounting (usage capture, call-site logging, truncation warning) ---
+
+
+class _FakeUsageResp:
+    """OpenAI-shaped response with a .usage block."""
+
+    def __init__(self, text="OK", finish_reason="stop", prompt_tokens=120,
+                 completion_tokens=30, with_usage=True):
+        self.choices = [_FakeORChoice(text, finish_reason)]
+        if with_usage:
+            self.usage = type("U", (), {"prompt_tokens": prompt_tokens,
+                                        "completion_tokens": completion_tokens})()
+
+
+class _FakeUsageClient:
+    def __init__(self, resp):
+        self.chat = self
+        self.completions = self
+        self._resp = resp
+
+    def create(self, **kwargs):
+        return self._resp
+
+
+def _usage_records(caplog):
+    return [r.getMessage() for r in caplog.records
+            if r.name == "src.llm_providers" and r.levelname == "INFO"]
+
+
+def _truncation_records(caplog):
+    return [r.getMessage() for r in caplog.records
+            if r.name == "src.llm_providers" and r.levelname == "WARNING"]
+
+
+def test_anthropic_compat_client_puts_usage_on_message():
+    fake = _FakeUsageClient(_FakeUsageResp(prompt_tokens=1234, completion_tokens=56))
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    resp = client.create(model="m", max_tokens=100,
+                         messages=[{"role": "user", "content": "hi"}])
+    assert resp.usage.input_tokens == 1234
+    assert resp.usage.output_tokens == 56
+
+
+def test_anthropic_compat_client_usage_defaults_to_zero_when_absent():
+    fake = _FakeUsageClient(_FakeUsageResp(with_usage=False))
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    resp = client.create(model="m", max_tokens=100,
+                         messages=[{"role": "user", "content": "hi"}])
+    assert (resp.usage.input_tokens, resp.usage.output_tokens) == (0, 0)
+
+
+def test_anthropic_compat_client_logs_usage_with_call_site(caplog):
+    caplog.set_level("INFO", logger="src.llm_providers")
+    fake = _FakeUsageClient(_FakeUsageResp(prompt_tokens=10, completion_tokens=3))
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    with llm_providers.llm_call_site("topics"):
+        client.create(model="claude-haiku-4-5-20251001", max_tokens=100,
+                      messages=[{"role": "user", "content": "hi"}])
+    [line] = _usage_records(caplog)
+    assert "call_site=topics" in line
+    assert "model=anthropic/claude-haiku-4.5" in line
+    assert "input_tokens=10" in line and "output_tokens=3" in line
+    assert _truncation_records(caplog) == []
+
+
+def test_unlabeled_call_logs_unlabeled_call_site(caplog):
+    caplog.set_level("INFO", logger="src.llm_providers")
+    fake = _FakeUsageClient(_FakeUsageResp())
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    client.create(model="m", max_tokens=100, messages=[{"role": "user", "content": "hi"}])
+    [line] = _usage_records(caplog)
+    assert "call_site=unlabeled" in line
+
+
+def test_anthropic_compat_client_warns_on_truncation(caplog):
+    caplog.set_level("INFO", logger="src.llm_providers")
+    fake = _FakeUsageClient(_FakeUsageResp(finish_reason="length", completion_tokens=512))
+    client = llm_providers.AnthropicCompatClient("https://x", "k", client=fake)
+    with llm_providers.llm_call_site("summarize.votes"):
+        resp = client.create(model="m", max_tokens=512,
+                             messages=[{"role": "user", "content": "hi"}])
+    assert resp.stop_reason == "max_tokens"
+    [warning] = _truncation_records(caplog)
+    assert "max_tokens=512" in warning
+    assert "call_site=summarize.votes" in warning
+
+
+def test_openai_compat_provider_captures_and_logs_usage(caplog):
+    caplog.set_level("INFO", logger="src.llm_providers")
+    fake = _FakeUsageClient(_FakeUsageResp(text="x", prompt_tokens=77, completion_tokens=8))
+    p = llm_providers.OpenAICompatProvider("deepseek-chat", "https://x", "k", client=fake)
+    with llm_providers.llm_call_site("discovery.classify"):
+        assert p.complete("hi", max_tokens=50, temperature=0.0) == "x"
+    assert (p.last_usage.input_tokens, p.last_usage.output_tokens) == (77, 8)
+    [line] = _usage_records(caplog)
+    assert "call_site=discovery.classify" in line
+    assert "model=deepseek-chat" in line
+    assert _truncation_records(caplog) == []
+
+
+def test_openai_compat_provider_warns_on_truncation(caplog):
+    caplog.set_level("INFO", logger="src.llm_providers")
+    fake = _FakeUsageClient(_FakeUsageResp(finish_reason="length"))
+    p = llm_providers.OpenAICompatProvider("m", "https://x", "k", client=fake)
+    with llm_providers.llm_call_site("evidence.extract"):
+        p.complete("hi", max_tokens=50, temperature=0.0)
+    [warning] = _truncation_records(caplog)
+    assert "call_site=evidence.extract" in warning
+
+
+def test_anthropic_provider_captures_usage_and_warns_on_max_tokens(caplog):
+    caplog.set_level("INFO", logger="src.llm_providers")
+
+    class _Client:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kwargs):
+            return type("M", (), {
+                "content": [type("B", (), {"text": "t"})()],
+                "stop_reason": "max_tokens",
+                "usage": type("U", (), {"input_tokens": 9, "output_tokens": 4})(),
+            })()
+
+    p = llm_providers.AnthropicProvider("m", client=_Client())
+    with llm_providers.llm_call_site("speaker_id"):
+        p.complete("hi", max_tokens=4, temperature=0.0)
+    assert (p.last_usage.input_tokens, p.last_usage.output_tokens) == (9, 4)
+    assert "call_site=speaker_id" in _usage_records(caplog)[0]
+    assert "call_site=speaker_id" in _truncation_records(caplog)[0]
+
+
+def test_llm_call_site_innermost_label_wins_and_resets():
+    get = llm_providers._CALL_SITE.get
+    with llm_providers.llm_call_site("outer"):
+        with llm_providers.llm_call_site("inner"):
+            assert get() == "inner"
+        assert get() == "outer"
+    assert get() == "unlabeled"
+
+
+def test_llm_call_site_works_as_decorator():
+    @llm_providers.llm_call_site("decorated")
+    def f():
+        return llm_providers._CALL_SITE.get()
+
+    assert f() == "decorated"
+    assert f() == "decorated"  # re-entrant: fresh context per call
+    assert llm_providers._CALL_SITE.get() == "unlabeled"
+
+
+class _StopCall(Exception):
+    pass
+
+
+class _CallSiteRecorder:
+    """Anthropic-shaped client that records the active call-site label at
+    call time and then stops the caller (so no reply parsing runs)."""
+
+    def __init__(self):
+        self.messages = self
+        self.seen = None
+
+    def create(self, **kwargs):
+        self.seen = llm_providers._CALL_SITE.get()
+        raise _StopCall
+
+
+def _call_sites():
+    from types import SimpleNamespace
+
+    from src import agenda_align, agenda_interpret, summarize
+    from src.agenda_parse import ParsedItem
+
+    meeting = SimpleNamespace(city="C", meeting_type="council", date="2026-01-01",
+                              duration_seconds=0, event_kind=None)
+    item = ParsedItem(position=1, item_number="1", section="S", section_number=1,
+                      title_raw="An item")
+    return [
+        ("summarize.classify", lambda c: summarize._classify_sections_chunk(c, "x")),
+        ("summarize.classify", lambda c: summarize._classify_sections_interview(c, [])),
+        ("summarize.synthesize", lambda c: summarize._summarize_discussion(c, "t", "T")),
+        ("summarize.synthesize", lambda c: summarize._summarize_interview_topic(c, "t", "T")),
+        ("summarize.rollcall", lambda c: summarize._extract_roll_call(c, "t")),
+        ("summarize.votes", lambda c: summarize._extract_votes(c, "t")),
+        ("summarize.exec", lambda c: summarize._generate_executive_summary(c, [], meeting)),
+        ("agenda_interpret", lambda c: agenda_interpret.interpret_item(c, item, "src")),
+        ("agenda_align", lambda c: agenda_align.align_items(c, [item], [])),
+    ]
+
+
+def test_pipeline_call_sites_are_labeled():
+    for label, call in _call_sites():
+        rec = _CallSiteRecorder()
+        with pytest.raises(_StopCall):
+            call(rec)
+        assert rec.seen == label
+    assert llm_providers._CALL_SITE.get() == "unlabeled"
+
+
+def test_provider_call_sites_are_labeled():
+    from src.discovery import classify as dclassify
+    from src.discovery.models import RawItem
+    from src.evidence import crosscheck, extract, judge
+
+    class _Provider:
+        def complete(self, prompt, **kw):
+            self.seen = llm_providers._CALL_SITE.get()
+            raise _StopCall
+
+    import inspect
+    raw_params = inspect.signature(RawItem).parameters
+    raw = RawItem(**{k: "x" for k, v in raw_params.items()
+                     if v.default is inspect.Parameter.empty})
+    cases = [
+        ("evidence.extract",
+         lambda p: extract.extract_quotes("some text", candidate_name="A", provider=p)),
+        ("discovery.classify",
+         lambda p: dclassify.classify_item(p, raw, race_label="R", roster_names=[])),
+    ]
+    for label, call in cases:
+        prov = _Provider()
+        with pytest.raises(_StopCall):
+            call(prov)
+        assert prov.seen == label
+    from src.evidence.models import QuoteCandidate
+
+    cand = QuoteCandidate(text="t", context="c", issue="i")
+    cases = [
+        ("evidence.crosscheck",
+         lambda p: crosscheck.crosscheck(cand, "src", candidate_name="A", provider=p)),
+        ("evidence.judge", lambda p: judge.judge(cand, provider=p)),
+    ]
+    for label, call in cases:
+        prov = _Provider()
+        with pytest.raises(_StopCall):
+            call(prov)
+        assert prov.seen == label
