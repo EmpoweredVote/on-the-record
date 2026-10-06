@@ -507,3 +507,60 @@ def test_cache_key_versioned_and_misses_expire(tmp_path):
     assert c.get("v1|old|miss|") is None
     c.put(k, {"name": "Ann Lee", "url": "https://x"})
     assert c.get(k) == {"name": "Ann Lee", "affiliation": None, "url": "https://x"}
+
+
+# ---- second fix round ----
+@pytest.mark.parametrize("url", ["http://127.0.0.1\\@example.com/", "http://127.0.0.1:80\\@example.com/",
+                                 "http://empowered.vote\\@example.com/", "http://user@example.com/",
+                                 "http://example.com /x", "http://exa\tmple.com/", "http://example.com/\x00"])
+def test_parser_differential_urls_blocked(monkeypatch, url):
+    gets = _net(monkeypatch, {"example.com": ["93.184.216.34"]}, {})
+    ok, why = verify_on_page("Aaron Spiegel", url)
+    assert not ok and why.startswith("blocked url"), why
+    assert gets == []
+
+
+def test_parser_differential_blocked_with_injected_fetch_too():
+    fetched = []
+    ok, why = verify_on_page("Aaron Spiegel", "http://empowered.vote\\@example.com/",
+                             fetch=lambda u: fetched.append(u) or HTML)
+    assert not ok and why.startswith("blocked url") and fetched == []
+
+
+def test_parser_differential_redirect_hop_blocked(monkeypatch):
+    gets = _net(monkeypatch, {"example.com": ["93.184.216.34"]},
+                {"https://example.com/a": _Resp(302, location="http://127.0.0.1\\@example.com/")})
+    ok, why = verify_on_page("Aaron Spiegel", "https://example.com/a")
+    assert not ok and why.startswith("blocked url"), why
+    assert [u for u, _ in gets] == ["https://example.com/a"]
+
+
+def test_check_url_host_mismatch_is_ambiguous(monkeypatch):
+    import urllib3.util
+
+    class P:
+        host = "127.0.0.1"
+
+    monkeypatch.setattr(urllib3.util, "parse_url", lambda u: P())
+    monkeypatch.setattr(NL, "_resolve", lambda h, p: ["93.184.216.34"])
+    with pytest.raises(NL.BlockedURL, match="blocked url: ambiguous"):
+        NL.check_url("https://example.com/")
+
+
+@pytest.mark.parametrize("a,b", [("Rachel", "Rachael"), ("Steven", "Stephen"), ("Jon", "John"),
+                                 ("Catherine", "Katherine")])
+def test_names_similar_tolerates_first_name_spelling(a, b):
+    assert NL.names_similar(f"{a} Sample", f"{b} Sample")
+    assert NL.names_similar(f"{b} Sample", f"{a} Sample")
+
+
+@pytest.mark.parametrize("a,b", [("Mike", "Michael"), ("Liz", "Elizabeth"), ("Tom", "Liz")])
+def test_names_similar_no_nickname_table(a, b):
+    assert not NL.names_similar(f"{a} Brown", f"{b} Brown")
+
+
+def test_roster_first_name_rule_stays_strict():
+    from src.roster import RosterMember
+
+    m = [RosterMember(name="Rachael Sample", aliases=["Rachael Sample", "Sample"], politician_id="p-s")]
+    assert match_roster("Rachel Sample", m) is None

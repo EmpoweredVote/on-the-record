@@ -28,6 +28,7 @@ MAX_PAGE_BYTES = 2_000_000
 MAX_REDIRECTS = 3
 OWN_SITE = "empowered.vote"
 SURNAME_MIN_RATIO = 0.6
+NAME_FIRST_SIMILARITY = 0.75   # web-result match only; roster/politician matching stays strict
 AFFILIATION_STOPWORDS = {"the", "with", "from", "office", "department", "state", "county", "city"}
 _LETTER_RUN = re.compile(r"[^\W\d_]+")
 
@@ -69,7 +70,10 @@ def names_similar(spoken: str, found: str) -> bool:
         return any(_similar(a[0], t) for t in b)
     if not _similar(a[-1], b[-1]):
         return False
-    return len(b) < 2 or _first_compatible(spoken, found)
+    if len(b) < 2 or _first_compatible(spoken, found):
+        return True
+    # Spelling variants (Rachel/Rachael, Steven/Stephen); no nickname table (Mike/Michael fails).
+    return difflib.SequenceMatcher(None, a[0], b[0]).ratio() >= NAME_FIRST_SIMILARITY
 
 
 def affiliation_tokens(affiliation: Optional[str]) -> list[str]:
@@ -157,8 +161,41 @@ def _ip_blocked(ip: "ipaddress._BaseAddress") -> bool:
             or ip.is_unspecified or not ip.is_global)
 
 
+_UNSAFE_URL_CHARS = re.compile(r"[\\\s\x00-\x1f\x7f]")
+
+
+def _check_url_shape(url: str) -> None:
+    """Syntax-only guard against parser differentials (no DNS).
+
+    urlparse and urllib3 disagree on some URLs: "http://127.0.0.1\\@example.com/"
+    is host example.com to urlparse but 127.0.0.1 to urllib3 (which requests uses).
+    Reject backslashes, whitespace, control chars and userinfo, then require both
+    parsers to agree on the host.
+    """
+    if _UNSAFE_URL_CHARS.search(url or ""):
+        raise BlockedURL("blocked url: ambiguous (backslash, space or control character)")
+    try:
+        parts = urlparse(url or "")
+    except ValueError as exc:
+        raise BlockedURL(f"blocked url: malformed ({exc})") from exc
+    if "@" in parts.netloc:
+        raise BlockedURL("blocked url: ambiguous (userinfo)")
+    import urllib3.util
+
+    try:
+        other = (urllib3.util.parse_url(url).host or "").lower().rstrip(".")
+    except Exception as exc:  # noqa: BLE001 - urllib3 LocationParseError etc.
+        raise BlockedURL("blocked url: ambiguous") from exc
+    mine = (parts.hostname or "").lower().rstrip(".")
+    if other.startswith("[") and other.endswith("]"):
+        other = other[1:-1]
+    if other != mine:
+        raise BlockedURL("blocked url: ambiguous")
+
+
 def check_url(url: str) -> None:
     """Raise BlockedURL unless url is http(s) on 80/443 to a public, non-own host."""
+    _check_url_shape(url)
     try:
         parts = urlparse(url or "")
         port = parts.port
@@ -240,6 +277,10 @@ def verify_on_page(
         host = parts.hostname
     except Exception:  # noqa: BLE001 - malformed url
         return False, "bad url"
+    try:
+        _check_url_shape(url)
+    except BlockedURL as exc:
+        return False, str(exc)[:200]
     if _is_own_site(host):
         return False, "own site excluded"
     try:
