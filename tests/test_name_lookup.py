@@ -219,3 +219,64 @@ def test_cache_tolerates_non_object_json_and_non_dict_entries(tmp_path):
     path.write_text(json.dumps({"k": "oops", "j": 5}), encoding="utf-8")
     c2 = ResearchCache(path)
     assert c2.get("k") is None and c2.get("j") is None
+
+
+from src.name_lookup import infer_state, match_local_people, match_politician, match_roster
+from src.roster import RosterMember
+
+
+class FakeDB:
+    def __init__(self, pols=None, states=None, race_state=None, local=None):
+        self.pols, self.states, self.race_state, self.local = pols or {}, states or [], race_state, local or []
+        self.calls = []
+
+    def politicians_by_surname(self, surname, state):
+        self.calls.append(("pol", surname, state))
+        return self.pols.get((surname.lower(), state), [])
+
+    def states_for_politicians(self, ids):
+        return self.states
+
+    def state_for_race(self, race_id):
+        return self.race_state
+
+    def local_people_by_name(self, name):
+        return [r for r in self.local if r["name"].lower() == name.lower()]
+
+
+MEMBERS = [
+    RosterMember(name="Cyndi Carrasco", aliases=["Cyndi Carrasco", "Carrasco", "Senator Carrasco"],
+                 politician_id="p-carrasco"),
+    RosterMember(name="Liz Brown", aliases=["Liz Brown", "Brown", "Senator Brown"], politician_id="p-brown"),
+    RosterMember(name="Tim Brown", aliases=["Tim Brown", "Brown"], politician_id="p-tbrown"),
+]
+
+
+def test_match_roster_full_name_and_unique_surname():
+    assert match_roster("Cyndi Carrasco", MEMBERS) == ("Cyndi Carrasco", "p-carrasco")
+    assert match_roster("Carrasco", MEMBERS) == ("Cyndi Carrasco", "p-carrasco")
+    assert match_roster("Liz Brown", MEMBERS) == ("Liz Brown", "p-brown")
+    assert match_roster("Brown", MEMBERS) is None          # two Browns: ambiguous
+    assert match_roster("Rachel Sample", MEMBERS) is None
+
+
+def test_infer_state_prefers_roster_then_race():
+    assert infer_state(["p1", "p2"], None, FakeDB(states=["IN"])) == "IN"
+    assert infer_state(["p1"], "r1", FakeDB(states=["IN", "OH"], race_state="IN")) == "IN"
+    assert infer_state([], "r1", FakeDB(race_state="TX")) == "TX"
+    assert infer_state([], None, FakeDB()) is None
+
+
+def test_match_politician_needs_state_and_a_unique_row():
+    db = FakeDB(pols={("garten", "IN"): [{"politician_id": "p-g", "full_name": "Chris Garten"}],
+                      ("smith", "IN"): [{"politician_id": "a", "full_name": "A Smith"},
+                                        {"politician_id": "b", "full_name": "B Smith"}]})
+    assert match_politician("Garten", "IN", db) == {"politician_id": "p-g", "full_name": "Chris Garten"}
+    assert match_politician("Smith", "IN", db) is None
+    assert match_politician("Garten", None, db) is None and db.calls == [("pol", "garten", "IN"), ("pol", "smith", "IN")]
+
+
+def test_match_local_people_full_names_only():
+    db = FakeDB(local=[{"slug": "rachael-sample", "name": "Rachael Sample"}])
+    assert match_local_people("rachael sample", db) == {"slug": "rachael-sample", "name": "Rachael Sample"}
+    assert match_local_people("Sample", db) is None

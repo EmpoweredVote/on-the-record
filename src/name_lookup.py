@@ -11,10 +11,13 @@ import json
 import re
 import subprocess
 import unicodedata
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Protocol, Union
 from urllib.parse import urlparse
+
+from .name_matching import significant_tokens
 
 MAX_PAGE_BYTES = 2_000_000
 
@@ -261,3 +264,99 @@ class ResearchCache:
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(self.path, self._data)
+
+
+class NameDB(Protocol):
+    def politicians_by_surname(self, surname: str, state: str) -> list[dict]: ...
+    def states_for_politicians(self, ids: list[str]) -> list[str]: ...
+    def state_for_race(self, race_id: str) -> Optional[str]: ...
+    def local_people_by_name(self, name: str) -> list[dict]: ...
+
+
+def _surname(name: str) -> str:
+    toks = significant_tokens(name)
+    return toks[-1] if toks else ""
+
+
+def match_roster(name: str, members: list) -> Optional[tuple[str, Optional[str]]]:
+    """(display_name, politician_id) for an exact alias match, or a unique surname."""
+    n = norm_name(name)
+    exact = [m for m in members if n and any(norm_name(a) == n for a in [m.name, *m.aliases])]
+    pool = exact or [m for m in members if _surname(name) and _surname(m.name) == _surname(name)]
+    ids = {m.politician_id or m.name for m in pool}
+    if len(ids) != 1:
+        return None
+    m = pool[0]
+    full = next((a for a in m.aliases if len(significant_tokens(a)) >= 2), m.name)
+    return full, m.politician_id
+
+
+def infer_state(member_politician_ids: list[str], race_id: Optional[str], db) -> Optional[str]:
+    if member_politician_ids:
+        states = [s for s in db.states_for_politicians(member_politician_ids) if s]
+        if states:
+            top, count = Counter(states).most_common(1)[0]
+            if count > len(states) / 2:
+                return top
+    return db.state_for_race(race_id) if race_id else None
+
+
+def match_politician(name: str, state: Optional[str], db) -> Optional[dict]:
+    if not state or not _surname(name):
+        return None
+    rows = db.politicians_by_surname(_surname(name), state)
+    return rows[0] if len({r["politician_id"] for r in rows}) == 1 else None
+
+
+def match_local_people(name: str, db) -> Optional[dict]:
+    if len(significant_tokens(name)) < 2:
+        return None
+    rows = db.local_people_by_name(name)
+    return rows[0] if len({r["slug"] for r in rows}) == 1 else None
+
+
+class PgNameDB:
+    """Read-only Postgres implementation of NameDB."""
+
+    def __init__(self, database_url: str):
+        import psycopg2
+
+        self._conn = psycopg2.connect(database_url)
+        self._conn.set_session(readonly=True, autocommit=True)
+
+    def _rows(self, sql: str, params: tuple) -> list[dict]:
+        import psycopg2.extras
+
+        with self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            return [dict(r) for r in cur.fetchall()]
+
+    def politicians_by_surname(self, surname: str, state: str) -> list[dict]:
+        return self._rows(
+            """select distinct p.id::text as politician_id, p.full_name
+               from essentials.politicians p
+               join essentials.current_office_holders h on h.politician_id = p.id
+               join essentials.offices o on o.id = h.office_id
+               where lower(p.last_name) = lower(%s) and o.representing_state = %s""",
+            (surname, state))
+
+    def states_for_politicians(self, ids: list[str]) -> list[str]:
+        rows = self._rows(
+            """select o.representing_state as state
+               from essentials.current_office_holders h
+               join essentials.offices o on o.id = h.office_id
+               where h.politician_id = any(%s::uuid[])""",
+            (list(ids),))
+        return [r["state"] for r in rows]
+
+    def state_for_race(self, race_id: str) -> Optional[str]:
+        rows = self._rows(
+            """select e.state from essentials.races r
+               join essentials.elections e on e.id = r.election_id where r.id = %s""",
+            (race_id,))
+        return rows[0]["state"] if rows else None
+
+    def local_people_by_name(self, name: str) -> list[dict]:
+        return self._rows(
+            "select slug, name from meetings.local_people where lower(name) = lower(%s)",
+            (name,))
