@@ -4,7 +4,7 @@ import json
 
 from src.name_candidates import Candidate
 from src.name_lookup import ResearchCache, ResearchFailed, ResearcherUnavailable
-from src.name_suggest import Deps, read_captions_text, suggest_for_candidate, suggest_names, write_suggestions
+from src.name_suggest import Deps, meeting_context, read_captions_text, suggest_for_candidate, suggest_names, write_suggestions
 from src.roster import RosterMember
 
 PAGE = "<html><body><p>Rabbi Aaron Spiegel, Executive Director, Indy Multi-Faith Alliance</p></body></html>"
@@ -35,9 +35,12 @@ class DB:
 def researcher(result):
     calls = []
 
-    def r(name, title, affiliation, place):
+    def r(name, title, affiliation, place, **kw):
         calls.append((name, title, affiliation, place))
+        r.kwargs.append(kw)
         return result
+
+    r.kwargs = []
 
     r.calls = calls
     return r
@@ -106,7 +109,7 @@ def test_not_searched_when_partial_without_affiliation():
 def test_unavailable_disables_web_for_the_run():
     calls = []
 
-    def down(*a):
+    def down(*a, **kw):
         calls.append(a)
         raise ResearcherUnavailable("Claude CLI cannot run lookups — run `claude`, then /login")
 
@@ -146,7 +149,7 @@ def test_read_captions_text_strips_vtt(tmp_path):
 def test_transient_failure_is_not_cached(tmp_path):
     calls = []
 
-    def flaky(name, title, affiliation, place):
+    def flaky(name, title, affiliation, place, **kw):
         calls.append(name)
         if len(calls) == 1:
             raise ResearchFailed("timeout")
@@ -392,3 +395,38 @@ def test_run_local_suggest_names_corrupt_pipeline_state(tmp_meetings_dir, tmp_co
     assert seen["members"] == []
     assert any("pipeline_state.json" in w for w in seen["warnings"])
     assert (d / "name_suggestions.json").exists()
+
+
+# ---- slice 2: intro + meeting context ----
+def test_meeting_context_builder_cases():
+    assert meeting_context({"title": "City Council"}) == "City Council"
+    assert meeting_context({"title": "California Governor Debate - CNN", "event_kind": "debate",
+                            "event_orgs": ["CNN"]}) == "California Governor Debate - CNN (debate; CNN)"
+    assert meeting_context({"meeting_type": "Regular Session", "event_kind": "council",
+                            "event_orgs": [{"name": "Bloomington Common Council"}]}) == \
+        "Regular Session (council; Bloomington Common Council)"
+    assert meeting_context({}) is None
+    assert meeting_context({"event_orgs": [], "title": "  "}) is None
+
+
+def test_suggest_for_candidate_passes_intro_and_context():
+    c = cand("Ann Lee", affiliation="Acme Corp")
+    r = researcher(None)
+    deps = Deps(db=None, researcher=r, fetch=lambda u: "")
+    suggest_for_candidate(c, members=[], state=None, place="Town", deps=deps, run=run(),
+                          intro="I'm Ann Lee of Acme Corp.", context="Forum (forum; Acme)")
+    assert r.kwargs == [{"intro": "I'm Ann Lee of Acme Corp.", "context": "Forum (forum; Acme)"}]
+
+
+def test_suggest_names_passes_e1_quote_and_context(tmp_path):
+    r = researcher(None)
+    meeting = {"title": "Budget Hearing", "event_kind": "council", "event_orgs": ["Town Council"],
+               "segments": [{"segment_id": 0, "start_time": 0.0, "end_time": 9.0, "speaker_label": "A",
+                             "text": "Good afternoon. My name is Ann Lee and I am the director of Acme Corp. "
+                                     "I want to thank the committee for hearing this bill today and for the time."}]}
+    out = suggest_names(meeting, tmp_path, members=[], deps=Deps(db=None, researcher=r, fetch=lambda u: ""))
+    assert out["suggestions"], "expected a candidate"
+    if r.calls:
+        kw = r.kwargs[0]
+        assert kw["context"] == "Budget Hearing (council; Town Council)"
+        assert "Ann Lee" in kw["intro"]

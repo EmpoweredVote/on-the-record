@@ -47,13 +47,32 @@ class Deps:
     cache: Optional[ResearchCache] = None
 
 
+def meeting_context(meeting: dict) -> Optional[str]:
+    """"Title (kind; org, org)" from the meeting's own fields; None when there is nothing."""
+    head = (meeting.get("title") or meeting.get("meeting_type") or "").strip()
+    orgs = []
+    for o in meeting.get("event_orgs") or []:
+        n = (o.get("name") if isinstance(o, dict) else o) or ""
+        if str(n).strip():
+            orgs.append(str(n).strip())
+    parts = [p for p in ((meeting.get("event_kind") or "").strip(), ", ".join(orgs)) if p]
+    if head and parts:
+        return f"{head} ({'; '.join(parts)})"
+    return head or "; ".join(parts) or None
+
+
+def _intro(cand: Candidate) -> Optional[str]:
+    return next((e.quote for e in cand.evidence if e.kind == "E1" and e.quote), None)
+
+
 def _transcript(cand: Candidate, reason: str) -> Lookup:
     return Lookup(name=cand.name, source="transcript", verified=False,
                   affiliation=cand.affiliation, reason=reason)
 
 
 def suggest_for_candidate(cand: Candidate, *, members: list, state: Optional[str], place: Optional[str],
-                          deps: Deps, run: dict) -> Lookup:
+                          deps: Deps, run: dict, intro: Optional[str] = None,
+                          context: Optional[str] = None) -> Lookup:
     if cand.conflict:
         return _transcript(cand, f"conflict: {cand.conflict}")
     hit = match_roster(cand.name, members) if members else None
@@ -77,13 +96,14 @@ def suggest_for_candidate(cand: Candidate, *, members: list, state: Optional[str
     if run.get("web_disabled"):
         return _transcript(cand, "web lookup unavailable")
 
-    key = ResearchCache.key(cand.name, cand.affiliation, place)
+    key = ResearchCache.key(cand.name, cand.affiliation, place, intro=intro, context=context)
     cached = deps.cache.get(key) if deps.cache else None
     if cached is not None:
         found = None if cached.get("found") is False else cached
     else:
         try:
-            found = deps.researcher(cand.name, None, cand.affiliation, place)
+            found = deps.researcher(cand.name, None, cand.affiliation, place,
+                                     intro=intro, context=context)
         except ResearcherUnavailable as exc:
             run["web_disabled"] = str(exc)
             return _transcript(cand, "web lookup unavailable")
@@ -126,13 +146,15 @@ def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps
         except Exception:
             state = None
     place = ", ".join(x for x in (meeting.get("city"), state) if x) or None
+    context = meeting_context(meeting)
     run: dict = {"web_disabled": None}
     out = []
     try:
         for label in sorted(cands):
             c = cands[label]
             try:
-                lk = suggest_for_candidate(c, members=members, state=state, place=place, deps=deps, run=run)
+                lk = suggest_for_candidate(c, members=members, state=state, place=place, deps=deps, run=run,
+                                         intro=_intro(c), context=context)
             except Exception as exc:
                 lk = _transcript(c, f"lookup error: {type(exc).__name__}")
             out.append({

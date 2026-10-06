@@ -112,9 +112,12 @@ it is shown as "spelling not verified" and the URL is not shown as a source.
 
 ### Privacy rules
 
-- Send only: spoken name, stated affiliation, meeting city/state. Never
-  transcript text.
-- Store only: the spelling and one source URL.
+- Send only: the spoken name, the speaker's OWN introduction (the E1
+  self-introduction window, at most 400 characters, from their first
+  substantial turn), the stated affiliation, the meeting title, event type and
+  producing body/outlet, and the meeting city/state. Never other speakers'
+  words or the rest of the transcript. Store only the spelling, affiliation and
+  one source URL.
 - Never search a speaker who gives no affiliation and only a common or partial
   name (e.g. "Michael", "Chelsey").
 
@@ -219,3 +222,11 @@ this spec.
 - **Parked slice-1 fixes first:** the 3-token trim must not fire before
   I / I'm / Jr / Sr / II / III / IV; a surname that is a title word ("Jim
   Justice") is kept when no name token follows the title.
+
+- **Intro + meeting context sent to the researcher (2026-10-06, Chris):** people
+  usually say "I'm NAME, the CEO of COMPANY", and the first eval fixed 0/21
+  misspellings because 20/21 had no extracted affiliation. The researcher now
+  gets the speaker's own E1 introduction (max 400 chars) and a meeting context
+  line (title, event kind, producing body; max 200 chars). The privacy rule
+  above is updated to match. Cache key is now `v2|` plus a hash of intro and
+  context, so old "not found" entries from thinner prompts are ignored.

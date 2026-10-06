@@ -90,3 +90,13 @@ def test_verified_domain_counts():
     rows = [{"verified": True, "url": "https://www.in.gov/a"}, {"verified": True, "url": "https://in.gov/b"},
             {"verified": True, "url": "https://iga.in.gov/x"}, {"verified": False, "url": None}]
     assert _mod.verified_domain_counts(rows) == {"in.gov": 2, "iga.in.gov": 1}
+
+
+def test_select_witnesses_rows_carry_intro_and_context(tmp_path):
+    m = _meeting("council", [("A", "Ted Simons", "Ted Simmons", None)], state="IN")
+    m["title"] = "Budget Hearing"
+    m["event_orgs"] = ["Town Council"]
+    _write(tmp_path, "m1", m)
+    (row,) = _mod.select_witnesses(tmp_path, 5, 7)
+    assert row["context"] == "Budget Hearing (council; Town Council)"
+    assert "Ted Simons" in row["intro"] and len(row["intro"]) <= 400

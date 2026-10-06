@@ -31,7 +31,7 @@ from src.name_evidence import extract_evidence  # noqa: E402
 from src.name_lookup import (  # noqa: E402
     ResearchCache, ResearchFailed, ResearcherUnavailable, research, should_research, verify_web_result,
 )
-from src.name_suggest import read_captions_text  # noqa: E402
+from src.name_suggest import _intro, meeting_context, read_captions_text  # noqa: E402
 from src.name_suggestion_eval import gold_labels, score_lookup_rows, strip_names  # noqa: E402
 
 
@@ -63,6 +63,7 @@ def select_witnesses(meetings_dir: Path, sample: int, seed: int) -> list[dict]:
             by_kind[meeting.get("event_kind") or "unknown"].append({
                 "meeting": mdir.name, "label": label, "event_kind": meeting.get("event_kind"),
                 "gold": gname, "spoken": c.name, "affiliation": c.affiliation, "partial": c.partial,
+                "intro": _intro(c), "context": meeting_context(meeting),
                 "place": ", ".join(x for x in (meeting.get("city"), meeting.get("state")) if x) or None,
             })
     rng = random.Random(seed)
@@ -107,11 +108,13 @@ def main() -> None:
         if unavailable:
             r["status"] = "unavailable"
             continue
-        key = ResearchCache.key(r["spoken"], r["affiliation"], r["place"])
+        key = ResearchCache.key(r["spoken"], r["affiliation"], r["place"],
+                                  intro=r.get("intro"), context=r.get("context"))
         cached = cache.get(key)
         try:
             found = (None if cached and cached.get("found") is False else cached) if cached is not None else \
-                research(r["spoken"], None, r["affiliation"], r["place"])
+                research(r["spoken"], None, r["affiliation"], r["place"],
+                         intro=r.get("intro"), context=r.get("context"))
         except ResearcherUnavailable as exc:
             unavailable = str(exc)
             r["status"] = "unavailable"
