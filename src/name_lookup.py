@@ -278,11 +278,26 @@ def _surname(name: str) -> str:
     return toks[-1] if toks else ""
 
 
+def _first_compatible(spoken: str, full: str) -> bool:
+    """First names equal, or one a prefix of the other (>= 3 letters)."""
+    a, b = significant_tokens(spoken), significant_tokens(full)
+    if not a or not b:
+        return False
+    x, y = a[0], b[0]
+    return x == y or (min(len(x), len(y)) >= 3 and (x.startswith(y) or y.startswith(x)))
+
+
 def match_roster(name: str, members: list) -> Optional[tuple[str, Optional[str]]]:
     """(display_name, politician_id) for an exact alias match, or a unique surname."""
     n = norm_name(name)
     exact = [m for m in members if n and any(norm_name(a) == n for a in [m.name, *m.aliases])]
-    pool = exact or [m for m in members if _surname(name) and _surname(m.name) == _surname(name)]
+    pool = exact
+    if not pool and _surname(name):
+        pool = [m for m in members if _surname(m.name) == _surname(name)]
+        if len(significant_tokens(name)) >= 2:
+            pool = [m for m in pool
+                    if any(_first_compatible(name, a) for a in [m.name, *m.aliases]
+                           if len(significant_tokens(a)) >= 2)]
     ids = {m.politician_id or m.name for m in pool}
     if len(ids) != 1:
         return None
@@ -305,6 +320,8 @@ def match_politician(name: str, state: Optional[str], db) -> Optional[dict]:
     if not state or not _surname(name):
         return None
     rows = db.politicians_by_surname(_surname(name), state)
+    if len(significant_tokens(name)) >= 2:
+        rows = [r for r in rows if _first_compatible(name, r["full_name"])]
     return rows[0] if len({r["politician_id"] for r in rows}) == 1 else None
 
 
@@ -331,7 +348,12 @@ class PgNameDB:
             cur.execute(sql, params)
             return [dict(r) for r in cur.fetchall()]
 
+    def close(self) -> None:
+        self._conn.close()
+
     def politicians_by_surname(self, surname: str, state: str) -> list[dict]:
+        # Current office holders only (titled => officeholder); non-incumbent
+        # candidates do not link.
         return self._rows(
             """select distinct p.id::text as politician_id, p.full_name
                from essentials.politicians p

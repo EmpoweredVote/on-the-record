@@ -280,3 +280,21 @@ def test_match_local_people_full_names_only():
     db = FakeDB(local=[{"slug": "rachael-sample", "name": "Rachael Sample"}])
     assert match_local_people("rachael sample", db) == {"slug": "rachael-sample", "name": "Rachael Sample"}
     assert match_local_people("Sample", db) is None
+
+
+def test_match_roster_surname_fallback_needs_compatible_first_name():
+    liz = [RosterMember(name="Liz Brown", aliases=["Liz Brown", "Brown"], politician_id="p-brown")]
+    assert match_roster("Tom Brown", liz) is None
+    assert match_roster("Liz Brown", liz) == ("Liz Brown", "p-brown")
+    garten = [RosterMember(name="Christopher Garten", aliases=["Christopher Garten", "Garten"],
+                           politician_id="p-g")]
+    assert match_roster("Chris Garten", garten) == ("Christopher Garten", "p-g")
+    assert match_roster("Garten", garten) == ("Christopher Garten", "p-g")
+
+
+def test_match_politician_needs_compatible_first_name():
+    row = {"politician_id": "p-g", "full_name": "Chris Garten"}
+    db = FakeDB(pols={("garten", "IN"): [row]})
+    assert match_politician("Tom Garten", "IN", db) is None
+    assert match_politician("Chris Garten", "IN", db) == row
+    assert match_politician("Garten", "IN", db) == row
