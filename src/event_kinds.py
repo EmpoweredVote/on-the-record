@@ -135,3 +135,31 @@ def speaker_id_framing(event_kind) -> str:
     if event_kind in ("debate", "forum"):
         return _DEBATE_FRAMING
     return _DEFAULT_FRAMING
+
+
+# --- Summary prompt framing per event kind ---------------------------------
+# (full noun, short noun) naming the event in summarize.py's non-interview
+# prompts. Council keeps its original wording. A missing kind (None) also maps
+# to council: meetings saved before event_kind existed are council meetings,
+# and their summaries were generated under that wording.
+_COUNCIL_SUBJECT = ("city council meeting", "council meeting")
+_SUMMARY_SUBJECTS = {
+    "council": _COUNCIL_SUBJECT,
+    "school_board": ("school board meeting", "school board meeting"),
+    "community_meeting": ("community meeting", "community meeting"),
+    "floor": ("legislative floor session", "floor session"),
+    "debate": ("candidate debate", "debate"),
+    "forum": ("candidate forum", "forum"),
+}
+_DEFAULT_SUMMARY_SUBJECT = ("public meeting", "meeting")
+
+
+def summary_subject(event_kind) -> tuple[str, str]:
+    """(full, short) noun for the event in summary prompts.
+
+    e.g. ("city council meeting", "council meeting") for council,
+    ("candidate debate", "debate") for debate.
+    """
+    if event_kind is None:
+        return _COUNCIL_SUBJECT
+    return _SUMMARY_SUBJECTS.get(event_kind, _DEFAULT_SUMMARY_SUBJECT)

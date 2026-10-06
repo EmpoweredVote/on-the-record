@@ -142,7 +142,10 @@ def synthesize_candidate(client, model_override, meeting: Meeting, gold_sections
             if is_interview:
                 content = _summarize_interview_topic(client, section_transcript, title, model=model_override)
             else:
-                content = _summarize_discussion(client, section_transcript, title, model=model_override)
+                content = _summarize_discussion(
+                    client, section_transcript, title, model=model_override,
+                    event_kind=meeting.event_kind,
+                )
             regenerated.append({"title": title, "section_type": sec_type, "content": content})
         else:
             content = sec.get("content", "")  # reused verbatim from the accepted summary
