@@ -103,9 +103,9 @@ deliberately separate checks because their remedies differ.
     high-severity rule.
 
   The pattern is path-anchored (`/scorecard/`, `/congressional-scorecard/`) so it does not match
-  a news article whose slug merely contains the word. An earlier draft keyed on `/roll-?call`
-  and wrongly matched **rollcall.com — CQ Roll Call, a news outlet**, which is a perfectly good
-  source; there is a regression test for that.
+  a news article whose slug merely contains the word. Do not key it on `/roll-?call`: that matches
+  **rollcall.com — CQ Roll Call, a news outlet**, which is a perfectly good source; a regression
+  test guards this.
 
 - **`pointer-only-source` — VOTE411 / thevoterguide.org; permission-gated, source elsewhere.**
   The answers are the candidate's own words, but the League of Women Voters' terms
@@ -177,11 +177,10 @@ matched against the live page, which costs network I/O, so that path is **opt-in
 
 ### 2.2 Written-source verification (`--verify-written`)
 
-Before 2026-08-01, `check_source` returned `None` for every non-YouTube `source_url`, so a quote
-from a candidate website or news article passed the source pass **without ever being compared to
-its cited source**. The WI-02 audit found the cost of that gap by hand
-(`docs/audits/2026-08-01-quote-audit-wi-house-02.md`): three quotes reported zero source findings,
-and one of them was a meaning-altering clip.
+Without `--verify-written`, `check_source` skips every non-YouTube `source_url` (apart from the
+always-on signal 1 of §2.3), so a quote from a candidate website or news article passes the source
+pass **without ever being compared to its cited source** — and a meaning-altering clip can pass
+with zero source findings (worked example: `docs/audits/2026-08-01-quote-audit-wi-house-02.md`).
 
 With `--verify-written`, the cited page is fetched, reduced to visible prose, and run through the
 same span-matching machinery the transcript path uses (`verbatim_runs` →
@@ -200,7 +199,7 @@ rather than as one impossible contiguous string. Three things can then go wrong:
   gated on the flag — see §2.3.
 - **`source-midsentence-clip`** — the run *is* verbatim, but it starts in the middle of a sentence
   with no `…` marking the cut, so the clause before it may carry the candidate's actual position.
-  This is the WI-02 defect, and a plain verbatim check cannot see it. It also catches bare
+  A plain verbatim check cannot see this defect. It also catches bare
   noun-phrase fragments stored as quotes ("independent redistricting commission").
 
 The three are ordered by severity, and the nested-quotation check runs **before** the clip check.
@@ -403,25 +402,24 @@ and candidates** in `what`, so a curator can reconstruct the set without re-quer
 demotion is a curation decision; it goes through `apply_fixes.py`'s dry-run + explicit OK like every
 other write in this skill.
 
-### 3.2 `source-not-an-answer` replaced `source-tier-4`
+### 3.2 `source-not-an-answer` — directness of answer, not medium
 
-The old check matched a **campaign-site URL pattern** and called the source "tier 4", from a ladder
-ordered by *medium* and *questioner independence*: spoken-and-probed at the top, candidate-bylined
-written at the bottom. That ordering is actively wrong for Read & Rank. It filed a **Vote411/LWV
-questionnaire** — written, self-published, therefore low-tier — beneath a stump speech, when the
-questionnaire is the **most directly comparable source there is**: every ballot-qualified candidate
-is invited, and they all answer *identical prompts*. Comparability is what Read & Rank is for, so
-the thing worth grading is **how directly this answers this question**, not what medium it arrived
-in. Questioner independence still breaks ties *within* a level; it no longer sets the level.
-A URL pattern cannot see directness at all — the same campaign domain hosts both a questionnaire
-reprint and a scraped platform bullet — so the check could not stay mechanical, and moved to §3.
+Provenance is graded by **how directly this answers this question**, not by what medium it arrived
+in. A candidate questionnaire is written and self-published, yet it is the **most directly
+comparable source there is**: every ballot-qualified candidate is invited, and they all answer
+*identical prompts*. Comparability is what Read & Rank is for, so medium does not set the level;
+questioner independence only breaks ties *within* a level. A URL pattern cannot see directness —
+the same campaign domain hosts both a questionnaire reprint and a scraped platform bullet — so this
+is a judgment check (§3), not a mechanical one. A `source-tier-4` finding in an older audit report
+is the retired URL-pattern version of this check.
 (Ruling: CASEBOOK.md, "Directness of answer, not medium". Model: §6–7 of this repo's
 `docs/superpowers/specs/2026-07-23-readrank-comparability-model.md`.)
 
-**What did *not* change, and must not be read as relaxed by this:**
+**What directness does not override:**
 
 - **Hot-mic, private, secretly-recorded and off-the-cuff "gotcha" remarks stay hard-excluded**
-  (QUOTE-CURATION-PRINCIPLES §5). That is a consent-and-fairness rule, not a ranking; being a
+  (`docs/quote-curation/PRINCIPLES.md`, "Sourcing"). That is a consent-and-fairness rule, not a
+  ranking; being a
   direct answer cannot rescue such a quote.
 - **Written sources at any level still yield verbatim sentences only.** A platform page or
   questionnaire answer rendered as a curator-summarized bullet list is still `source-summary`
@@ -434,8 +432,8 @@ reprint and a scraped platform bullet — so the check could not stay mechanical
   `scorecard-source` detect sources that cannot carry a candidate utterance *at all*, which is
   orthogonal to directness: a level-1-looking page is still unusable if nobody said the words on it.
 
-✅ `QUOTE-CURATION-PRINCIPLES.md` §5 now states this hierarchy (2026-08-07). The two documents
-agree; the principles doc remains the authority. Its levels are **named, not numbered** —
+✅ `docs/quote-curation/PRINCIPLES.md` ("Sourcing") states this hierarchy and remains the
+authority. Its levels are **named, not numbered** —
 `answered-this-question` / `adjacent` / `curator-extracted` / `excluded` — deliberately, because
 `essentials.discovered_sources.source_tier_guess` runs 1–4 on a *different* scale.
 
@@ -648,7 +646,8 @@ error you are here to catch, so never merge two questions because their topic ma
    `off-question`. Responsiveness precedes comparability — a quote that doesn't answer the
    question was never in the set.
 
-   **Then decide what the set is, from the run's scope:**
+   **Then decide what the set is, from the run's scope** (drafts are in scope exactly when some
+   quote has `readrank_selected` false — a live-only run carries no drafts):
    - **Live-only run** (the default): the set is the live quotes (`readrank_selected` true).
      You are grading what a citizen actually sees.
    - **Drafts in scope** (`--include-drafts`): the set is **each candidate's single best
