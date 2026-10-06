@@ -3620,10 +3620,20 @@ def _suggest_names(meeting_id: str) -> None:
     body_slug = json.loads(state_path.read_text()).get("body_slug") if state_path.exists() else None
     roster = load_roster(body_slug=body_slug) if body_slug else None
     db_url = os.environ.get("DATABASE_URL", "").strip()
-    db = PgNameDB(db_url) if db_url else None
+    db_warning = "database unavailable: politician and past-meeting lookups skipped"
+    warnings: list = []
+    db = None
+    if db_url:
+        try:
+            db = PgNameDB(db_url)
+        except Exception:
+            warnings.append(db_warning)
+    else:
+        warnings.append(db_warning)
     try:
         deps = Deps(db=db, cache=ResearchCache(config.CONFIG_DIR / "name_lookup_cache.json"))
-        result = suggest_names(meeting, meeting_dir, members=roster.members if roster else [], deps=deps)
+        result = suggest_names(meeting, meeting_dir, members=roster.members if roster else [], deps=deps,
+                               warnings=warnings)
     finally:
         if db is not None:
             db.close()

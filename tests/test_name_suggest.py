@@ -159,3 +159,87 @@ def test_transient_failure_is_not_cached(tmp_path):
     assert cache._data == {}
     lk2 = suggest_for_candidate(cand("Ann Lee"), members=[], state=None, place=None, deps=deps, run=run())
     assert len(calls) == 2 and lk2.reason == "not found on the web"
+
+
+def _meeting_two_labels(names):
+    segs = []
+    for i, (label, text) in enumerate(names):
+        segs.append({"segment_id": i, "start_time": i * 10, "end_time": i * 10 + 9,
+                     "speaker_label": label, "text": text})
+    return {"meeting_id": "m", "city": "X", "event_kind": "council", "race_id": None, "segments": segs}
+
+
+def test_same_roster_identity_on_two_labels_is_conflict(tmp_path):
+    m = [RosterMember(name="Greg Taylor", aliases=["Greg Taylor", "Taylor"], politician_id="p-t")]
+    meeting = _meeting_two_labels([
+        ("CHAIR", "Next is Councilor Taylor."), ("A", "Thank you, I am Councilor Taylor and I support this."),
+        ("CHAIR", "Now Councilor Taylor again."), ("B", "Councilor Taylor here, thanks.")])
+    from src import name_suggest
+    # synthetic path: force two candidates resolving to one roster identity
+    cands = {l: cand("Taylor", titled=True, partial=True, label=l) for l in ("A", "B")}
+    orig = name_suggest.build_candidates
+    name_suggest.build_candidates = lambda *a, **k: cands
+    try:
+        out = suggest_names(meeting, tmp_path, members=m, deps=Deps(db=None))
+    finally:
+        name_suggest.build_candidates = orig
+    assert len(out["suggestions"]) == 2
+    for s in out["suggestions"]:
+        assert s["conflict"] == "name_on_two_labels"
+        lk = s["lookup"]
+        assert (lk["verified"], lk["source"], lk["politician_id"], lk["url"]) == (False, "transcript", None, None)
+        assert lk["reason"] == "conflict: name_on_two_labels"
+
+
+class BrokenDB(DB):
+    def politicians_by_surname(self, s, st):
+        raise RuntimeError("db down")
+
+    def local_people_by_name(self, n):
+        raise RuntimeError("db down")
+
+    def states_for_politicians(self, ids):
+        raise RuntimeError("db down")
+
+
+def test_db_failures_degrade(tmp_path):
+    from src import name_suggest
+    meeting = _meeting_two_labels([("A", "hello")])
+    cands = {"A": cand("Ann Lee", label="A")}
+    orig = name_suggest.build_candidates
+    name_suggest.build_candidates = lambda *a, **k: cands
+    try:
+        m = [RosterMember(name="Z Y", aliases=["Z Y"], politician_id="p-z")]
+        out = suggest_names(meeting, tmp_path, members=m, deps=Deps(db=BrokenDB(), researcher=researcher(None)))
+    finally:
+        name_suggest.build_candidates = orig
+    assert out["state"] is None
+    [s] = out["suggestions"]
+    assert s["lookup"]["reason"] == "lookup error: RuntimeError" and s["lookup"]["verified"] is False
+
+
+def test_extra_warnings_and_cache_saved_on_failure(tmp_path):
+    from src import name_suggest
+    meeting = _meeting_two_labels([("A", "hello")])
+    cache = ResearchCache(tmp_path / "c.json")
+    cache.put("k", None)
+    orig = name_suggest.suggest_for_candidate
+
+    def boom(*a, **k):
+        raise KeyboardInterrupt
+
+    cands = {"A": cand("Ann Lee", label="A")}
+    ob = name_suggest.build_candidates
+    name_suggest.build_candidates = lambda *a, **k: cands
+    name_suggest.suggest_for_candidate = boom
+    try:
+        try:
+            suggest_names(meeting, tmp_path, members=[], deps=Deps(db=None, cache=cache))
+        except KeyboardInterrupt:
+            pass
+    finally:
+        name_suggest.suggest_for_candidate = orig
+        name_suggest.build_candidates = ob
+    assert (tmp_path / "c.json").exists()
+    out = suggest_names(meeting, tmp_path, members=[], deps=Deps(db=None), warnings=["w1"])
+    assert out["warnings"] == ["w1"]

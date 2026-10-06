@@ -15,7 +15,7 @@ from .models import Segment
 from .name_candidates import Candidate, build_candidates
 from .name_evidence import extract_evidence
 from .name_lookup import (
-    NameDB, RESEARCH_MODEL, Lookup, ResearchCache, ResearchFailed, ResearcherUnavailable, default_fetch, infer_state,
+    NameDB, RESEARCH_MODEL, Lookup, ResearchCache, ResearchFailed, ResearcherUnavailable, default_fetch, infer_state, norm_name,
     match_local_people, match_politician, match_roster, research, should_research, verify_on_page,
 )
 
@@ -97,30 +97,69 @@ def suggest_for_candidate(cand: Candidate, *, members: list, state: Optional[str
                   affiliation=found.get("affiliation") or cand.affiliation)
 
 
-def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps) -> dict:
+def _identity(lk: Lookup) -> Optional[str]:
+    if not lk.verified:
+        return None
+    if lk.politician_id:
+        return f"pol:{lk.politician_id}"
+    if lk.local_slug:
+        return f"local:{lk.local_slug}"
+    return f"name:{norm_name(lk.name)}"
+
+
+def suggest_names(meeting: dict, meeting_dir: Path, *, members: list, deps: Deps,
+                  warnings: Optional[list] = None) -> dict:
     segments = [Segment.from_dict(s) for s in meeting.get("segments", [])]
     cands = build_candidates(extract_evidence(segments, read_captions_text(meeting_dir)),
                              meeting.get("event_kind"))
     member_ids = [m.politician_id for m in members if getattr(m, "politician_id", None)]
-    state = infer_state(member_ids, meeting.get("race_id"), deps.db) if deps.db else None
+    state = None
+    if deps.db:
+        try:
+            state = infer_state(member_ids, meeting.get("race_id"), deps.db)
+        except Exception:
+            state = None
     place = ", ".join(x for x in (meeting.get("city"), state) if x) or None
     run: dict = {"web_disabled": None}
     out = []
-    for label in sorted(cands):
-        c = cands[label]
-        lk = suggest_for_candidate(c, members=members, state=state, place=place, deps=deps, run=run)
-        out.append({
-            "label": label, "tier": c.tier, "role": c.role, "titled": c.titled, "conflict": c.conflict,
-            "spoken_name": c.name,
-            "evidence": [{"kind": e.kind, "quote": e.quote} for e in c.evidence],
-            "lookup": lk.to_dict(),
-        })
-    if deps.cache:
-        deps.cache.save()
+    try:
+        for label in sorted(cands):
+            c = cands[label]
+            try:
+                lk = suggest_for_candidate(c, members=members, state=state, place=place, deps=deps, run=run)
+            except Exception as exc:
+                lk = _transcript(c, f"lookup error: {type(exc).__name__}")
+            out.append({
+                "label": label, "tier": c.tier, "role": c.role, "titled": c.titled, "conflict": c.conflict,
+                "spoken_name": c.name,
+                "evidence": [{"kind": e.kind, "quote": e.quote} for e in c.evidence],
+                "lookup": lk,
+            })
+    finally:
+        if deps.cache:
+            deps.cache.save()
+    # X4 after lookup: one identity on two labels is a conflict for both.
+    groups: dict = {}
+    for s in out:
+        ident = _identity(s["lookup"])
+        if ident:
+            groups.setdefault(ident, []).append(s)
+    for members_ in groups.values():
+        if len(members_) >= 2:
+            for s in members_:
+                s["conflict"] = "name_on_two_labels"
+                s["lookup"] = Lookup(name=s["lookup"].name, source="transcript", verified=False,
+                                     affiliation=s["lookup"].affiliation,
+                                     reason="conflict: name_on_two_labels")
+    for s in out:
+        s["lookup"] = s["lookup"].to_dict()
+    warns = list(warnings or [])
+    if run["web_disabled"]:
+        warns.append(run["web_disabled"])
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model": RESEARCH_MODEL, "state": state,
-        "warnings": [run["web_disabled"]] if run["web_disabled"] else [],
+        "warnings": warns,
         "suggestions": out,
     }
 
