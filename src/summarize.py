@@ -8,7 +8,6 @@ Two-pass pipeline (models come from config; calls go through make_llm_client):
 from __future__ import annotations
 
 import json
-import logging
 import re
 from datetime import datetime
 from typing import Optional
@@ -18,20 +17,6 @@ from .event_kinds import INTERVIEW_KINDS as _INTERVIEW_KINDS, summary_subject
 from .llm_providers import llm_call_site, make_llm_client
 from .models import Meeting, MeetingSummary, Segment, SummarySection
 from .summary_sections import normalize_raw_sections
-
-logger = logging.getLogger(__name__)
-
-
-def _warn_if_truncated(message, call_site: str) -> None:
-    """Log when a reply stopped at max_tokens.
-
-    A JSON reply cut short fails to parse and degrades to a "could not be
-    parsed" placeholder or an empty result; this makes that cause visible.
-    """
-    if getattr(message, "stop_reason", None) == "max_tokens":
-        logger.warning(
-            "summarize: %s reply hit max_tokens and is truncated", call_site
-        )
 
 
 def _framed(template: str, event_kind: Optional[str]) -> str:
@@ -222,7 +207,6 @@ def _classify_sections_chunk(
             ) + f"{condensed}{chapter_hint}",
         }],
     )
-    _warn_if_truncated(message, "classify")
 
     text = message.content[0].text
     # Extract JSON from response (handle markdown code fences)
@@ -375,7 +359,6 @@ def _summarize_discussion(
             "content": f"Meeting section: \"{title}\"\n\nTranscript:\n{section_transcript}",
         }],
     )
-    _warn_if_truncated(message, "discussion summary")
     return message.content[0].text.strip()
 
 
@@ -393,7 +376,6 @@ def _extract_roll_call(
             "content": f"Extract roll call from:\n\n{section_transcript}",
         }],
     )
-    _warn_if_truncated(message, "roll call")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -431,7 +413,6 @@ def _extract_votes(
             "content": f"Extract votes from:\n\n{section_transcript}",
         }],
     )
-    _warn_if_truncated(message, "votes")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -549,7 +530,6 @@ def _generate_executive_summary(
             ),
         }],
     )
-    _warn_if_truncated(message, "executive summary")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -590,7 +570,6 @@ def _classify_sections_interview(
             "content": f"Classify this interview transcript into topic sections:\n\n{condensed}{chapter_hint}",
         }],
     )
-    _warn_if_truncated(message, "interview classify")
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
     if not json_match:
@@ -631,7 +610,6 @@ def _summarize_interview_topic(
             "content": f"Topic: \"{title}\"\n\nTranscript:\n{section_transcript}",
         }],
     )
-    _warn_if_truncated(message, "interview topic summary")
     return message.content[0].text.strip()
 
 
@@ -694,7 +672,6 @@ def _generate_interview_executive_summary(
             ),
         }],
     )
-    _warn_if_truncated(message, "interview executive summary")
 
     text = message.content[0].text
     json_match = re.search(r"\{[\s\S]*\}", text)
@@ -843,7 +820,6 @@ def generate_summary(
                             ) + section_transcript,
                         }],
                     )
-                _warn_if_truncated(msg, f"{sec_type} summary")
                 content = msg.content[0].text.strip()
             else:
                 content = ""

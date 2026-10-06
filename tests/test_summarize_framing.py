@@ -128,17 +128,35 @@ def test_chunked_classify_frames_every_chunk(monkeypatch):
     assert all("candidate forum transcripts" in c["system"] for c in calls)
 
 
+def _openrouter_client(text, finish_reason):
+    """The production client (AnthropicCompatClient) over a fake OpenAI-shaped
+    endpoint, so the adapter's truncation warning runs."""
+    from types import SimpleNamespace
+
+    from src.llm_providers import AnthropicCompatClient
+
+    resp = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=text),
+                                 finish_reason=finish_reason)],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+    )
+    fake = MagicMock()
+    fake.chat.completions.create.return_value = resp
+    return AnthropicCompatClient("https://x", "k", client=fake)
+
+
 def test_max_tokens_stop_reason_logs_warning(caplog):
-    client, _ = _capture_client(text='{"votes": [', stop_reason="max_tokens")
-    with caplog.at_level(logging.WARNING, logger="src.summarize"):
+    client = _openrouter_client('{"votes": [', finish_reason="length")
+    with caplog.at_level(logging.WARNING, logger="src.llm_providers"):
         md, votes = _extract_votes(client, "transcript")
     assert votes == []
-    assert any("max_tokens" in r.getMessage() and "votes" in r.getMessage()
+    assert any("max_tokens" in r.getMessage()
+               and "call_site=summarize.votes" in r.getMessage()
                for r in caplog.records)
 
 
 def test_normal_stop_reason_logs_nothing(caplog):
-    client, _ = _capture_client(text="Summary.", stop_reason="end_turn")
-    with caplog.at_level(logging.WARNING, logger="src.summarize"):
+    client = _openrouter_client("Summary.", finish_reason="stop")
+    with caplog.at_level(logging.WARNING, logger="src.llm_providers"):
         _summarize_discussion(client, "transcript", "Title", event_kind="debate")
-    assert not caplog.records
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
