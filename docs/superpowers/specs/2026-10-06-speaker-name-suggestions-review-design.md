@@ -32,11 +32,12 @@ later be made on data. Nothing is ever applied without Chris.
   no timeout beyond the per-lookup timeout already in place.
 - **Off the Mac / logged out:** unchanged slice-2 behaviour — the web step is
   skipped with one warning; roster, politician and past-meeting steps still run.
-- **Which speakers:** suggestions are computed for every speaker with evidence.
-  The review shows a suggestion only when it would change something: the speaker
-  is unnamed (no name, unidentified status, or no identity), or the suggested name
-  differs from the current name (normalized comparison) — this surfaces
-  misspellings like the five fixed on 2026-10-06.
+- **Which speakers (Chris, 2026-10-06):** only speakers **without an identity**
+  are looked up — no name, or status unidentified. A speaker already identified
+  by a voice profile, a politician link or a local person gets **no lookup at
+  all** (no web call, no usage spent). Checking already-known names for
+  misspellings is the separate published-names audit (out of scope). The review
+  therefore shows suggestions only on unnamed speakers.
 - **Label drift:** suggestions are keyed by speaker label; a suggestion whose
   label no longer exists (e.g. after a merge) is ignored.
 - **Re-run:** `run_local.py --suggest-names MEETING_ID` (exists) and a GUI route
