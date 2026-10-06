@@ -1781,6 +1781,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     print()
 
+    # Stage 4.5: name suggestions for unnamed speakers (never fails the run).
+    from src.name_suggest_step import run_name_suggestions
+    run_name_suggestions(meeting_dir, disabled=getattr(args, "no_suggest_names", False))
+
     # ======================================================================
     # Confidence gate (Phase A): score the meeting, route non-passing
     # non-interactive runs to the review queue BEFORE any paid summary or
@@ -3605,10 +3609,6 @@ def _enroll_after_review(
 
 def _suggest_names(meeting_id: str) -> None:
     """Write <meeting_dir>/name_suggestions.json and print a summary."""
-    from src.name_lookup import PgNameDB, ResearchCache
-    from src.name_suggest import Deps, suggest_names, write_suggestions
-    from src.roster import load_roster
-
     try:
         from gui.paths import is_safe_meeting_id
     except ImportError:  # gui extras not installed: same rule, inline
@@ -3623,42 +3623,16 @@ def _suggest_names(meeting_id: str) -> None:
         print(f"No transcript found for meeting: {meeting_id}")
         print(f"  Expected at: {named_path}")
         sys.exit(1)
-    meeting = json.loads(named_path.read_text(encoding="utf-8"))
-    warnings: list = []
-    state_path = meeting_dir / "pipeline_state.json"
-    body_slug = None
-    if state_path.exists():
-        try:
-            body_slug = json.loads(state_path.read_text(encoding="utf-8")).get("body_slug")
-        except (OSError, ValueError, AttributeError):
-            warnings.append("pipeline_state.json unreadable: roster lookups skipped")
-    roster = load_roster(body_slug=body_slug) if body_slug else None
-    db_url = os.environ.get("DATABASE_URL", "").strip()
-    db_warning = "database unavailable: politician and past-meeting lookups skipped"
-    db = None
-    if db_url:
-        try:
-            db = PgNameDB(db_url)
-        except Exception:
-            warnings.append(db_warning)
-    else:
-        warnings.append(db_warning)
-    try:
-        deps = Deps(db=db, cache=ResearchCache(config.CONFIG_DIR / "name_lookup_cache.json"))
-        result = suggest_names(meeting, meeting_dir, members=roster.members if roster else [], deps=deps,
-                               warnings=warnings)
-    finally:
-        if db is not None:
-            db.close()
-    path = write_suggestions(meeting_dir, result)
-    for w in result["warnings"]:
-        print(f"  WARNING: {w}")
+    from src.name_suggest_step import run_name_suggestions
+    result = run_name_suggestions(meeting_dir, force=True)
+    if result is None:
+        return
     for s in result["suggestions"]:
         lk = s["lookup"]
         mark = "\u2713" if lk["verified"] else "\u00b7"
         print(f"  {mark} {s['label']:<11} {s['tier'] or '-':<7} {lk['name']!s:<28} {lk['source']:<12} "
               f"{lk['url'] or lk['reason'] or ''}")
-    print(f"Wrote {path}")
+    print(f"Wrote {meeting_dir / 'name_suggestions.json'}")
 
 
 def _review_meeting(meeting_id: str) -> None:
@@ -4189,6 +4163,8 @@ Environment Variables:
     parser.add_argument("--suggest-names", metavar="MEETING_ID",
                         help="Suggest names for unnamed speakers (self-intros, chair calls, "
                              "roster/politician/past-meeting/web lookup); writes name_suggestions.json")
+    parser.add_argument("--no-suggest-names", action="store_true",
+                        help="Skip the automatic name-suggestion step after speaker identification")
     parser.add_argument("--review", metavar="MEETING_ID",
                         help="Review/correct/merge speakers in an existing meeting "
                              "(canonical; --review-meeting and --identify-speakers are aliases)")

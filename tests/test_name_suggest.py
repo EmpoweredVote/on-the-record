@@ -362,14 +362,14 @@ import pytest
 
 
 def _fake_pipeline(monkeypatch):
-    from src import name_suggest
+    from src import name_suggest_step
     seen = {}
 
-    def fake_suggest(meeting, meeting_dir, *, members, deps, warnings=None):
+    def fake_suggest(meeting, meeting_dir, *, members, deps, warnings=None, only_labels=None):
         seen.update(members=members, warnings=list(warnings or []), researcher=deps.researcher)
         return {"warnings": list(warnings or []), "suggestions": []}
 
-    monkeypatch.setattr(name_suggest, "suggest_names", fake_suggest)
+    monkeypatch.setattr(name_suggest_step, "suggest_names", fake_suggest)
     monkeypatch.setenv("DATABASE_URL", "")
     return seen
 
@@ -389,7 +389,8 @@ def test_run_local_suggest_names_corrupt_pipeline_state(tmp_meetings_dir, tmp_co
     seen = _fake_pipeline(monkeypatch)
     d = tmp_meetings_dir / "m1"
     d.mkdir()
-    (d / "transcript_named.json").write_text(json.dumps({"segments": []}))
+    (d / "transcript_named.json").write_text(json.dumps(
+        {"segments": [{"segment_id": 0, "speaker_label": "W", "text": "hi"}], "speakers": {}}))
     (d / "pipeline_state.json").write_text("{not json")
     run_local._suggest_names("m1")
     assert seen["members"] == []
