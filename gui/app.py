@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -127,6 +127,17 @@ class _NoCacheStaticFiles(StaticFiles):
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache"
         return response
+
+
+def _log_suggestion_edit(meeting_id: str, label: str, from_suggestion: str, name: str) -> None:
+    """After an identity form that was pre-filled from a name suggestion saved,
+    log what was kept. Best-effort: logging never breaks the form action."""
+    if from_suggestion.strip() != label:
+        return
+    try:
+        review_api.log_suggestion_edit(meeting_id, label, name)
+    except Exception:
+        pass
 
 
 def create_app() -> FastAPI:
@@ -461,11 +472,16 @@ def create_app() -> FastAPI:
         return FileResponse(str(path), media_type="image/jpeg")
 
     @app.get("/meetings/{meeting_id}/review")
-    def review_page(meeting_id: str) -> RedirectResponse:
-        return RedirectResponse(url=f"/meetings/{meeting_id}?tab=review", status_code=301)
+    def review_page(meeting_id: str, notice: str = "") -> RedirectResponse:
+        # A one-line result message (e.g. from accept-all) rides along to the shell.
+        query = {"tab": "review", **({"notice": notice} if notice.strip() else {})}
+        # 303, not 301: a redirect that carries a per-action notice must not be cached.
+        return RedirectResponse(url=f"/meetings/{meeting_id}?" + urlencode(query),
+                                status_code=303 if notice.strip() else 301)
 
     @app.get("/meetings/{meeting_id}", response_class=HTMLResponse)
-    def workspace_shell(request: Request, meeting_id: str, tab: str = "") -> HTMLResponse:
+    def workspace_shell(request: Request, meeting_id: str, tab: str = "",
+                        notice: str = "") -> HTMLResponse:
         # Pick the tab from a cheap stage read first, so we can load the review page
         # at most once and reuse it for both the panel and the header's attention count.
         stage = workspace.meeting_stage(meeting_id)
@@ -486,7 +502,8 @@ def create_app() -> FastAPI:
         if header is None:
             raise HTTPException(status_code=404)
         return _templates.TemplateResponse(
-            request, "workspace.html", {**ctx, "header": header, "active_tab": active},
+            request, "workspace.html",
+            {**ctx, "header": header, "active_tab": active, "notice": notice.strip()[:500]},
         )
 
     @app.get("/meetings/{meeting_id}/panel/review/card/{label}", response_class=HTMLResponse)
@@ -644,14 +661,36 @@ def create_app() -> FastAPI:
     @app.post("/meetings/{meeting_id}/speakers/{label}/link")
     def link_speaker_route(meeting_id: str, label: str,
                            politician_slug: str = Form(""), politician_id: str = Form(""),
-                           name: str = Form("")):
+                           name: str = Form(""), from_suggestion: str = Form("")):
         redirect = RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
         if not politician_slug.strip() and not politician_id.strip():
             return redirect  # nothing to link
         if not review_api.apply_link(meeting_id, label, politician_slug, politician_id,
                                      name=name):
             raise HTTPException(status_code=404)
+        _log_suggestion_edit(meeting_id, label, from_suggestion, name)
         return redirect
+
+    @app.post("/meetings/{meeting_id}/speakers/{label}/accept-suggestion")
+    def accept_suggestion_route(meeting_id: str, label: str):
+        if review_api.apply_suggestion(meeting_id, label) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
+
+    @app.post("/meetings/{meeting_id}/accept-suggestions")
+    def accept_all_suggestions_route(meeting_id: str):
+        done = review_api.apply_all_suggestions(meeting_id)
+        msg = (f"Accepted {len(done)}: " + ", ".join(f"{lab} {name}" for lab, name in done)
+               if done else "Accepted 0")
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review?" + urlencode({"notice": msg}),
+                                status_code=303)
+
+    @app.post("/meetings/{meeting_id}/suggest-names")
+    def suggest_names_route(meeting_id: str):
+        if runner.launch_suggest_names(meeting_id, python_exe=sys.executable,
+                                       script=_RUN_LOCAL) is None:
+            raise HTTPException(status_code=404)
+        return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/unlink")
     def unlink_speaker_route(meeting_id: str, label: str):
@@ -680,7 +719,7 @@ def create_app() -> FastAPI:
     @app.post("/meetings/{meeting_id}/speakers/{label}/local-person")
     def make_local_person_route(meeting_id: str, label: str,
                                slug: str = Form(""), role: str = Form(""),
-                               name: str = Form("")):
+                               name: str = Form(""), from_suggestion: str = Form("")):
         try:
             ok = review_api.apply_make_local_person(meeting_id, label, slug, role,
                                                     name=name)
@@ -690,6 +729,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc))
         if not ok:
             raise HTTPException(status_code=404)
+        _log_suggestion_edit(meeting_id, label, from_suggestion, name)
         return RedirectResponse(url=f"/meetings/{meeting_id}/review", status_code=303)
 
     @app.post("/meetings/{meeting_id}/speakers/{label}/local-person/clear")

@@ -253,6 +253,22 @@ def launch_redo(meeting_id: str, stage: str, *, python_exe: str, script: str,
     return _spawn(meeting_id, meeting_dir, cmd, popen)
 
 
+def launch_suggest_names(meeting_id: str, *, python_exe: str, script: str,
+                         popen=subprocess.Popen) -> Optional[str]:
+    """Re-run the name lookup for one meeting in the background. None on an
+    unsafe id, an unprocessed meeting, or a run still in progress for it (a
+    lookup must not take over a live pipeline's handle and log)."""
+    if not is_safe_meeting_id(meeting_id):
+        return None
+    meeting_dir = config.MEETINGS_DIR / meeting_id
+    if not (meeting_dir / "transcript_named.json").exists():
+        return None
+    live = _RUNS.get(meeting_id)
+    if live is not None and live.poll() is None:
+        return None
+    return _spawn(meeting_id, meeting_dir, [python_exe, script, "--suggest-names", meeting_id], popen)
+
+
 def build_reingest_command(python_exe: str, script: str, meeting_id: str) -> Optional[list[str]]:
     """Replay the meeting's original launch argv, or None if it wasn't recorded.
 

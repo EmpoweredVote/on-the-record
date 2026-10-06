@@ -184,6 +184,7 @@
         results.innerHTML = '<div class="link-msg">' + (data.error ? "search unavailable" : "no matches") + "</div>";
         return;
       }
+      const fromSug = widget.getAttribute("data-from-suggestion") || "";
       let action = widget.getAttribute("data-link-action") || "";
       if (!action.endsWith("/link")) action += "/link";
       const esc = (s) => String(s == null ? "" : s).replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -212,6 +213,9 @@
           // empty name is correct (apply_link/_reset_and_rename just skips the
           // rename), never the whole decorated line landing in speaker_name.
           '<input type="hidden" name="name" value="' + esc(r.full_name || "") + '">' +
+          // Set when the card's search started from a name suggestion: the
+          // server logs whether the reviewer kept the suggested name.
+          (fromSug ? '<input type="hidden" name="from_suggestion" value="' + esc(fromSug) + '">' : "") +
           '<button type="submit" class="link-result">' + inner + "</button></form>"
         );
       }).join("");

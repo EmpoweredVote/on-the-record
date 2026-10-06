@@ -75,8 +75,25 @@
   </div>
   {% endif %}
 
-  {% if c.hints or c.sample_text or c.clip_seeks %}
+  {% if c.suggestion or c.hints or c.sample_text or c.clip_seeks %}
   <div class="card-evidence">
+    {# Name suggestion (name_suggestions.json) for a still-unnamed speaker. Only
+       an acceptable (verified) one gets a one-click Accept; the others are
+       reviewed through the identity forms below, which are pre-filled with it. #}
+    {% if c.suggestion %}{% set s = c.suggestion %}
+    <div class="suggestion suggestion-{{ s.state }}">
+      {% if s.state == 'acceptable' %}<strong>Suggested: {{ s.name }} ✓</strong>
+      {% elif s.state == 'unverified' %}<strong>Suggested (not verified): {{ s.name }}</strong> <span class="why">{{ s.reason or '' }}</span>
+      {% else %}<strong>Possible: {{ s.name }}</strong> <span class="why">{{ s.reason or '' }}</span>{% endif %}
+      <span class="src">{% if s.url %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.source }} · {{ s.domain }}</a>{% else %}{{ s.source }}{% endif %}{% if s.role %} · {{ s.role }}{% endif %}</span>
+      {% for q in s.quotes %}<p class="sample">“{{ q[:200] }}”</p>{% endfor %}
+      {% if s.state == 'acceptable' %}
+      <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/accept-suggestion" class="inline">
+        <button type="submit" class="accept">Accept</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
     {% for hname, hscore in c.hints %}
       <div class="hint">▸ voice match: {{ hname }} ({{ '%.2f'|format(hscore) }})</div>
     {% endfor %}
@@ -114,10 +131,13 @@
       {# The search results are rendered by workspace.js as one POST form per
          hit, each carrying that person's name so speaker_name cannot disagree
          with the person linked. #}
+      {# With a name suggestion, the search box starts on the suggested name and
+         every result form carries from_suggestion, so the save is logged. #}
       <div class="link-search"
            data-search-url="/api/politicians/search"
-           data-link-action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/link">
-        <input type="text" placeholder="Search a name…" autocomplete="off">
+           data-link-action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/link"
+           {% if c.suggestion %}data-from-suggestion="{{ c.label }}"{% endif %}>
+        <input type="text" placeholder="Search a name…" autocomplete="off"{% if c.suggestion %} value="{{ c.suggestion.name }}"{% endif %}>
         <div class="link-results"></div>
       </div>
     </div>
@@ -160,18 +180,23 @@
          reason — there is no established role to echo back — and prefilled only
          when identity_kind == 'local'. #}
       {% set is_marked = c.identity_kind in ('unidentified', 'non_speaker') %}
+      {# A name suggestion is the one honest prefill for an unnamed or
+         unidentified card: it states who this is, with its own slug and role.
+         from_suggestion marks the save so what the reviewer kept is logged. #}
+      {% set from_sug = c.suggestion and c.identity_kind in ('none', 'unidentified') %}
       <form method="post" action="/meetings/{{ meeting_id }}/speakers/{{ c.label }}/local-person"
             class="local-person">
+        {% if from_sug %}<input type="hidden" name="from_suggestion" value="{{ c.label }}">{% endif %}
         <label>Name
-          <input type="text" name="name" value="{{ '' if is_marked else (c.name or '') }}" required
+          <input type="text" name="name" value="{{ c.suggestion.name if from_sug else ('' if is_marked else (c.name or '')) }}" required
                  autocomplete="off" placeholder="Brian Sterling"></label>
         <label>Slug
-          <input type="text" name="slug" value="{{ '' if is_marked else (c.local_slug if c.identity_kind == 'local' else c.default_slug) }}" required
+          <input type="text" name="slug" value="{{ c.suggestion_slug if from_sug else ('' if is_marked else (c.local_slug if c.identity_kind == 'local' else c.default_slug)) }}" required
                  {{ 'data-autoslug' if c.identity_kind != 'local' }}
                  pattern="[a-z0-9][a-z0-9_-]{0,99}"
                  title="lowercase letters, digits, hyphen or underscore"></label>
         <label>Role
-          <input type="text" name="role" value="{{ '' if is_marked or c.identity_kind != 'local' else (c.local_role or '') }}" required
+          <input type="text" name="role" value="{{ (c.suggestion.role or '') if from_sug else ('' if is_marked or c.identity_kind != 'local' else (c.local_role or '')) }}" required
                  list="roles-{{ c.label }}" autocomplete="off" placeholder="choose or type…"></label>
         <datalist id="roles-{{ c.label }}">
           {% for r in local_role_options %}<option value="{{ r }}"></option>{% endfor %}
