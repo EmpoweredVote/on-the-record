@@ -24,7 +24,7 @@ what's already there.
       judgment-agent prompt templates, and the portfolio instructions). If the two ever disagree,
       the principles doc wins.
 - [ ] **Resolve scope + confirm.** Run `scripts/audit.py` with the user's scope (default: no
-      flags, all races). It prints a `SCOPE:` line and `MECHANICAL FINDINGS: N`, and writes
+      flags, all races). It prints a `SCOPE:` line and `MECHANICAL+SOURCE FINDINGS: N`, and writes
       `.runs/<date>/context/<race>.json` bundles plus `mechanical_findings.json` and
       `mechanical_report.md`. Show the user both printed lines and **confirm before the judgment
       fan-out** — state roughly one subagent per race. The mechanical pass is free and read-only,
@@ -36,9 +36,8 @@ what's already there.
       to ship — that is most runs on a race with a large draft pool and sparse live selections,
       which is the common case. Drafts cost no network I/O, just a larger bundle.
 - [ ] **Offer `--verify-written`** (a.k.a. `--verify-sources`). Without it, quotes from candidate
-      sites, op-eds and news articles are never compared to their cited source — the gap that let
-      the WI-02 clip through (CHECKS.md §2.2). This is the highest-severity blind spot in the
-      pipeline: a quote can be fabricated, paraphrased, or cut to mean the opposite, and every
+      sites, op-eds and news articles are never compared to their cited source (CHECKS.md §2.2).
+      This is the highest-severity blind spot in the pipeline: a quote can be fabricated, paraphrased, or cut to mean the opposite, and every
       other check still passes it. It fetches each cited page (cached, rate-limited), so it is off
       by default: **ask before enabling it on a wide scope**, since a full sweep hits hundreds of
       third-party sites. On a single race it's cheap — just turn it on.
@@ -113,7 +112,8 @@ Fixes file for `scripts/apply_fixes.py` (dry-run by default; `--commit` persists
 ```
 
 Allowed `field` values for `set_field`/`regex_sub`: `editor_note`, `deidentified_text`,
-`quote_text`, `topic_key`. `set_live` toggles `readrank_selected` and takes no `field`.
+`quote_text`, `topic_key`, `source_name`, `source_url`. `set_live` toggles `readrank_selected`
+and takes no `field`.
 
 ```bash
 ../../../.venv/bin/python -m scripts.apply_fixes fixes.json            # dry-run: shows diff, rolls back
@@ -136,7 +136,7 @@ Allowed `field` values for `set_field`/`regex_sub`: `editor_note`, `deidentified
   then apply — never rewrite and commit in the same step.
 - **Never merge the two judgment passes.** Per-set runs strictly after per-quote so contrast
   cannot influence selection. Merging them to save a dispatch silently breaks the guardrail the
-  whole rubric rests on (QUOTE-CURATION-PRINCIPLES §4.6).
+  whole rubric rests on (CASEBOOK.md, "Differentiation is observed, never engineered").
 - **Agreement is information.** An undifferentiated question is *shown as convergence*, not
   dropped and not sharpened. Never hide agreement to make a race look sharper, and never suggest
   sourcing or swapping a quote in order to create contrast.

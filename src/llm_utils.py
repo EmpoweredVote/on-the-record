@@ -132,8 +132,8 @@ def prompt_for_speaker_id(
     roster_section = ""
     if roster_hint:
         roster_section = (
-            f"\n{roster_hint}\nIMPORTANT: Use the exact names from this roster when "
-            "identifying speakers. Transcription may misspell names.\n"
+            f"\n{roster_hint}\nUse the exact spelling from this roster when you name a "
+            "speaker; the transcription may misspell names.\n"
         )
 
     prompt = f"""{speaker_id_framing(event_kind)} Your job is to identify one speaker.
@@ -148,24 +148,19 @@ Transcript excerpt:
 {transcript_excerpt}
 ---
 
-Based on the context, who is {unknown_label}? Consider:
-- How other speakers address them
-- What topics they discuss and their role
-- Conversational patterns and turn-taking
+Based on the context, who is {unknown_label}?
 
 If the transcript does not contain enough information to name this speaker,
 answer with null rather than guessing.
 
 Respond with ONLY a JSON object:
-{{"name": "Speaker Name or null", "reasoning": "brief explanation"}}"""
+{{"name": "Speaker Name or null"}}"""
 
     text = provider.complete(
         prompt,
         max_tokens=config.SPEAKER_ID_MAX_TOKENS,
         temperature=0.0,
     )
-    if text and "{" in text and "}" not in text:
-        text += "}"
 
     candidate = _parse_name(text)
     if not candidate:

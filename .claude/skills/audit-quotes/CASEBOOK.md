@@ -118,7 +118,7 @@ provenance pass of 2026-08-07.
 ## Provenance and inclusion
 
 ### Directness of answer, not medium
-- **Situation.** The old ladder ranked a Vote411/LWV questionnaire as low-tier because it is written
+- **Situation.** The old ladder ranked a candidate questionnaire as low-tier because it is written
   and self-published.
 - **Decision.** Questionnaires are **level 1**. Identical prompts across candidates, and every
   ballot-qualified candidate is invited.

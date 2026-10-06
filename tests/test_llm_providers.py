@@ -432,7 +432,7 @@ def _call_sites():
     from src.agenda_parse import ParsedItem
 
     meeting = SimpleNamespace(city="C", meeting_type="council", date="2026-01-01",
-                              duration_seconds=0)
+                              duration_seconds=0, event_kind=None)
     item = ParsedItem(position=1, item_number="1", section="S", section_number=1,
                       title_raw="An item")
     return [
