@@ -969,3 +969,18 @@ def test_publish_meeting_override_log_code_bug_is_not_swallowed(monkeypatch, tmp
 
     with pytest.raises(NameError):
         publish.publish_meeting(Meeting(meeting_id="m1", city="X", date="2026-04-01"), None)
+
+
+def test_upsert_meeting_update_keeps_existing_thumbnail_when_none():
+    """A meeting with no local video attaches no thumbnail (thumbnail_url None);
+    re-publishing must not overwrite the stored thumbnail with NULL."""
+    cur = RecordingCursor(("existing-uuid",))
+    meeting = Meeting(
+        meeting_id="2026-05-10-interview",
+        city=None, date="2026-05-10", meeting_type="Interview",
+        title="Interview", event_kind="news_clip",
+    )
+    assert meeting.thumbnail_url is None
+    _upsert_meeting(cur, meeting, None)
+    write_sql, _params = cur.calls[1]
+    assert "thumbnail_url = COALESCE(%s, thumbnail_url)" in write_sql

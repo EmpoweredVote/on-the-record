@@ -287,7 +287,7 @@ def _upsert_meeting(cur, meeting: Meeting, body_slug: Optional[str], status: str
               playback_kind = %s,
               clip_start_seconds = %s,
               clip_end_seconds = %s,
-              thumbnail_url = %s,
+              thumbnail_url = COALESCE(%s, thumbnail_url),
               summary = %s,
               processing_metadata = %s,
               updated_at = NOW()
