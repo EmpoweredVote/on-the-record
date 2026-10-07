@@ -944,6 +944,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         sys.exit(2)
+    _date_warning = _meeting_id_date_mismatch(meeting_id, args.date)
+    if _date_warning:
+        print(f"WARNING: {_date_warning}", file=sys.stderr)
     meeting_dir = ensure_drive_structure(meeting_id)
     state = PipelineState(meeting_dir)
 
@@ -2260,6 +2263,20 @@ def _run_batch(args: argparse.Namespace) -> None:
 
     if completed or skipped:
         print(f"\nUse --review-meeting MEETING_ID to review speaker identifications.")
+
+
+def _meeting_id_date_mismatch(meeting_id: str, date: Optional[str]) -> Optional[str]:
+    """Warning text if meeting_id starts with a YYYY-MM-DD that differs from date.
+
+    The id prefix and --date are entered separately. If they disagree, the
+    published date and the date in the summary follow --date, not the id.
+    Returns None when they agree, or when either one is missing.
+    """
+    m = re.match(r"(\d{4}-\d{2}-\d{2})", meeting_id or "")
+    if not m or not date or m.group(1) == date:
+        return None
+    return (f"meeting id {meeting_id!r} starts with {m.group(1)}, but --date is "
+            f"{date}. The published date and the summary will use {date}.")
 
 
 def _is_simple_meeting_id(meeting_id: str) -> bool:
