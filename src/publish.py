@@ -1343,12 +1343,15 @@ def publish_meeting(
     # Best-effort: record where a published name differs from an accepted-quality
     # suggestion. Never blocks or fails a publish.
     try:
+        from . import config
         from .name_suggestion_log import log_overrides
 
         log_overrides(config.MEETINGS_DIR / meeting.meeting_id, meeting.meeting_id,
                       {lab: m.speaker_name for lab, m in meeting.speakers.items()})
-    except Exception as exc:  # noqa: BLE001 - logging never blocks a publish
-        print(f"  (name-suggestion override log skipped: {type(exc).__name__})")
+    except (OSError, ValueError, KeyError) as exc:
+        # Expected I/O / bad-data failures only. A NameError or ImportError is a
+        # code bug and must surface, not hide behind this best-effort log.
+        print(f"  (name-suggestion override log skipped: {type(exc).__name__}: {exc})")
 
     return PublishResult(
         meeting_id=meeting.meeting_id,

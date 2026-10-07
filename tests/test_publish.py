@@ -895,3 +895,77 @@ def test_publish_result_removed_speakers_defaults_to_zero():
     # Existing callers build PublishResult positionally with three fields.
     from src.publish import PublishResult
     assert PublishResult("m1", 12, 3).removed_speakers == 0
+
+
+def _stub_publish_db(monkeypatch, publish):
+    """Stub the DB transaction so publish_meeting runs through to the override log."""
+    monkeypatch.setattr(publish, "_require_db_url", lambda: "postgresql://x")
+
+    class _Cur:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, *a, **k): pass
+        def fetchone(self): return ("muid",)
+        def fetchall(self): return []
+    class _Conn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def cursor(self): return _Cur()
+        def close(self): pass
+    monkeypatch.setattr(publish.psycopg2, "connect", lambda *a, **k: _Conn())
+    for fn in ("_upsert_meeting", "_upsert_event_orgs", "_upsert_local_people",
+               "_reconcile_event_races", "_replace_topics"):
+        monkeypatch.setattr(publish, fn, lambda *a, **k: "muid")
+    monkeypatch.setattr(publish, "_upsert_speakers", lambda *a, **k: {})
+    monkeypatch.setattr(publish, "_replace_segments", lambda *a, **k: 0)
+
+
+def test_publish_meeting_calls_name_suggestion_override_log(monkeypatch, tmp_path, capsys):
+    """Regression: `config` was not imported in publish_meeting, so the override
+    log raised NameError and was silently skipped on every publish."""
+    import src.publish as publish
+    from src import config, name_suggestion_log
+    from src.models import Meeting
+
+    _stub_publish_db(monkeypatch, publish)
+    monkeypatch.setattr(config, "MEETINGS_DIR", tmp_path)
+    seen = {}
+    monkeypatch.setattr(name_suggestion_log, "log_overrides",
+                        lambda d, mid, names: seen.update(dir=d, mid=mid, names=names))
+
+    publish.publish_meeting(Meeting(meeting_id="m1", city="X", date="2026-04-01"), None)
+
+    assert seen == {"dir": tmp_path / "m1", "mid": "m1", "names": {}}
+    assert "override log skipped" not in capsys.readouterr().out
+
+
+def test_publish_meeting_override_log_io_error_is_reported_not_fatal(monkeypatch, tmp_path, capsys):
+    import src.publish as publish
+    from src import config, name_suggestion_log
+    from src.models import Meeting
+
+    _stub_publish_db(monkeypatch, publish)
+    monkeypatch.setattr(config, "MEETINGS_DIR", tmp_path)
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(name_suggestion_log, "log_overrides", boom)
+
+    publish.publish_meeting(Meeting(meeting_id="m1", city="X", date="2026-04-01"), None)
+    assert "override log skipped: OSError: disk full" in capsys.readouterr().out
+
+
+def test_publish_meeting_override_log_code_bug_is_not_swallowed(monkeypatch, tmp_path):
+    import src.publish as publish
+    from src import config, name_suggestion_log
+    from src.models import Meeting
+
+    _stub_publish_db(monkeypatch, publish)
+    monkeypatch.setattr(config, "MEETINGS_DIR", tmp_path)
+
+    def bug(*a, **k):
+        raise NameError("nope")
+    monkeypatch.setattr(name_suggestion_log, "log_overrides", bug)
+
+    with pytest.raises(NameError):
+        publish.publish_meeting(Meeting(meeting_id="m1", city="X", date="2026-04-01"), None)
