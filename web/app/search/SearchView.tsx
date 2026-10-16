@@ -4,13 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { formatMeetingDate, formatTime, meetingTitle } from "@/lib/format";
+import { apiBase } from "@/lib/apiBase";
 import { fetchMeetings, fetchPeople } from "@/lib/queries";
 import { useApi } from "@/lib/useApi";
 import type { EventKind, SearchResult } from "@/lib/types";
 
-// Runtime requests from the browser — needs the NEXT_PUBLIC_ env var,
-// baked in at build time. The build-time EV_ACCOUNTS_URL is not visible here.
-const API_BASE = (process.env.NEXT_PUBLIC_EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
 const PAGE_SIZE = 25; // keep in sync with SEARCH_PAGE_SIZE in ev-accounts
 const MAX_PAGE = 400; // keep in sync with MAX_PAGE in ev-accounts
 
@@ -119,7 +117,7 @@ export default function SearchView() {
     if (urlCity) params.set("city", urlCity);
     if (urlSpeaker) params.set("speaker", urlSpeaker);
     setStatus("loading");
-    fetch(`${API_BASE}/api/search?${params}`, { signal: controller.signal })
+    fetch(`${apiBase()}/api/search?${params}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`search failed: ${res.status}`);
         return res.json();

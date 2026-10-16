@@ -15,11 +15,9 @@ import type {
   TopicListEntry,
   Vote,
 } from "./types";
+import { apiBase } from "./apiBase";
 
-// Read at call time (not import time) so it's testable and still inlined by Next.
-function base(): string {
-  return (process.env.NEXT_PUBLIC_EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
-}
+const base = apiBase;
 
 // Always fetch current data in the browser; no build-time cache.
 const FETCH_INIT: RequestInit = { cache: "no-store" };

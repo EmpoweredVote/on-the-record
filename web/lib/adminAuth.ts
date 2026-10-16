@@ -1,11 +1,9 @@
 // Client-side auth for the /admin review panel. The static bundle holds no
 // secret; real protection is the ev-accounts requireAuth+requireAdmin gate.
+import { apiBase } from "./apiBase";
+
 const TOKEN_KEY = "otr_admin_token";
 let memoryToken: string | null = null;
-
-function apiBase(): string {
-  return (process.env.NEXT_PUBLIC_EV_ACCOUNTS_URL ?? "").replace(/\/$/, "");
-}
 
 export class AuthError extends Error {
   code: "INVALID_CREDENTIALS" | "UNAUTHORIZED" | "FORBIDDEN" | "NETWORK";
