@@ -58,3 +58,23 @@ def test_fetch_stance_picks_one_season_answer():
     sql, _ = conn.cur.executed
     assert "LIMIT 1" in sql
     assert "se.status = 'open'" in sql
+
+
+def test_fetch_stance_chairs_follow_open_season_bound_version():
+    # Legacy inform.compass_stances is frozen and drifted from published revisions (41 topics on
+    # 2026-10-21). Chairs must resolve like ev-accounts getCompassTopics: open-season pin → latest
+    # published/superseded revision of that version → compass_stance_revisions.
+    conn = _Conn({"chairs": [], "chairs_source": "open_season"})
+    fetch_stance(conn, "pol-1", "housing")
+
+    sql, _ = conn.cur.executed
+    assert "inform.compass_stances s" not in sql
+    assert "compass_topics_promoted" in sql
+    assert "p.season_revision_id" in sql
+    assert "e.version = pin.version" in sql
+    assert "e.status IN ('published', 'superseded')" in sql
+    assert "ORDER BY e.revision DESC" in sql
+    assert "compass_stance_revisions" in sql
+    # A topic the open season does not ask falls back to the is_current ladder.
+    assert "compass_stances_current" in sql
+    assert "chairs_source" in sql
