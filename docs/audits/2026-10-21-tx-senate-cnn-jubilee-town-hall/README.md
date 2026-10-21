@@ -111,3 +111,24 @@ pending the user's review of the editor notes.
 Paxton contrast: his 10 ingested recordings (Feb–July 2026) contain no forward position on these
 topics, only attacks and record. A sourcing pass for his general-election material is proposed
 separately.
+
+## Update 2026-10-21: second batch inserted (`batch-talarico-2.json`)
+
+The user approved these after reviewing every field. All are linked to their race question.
+
+| topic_key | quote id | note |
+|---|---|---|
+| abortion | 6c6c0061-e1d2-4178-b7cd-fa1507b1b2c6 / 5bc8121e-0651-4478-8791-e34ce68bc9f4 | 40:24 reduce-abortions, and 42:40 critique of the current Texas ban (accuracy check flagged in its note) |
+| deportation | 82b55e40-ded3-4e57-8732-b98fa24b5b4a / 1a3d8648-8c0a-4b35-828f-6683affacaeb | "who" (deport violent offenders) and "ICE" (does not support abolishing) |
+| healthcare | 32318244-0029-4695-b9c1-1a0fab2d9f8e | ACA cuts, drug caps, public option |
+| housing | 5c9f48e0-99a6-460a-81a8-1708904ec589 | first-time buyers, ban Wall Street purchases |
+| immigration | b0fbbcfd-8400-49dd-a3c9-3f3309aa9c60 | legal pathways, pathway to citizenship |
+
+The user chose to add these alongside the existing rows, not as replacements, so these topics now
+exceed the 2-draft guideline. "Texas" stays in the blind cards because every candidate in this
+race is running in Texas.
+
+Audit: only the expected `not-rankable` and `source-not-ingested` findings. The audit script
+crashes on the housing row because `inform.politician_answers` holds **two** Talarico answers for
+housing (values 2.0 and 3.0) and two for same-sex-marriage (1.0 and 2.0), from 2026-08-26 and
+2026-09-03. This is existing Compass data, not caused by this ingest. Needs a separate fix.

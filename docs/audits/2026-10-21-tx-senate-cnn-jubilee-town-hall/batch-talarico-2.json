@@ -1,0 +1,49 @@
+{
+  "politician_id": "e31c865b-e378-4c02-b6d5-3f3fc1393791",
+  "source_url": "https://www.youtube.com/watch?v=VnurpLQd4c0",
+  "quotes": [
+    {
+      "topic_key": "abortion",
+      "timestamp_seconds": 2424,
+      "text": "… what I think we can do is actually come together on reducing the number of unplanned pregnancies and the number of abortions, because if we treat this issue as a public health problem and not a culture war problem, then we can actually make progress together. … If we can join together to make sure that we have scientifically valid sex education, age-appropriate sex education, if we can make sure that folks who need contraception can get it, if we can make sure everyone has health care, … then we know that that reduces the number of abortions.",
+      "editor_note": "Not a direct answer to the legal-framework question: he says he and the voter reach different conclusions on legality, then proposes reducing abortions through sex education, contraception, and health care. Two cuts marked with … (his complaint about how the debate is argued, and an aside about the Catholic Church), and the leading … marks that he started with 'but'."
+    },
+    {
+      "topic_key": "abortion",
+      "timestamp_seconds": 2560,
+      "text": "But I think we could also look at the current abortion ban in Texas, which bans abortion in all cases, including in cases of rape and incest, including when the life of the mother is in danger. We currently see in Texas women dying in emergency room parking lots from sepsis because their doctors are too afraid to provide life-saving care. … And so if we are authentically pro-life, I think we should be disturbed by the outcomes of this extreme abortion ban.",
+      "editor_note": "His critique of the current Texas abortion law, given to a Catholic voter in the same exchange; it describes what he opposes rather than the framework he would put in its place. One cut marked with … (a sentence about girls as young as 10). Accuracy check before live: Texas law has a narrow exception for a life-threatening medical condition, so his phrase 'including when the life of the mother is in danger' is his reading of how it works in practice."
+    },
+    {
+      "topic_key": "deportation",
+      "timestamp_seconds": 1596,
+      "text": "We were told that ICE was gonna go after violent criminals, and I support that. If you're an undocumented immigrant and you commit a violent crime, you should be deported immediately. But that's not what they're doing. … ICE should be focused on going after the cartels, not our communities. They should be going after violent gang members, not moms and babies.",
+      "editor_note": "Part of his answer to a Republican voter who asked whether people with no basis to stay should be required to leave: deport violent offenders immediately and focus enforcement on cartels and gangs. One cut marked with …: his list of people he says ICE is detaining instead. It covers the 'who should be deported' part of the question; his live quote says much the same."
+    },
+    {
+      "topic_key": "deportation",
+      "timestamp_seconds": 1759,
+      "text": "[I don't support abolishing ICE,] and I never have. We need Immigration and Customs Enforcement in this country, but that's not what we're seeing. What we've seen over the last year is a secret police force, and that's what we don't want in this country.",
+      "editor_note": "His answer when the moderator asked directly, 'Do you support abolishing ICE or not?' It covers the 'what should happen to ICE' part of the question. He answered 'No, and I never have'; the bracketed words replace that 'No' so the quote stands alone, and the rest is verbatim."
+    },
+    {
+      "topic_key": "healthcare",
+      "timestamp_seconds": 794,
+      "text": "In the US Senate, I want to do a few things. One, I want to roll back the cuts to the Affordable Care Act because those cuts are driving up premiums, sometimes a thousand dollars a month for Texans. I want to cap the cost of more life-saving drugs like EpiPens and cancer drugs. And then I think we need a robust public option that can compete with the for-profit health insurance companies in this country.",
+      "deidentified": "… I want to roll back the cuts to the Affordable Care Act because those cuts are driving up premiums, sometimes a thousand dollars a month for Texans. I want to cap the cost of more life-saving drugs like EpiPens and cancer drugs. And then I think we need a robust public option that can compete with the for-profit health insurance companies in this country.",
+      "editor_note": "His answer to a nurse's question about rising costs, naming three levers: roll back the Affordable Care Act cuts, cap more drug prices, and a public option. Verbatim; the blind version drops 'In the US Senate, I want to do a few things. One,' which identifies the office he is running for. His live KXAN quote says everyone should be able to join Medicare; this one says 'public option', and both are recorded as said."
+    },
+    {
+      "topic_key": "immigration",
+      "timestamp_seconds": 1671,
+      "text": "I also think that comprehensive immigration reform package should include more legal pathways for hardworking immigrants who want to come here and contribute to our economy and make us richer and stronger as a nation, as immigrants have always done. … And then lastly, I think we have to build a pathway to citizenship for our neighbors who have been here for years and decades. They should pay a fine, they should pay back taxes, they should learn English. And if they can do all those things, I think they deserve a shot at joining our communities as full citizens.",
+      "editor_note": "Part of his answer to a Republican voter on immigration: more legal pathways, and a path to citizenship conditioned on a fine, back taxes, and learning English. One cut marked with …: a line about his own family name and immigrant background. Verbatim otherwise."
+    },
+    {
+      "topic_key": "housing",
+      "timestamp_seconds": 4672,
+      "text": "We need substantial assistance for first-time home buyers. … Actually, the folks who are buying up most of the properties here in Texas, it's Wall Street. And so we need to ban Wall Street from gobbling up our housing stock here in Texas.",
+      "editor_note": "His answer to a first-time buyer who was outbid: more help for first-time buyers and a ban on Wall Street buying housing stock. One cut marked with … (a reference to the voter's story), and the quote ends where his sentence was cut off by crosstalk. His claim that Wall Street buys 'most of the properties' has not been checked."
+    }
+  ]
+}
