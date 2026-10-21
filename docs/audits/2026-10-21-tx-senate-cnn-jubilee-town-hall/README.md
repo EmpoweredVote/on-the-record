@@ -81,3 +81,33 @@ These are good spoken passages, but the topic already has 2 Talarico rows. Each 
    "CouncilScribe" has expired. Renew it, then run
    `run_local.py --resume 2026-10-14-cnn-jubilee-town-hall-james-talarico --no-publish`.
    The meeting is not published to `meetings.*`. Also, pyannote.ai returned 402 (out of credit).
+
+## Update 2026-10-21: inserted after review
+
+Quotes 1–9 were approved by the user and inserted as drafts. `question_id` was set by SQL where
+the race has a question. data-centers, border-security and military-intervention have no race
+question yet.
+
+| topic_key | quote id | question_id |
+|---|---|---|
+| border-security | f4f395ba-923c-4c3c-aa22-c52bb6d99256 | none |
+| campaign-finance | f9c2c2b5-1c0d-4662-925e-44fd80438eac | 6fbc1d11 |
+| childcare | 831eeee6-2e31-4b5f-84f3-3be8eededfcb | 529362f2 |
+| data-centers | bc43237c-b9b1-4804-a97c-ee8e88982ddc | none |
+| fossil-fuels | f525a208-cf4b-484c-bf4c-9351ac1063f7 | 520a1cc6 |
+| military-intervention | d46edc86-0469-4e3a-970e-e6d6392aaf1a | none |
+| taxes | c679b648-96be-4d23-805b-a7f53fe1f6a4 | 9e65ba5e |
+| ukraine-support | 757dea9d-106a-427b-bba1-727f39297463 | debe0e8d |
+| voting-rights | 1d155c17-1eb8-4f2c-b511-862e1933dd27 | ddaef5f7 |
+
+The audit-quotes run on these ids found 0 high and 18 medium findings. Every medium finding is
+one of two kinds: `not-rankable`, because no other candidate has a quote on that topic yet, and
+`source-not-ingested`, because the meeting is not published to `meetings.*`. No defects in the
+quotes themselves.
+
+The abortion quote (10) moved to `held-abortion.json`, pending a decision. Quotes 11–14 are
+pending the user's review of the editor notes.
+
+Paxton contrast: his 10 ingested recordings (Feb–July 2026) contain no forward position on these
+topics, only attacks and record. A sourcing pass for his general-election material is proposed
+separately.
