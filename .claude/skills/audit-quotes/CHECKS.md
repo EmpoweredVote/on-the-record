@@ -470,12 +470,14 @@ each topic has a `quotes` array. Each quote has:
     or null if none exists yet
   - `editor_note` — the curator's justification for the quote and its edits
   - `source_name`, `source_url` — provenance
-  - `stance` — `{question_text, compass_question_text, override_active, value, chairs}` for this
+  - `stance` — `{question_text, compass_question_text, override_active, value, chairs, chairs_source}` for this
     candidate+topic. `question_text` is the **ranking question** you gate responsiveness against
     (the per-race override if `override_active`, else the Compass question). `compass_question_text`
     is the canonical Compass question. `value` is the candidate's numeric Compass value on this
     topic's spectrum (may be null), and `chairs` are the spectrum's labeled anchor points
-    (roughly 1-5, from one pole to the other)
+    (roughly 1-5, from one pole to the other) in the wording voters see now: the open season's
+    version (`chairs_source` = `open_season`), or the `is_current` ladder for a topic the open
+    season does not ask (`is_current`)
 
 <!-- inject:gates:start -->
 ## The rules (summarized — the full principles live in docs/quote-curation/PRINCIPLES.md)

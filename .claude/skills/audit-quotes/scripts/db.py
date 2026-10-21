@@ -66,16 +66,49 @@ def fetch_stance(conn, politician_id, topic_key, race_id=None):
 
     Answers are season-scoped (one row per politician, topic, season), so `value` is the OPEN
     season's answer — the chair Read & Rank and Compass show now — falling back to the most
-    recently opened season. `season_name` says which season it came from."""
+    recently opened season. `season_name` says which season it came from.
+
+    `chairs` is the wording voters see now, resolved the way ev-accounts `getCompassTopics` does
+    (ADR 0006): the open season's pin (`compass_topics_promoted.season_revision_id`) → the latest
+    published/superseded revision of that pin's version → its `compass_stance_revisions`, first
+    letter capitalized. That can differ from `is_current`. A topic the open season does not ask
+    falls back to `compass_stances_current`; `chairs_source` says which. Never the frozen legacy
+    `compass_stances` table, whose text no longer matches published revisions."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute("""
           SELECT t.question_text AS compass_question_text,
                  COALESCE(rtq.question_text, t.question_text) AS question_text,
                  (rtq.question_text IS NOT NULL) AS override_active,
                  sa.value, sa.season_name,
-                 (SELECT json_agg(json_build_object('v', s.value, 'text', s.text) ORDER BY s.value)
-                  FROM inform.compass_stances s WHERE s.topic_id=t.id) AS chairs
+                 COALESCE(oc.chairs, cc.chairs) AS chairs,
+                 CASE WHEN oc.chairs IS NOT NULL THEN 'open_season'
+                      WHEN cc.chairs IS NOT NULL THEN 'is_current' END AS chairs_source
           FROM inform.compass_topics t
+          LEFT JOIN LATERAL (
+            -- Mirrors seasonService.servedRevisionLateral + getCompassTopics' stance query.
+            SELECT json_agg(json_build_object(
+                     'v', sr.value, 'text', upper(left(sr.text, 1)) || substr(sr.text, 2))
+                   ORDER BY sr.value) AS chairs
+            FROM inform.compass_topics_promoted p
+            JOIN LATERAL (
+              SELECT e.id
+              FROM inform.compass_topic_revisions pin
+              JOIN inform.compass_topic_revisions e
+                ON e.topic_id = pin.topic_id AND e.version = pin.version
+               AND e.status IN ('published', 'superseded')
+              WHERE pin.id = p.season_revision_id
+              ORDER BY e.revision DESC
+              LIMIT 1
+            ) eff ON true
+            JOIN inform.compass_stance_revisions sr ON sr.topic_revision_id = eff.id
+            WHERE p.id = t.id
+          ) oc ON true
+          LEFT JOIN LATERAL (
+            SELECT json_agg(json_build_object(
+                     'v', s.value, 'text', upper(left(s.text, 1)) || substr(s.text, 2))
+                   ORDER BY s.value) AS chairs
+            FROM inform.compass_stances_current s WHERE s.topic_id = t.id
+          ) cc ON true
           LEFT JOIN LATERAL (
             SELECT a.value, se.name AS season_name
             FROM inform.politician_answers a
