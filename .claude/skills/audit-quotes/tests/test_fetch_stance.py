@@ -47,3 +47,14 @@ def test_fetch_stance_resolves_override_and_passes_race_id():
     assert "readrank_race_topic_questions" in sql
     # Lock param order: politician_id (value subquery), race_id (join), topic_key (where).
     assert params == ("pol-1", "race-1", "fossil-fuels")
+
+
+def test_fetch_stance_picks_one_season_answer():
+    # politician_answers holds one row per season; a scalar subquery over it raised
+    # CardinalityViolation for anyone answered in two seasons. Lock the single-row pick.
+    conn = _Conn({"value": 3.0, "season_name": "Season 2", "chairs": []})
+    fetch_stance(conn, "pol-1", "housing")
+
+    sql, _ = conn.cur.executed
+    assert "LIMIT 1" in sql
+    assert "se.status = 'open'" in sql

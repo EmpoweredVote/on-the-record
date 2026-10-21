@@ -62,17 +62,28 @@ def fetch_stance(conn, politician_id, topic_key, race_id=None):
     `question_text` is the RESOLVED ranking question (per-race override ?? Compass), which is what
     Read & Rank gates responsiveness against. `compass_question_text` is the canonical Compass
     question and `override_active` says whether an override applied — both let the audit check an
-    override for axis-drift. Keyed on politician_id (names collide across the national race set)."""
+    override for axis-drift. Keyed on politician_id (names collide across the national race set).
+
+    Answers are season-scoped (one row per politician, topic, season), so `value` is the OPEN
+    season's answer — the chair Read & Rank and Compass show now — falling back to the most
+    recently opened season. `season_name` says which season it came from."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute("""
           SELECT t.question_text AS compass_question_text,
                  COALESCE(rtq.question_text, t.question_text) AS question_text,
                  (rtq.question_text IS NOT NULL) AS override_active,
-                 (SELECT a.value FROM inform.politician_answers a
-                  WHERE a.topic_id=t.id AND a.politician_id=%s::uuid) AS value,
+                 sa.value, sa.season_name,
                  (SELECT json_agg(json_build_object('v', s.value, 'text', s.text) ORDER BY s.value)
                   FROM inform.compass_stances s WHERE s.topic_id=t.id) AS chairs
           FROM inform.compass_topics t
+          LEFT JOIN LATERAL (
+            SELECT a.value, se.name AS season_name
+            FROM inform.politician_answers a
+            JOIN inform.seasons se ON se.id = a.season_id
+            WHERE a.topic_id=t.id AND a.politician_id=%s::uuid
+            ORDER BY (se.status = 'open') DESC, se.opened_at DESC NULLS LAST
+            LIMIT 1
+          ) sa ON true
           LEFT JOIN essentials.readrank_race_topic_questions rtq
             ON rtq.race_id = %s::uuid AND rtq.topic_key = t.topic_key
           WHERE t.topic_key=%s
