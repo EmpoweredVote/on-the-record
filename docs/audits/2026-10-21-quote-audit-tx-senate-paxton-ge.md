@@ -1,0 +1,83 @@
+# Quote Audit — TX Senate Paxton GE new
+
+**25 findings** — 1 high, 24 medium, 0 low
+
+## Summary by race
+- **race 216ead27-9e86-49f2-b21c-af659d114faf** — 25 findings (1 high, 24 med, 0 low)
+
+## race 216ead27-9e86-49f2-b21c-af659d114faf
+- `high` · `decision-required` · **off-question** (quote) — Ken Paxton / childcare [c536aa42-fa7a-4f9d-8b46-436098e8a299]
+    - The question asks how government should address the cost and availability of childcare. The rally passage never mentions childcare: doubling the child tax credit is general cash to parents (it touches family cost only indirectly), and making the child savings accounts permanent does not address childcare cost or availability at all. The curator knowingly accepted this as his closest statement, which is a legitimate call, but by the rubric it does not squarely answer the ranking question.
+    - fix: Curator decision: either (a) keep it as an affirmed adjacent answer, possibly trimmed to the child-tax-credit sentence only (the savings-account sentence is the clearly off-question part), with the note saying so; or (b) treat Paxton as absent on childcare until a childcare-specific statement is found.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / childcare [childcare]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / childcare [c536aa42-fa7a-4f9d-8b46-436098e8a299]
+    - Cited video 9RUJdj83quk is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **source-not-an-answer** (quote) — Ken Paxton / childcare [c536aa42-fa7a-4f9d-8b46-436098e8a299]
+    - Curator-extracted from a list of plan items in a campaign rally speech (level 3); nothing establishes he was answering a childcare question.
+    - fix: Keep as honest presence if nothing better exists; check his other interviews and any candidate questionnaires for a direct childcare answer before surfacing.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / data-centers [data-centers]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / data-centers [68477d75-418c-49f7-8142-f38a59c26363]
+    - Cited video U5M2JTK5Jys is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / deportation [deportation]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / deportation [b3047bbf-c6c8-44dd-81e3-417e8a5222ef]
+    - Cited video ddX6_Hqj9u0 is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **source-not-an-answer** (quote) — Ken Paxton / deportation [b3047bbf-c6c8-44dd-81e3-417e8a5222ef]
+    - Prepared remarks at a sheriffs' endorsement press conference (level 3, curator-extracted); he was not answering a question about who should be deported. Faithful and forward-looking, so this is a provenance flag only.
+    - fix: Look for a direct interview or debate answer on deportation scope (e.g. the longer podcast or interview transcripts already collected); if none exists, keep this as honest presence.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / fossil-fuels [fossil-fuels]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / fossil-fuels [e74257b4-5c32-4f48-be67-022336bbdc1f]
+    - Cited video U5M2JTK5Jys is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / healthcare [healthcare]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / healthcare [2c12eb7f-af2a-4341-9227-904941b6ae9d]
+    - Cited video U5M2JTK5Jys is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / housing [housing]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / housing [9472f66c-bace-46c8-97f7-596ca94773f4]
+    - Cited video U5M2JTK5Jys is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **not-rankable** (topic) —  / immigration [immigration]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / immigration [54b59f59-1d23-4463-a59d-5dd0901fc18c]
+    - Cited video U5M2JTK5Jys is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `decision-required` · **coupling-in-tension** (quote) — Ken Paxton / immigration [54b59f59-1d23-4463-a59d-5dd0901fc18c]
+    - His Compass value is 5.0 ('Stop most legal immigration'), but the quote says he is 'open to' letting people in to fill jobs we lack workers for, conditional on a certified secure border. That pulls toward chair 3-4, not 5. The quote is a faithful direct answer, so the tension sits between the quote and the stored value.
+    - fix: Decide whether the synthesized Compass value of 5.0 should be revisited in light of this answer, or keep both and have the note explain the tension (restrictive on border, open to conditional work authorization).
+- `medium` · `decision-required` · **not-rankable** (topic) —  / taxes [taxes]
+    - Only 0 candidate(s) live on this topic; not a valid head-to-head.
+    - fix: Source a second candidate's on-question quote, or drop the topic from the race.
+- `medium` · `decision-required` · **source-not-ingested** (quote) — Ken Paxton / taxes [4f1b97f9-e357-412d-b722-491ac69c546c]
+    - Cited video aoyXZexghjg is not ingested; quote can't be auto-verified.
+    - fix: Verify the quote against the source manually, or ingest the source.
+- `medium` · `guided` · **note-not-self-contained** (quote) — Ken Paxton / deportation [b3047bbf-c6c8-44dd-81e3-417e8a5222ef]
+    - His Compass value is 4.0 ('Deport all undocumented immigrants, starting with those who have criminal records'). The note does not say how the quote relates to it; read alone, 'mandatory detention and deportation for dangerous criminal illegal immigrants' could look like chair 2, so a reader needs the note to say it is the 'starting with criminals' part of chair 4.
+    - fix: Add one sentence to editor_note stating where the quote sits on this topic's spectrum and whether it reinforces, elaborates on, or is in tension with his current Compass value.
+- `medium` · `guided` · **note-not-self-contained** (quote) — Ken Paxton / fossil-fuels [e74257b4-5c32-4f48-be67-022336bbdc1f]
+    - His Compass value is 4.0 ('Expand fossil fuel production with new drilling and permits'). The note explains the lever but does not say the quote reinforces that value.
+    - fix: Add one sentence to editor_note stating where the quote sits on this topic's spectrum and whether it reinforces, elaborates on, or is in tension with his current Compass value.
+- `medium` · `guided` · **note-not-self-contained** (quote) — Ken Paxton / healthcare [2c12eb7f-af2a-4341-9227-904941b6ae9d]
+    - The note contrasts 'tax relief rather than coverage programs' but does not state alignment with his Compass value. The stored value is 0.0, outside the 1-5 chair range, which looks like an unscored sentinel; the note should place the quote on the chairs (roughly chair 4) and the value itself may need checking.
+    - fix: Add one sentence to editor_note stating where the quote sits on this topic's spectrum and whether it reinforces, elaborates on, or is in tension with his current Compass value.
+- `medium` · `guided` · **note-not-self-contained** (quote) — Ken Paxton / immigration [54b59f59-1d23-4463-a59d-5dd0901fc18c]
+    - His Compass value is 5.0. The note explains the question and edits but does not state how the quote relates to the value (it is in tension; see the separate coupling finding).
+    - fix: Add one sentence to editor_note stating where the quote sits on this topic's spectrum and whether it reinforces, elaborates on, or is in tension with his current Compass value.
+- `medium` · `guided` · **note-not-self-contained** (quote) — Ken Paxton / taxes [4f1b97f9-e357-412d-b722-491ac69c546c]
+    - His Compass value is 5.0 ('Cut taxes as far as possible and shrink what government does'). The note names the lever but does not say the quote reinforces that value.
+    - fix: Add one sentence to editor_note stating where the quote sits on this topic's spectrum and whether it reinforces, elaborates on, or is in tension with his current Compass value.
