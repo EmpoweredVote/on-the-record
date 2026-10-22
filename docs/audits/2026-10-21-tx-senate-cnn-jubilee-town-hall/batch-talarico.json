@@ -1,0 +1,61 @@
+{
+  "politician_id": "e31c865b-e378-4c02-b6d5-3f3fc1393791",
+  "source_url": "https://www.youtube.com/watch?v=VnurpLQd4c0",
+  "quotes": [
+    {
+      "topic_key": "data-centers",
+      "timestamp_seconds": 4820,
+      "text": "I've rolled out a plan to crack down on these giant data center companies. I've said that we got to force them to pay for their own energy instead of jacking up our utility bills. We got to force them to recycle their water so they are not exacerbating the water crisis here in Texas, and force them to get the consent of the people who live in these communities before they start building.",
+      "editor_note": "His answer to a voter's question on AI data centers, naming three concrete levers: companies pay for their own energy, recycle water, and get community consent before building. Verbatim from the CNN & Jubilee town hall; only punctuation added. He had no data-centers quote before this."
+    },
+    {
+      "topic_key": "voting-rights",
+      "timestamp_seconds": 3872,
+      "text": "I am for fair voter ID. And I say fair because here in Texas, I think that a lot of our voter ID policies are discriminatory. … When you go to vote here in Texas, you can bring your concealed carry license, which I'm all for, but a student at a public college or university can't bring their student ID. … What I want to see is voter ID that is consistent across the board.",
+      "editor_note": "Asked by a voter whether he supports the SAVE America Act, he said he would need to read the final bill, then stated this position: voter ID, but with the same accepted IDs for everyone. Two cuts marked with …: his lead-in ('here's what I mean by that') and his reasoning about who the current list helps and hurts; 'So for instance' trimmed at the start of the second sentence. This is spoken and answers the access-versus-security question directly; his only other voting-rights quote is a campaign-site line."
+    },
+    {
+      "topic_key": "taxes",
+      "timestamp_seconds": 2739,
+      "text": "We are often told that the only way to tackle the deficit or the debt is by doing it on the backs of working people. And that's not true. We can close the deficit and we can do it by closing billionaire tax loopholes. Right now, billionaires can write off flying on a private jet from their taxes and call it a business expense.",
+      "editor_note": "His answer to a voter who called the national debt the country's top problem: close the deficit by closing tax loopholes for the very wealthy rather than cutting from working people. Verbatim; both transcripts read 'ride off', which we spell 'write off' because the tax meaning is clear from context. This is a spoken, on-question answer; his current live taxes quote is a campaign-site slogan."
+    },
+    {
+      "topic_key": "campaign-finance",
+      "timestamp_seconds": 1203,
+      "text": "I'm running to ban super PACs and corporate PACs so billionaires aren't spending unlimited secret money on our political campaigns. And I don't care if they're Democratic super PACs or Republican super PACs. I think we've got to ban them all because there's way too much influence from big money in our politics.",
+      "editor_note": "His answer to a voter asking what anti-corruption steps he would support even if they hurt his own party. It names the lever (ban super PACs and corporate PACs) and applies it to both parties. Verbatim; the sentences just before it, about his own refusal of corporate PAC money, are left out because they describe his record, not a policy."
+    },
+    {
+      "topic_key": "border-security",
+      "timestamp_seconds": 1636,
+      "text": "I'm a border security Democrat. I think we should know who's coming into our country. … I rolled out a common-sense border security plan that was endorsed by Democratic and Republican law enforcement officials along our southern border, calling for more Border Patrol agents, calling for better surveillance technology so we can detect unauthorized crossings.",
+      "editor_note": "Part of his answer to a Republican voter asking what federal border laws he would support: more Border Patrol agents and better surveillance technology. One cut marked with …: his state-legislature bill on ports of entry, which is his record rather than a federal proposal. The blind version also drops his party label and the endorsement, which identify him; he had no border-security quote before this.",
+      "deidentified": "I think we should know who's coming into our country. … I rolled out a common-sense border security plan … calling for more Border Patrol agents, calling for better surveillance technology so we can detect unauthorized crossings."
+    },
+    {
+      "topic_key": "fossil-fuels",
+      "timestamp_seconds": 907,
+      "text": "I'm campaigning on an all-of-the-above energy strategy that includes oil and gas. I want to protect the good-paying oil and gas jobs that support whole families across the state. And I want us to invest in the energy sources of the future, wind and solar and geothermal and hydrogen and batteries, so that we can stay dominant in the energy industry. … I think there are a few things we could do. One is support efforts to streamline permitting so that we can speed up some of these projects. I think we can restore the tax credits and the subsidies for some of these renewable industries.",
+      "editor_note": "A voter asked him to be specific about balancing oil and gas against renewables. He repeats the all-of-the-above position in his current live quote and adds two levers: faster permitting and restoring renewable tax credits. One cut marked with …: a passage about standing up to both parties on energy."
+    },
+    {
+      "topic_key": "ukraine-support",
+      "timestamp_seconds": 3327,
+      "text": "I think we learned back in the Second World War that when we fail to stand up to an aggressor in Europe, that comes back to haunt us. And we need to strengthen Ukraine. We need to strengthen our NATO allies as they stand up to Russian aggression so we don't have to. So in some ways, I see this as a cost-saving measure. … I think what we're doing in Ukraine is a good investment. I think it will save us money in the long run, but it doesn't mean that we shouldn't always examine it and ensure that we are using taxpayer dollars in the most efficient and effective way possible.",
+      "editor_note": "His answer to a voter who asked why money should go to Ukraine instead of Texans at home. He supports continued aid, gives his reason, and adds a condition that the spending be reviewed. One cut marked with … (about stopping Putin in Ukraine so we don't have to elsewhere, and being strategic abroad), and a repeated 'we need to strengthen' removed; the closing condition is kept because it limits the position."
+    },
+    {
+      "topic_key": "military-intervention",
+      "timestamp_seconds": 3245,
+      "text": "The real drain on our resources is this disastrous war in Iran. And it's why I've called for this war to come to a close, because not only is it costing us a billion dollars a day, not only is it driving up gas prices and diesel prices here at home, but it is also killing our brave men and women in uniform. … We should not be sending our brave men and women off to die in another forever war in the Middle East.",
+      "editor_note": "His answer to a voter's question about foreign wars: he calls for the war in Iran to end and opposes 'another forever war in the Middle East'. One cut marked with …: the story of a Texas service member killed in the war. The '$1 billion a day' figure is his claim and has not been checked; a reviewer should confirm it before this goes live."
+    },
+    {
+      "topic_key": "childcare",
+      "timestamp_seconds": 2043,
+      "text": "… I would fight to guarantee universal, high-quality early childhood education for every kid in this country. The first three years, the first thousand days of a child's life are the most important when it comes to brain development.",
+      "editor_note": "Part of his answer to a voter's question about school funding: universal early childhood education, with his reason. The leading … marks that the sentence began with 'then', the second item in his list. It matches his current live childcare quote, which comes from KXAN."
+    }
+  ]
+}
