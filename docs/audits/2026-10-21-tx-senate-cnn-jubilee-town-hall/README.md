@@ -132,3 +132,18 @@ Audit: only the expected `not-rankable` and `source-not-ingested` findings. The 
 crashes on the housing row because `inform.politician_answers` holds **two** Talarico answers for
 housing (values 2.0 and 3.0) and two for same-sex-marriage (1.0 and 2.0), from 2026-08-26 and
 2026-09-03. This is existing Compass data, not caused by this ingest. Needs a separate fix.
+
+## Update 2026-10-22: meeting published
+
+The town hall is published as meeting `601a7fcb-bcc9-40c6-bd69-5b4c8c42d927` (published by the user;
+227 segments, YouTube playback `VnurpLQd4c0`). Speakers: `SPEAKER_12` James Talarico (voice profile,
+linked to his politician_id) and `SPEAKER_17` Erin Burnett (human review). Voters are left unnamed in
+the transcript; the user chose to keep the names they gave on air in the summary. The mislabel of a
+voter as "Tallarico" was removed. The summary had factual and neutrality edits (name spellings, a wrong
+"2020" date for the ICE remark, a moderator/voter mix-up, and five evaluative "context" lines);
+backups sit next to the local transcript. The first resumed run had dropped the title and YouTube
+link, so the meeting was republished with them restored.
+
+Re-audit against the published transcript: all 15 non-housing quotes verify against their source,
+with no source or speaker findings. Only the scope-level `not-rankable` remains. The housing quote
+still hits the audit crash fixed in PR #293, which is not merged yet.
