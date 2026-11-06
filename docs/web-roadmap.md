@@ -84,4 +84,4 @@ For sources that are neither embeddable nor direct-file, when links rot, or if h
 
 - Publisher env (`.env.local` at repo root): `DATABASE_URL` (Supabase dashboard → Project Settings → Database → connection string, URI mode, port 5432).
 - Site env (`web/.env.local`): `EV_ACCOUNTS_URL` (no trailing slash) — see `web/.env.local.example`.
-- Render: static site from this repo, root dir `web`, build `npm install && npm run build`, publish path `out`, env vars `NODE_VERSION=20` and `EV_ACCOUNTS_URL` (see `render.yaml`).
+- Render: static site `on-the-record`, root dir `web`, build `npm install; npm run build`, publish path `out`, env vars `DATABASE_URL`, `EV_ACCOUNTS_URL` and `NEXT_PUBLIC_EV_ACCOUNTS_URL`. Each dynamic route needs a rewrite (`/meetings/*`, `/people/*`, `/topics/*`, `/items/*`, `/admin/meetings/*` → that route's `view/index.html`). These settings live in the Render dashboard; there is no `render.yaml`, so a new dynamic route needs its rewrite added there.
