@@ -68,3 +68,62 @@ jobs:
       - name: Run _shared skill tests
         if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         run: python -m pytest .claude/skills/_shared/tests -q -p no:cacheprovider
+
+  web:
+    # The Next.js site in web/ had no CI, so web dependency bumps were never built before
+    # merge. Build it and run its unit tests. No secrets: the build needs none.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+  # Dependabot auto-merge. Runs only on Dependabot PRs, only after every job above passed
+  # (or was skipped on purpose), and only for patch/minor updates. Majors stay open for a
+  # person to read. A merge that fails (usually a lockfile conflict after a sibling PR
+  # merged) is left alone: Dependabot rebases the PR, CI reruns, and this job tries again.
+  # Merges made with GITHUB_TOKEN do not start push-triggered workflows; hosting deploys
+  # (which listen to GitHub directly) still run.
+  dependabot-automerge:
+    name: dependabot auto-merge
+    needs: [pytest, web]
+    if: >-
+      always()
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.actor == 'dependabot[bot]'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@v3.1.0
+      - name: Merge patch and minor updates
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh pr merge --squash "$PR_URL"; then
+            echo "::warning::Merge did not go through (likely a conflict). Dependabot will rebase and this job will retry."
+          fi
